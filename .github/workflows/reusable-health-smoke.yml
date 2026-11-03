@@ -1,7 +1,10 @@
 # =============================================================================
 # Reusable Health Smoke Test — Tier 1 post-deploy verification
 # =============================================================================
-# curl-based health checks against 5 production endpoints.
+# curl-based health checks against 5 endpoints of the target environment.
+# Targets are configurable (CAB-2362): input `base-domain`, else the repo
+# variable SMOKE_BASE_DOMAIN_PROD / SMOKE_BASE_DOMAIN_DEV for `environment`.
+# No host is hard-coded; a missing target fails the job explicitly.
 # Zero auth required, runs in ~30s, catches real deploy failures:
 #   pod crash, ingress misconfiguration, Keycloak down, image pull error.
 #
@@ -22,6 +25,11 @@ on:
         required: false
         type: string
         default: 'dev'
+      base-domain:
+        description: 'Base domain to probe (overrides SMOKE_BASE_DOMAIN_<ENV>)'
+        required: false
+        type: string
+        default: ''
 
 permissions: {}
 
@@ -30,8 +38,25 @@ jobs:
     name: Health Smoke (${{ inputs.component }})
     runs-on: ubuntu-latest
     timeout-minutes: 8
+    env:
+      SMOKE_ENV: ${{ inputs.environment }}
+      SMOKE_COMPONENT: ${{ inputs.component }}
+      SMOKE_DOMAIN: >-
+        ${{ inputs.base-domain != '' && inputs.base-domain
+        || (inputs.environment == 'prod' && vars.SMOKE_BASE_DOMAIN_PROD)
+        || (inputs.environment == 'dev' && vars.SMOKE_BASE_DOMAIN_DEV)
+        || '' }}
 
     steps:
+      - name: Resolve smoke targets
+        run: |
+          set -euo pipefail
+          if [ -z "${SMOKE_DOMAIN// /}" ]; then
+            echo "::error::No smoke target for environment '$SMOKE_ENV': set input base-domain or repo variable SMOKE_BASE_DOMAIN_${SMOKE_ENV^^}"
+            exit 1
+          fi
+          echo "Smoke targets: *.$SMOKE_DOMAIN (environment: $SMOKE_ENV)"
+
       - name: Wait for rollout to converge
         run: |
           set -uo pipefail
@@ -39,15 +64,15 @@ jobs:
           # instead of a fixed sleep — a 2-pod ArgoCD rollout routinely takes
           # longer than 30s and the smoke raced it red on every gateway
           # deploy (CAB-2227).
-          case "${{ inputs.component }}" in
-            stoa-gateway)      url="https://mcp.gostoa.dev/health/ready" ;;
-            control-plane-api) url="https://api.gostoa.dev/health" ;;
-            portal)            url="https://portal.gostoa.dev" ;;
-            control-plane-ui)  url="https://console.gostoa.dev" ;;
+          case "$SMOKE_COMPONENT" in
+            stoa-gateway)          url="https://mcp.${SMOKE_DOMAIN}/health/ready" ;;
+            control-plane-api)     url="https://api.${SMOKE_DOMAIN}/health" ;;
+            portal|stoa-portal)    url="https://portal.${SMOKE_DOMAIN}" ;;
+            control-plane-ui)      url="https://console.${SMOKE_DOMAIN}" ;;
             *)                 url="" ;;
           esac
           if [ -z "$url" ]; then
-            echo "No rollout-wait URL for ${{ inputs.component }}; sleeping 30s"
+            echo "No rollout-wait URL for $SMOKE_COMPONENT; sleeping 30s"
             sleep 30
             exit 0
           fi
@@ -82,15 +107,15 @@ jobs:
             fi
           }
 
-          echo "Health checks for gostoa.dev (after ${{ inputs.component }} deploy)"
+          echo "Health checks for $SMOKE_ENV (after $SMOKE_COMPONENT deploy)"
           echo "---"
 
-          check "API Health"      "https://api.gostoa.dev/health"
-          check "Gateway Health"  "https://mcp.gostoa.dev/health/ready"
-          check "Portal"          "https://portal.gostoa.dev"
-          check "Console"         "https://console.gostoa.dev"
-          check "Keycloak OIDC"   "https://auth.gostoa.dev/realms/stoa/.well-known/openid-configuration"
+          check "API Health"      "https://api.${SMOKE_DOMAIN}/health"
+          check "Gateway Health"  "https://mcp.${SMOKE_DOMAIN}/health/ready"
+          check "Portal"          "https://portal.${SMOKE_DOMAIN}"
+          check "Console"         "https://console.${SMOKE_DOMAIN}"
+          check "Keycloak OIDC"   "https://auth.${SMOKE_DOMAIN}/realms/stoa/.well-known/openid-configuration"
 
           echo "---"
-          echo "Results: $PASS passed, $FAIL failed (component: ${{ inputs.component }})"
+          echo "Results: $PASS passed, $FAIL failed (component: $SMOKE_COMPONENT)"
           [ "$FAIL" -eq 0 ] || exit 1

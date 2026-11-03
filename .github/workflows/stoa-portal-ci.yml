@@ -112,11 +112,14 @@ jobs:
   # === Smoke Test: health checks after deploy (Tier 1) ===
   smoke-test:
     needs: deploy
-    if: needs.deploy.result == 'success' && vars.GITOPS_DEPLOY_ENABLED == 'true'
+    # CAB-2362 (same as control-plane-api, CAB-2084 A3): no dev smoke target
+    # exists yet, so a dev deploy must not be judged on prod. Targets come
+    # from SMOKE_BASE_DOMAIN_<ENV> in reusable-health-smoke.yml.
+    if: needs.deploy.result == 'success' && vars.GITOPS_DEPLOY_ENABLED == 'true' && github.event.inputs.environment == 'prod'
     uses: ./.github/workflows/reusable-health-smoke.yml
     with:
       component: stoa-portal
-      environment: dev
+      environment: ${{ github.event.inputs.environment || 'dev' }}
     permissions:
       contents: read
 

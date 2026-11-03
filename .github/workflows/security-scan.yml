@@ -43,6 +43,8 @@ jobs:
       sast-rust: ${{ steps.diff.outputs.sast-rust }}
       sast-python: ${{ steps.diff.outputs.sast-python }}
       sast-javascript: ${{ steps.diff.outputs.sast-javascript }}
+      sast-control-plane-ui: ${{ steps.web.outputs.control-plane-ui }}
+      sast-portal: ${{ steps.web.outputs.portal }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -56,6 +58,27 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: python3 -B .github/scripts/security-scan-changes.py
+
+      - name: Filter JavaScript scan components
+        if: github.event_name == 'pull_request'
+        id: web
+        uses: dorny/paths-filter@15192bc058cc28a13dbf6cde61f19e18988b7af6 # v3.0.2
+        with:
+          # Use the checked-out Git history without adding PR API permissions.
+          token: ''
+          base: ${{ github.event.pull_request.base.sha }}
+          predicate-quantifier: every
+          filters: ${{ steps.diff.outputs.web-filters }}
+
+      - name: Validate JavaScript filter outputs
+        if: github.event_name == 'pull_request'
+        env:
+          UI_CHANGED: ${{ steps.web.outputs.control-plane-ui }}
+          PORTAL_CHANGED: ${{ steps.web.outputs.portal }}
+        run: |
+          for changed in "$UI_CHANGED" "$PORTAL_CHANGED"; do
+            case "$changed" in true|false) ;; *) exit 1 ;; esac
+          done
 
   # ==========================================================================
   # 1. SAST — Rust (Clippy strict)
@@ -163,6 +186,9 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Check project has ESLint configured
+        # Keep each check name reporting; unchanged PR components pass through.
+        # Push, merge-group and nightly events always run both components.
+        if: github.event_name != 'pull_request' || needs.scan-changes.outputs[format('sast-{0}', matrix.project)] == 'true'
         id: check
         run: |
           if [ -f "${{ matrix.project }}/package.json" ] && grep -q '"eslint"' "${{ matrix.project }}/package.json"; then
@@ -171,6 +197,10 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
             echo "::warning::No ESLint config in ${{ matrix.project }}/, skipping"
           fi
+
+      - name: Report unchanged component
+        if: github.event_name == 'pull_request' && needs.scan-changes.outputs[format('sast-{0}', matrix.project)] == 'false'
+        run: echo 'JavaScript security scan passed through because this component is unchanged.' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Set up Node.js
         if: steps.check.outputs.exists == 'true'

@@ -68,13 +68,17 @@ def test_real_shards_are_disjoint_complete_and_combined_coverage_is_enforced(tmp
                     "--splits", "2", "--group", str(shard), "--splitting-algorithm", "least_duration",
                     "--cov=src", "--cov-fail-under=0", f"--junitxml=results-{shard}.xml"], runner)
         assert proc.returncode == 0, proc.stdout + proc.stderr
-        selected.append({c.attrib["name"] for c in ET.parse(runner / f"results-{shard}.xml").iter("testcase")})
+        # Pytest versions differ in whether JUnit names include xdist's group suffix.
+        selected.append({
+            c.attrib["name"].partition("@")[0]
+            for c in ET.parse(runner / f"results-{shard}.xml").iter("testcase")
+        })
         assert run([sys.executable, "-m", "coverage", "report", "--fail-under=70"], runner).returncode != 0
         destination = project / f"coverage-shards/{shard}"
         destination.mkdir(parents=True)
         (runner / ".coverage").rename(destination / f".coverage.shard-{shard}")
     assert selected[0].isdisjoint(selected[1])
-    assert selected[0] | selected[1] == {f"test_{i}@group{i % 2}" for i in range(8)}
+    assert selected[0] | selected[1] == {f"test_{i}" for i in range(8)}
     combined = aggregate(project)
     assert combined.returncode == 0, combined.stdout + combined.stderr
     rates = ET.parse(project / "coverage.xml").getroot().attrib

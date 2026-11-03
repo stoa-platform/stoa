@@ -20,6 +20,10 @@ from src.models.tenant import Tenant
 from src.routers.users import router
 
 
+class ClaimClient(AsyncClient):
+    fixture_app: FastAPI
+
+
 @pytest.fixture(scope="module")
 def signing_keys() -> tuple[bytes, str]:
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -50,7 +54,7 @@ def signed_headers(signing_keys: tuple[bytes, str], **claims: Any) -> dict[str, 
 
 
 @pytest.fixture
-async def claim_client(monkeypatch: pytest.MonkeyPatch, signing_keys: tuple[bytes, str]) -> AsyncIterator[AsyncClient]:
+async def claim_client(monkeypatch: pytest.MonkeyPatch, signing_keys: tuple[bytes, str]) -> AsyncIterator[ClaimClient]:
     monkeypatch.setattr(dependencies.settings, "KEYCLOAK_URL", "https://auth.example.invalid")
     monkeypatch.setattr(dependencies.settings, "KEYCLOAK_REALM", "stoa")
     monkeypatch.setattr(dependencies.settings, "KEYCLOAK_CLIENT_ID", "control-plane-api")
@@ -89,7 +93,7 @@ async def claim_client(monkeypatch: pytest.MonkeyPatch, signing_keys: tuple[byte
             yield session
 
     app.dependency_overrides[get_db] = database
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test.invalid") as client:
+    async with ClaimClient(transport=ASGITransport(app=app), base_url="http://test.invalid") as client:
         client.fixture_app = app
         yield client
     await engine.dispose()
@@ -97,7 +101,7 @@ async def claim_client(monkeypatch: pytest.MonkeyPatch, signing_keys: tuple[byte
 
 @pytest.mark.parametrize("claim", ["acme", ["acme"]])
 async def test_regression_canonical_claim_ignores_client_header(
-    claim_client: AsyncClient, signing_keys: tuple[bytes, str], claim: object
+    claim_client: ClaimClient, signing_keys: tuple[bytes, str], claim: object
 ) -> None:
     headers = signed_headers(signing_keys, tenant_id=claim)
     response = await claim_client.get("/tenants/acme", headers=headers)
@@ -113,6 +117,7 @@ async def test_regression_canonical_claim_ignores_client_header(
 @pytest.mark.parametrize(
     "claim",
     [
+        None,
         "",
         " ",
         " acme",
@@ -132,7 +137,7 @@ async def test_regression_canonical_claim_ignores_client_header(
     ],
 )
 async def test_regression_malformed_claims_fail_authentication(
-    claim_client: AsyncClient, signing_keys: tuple[bytes, str], role: str, field: str, claim: object
+    claim_client: ClaimClient, signing_keys: tuple[bytes, str], role: str, field: str, claim: object
 ) -> None:
     headers = signed_headers(signing_keys, **{field: claim}, realm_access={"roles": [role]})
     response = await claim_client.get("/tenants/acme", headers=headers)
@@ -141,10 +146,10 @@ async def test_regression_malformed_claims_fail_authentication(
     assert claim_client.fixture_app.state.calls == []
 
 
-@pytest.mark.parametrize("claims", [{}, {"tenant_id": None}, {"tenant": "acme"}, {"tenant_id": None, "tenant": "acme"}])
+@pytest.mark.parametrize("claims", [{}, {"tenant": "acme"}])
 @pytest.mark.parametrize("role", ["viewer", "tenant-admin", "devops", "cpi-admin", "tenant-acme"])
 async def test_regression_unscoped_bootstrap_and_admin_contract(
-    claim_client: AsyncClient, signing_keys: tuple[bytes, str], claims: dict, role: str
+    claim_client: ClaimClient, signing_keys: tuple[bytes, str], claims: dict, role: str
 ) -> None:
     headers = signed_headers(signing_keys, **claims, realm_access={"roles": [role]})
     response = await claim_client.get("/v1/me", headers=headers)
@@ -160,9 +165,22 @@ async def test_regression_unscoped_bootstrap_and_admin_contract(
     assert claim_client.fixture_app.state.calls == (["acme"] if role == "cpi-admin" else [])
 
 
-@pytest.mark.parametrize("legacy", ["acme", ["acme"], "other", ["other"], None])
+@pytest.mark.parametrize("role", ["viewer", "cpi-admin"])
+@pytest.mark.parametrize("claims", [{"tenant_id": None}, {"tenant": None}, {"tenant_id": "acme", "tenant": None}])
+async def test_regression_null_claims_deny_bootstrap_and_resource_access(
+    claim_client: ClaimClient, signing_keys: tuple[bytes, str], role: str, claims: dict
+) -> None:
+    headers = signed_headers(signing_keys, **claims, realm_access={"roles": [role]})
+    for method, path in [("GET", "/v1/me"), ("POST", "/v1/me/tenant"), ("GET", "/global"), ("GET", "/tenants/acme")]:
+        response = await claim_client.request(method, path, headers=headers)
+        assert response.status_code == 401
+        assert response.json() == {"detail": "Invalid token: invalid_tenant_claim"}
+        assert claim_client.fixture_app.state.calls == []
+
+
+@pytest.mark.parametrize("legacy", ["acme", ["acme"], "other", ["other"]])
 async def test_regression_legacy_claim_must_agree(
-    claim_client: AsyncClient, signing_keys: tuple[bytes, str], legacy: object
+    claim_client: ClaimClient, signing_keys: tuple[bytes, str], legacy: object
 ) -> None:
     response = await claim_client.get("/v1/me", headers=signed_headers(signing_keys, tenant_id="acme", tenant=legacy))
     assert response.status_code == (401 if legacy in ("other", ["other"]) else 200)
@@ -172,7 +190,7 @@ async def test_regression_legacy_claim_must_agree(
         assert response.json() == {"detail": "Invalid token: conflicting_tenant_claims"}
 
 
-async def test_regression_header_alone_cannot_authenticate(claim_client: AsyncClient) -> None:
+async def test_regression_header_alone_cannot_authenticate(claim_client: ClaimClient) -> None:
     response = await claim_client.get("/tenants/acme", headers={"X-Tenant-ID": "acme"})
     assert response.status_code == 401
     assert claim_client.fixture_app.state.calls == []

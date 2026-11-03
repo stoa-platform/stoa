@@ -56,10 +56,8 @@ class User(BaseModel):
     tenant_id: str | None = None
 
 
-def _normalize_tenant_claim(value: object) -> str | None:
+def _normalize_tenant_claim(value: object) -> str:
     """Match the gateway wire contract without coercing ambiguous identities."""
-    if value is None:
-        return None
     if isinstance(value, list) and len(value) == 1:
         value = value[0]
     if not isinstance(value, str) or not value or value != value.strip():
@@ -295,8 +293,8 @@ async def get_current_user(
         from .rbac import normalize_roles
 
         roles = normalize_roles(payload.get("realm_access", {}).get("roles", []))
-        tenant_id = _normalize_tenant_claim(payload.get("tenant_id"))
-        legacy_tenant = _normalize_tenant_claim(payload.get("tenant"))
+        tenant_id = _normalize_tenant_claim(payload["tenant_id"]) if "tenant_id" in payload else None
+        legacy_tenant = _normalize_tenant_claim(payload["tenant"]) if "tenant" in payload else None
         if tenant_id is not None and legacy_tenant is not None and tenant_id != legacy_tenant:
             raise JWTError("conflicting_tenant_claims")
         # Legacy claims never establish identity; missing tenants remain valid for bootstrap.

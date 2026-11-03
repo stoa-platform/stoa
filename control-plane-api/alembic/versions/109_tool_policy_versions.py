@@ -15,7 +15,7 @@ def upgrade() -> None:
     namespace = bind.dialect.identifier_preparer.quote_schema(schema)
     counter = f"{namespace}.tool_policy_versions"
     permission = f"{namespace}.tenant_tool_permissions"
-    permission_oid = bind.scalar(sa.select(sa.func.to_regclass(permission).cast(sa.BigInteger())))
+    schema_literal = sa.literal(schema).compile(dialect=bind.dialect, compile_kwargs={"literal_binds": True})
     op.create_table(
         "tool_policy_versions",
         sa.Column("tenant_id", sa.String(255), primary_key=True),
@@ -35,7 +35,7 @@ def upgrade() -> None:
         CREATE FUNCTION {namespace}.bump_tool_policy_version() RETURNS trigger
         LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $$
         BEGIN
-            IF TG_RELID <> {permission_oid} THEN
+            IF TG_TABLE_SCHEMA <> {schema_literal} OR TG_TABLE_NAME <> 'tenant_tool_permissions' THEN
                 RAISE EXCEPTION 'policy version requires the permission relation';
             END IF;
             IF TG_OP = 'UPDATE' AND NEW.tenant_id IS DISTINCT FROM OLD.tenant_id THEN

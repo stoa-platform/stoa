@@ -39,9 +39,8 @@ async def policy_db() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
         await connection.execute(text(f'CREATE SCHEMA "{schema}"'))
         await connection.run_sync(TenantToolPermission.__table__.create)
         await connection.execute(
-            TenantToolPermission.__table__.insert().values(
-                tenant_id="existing", mcp_server_id=uuid4(), tool_name="read", created_by="test"
-            )
+            TenantToolPermission.__table__.insert(),
+            {"tenant_id": "existing", "mcp_server_id": uuid4(), "tool_name": "read", "created_by": "test"},
         )
         await connection.run_sync(migrate)
     try:
@@ -56,8 +55,18 @@ async def version(session: AsyncSession, tenant: str = "tenant-a") -> int:
     return await session.scalar(select(ToolPolicyVersion.version).where(ToolPolicyVersion.tenant_id == tenant)) or 1
 
 
-async def test_mutations_increment_and_preserve_tenant_isolation(policy_db) -> None:
+@pytest.mark.parametrize("recreated", [False, True])
+async def test_mutations_increment_and_preserve_tenant_isolation(policy_db, recreated: bool) -> None:
     async with policy_db.begin() as session:
+        if recreated:
+            for statement in (
+                "ALTER TABLE tenant_tool_permissions RENAME TO original",
+                "CREATE TABLE tenant_tool_permissions (LIKE original INCLUDING ALL)",
+                "CREATE TRIGGER tool_permission_version AFTER INSERT OR UPDATE OR DELETE ON tenant_tool_permissions "
+                "FOR EACH ROW EXECUTE FUNCTION bump_tool_policy_version()",
+            ):
+                await session.execute(text(statement))
+            assert await session.scalar(text("SELECT 'tenant_tool_permissions'::regclass <> 'original'::regclass"))
         backfilled = await session.get(ToolPolicyVersion, "existing")
         assert backfilled is not None and backfilled.version == 1
         row = permission()
@@ -73,10 +82,7 @@ async def test_mutations_increment_and_preserve_tenant_isolation(policy_db) -> N
         assert await version(session, "existing") == 1
     async with policy_db() as session:
         assert await version(session) == 4
-        assert (
-            await session.scalar(select(TenantToolPermission).where(TenantToolPermission.tenant_id == "tenant-a"))
-            is None
-        )
+        assert await session.scalar(select(TenantToolPermission.id).filter_by(tenant_id="tenant-a")) is None
 
 
 @pytest.mark.parametrize("existing", [False, True])
@@ -90,9 +96,7 @@ async def test_rollback_reverts_permission_and_version(policy_db, existing: bool
         await session.rollback()
     async with policy_db() as session:
         assert await version(session, tenant) == before
-        assert (
-            await session.scalar(select(TenantToolPermission).where(TenantToolPermission.tool_name == "write")) is None
-        )
+        assert await session.scalar(select(TenantToolPermission.id).filter_by(tool_name="write")) is None
 
 
 @pytest.mark.parametrize("tenant", ["tenant-a", "existing"])
@@ -171,9 +175,8 @@ async def test_migration_downgrade_and_upgrade(policy_db) -> None:
         await connection.run_sync(migrate, "downgrade")
         assert await connection.scalar(text("SELECT to_regclass('tool_policy_versions')")) is None
         await connection.execute(
-            TenantToolPermission.__table__.insert().values(
-                tenant_id="downgraded", mcp_server_id=uuid4(), tool_name="read", created_by="test"
-            )
+            TenantToolPermission.__table__.insert(),
+            {"tenant_id": "downgraded", "mcp_server_id": uuid4(), "tool_name": "read", "created_by": "test"},
         )
         await connection.run_sync(migrate)
     async with policy_db() as session:

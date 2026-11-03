@@ -19,5 +19,8 @@
     "@types/react-dom": "^19.2.3",
     "lucide-react": "^0.475.0",
     "openapi-typescript": "^7.13.0"
+  },
+  "overrides": {
+    "js-yaml": "4.3.2"
   }
 }

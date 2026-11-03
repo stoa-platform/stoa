@@ -14,7 +14,8 @@ from src.services.vault_client import get_vault_client
 logger = logging.getLogger(__name__)
 
 AGENT_MANAGED_MESSAGE = (
-    "Gateway is agent-managed (source=self_register, type=stoa). " "Use the agent's heartbeat/sync-ack for status."
+    "Gateway is agent-managed (source=self_register, type=stoa). "
+    "Use the agent's heartbeat/sync-ack for status."
 )
 
 # Pure "stoa" gateways use the pull model. STOA Link/Connect registrations may
@@ -52,8 +53,7 @@ async def resolve_gateway_auth_config(auth_config: dict[str, Any] | None) -> dic
 
     If auth_config contains a 'vault_path' key, fetches secrets from Vault
     and merges them into the config. Vault values override existing keys.
-    Raises CredentialResolutionError if the read fails or returns no credentials,
-    even when direct credentials are also present in auth_config.
+    Raises CredentialResolutionError if required credentials cannot be read.
     """
     if not auth_config or "vault_path" not in auth_config:
         return auth_config or {}

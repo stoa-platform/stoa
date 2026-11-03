@@ -12,6 +12,11 @@ from src.services.credential_resolver import (
 # ── resolve_gateway_auth_config ──
 
 
+async def assert_refused(auth: dict[str, str]) -> None:
+    with pytest.raises(ValueError, match="operation refused"):
+        await resolve_gateway_auth_config(auth)
+
+
 class TestResolveGatewayAuthConfig:
     async def test_passthrough_no_vault_path(self):
         """Auth config without vault_path is returned unchanged."""
@@ -70,11 +75,8 @@ class TestResolveGatewayAuthConfig:
         mock_vault = MagicMock()
         mock_vault.read_secret = AsyncMock(return_value=None)
 
-        with (
-            patch("src.services.credential_resolver.get_vault_client", return_value=mock_vault),
-            pytest.raises(ValueError, match="operation refused"),
-        ):
-            await resolve_gateway_auth_config(auth)
+        with patch("src.services.credential_resolver.get_vault_client", return_value=mock_vault):
+            await assert_refused(auth)
 
     async def test_vault_unavailable_refuses_operation(self):
         """A Vault-backed config cannot proceed on a Vault exception."""
@@ -82,11 +84,8 @@ class TestResolveGatewayAuthConfig:
         mock_vault = MagicMock()
         mock_vault.read_secret = AsyncMock(side_effect=Exception("connection refused"))
 
-        with (
-            patch("src.services.credential_resolver.get_vault_client", return_value=mock_vault),
-            pytest.raises(ValueError, match="operation refused"),
-        ):
-            await resolve_gateway_auth_config(auth)
+        with patch("src.services.credential_resolver.get_vault_client", return_value=mock_vault):
+            await assert_refused(auth)
 
     async def test_regression_cab_1908_vault_only_raises_on_failure(self):
         """CAB-1908: vault_path-only config with Vault unavailable must raise, not return {}."""
@@ -118,11 +117,8 @@ class TestResolveGatewayAuthConfig:
         mock_vault = MagicMock()
         mock_vault.read_secret = AsyncMock(return_value=None)
 
-        with (
-            patch("src.services.credential_resolver.get_vault_client", return_value=mock_vault),
-            pytest.raises(ValueError, match="operation refused"),
-        ):
-            await resolve_gateway_auth_config(auth)
+        with patch("src.services.credential_resolver.get_vault_client", return_value=mock_vault):
+            await assert_refused(auth)
 
 
 # ── create_adapter_with_credentials ──

@@ -3,12 +3,12 @@
 Provides secure storage and retrieval of credentials for external MCP servers.
 Uses Kubernetes authentication in cluster, token auth for development.
 
-Disabled or missing credential reads may return None; callers must reject operations
-that require those credentials. Failed seal-status checks raise an availability error.
+Required credential reads and seal checks must succeed before callers proceed.
 """
 
 import logging
 import os
+from contextvars import ContextVar
 from typing import Any, cast
 
 import hvac
@@ -17,6 +17,22 @@ from hvac.exceptions import InvalidPath, VaultError
 from src.config import settings
 
 logger = logging.getLogger(__name__)
+_vault_request: ContextVar[bool] = ContextVar("vault_request", default=False)
+
+# Filter at each emitting logger; parent filters do not cover propagated records.
+for _name in ("connectionpool", "connection", "poolmanager", "util.retry"):
+    logging.getLogger(f"urllib3.{_name}").addFilter(lambda _record: not _vault_request.get())
+
+
+class _VaultAdapter(hvac.adapters.JSONAdapter):
+    """Keep request details private regardless of configured transport log levels."""
+
+    def request(self, *args: Any, **kwargs: Any) -> Any:
+        token = _vault_request.set(True)
+        try:
+            return super().request(*args, **kwargs)
+        finally:
+            _vault_request.reset(token)
 
 
 class VaultUnavailableError(Exception):
@@ -71,7 +87,7 @@ class VaultClient:
         if self._client is not None and self._client.is_authenticated():
             return self._client
 
-        self._client = hvac.Client(url=self.vault_addr)
+        self._client = hvac.Client(url=self.vault_addr, adapter=_VaultAdapter)
 
         # Try Kubernetes auth first (in-cluster)
         if self._kubernetes_role:

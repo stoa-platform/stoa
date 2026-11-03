@@ -16,18 +16,30 @@ WF = ROOT / ".github/workflows"
 PROD = "gostoa.dev"
 
 
-def _resolve(tmp_path: Path, env: str, input_domain: str = "", var_domain: str = ""):
+def _resolve(
+    tmp_path: Path,
+    env: str,
+    input_domain: str = "",
+    var_domain: str = "",
+    *,
+    with_summary: bool = False,
+):
     out = tmp_path / "out"
     out.write_text("")
+    process_env = {
+        "PATH": os.environ["PATH"],
+        "SMOKE_ENV": env,
+        "SMOKE_INPUT_DOMAIN": input_domain,
+        "SMOKE_VAR_DOMAIN": var_domain,
+        "GITHUB_OUTPUT": str(out),
+    }
+    if with_summary:
+        summary = tmp_path / "summary"
+        summary.write_text("")
+        process_env["GITHUB_STEP_SUMMARY"] = str(summary)
     proc = subprocess.run(
         ["bash", str(SCRIPT)],
-        env={
-            "PATH": os.environ["PATH"],
-            "SMOKE_ENV": env,
-            "SMOKE_INPUT_DOMAIN": input_domain,
-            "SMOKE_VAR_DOMAIN": var_domain,
-            "GITHUB_OUTPUT": str(out),
-        },
+        env=process_env,
         capture_output=True,
         text=True,
         check=False,
@@ -36,24 +48,35 @@ def _resolve(tmp_path: Path, env: str, input_domain: str = "", var_domain: str =
     return proc, outputs
 
 
-def test_dev_deploy_without_dev_domain_is_skipped_not_prod(tmp_path):
-    proc, out = _resolve(tmp_path, "dev")
+@pytest.mark.parametrize("with_summary", [False, True])
+def test_dev_deploy_without_dev_domain_is_skipped_not_prod(tmp_path, with_summary):
+    proc, out = _resolve(tmp_path, "dev", with_summary=with_summary)
     assert proc.returncode == 0
     assert out == {"domain": "", "skip": "true"}
-    assert "::warning::" in proc.stdout
+    assert "::warning::SKIPPED, no dev target" in proc.stdout
+    assert "success" not in proc.stdout.lower()
+    if with_summary:
+        summary = (tmp_path / "summary").read_text()
+        assert "SKIPPED, no dev target" in summary
+        assert "success" not in summary.lower()
 
 
-def test_dev_deploy_never_probes_prod(tmp_path):
-    for kw in ({"var_domain": PROD}, {"input_domain": PROD}):
-        proc, out = _resolve(tmp_path, "dev", **kw)
-        assert proc.returncode != 0
-        assert out.get("domain") != PROD
+@pytest.mark.parametrize("domain", [PROD, f"dev.{PROD}", f"preview.dev.{PROD}"])
+@pytest.mark.parametrize("source", ["input_domain", "var_domain"])
+def test_dev_deploy_never_probes_prod_or_its_subdomains(tmp_path, domain, source):
+    proc, out = _resolve(tmp_path, "dev", with_summary=True, **{source: domain})
+    assert proc.returncode != 0
+    assert "::error::" in proc.stdout + proc.stderr
+    assert out == {}
+    assert domain not in proc.stdout + proc.stderr + (tmp_path / "summary").read_text()
 
 
-def test_dev_deploy_uses_dev_variable(tmp_path):
-    proc, out = _resolve(tmp_path, "dev", var_domain="dev.example.org")
+@pytest.mark.parametrize("domain", ["dev.example.org", "preview.example.dev"])
+@pytest.mark.parametrize("source", ["input_domain", "var_domain"])
+def test_dev_deploy_accepts_public_domain(tmp_path, domain, source):
+    proc, out = _resolve(tmp_path, "dev", **{source: domain})
     assert proc.returncode == 0
-    assert out == {"domain": "dev.example.org", "skip": "false"}
+    assert out == {"domain": domain, "skip": "false"}
 
 
 def test_prod_deploy_probes_prod_by_default(tmp_path):
@@ -73,6 +96,44 @@ def test_precedence_input_over_variable(tmp_path):
 def test_rejects_ip_and_non_public_names(tmp_path, bad):
     proc, _ = _resolve(tmp_path, "prod", var_domain=bad)
     assert proc.returncode != 0
+
+
+@pytest.mark.parametrize(
+    "suffix",
+    [
+        "local",
+        "localhost",
+        "internal",
+        "intranet",
+        "lan",
+        "home",
+        "corp",
+        "home.arpa",
+        "svc",
+        "cluster.local",
+        "test",
+        "example",
+        "invalid",
+    ],
+)
+@pytest.mark.parametrize("source", ["input_domain", "var_domain"])
+def test_rejects_reserved_suffixes_before_logging_or_outputs(tmp_path, suffix, source):
+    domain = f"smoke.{suffix}"
+    proc, out = _resolve(tmp_path, "prod", with_summary=True, **{source: domain})
+    assert proc.returncode != 0
+    assert "::error::" in proc.stdout + proc.stderr
+    assert out == {}
+    assert domain not in proc.stdout + proc.stderr + (tmp_path / "summary").read_text()
+
+
+@pytest.mark.parametrize("domain", ["smoke", "smoke.unregistered-tld"])
+@pytest.mark.parametrize("source", ["input_domain", "var_domain"])
+def test_rejects_names_without_public_tld_before_logging_or_outputs(tmp_path, domain, source):
+    proc, out = _resolve(tmp_path, "prod", with_summary=True, **{source: domain})
+    assert proc.returncode != 0
+    assert "::error::" in proc.stdout + proc.stderr
+    assert out == {}
+    assert domain not in proc.stdout + proc.stderr + (tmp_path / "summary").read_text()
 
 
 def test_unknown_environment_fails(tmp_path):

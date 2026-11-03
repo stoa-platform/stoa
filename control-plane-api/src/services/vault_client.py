@@ -3,13 +3,12 @@
 Provides secure storage and retrieval of credentials for external MCP servers.
 Uses Kubernetes authentication in cluster, token auth for development.
 
-Graceful degradation: when Vault is unavailable or disabled, credential operations
-return None/False instead of crashing. The MCP server feature works without Vault
-(credentials just won't be persisted securely).
+Required credential reads and seal checks must succeed before callers proceed.
 """
 
 import logging
 import os
+from contextvars import ContextVar, copy_context
 from typing import Any, cast
 
 import hvac
@@ -18,6 +17,16 @@ from hvac.exceptions import InvalidPath, VaultError
 from src.config import settings
 
 logger = logging.getLogger(__name__)
+_vault_request: ContextVar[bool] = ContextVar("vault_request", default=False)
+for _name in ("connectionpool", "connection", "poolmanager", "util.retry"):  # These loggers emit request paths.
+    logging.getLogger(f"urllib3.{_name}").addFilter(lambda _record: not _vault_request.get())
+
+
+class _PrivateAdapter(hvac.adapters.JSONAdapter):  # Flags Vault requests so the filter above drops transport records.
+    def request(self, *args: Any, **kwargs: Any) -> Any:
+        context = copy_context()
+        context.run(_vault_request.set, True)
+        return context.run(super().request, *args, **kwargs)
 
 
 class VaultUnavailableError(Exception):
@@ -35,7 +44,7 @@ class VaultClient:
     """HashiCorp Vault client for external MCP server credentials.
 
     Stores credentials at: secret/data/external-mcp-servers/{server_id}
-    Gracefully degrades when Vault is unavailable (returns None instead of crashing).
+    Required seal-status checks fail closed when Vault is unavailable.
     """
 
     def __init__(
@@ -72,7 +81,7 @@ class VaultClient:
         if self._client is not None and self._client.is_authenticated():
             return self._client
 
-        self._client = hvac.Client(url=self.vault_addr)
+        self._client = hvac.Client(url=self.vault_addr, adapter=_PrivateAdapter)
 
         # Try Kubernetes auth first (in-cluster)
         if self._kubernetes_role:
@@ -88,8 +97,8 @@ class VaultClient:
                     )
                     logger.info("Authenticated with Vault using Kubernetes auth")
                     return self._client
-            except Exception as e:
-                logger.warning(f"Kubernetes auth failed, falling back to token: {e}")
+            except Exception:
+                logger.warning("Kubernetes auth failed, falling back to token")
 
         # Fall back to token auth (development)
         if self._vault_token:
@@ -110,8 +119,9 @@ class VaultClient:
                 raise VaultSealedException()
         except VaultSealedException:
             raise
-        except Exception as e:
-            logger.warning(f"Could not verify Vault seal status: {e}")
+        except Exception:
+            logger.warning("Could not verify Vault seal status; refusing credential operation")
+            raise VaultUnavailableError("Secret store is unavailable") from None
 
     async def store_credential(
         self,
@@ -200,7 +210,7 @@ class VaultClient:
         Unlike retrieve_credential(), accepts any path (not just external-mcp-servers/).
         """
         if not self.enabled:
-            logger.debug("Vault disabled — cannot read secret at %s", path)
+            logger.debug("Vault disabled — cannot read secret")
             return None
 
         self._ensure_unsealed()
@@ -213,17 +223,17 @@ class VaultClient:
             )
 
             if response and "data" in response and "data" in response["data"]:
-                logger.info("Read secret from Vault", extra={"path": path})
+                logger.info("Read secret from Vault")
                 return cast(dict[str, Any], response["data"]["data"])
 
             return None
 
         except InvalidPath:
-            logger.warning("Secret not found in Vault", extra={"path": path})
+            logger.warning("Secret not found in Vault")
             return None
 
-        except VaultError as e:
-            logger.error("Failed to read secret from Vault", extra={"path": path, "error": str(e)})
+        except VaultError:
+            logger.error("Failed to read secret from Vault")
             return None
 
     async def delete_credential(self, server_id: str) -> bool:

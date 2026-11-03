@@ -91,23 +91,23 @@ impl Fixture {
     }
 
     async fn post(&self, uri: &str, token: Option<&str>, body: Value) -> (StatusCode, Value) {
-        self.post_with_tenant(uri, token, body, "").await
+        self.post_with_tenants(uri, token, body, &[]).await
     }
 
-    async fn post_with_tenant(
+    async fn post_with_tenants(
         &self,
         uri: &str,
         token: Option<&str>,
         body: Value,
-        tenant: &str,
+        tenants: &[&str],
     ) -> (StatusCode, Value) {
         let mut builder = Request::builder()
             .method("POST")
             .uri(uri)
             .header("Content-Type", "application/json")
             .header("X-User-ID", "client-controlled");
-        if !tenant.is_empty() {
-            builder = builder.header("X-Tenant-ID", tenant);
+        for tenant in tenants {
+            builder = builder.header("X-Tenant-ID", *tenant);
         }
         if let Some(token) = token {
             builder = builder.header("Authorization", format!("Bearer {token}"));
@@ -383,7 +383,9 @@ async fn batch_tenant_context_precedes_dispatch() {
         for uri in ["/mcp", "/mcp/sse"] {
             for batch in [json!([initialize, tool]), json!([tool, initialize])] {
                 let start = buffer.0.lock().unwrap().len();
-                let (status, response) = fixture.post(uri, Some(&token), batch).await;
+                let (status, response) = fixture
+                    .post_with_tenants(uri, Some(&token), batch, &["tenant-a", "tenant-b"])
+                    .await;
                 assert_eq!(status, StatusCode::FORBIDDEN);
                 assert_denied(&response, "tenant context");
                 assert_eq!(response["error"]["message"], "A tenant claim is required");
@@ -1198,6 +1200,12 @@ async fn websocket_checks_token_lifetime_during_session() {
     request
         .headers_mut()
         .insert("Authorization", format!("Bearer {token}").parse().unwrap());
+    request
+        .headers_mut()
+        .append("X-Tenant-ID", "tenant-a".parse().unwrap());
+    request
+        .headers_mut()
+        .append("X-Tenant-ID", "tenant-b".parse().unwrap());
     let (mut socket, _) = tokio_tungstenite::connect_async(request).await.unwrap();
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
     let message = tokio::time::timeout(std::time::Duration::from_secs(5), socket.next())
@@ -1343,57 +1351,177 @@ async fn mcp_audience_is_configurable() {
 }
 
 #[tokio::test]
-async fn tenant_header_must_match_context_across_http_forms() {
+async fn regression_tenant_headers_are_ignored_across_http_forms() {
     let fixture = Fixture::new(|_| {}).await;
     let token = fixture.token(json!({}));
     let request = json!({"jsonrpc": "2.0", "id": 7, "method": "tools/call",
         "params": {"name": "echo_tool", "arguments": {}}});
-    for body in [request.clone(), json!([request])] {
-        let (_, response) = fixture
-            .post_with_tenant("/mcp", Some(&token), body.clone(), "tenant-b")
-            .await;
-        let response = if response.is_array() {
-            &response[0]
-        } else {
-            &response
-        };
-        assert_denied(
-            response,
-            "tenant header conflicts with the validated identity",
-        );
-        let (_, response) = fixture
-            .post_with_tenant("/mcp", Some(&token), body, "tenant-a")
-            .await;
-        let response = if response.is_array() {
-            &response[0]
-        } else {
-            &response
-        };
-        assert_eq!(content(response)["tenant"], "tenant-a");
+    let tenantless = fixture.token(json!({"tenant_id": null}));
+    for uri in ["/mcp", "/mcp/sse"] {
+        for (identity, expected) in [
+            (None, StatusCode::UNAUTHORIZED),
+            (Some(tenantless.as_str()), StatusCode::FORBIDDEN),
+        ] {
+            let (status, response) = fixture
+                .post_with_tenants(uri, identity, request.clone(), &["tenant-a", "tenant-b"])
+                .await;
+            assert_eq!(status, expected);
+            assert_denied(&response, "tenant headers cannot supply an identity");
+        }
     }
-    for (uri, body) in [
-        (
-            "/mcp/tools/call",
-            json!({"name": "echo_tool", "arguments": {}}),
-        ),
-        (
-            "/mcp/v1/tools/invoke",
-            json!({"tool": "echo_tool", "arguments": {}}),
-        ),
+    assert_eq!(fixture.state.session_manager.count(), 0);
+    for tenants in [
+        vec![],
+        vec!["tenant-a"],
+        vec!["tenant-b"],
+        vec!["tenant-a", "tenant-b"],
+        vec!["invalid tenant"],
     ] {
-        let (status, _) = fixture
-            .post_with_tenant(uri, Some(&token), body.clone(), "tenant-b")
-            .await;
-        assert_eq!(status, StatusCode::FORBIDDEN);
-        let (status, _) = fixture
-            .post_with_tenant(uri, Some(&token), body, "tenant-a")
-            .await;
-        assert_eq!(status, StatusCode::OK);
+        for uri in ["/mcp", "/mcp/sse"] {
+            for body in [request.clone(), json!([request])] {
+                let (status, response) = fixture
+                    .post_with_tenants(uri, Some(&token), body, &tenants)
+                    .await;
+                assert_eq!(status, StatusCode::OK);
+                let response = if response.is_array() {
+                    &response[0]
+                } else {
+                    &response
+                };
+                assert_eq!(content(response)["tenant"], "tenant-a");
+            }
+        }
+        for (uri, body) in [
+            (
+                "/mcp/tools/call",
+                json!({"name": "echo_tool", "arguments": {}}),
+            ),
+            (
+                "/mcp/v1/tools/invoke",
+                json!({"tool": "echo_tool", "arguments": {}}),
+            ),
+        ] {
+            let (status, response) = fixture
+                .post_with_tenants(uri, Some(&token), body, &tenants)
+                .await;
+            assert_eq!(status, StatusCode::OK);
+            let value: Value =
+                serde_json::from_str(response["content"][0]["text"].as_str().unwrap()).unwrap();
+            assert_eq!(value["tenant"], "tenant-a");
+        }
+        let mut request = Request::builder()
+            .uri("/mcp/sse")
+            .header("Authorization", format!("Bearer {token}"));
+        for tenant in &tenants {
+            request = request.header("X-Tenant-ID", *tenant);
+        }
+        let response = crate::build_router(fixture.state.clone())
+            .oneshot(request.body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let mut stream = response.into_body().into_data_stream();
+        let endpoint = stream.next().await.unwrap().unwrap();
+        let endpoint = std::str::from_utf8(&endpoint).unwrap();
+        let id = endpoint.split("sessionId=").nth(1).unwrap().trim();
+        assert_eq!(
+            fixture
+                .state
+                .session_manager
+                .get(id)
+                .await
+                .unwrap()
+                .tenant_id,
+            "tenant-a"
+        );
     }
+}
+
+#[tokio::test]
+async fn sse_tenant_headers_preserve_token_expiry() {
+    let fixture = Fixture::new(|_| {}).await;
+    assert!(fixture
+        .state
+        .jwt_validator
+        .as_ref()
+        .unwrap()
+        .oidc_provider()
+        .get_key("test-key")
+        .await
+        .is_ok());
+    let started = std::time::Instant::now();
+    let token = fixture.token(json!({"exp": chrono::Utc::now().timestamp() + 3}));
     let response = crate::build_router(fixture.state.clone())
         .oneshot(
             Request::builder()
                 .uri("/mcp/sse")
+                .header("Authorization", format!("Bearer {token}"))
+                .header("X-Tenant-ID", "tenant-a")
+                .header("X-Tenant-ID", "tenant-b")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        to_bytes(response.into_body(), 1_048_576),
+    )
+    .await
+    .expect("SSE stream must close at token expiry")
+    .unwrap();
+    assert!(started.elapsed() >= std::time::Duration::from_secs(1));
+    assert!(std::str::from_utf8(&bytes)
+        .unwrap()
+        .contains("event: endpoint"));
+}
+
+#[tokio::test]
+async fn tenant_headers_cannot_authorize_sse_sessions() {
+    let fixture = Fixture::new(|_| {}).await;
+    assert!(fixture
+        .state
+        .session_manager
+        .ensure_tenant_session("owned", "tenant-a"));
+    let tenantless = fixture.token(json!({"tenant_id": null}));
+    let foreign = fixture.token(json!({"tenant_id": "tenant-b"}));
+    for (token, expected) in [
+        (None, StatusCode::UNAUTHORIZED),
+        (Some(tenantless), StatusCode::FORBIDDEN),
+        (Some(foreign), StatusCode::FORBIDDEN),
+    ] {
+        for method in ["GET", "POST", "DELETE"] {
+            let mut request = Request::builder()
+                .method(method)
+                .uri("/mcp/sse?sessionId=owned")
+                .header("Content-Type", "application/json")
+                .header("X-Tenant-ID", "tenant-a");
+            if let Some(token) = &token {
+                request = request.header("Authorization", format!("Bearer {token}"));
+            }
+            let response = crate::build_router(fixture.state.clone()).oneshot(request.body(Body::from(
+                json!({"jsonrpc": "2.0", "id": 7, "method": "tools/call", "params": {"name": "echo_tool", "arguments": {}}}).to_string()
+            )).unwrap()).await.unwrap();
+            assert_eq!(response.status(), expected, "{method}");
+            assert_eq!(
+                fixture
+                    .state
+                    .session_manager
+                    .get("owned")
+                    .await
+                    .unwrap()
+                    .tenant_id,
+                "tenant-a"
+            );
+        }
+    }
+    let token = fixture.token(json!({}));
+    let response = crate::build_router(fixture.state.clone())
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri("/mcp/sse?sessionId=owned")
                 .header("Authorization", format!("Bearer {token}"))
                 .header("X-Tenant-ID", "tenant-b")
                 .body(Body::empty())
@@ -1401,7 +1529,8 @@ async fn tenant_header_must_match_context_across_http_forms() {
         )
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    assert_eq!(fixture.state.session_manager.count(), 0);
 }
 
 #[tokio::test]
@@ -1666,8 +1795,8 @@ async fn service_account_reads_cp_permissions_end_to_end() {
 }
 
 #[tokio::test]
-async fn websocket_tenant_header_must_match_context() {
-    use tokio_tungstenite::tungstenite::{client::IntoClientRequest, Error};
+async fn websocket_tenant_headers_are_ignored() {
+    use tokio_tungstenite::tungstenite::{client::IntoClientRequest, Message};
     let fixture = Fixture::new(|_| {}).await;
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
@@ -1694,10 +1823,31 @@ async fn websocket_tenant_header_must_match_context() {
                     .headers_mut()
                     .append("X-Tenant-ID", tenant.parse().unwrap());
             }
-            match tokio_tungstenite::connect_async(request).await {
-                Err(Error::Http(response)) => assert_eq!(response.status().as_u16(), 403),
-                _ => panic!("conflicting tenant must be rejected before upgrade"),
-            }
+            let (mut socket, _) = tokio_tungstenite::connect_async(request).await.unwrap();
+            socket
+                .send(Message::Text(
+                    json!({"jsonrpc": "2.0", "id": 7, "method": "tools/call",
+                "params": {"name": "echo_tool", "arguments": {}}})
+                    .to_string()
+                    .into(),
+                ))
+                .await
+                .unwrap();
+            let response = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+                loop {
+                    match socket.next().await.unwrap().unwrap() {
+                        Message::Text(text) => break serde_json::from_str::<Value>(&text).unwrap(),
+                        Message::Ping(payload) => {
+                            socket.send(Message::Pong(payload)).await.unwrap()
+                        }
+                        _ => continue,
+                    }
+                }
+            })
+            .await
+            .expect("tool response");
+            assert_eq!(content(&response)["tenant"], "tenant-a");
+            socket.close(None).await.unwrap();
         }
     }
     server.abort();
@@ -1750,7 +1900,9 @@ async fn rest_tool_denials_precede_execution() {
             (Some(tenantless.as_str()), StatusCode::FORBIDDEN),
             (Some(scoped.as_str()), StatusCode::FORBIDDEN),
         ] {
-            let (status, response) = fixture.post(uri, token, body.clone()).await;
+            let (status, response) = fixture
+                .post_with_tenants(uri, token, body.clone(), &["tenant-a", "tenant-b"])
+                .await;
             assert_eq!(status, expected, "{uri}");
             if token == Some(scoped.as_str()) {
                 assert_eq!(response["isError"], true);
@@ -1799,6 +1951,12 @@ async fn websocket_identity_denials_precede_execution() {
                 };
                 request.headers_mut().insert(name, value.parse().unwrap());
             }
+            request
+                .headers_mut()
+                .append("X-Tenant-ID", "tenant-a".parse().unwrap());
+            request
+                .headers_mut()
+                .append("X-Tenant-ID", "tenant-b".parse().unwrap());
             match tokio_tungstenite::connect_async(request).await {
                 Err(Error::Http(response)) => assert_eq!(response.status(), expected),
                 _ => panic!("identity must be validated before upgrade"),
@@ -1936,6 +2094,8 @@ async fn batch_authentication_precedes_dispatch() {
                     .method("POST")
                     .uri(uri)
                     .header("Content-Type", "application/json")
+                    .header("X-Tenant-ID", "tenant-a")
+                    .header("X-Tenant-ID", "tenant-b")
                     .body(Body::from(Value::Array(batch.clone()).to_string()))
                     .unwrap(),
             )

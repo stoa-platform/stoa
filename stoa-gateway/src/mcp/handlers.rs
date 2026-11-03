@@ -176,7 +176,7 @@ fn require_admin_action(auth: &AuthContext, action: Action) -> Result<(), &'stat
 }
 
 /// Validate the JWT before accepting any client identity or tenant.
-/// A client tenant header cannot override or disagree with the validated identity.
+/// Client tenant headers are ignored; only the verified identity supplies the tenant.
 pub(super) async fn extract_auth_context(
     state: &AppState,
     headers: &HeaderMap,

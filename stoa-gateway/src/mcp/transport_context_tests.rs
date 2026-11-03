@@ -2503,3 +2503,91 @@ async fn regression_a2a_tasks_are_scoped_to_the_token_identity() {
         "alice data"
     );
 }
+
+fn permission(tool: &str, allowed: bool) -> Value {
+    json!({"mcp_server_id": "test-server", "tool_name": tool, "allowed": allowed})
+}
+
+/// Replace the fixture's tenant-a permissions with `items`.
+async fn override_permissions(fixture: &Fixture, items: Vec<Value>) {
+    Mock::given(method("GET"))
+        .and(path("/v1/tenants/tenant-a/tool-permissions"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "total": items.len(), "items": items
+        })))
+        .with_priority(1)
+        .mount(&fixture.server)
+        .await;
+}
+
+/// Call `name` through every transport that authorizes tool calls and
+/// return the REST and A2A statuses; JSON-RPC must agree with REST.
+async fn call_tool_everywhere(
+    fixture: &Fixture,
+    token: &str,
+    name: &str,
+) -> (StatusCode, StatusCode) {
+    let rest = json!({"name": name, "arguments": {}});
+    let rpc = json!({"jsonrpc": "2.0", "id": 7, "method": "tools/call",
+        "params": {"name": name, "arguments": {}}});
+    let (rest_status, _) = fixture.post("/mcp/tools/call", Some(token), rest).await;
+    let (_, rpc_response) = fixture.post("/mcp", Some(token), rpc).await;
+    let (a2a_status, a2a_response) = a2a_probe_request(fixture, Some(token), name, false).await;
+    if rest_status == StatusCode::OK {
+        assert!(
+            rpc_response.get("result").is_some(),
+            "JSON-RPC must follow REST"
+        );
+    } else {
+        assert_denied(&rpc_response, "JSON-RPC must follow the REST decision");
+        assert_denied(&a2a_response, "A2A must follow the REST decision");
+    }
+    (rest_status, a2a_status)
+}
+
+#[tokio::test]
+async fn regression_alias_allow_does_not_widen_canonical_tool_access() {
+    // A deprecated alias that is allowed must not execute a canonical tool
+    // that is explicitly denied or simply not listed.
+    for canonical in [Some(permission("echo_tool", false)), None] {
+        let fixture = Fixture::new(|config| config.a2a_enabled = true).await;
+        fixture
+            .state
+            .tool_registry
+            .register_alias("legacy_echo", "echo_tool");
+        let mut items = vec![permission("legacy_echo", true)];
+        items.extend(canonical);
+        override_permissions(&fixture, items).await;
+        let token = fixture.token(json!({}));
+        assert_eq!(
+            call_tool_everywhere(&fixture, &token, "legacy_echo").await,
+            (StatusCode::FORBIDDEN, StatusCode::FORBIDDEN)
+        );
+    }
+}
+
+#[tokio::test]
+async fn regression_alias_explicit_deny_wins_and_canonical_allow_still_works() {
+    let fixture = Fixture::new(|config| config.a2a_enabled = true).await;
+    fixture
+        .state
+        .tool_registry
+        .register_alias("legacy_echo", "echo_tool");
+    override_permissions(
+        &fixture,
+        vec![
+            permission("legacy_echo", false),
+            permission("echo_tool", true),
+        ],
+    )
+    .await;
+    let token = fixture.token(json!({}));
+    assert_eq!(
+        call_tool_everywhere(&fixture, &token, "legacy_echo").await,
+        (StatusCode::FORBIDDEN, StatusCode::FORBIDDEN)
+    );
+    assert_eq!(
+        call_tool_everywhere(&fixture, &token, "echo_tool").await,
+        (StatusCode::OK, StatusCode::OK)
+    );
+}

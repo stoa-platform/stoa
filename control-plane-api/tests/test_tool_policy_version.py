@@ -113,7 +113,7 @@ async def test_concurrent_mutations_get_distinct_versions(policy_db, tenant: str
 
 @pytest.mark.parametrize(
     "operation",
-    ["increment", "insert", "decrement", "rekey", "delete", "truncate", "truncate_permissions", "move_permission"],
+    "increment insert decrement rekey delete truncate truncate_permissions move_permission temp_trigger temp_bump".split(),  # noqa: SIM905 - Compact cases.
 )
 async def test_no_counter_reset_or_decrement_path(policy_db, operation: str) -> None:
     tenant = ToolPolicyVersion.tenant_id == "tenant-a"
@@ -130,12 +130,39 @@ async def test_no_counter_reset_or_decrement_path(policy_db, operation: str) -> 
     async with policy_db.begin() as session:
         session.add(permission())
     async with policy_db() as session:
+        if operation.startswith("temp_"):
+            schema = await session.scalar(text("SELECT current_schema()"))
+            await session.execute(text("CREATE TEMP TABLE policy_probe (tenant_id text)"))
+            function = f"{schema}.bump_tool_policy_version"
+            if operation == "temp_trigger":
+                function = "pg_temp.bump_tool_policy_version"
+                await session.execute(text(f"""
+                    CREATE FUNCTION pg_temp.bump_tool_policy_version() RETURNS trigger AS $$ BEGIN
+                    PERFORM set_config('stoa.tool_policy_mutation', 'on', true);
+                    UPDATE {schema}.tool_policy_versions SET version = 100 WHERE tenant_id = NEW.tenant_id;
+                    RETURN NEW; END; $$ LANGUAGE plpgsql
+                """))  # noqa: S608 - Generated schema.
+            trigger = f"CREATE TRIGGER probe AFTER INSERT ON policy_probe FOR EACH ROW EXECUTE FUNCTION {function}()"
+            await session.execute(text(trigger))
+            statements[operation] = text("INSERT INTO policy_probe VALUES ('tenant-a')")
         with pytest.raises(DBAPIError, match=r"policy version|permission tenant"):
             await session.execute(statements[operation])
         await session.rollback()
         assert await version(session) == 2
         assert await version(session, "other") == 1
     assert "version" not in TenantToolPermissionCreate.model_fields
+
+
+async def test_temporary_counter_does_not_divert_increment(policy_db) -> None:
+    async with policy_db.begin() as session:
+        schema = await session.scalar(text("SELECT current_schema()"))
+        await session.execute(text("CREATE TEMP TABLE tool_policy_versions (tenant_id text, version bigint)"))
+        session.add(permission("existing", "write"))
+        await session.flush()
+        counter = f"{schema}.tool_policy_versions"
+        query = f"SELECT version FROM {counter} WHERE tenant_id='existing'"  # noqa: S608 - Generated schema.
+        assert await session.scalar(text(query)) == 2
+        assert await session.scalar(text("SELECT count(*) FROM pg_temp.tool_policy_versions")) == 0
 
 
 async def test_migration_downgrade_and_upgrade(policy_db) -> None:

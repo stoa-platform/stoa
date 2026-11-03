@@ -112,6 +112,10 @@ jobs:
   # === Smoke Test: health checks after deploy (Tier 1) ===
   smoke-test:
     needs: deploy
+    # CAB-2362: the smoke targets the environment the deploy job actually
+    # deployed (environment: dev above), never prod. Without a public dev
+    # domain (SMOKE_BASE_DOMAIN_DEV) the reusable workflow skips the probes
+    # with a visible warning. Keep this in sync with deploy.with.environment.
     if: needs.deploy.result == 'success' && vars.GITOPS_DEPLOY_ENABLED == 'true'
     uses: ./.github/workflows/reusable-health-smoke.yml
     with:

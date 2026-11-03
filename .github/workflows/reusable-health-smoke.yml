@@ -1,7 +1,11 @@
 # =============================================================================
 # Reusable Health Smoke Test — Tier 1 post-deploy verification
 # =============================================================================
-# curl-based health checks against 5 production endpoints.
+# curl-based health checks against 5 endpoints of the target environment.
+# Targets (CAB-2362) are resolved by scripts/ci/resolve-smoke-targets.sh for
+# the environment that was actually deployed: input `base-domain`, else repo
+# variable SMOKE_BASE_DOMAIN_<ENV>, else the derived public prod default.
+# Dev has no public default: the smoke is skipped with a visible warning.
 # Zero auth required, runs in ~30s, catches real deploy failures:
 #   pod crash, ingress misconfiguration, Keycloak down, image pull error.
 #
@@ -22,6 +26,11 @@ on:
         required: false
         type: string
         default: 'dev'
+      base-domain:
+        description: 'Base domain to probe (overrides SMOKE_BASE_DOMAIN_<ENV>)'
+        required: false
+        type: string
+        default: ''
 
 permissions: {}
 
@@ -30,24 +39,47 @@ jobs:
     name: Health Smoke (${{ inputs.component }})
     runs-on: ubuntu-latest
     timeout-minutes: 8
+    permissions:
+      contents: read
+    env:
+      SMOKE_ENV: ${{ inputs.environment }}
+      SMOKE_COMPONENT: ${{ inputs.component }}
+      SMOKE_INPUT_DOMAIN: ${{ inputs.base-domain }}
+      SMOKE_VAR_DOMAIN: >-
+        ${{ (inputs.environment == 'prod' && vars.SMOKE_BASE_DOMAIN_PROD)
+        || (inputs.environment == 'dev' && vars.SMOKE_BASE_DOMAIN_DEV)
+        || '' }}
 
     steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          sparse-checkout: scripts/ci/resolve-smoke-targets.sh
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Resolve smoke targets
+        id: resolve
+        run: bash scripts/ci/resolve-smoke-targets.sh
+
       - name: Wait for rollout to converge
+        if: steps.resolve.outputs.skip != 'true'
+        env:
+          SMOKE_DOMAIN: ${{ steps.resolve.outputs.domain }}
         run: |
           set -uo pipefail
           # Poll the just-deployed component's own endpoint until it serves,
           # instead of a fixed sleep — a 2-pod ArgoCD rollout routinely takes
           # longer than 30s and the smoke raced it red on every gateway
           # deploy (CAB-2227).
-          case "${{ inputs.component }}" in
-            stoa-gateway)      url="https://mcp.gostoa.dev/health/ready" ;;
-            control-plane-api) url="https://api.gostoa.dev/health" ;;
-            portal)            url="https://portal.gostoa.dev" ;;
-            control-plane-ui)  url="https://console.gostoa.dev" ;;
+          case "$SMOKE_COMPONENT" in
+            stoa-gateway)          url="https://mcp.${SMOKE_DOMAIN}/health/ready" ;;
+            control-plane-api)     url="https://api.${SMOKE_DOMAIN}/health" ;;
+            portal|stoa-portal)    url="https://portal.${SMOKE_DOMAIN}" ;;
+            control-plane-ui)      url="https://console.${SMOKE_DOMAIN}" ;;
             *)                 url="" ;;
           esac
           if [ -z "$url" ]; then
-            echo "No rollout-wait URL for ${{ inputs.component }}; sleeping 30s"
+            echo "No rollout-wait URL for $SMOKE_COMPONENT; sleeping 30s"
             sleep 30
             exit 0
           fi
@@ -66,6 +98,9 @@ jobs:
           echo "::warning::$url not ready after 5 min — running checks anyway"
 
       - name: Health checks
+        if: steps.resolve.outputs.skip != 'true'
+        env:
+          SMOKE_DOMAIN: ${{ steps.resolve.outputs.domain }}
         run: |
           set -euo pipefail
           PASS=0; FAIL=0
@@ -82,15 +117,15 @@ jobs:
             fi
           }
 
-          echo "Health checks for gostoa.dev (after ${{ inputs.component }} deploy)"
+          echo "Health checks for $SMOKE_ENV (after $SMOKE_COMPONENT deploy)"
           echo "---"
 
-          check "API Health"      "https://api.gostoa.dev/health"
-          check "Gateway Health"  "https://mcp.gostoa.dev/health/ready"
-          check "Portal"          "https://portal.gostoa.dev"
-          check "Console"         "https://console.gostoa.dev"
-          check "Keycloak OIDC"   "https://auth.gostoa.dev/realms/stoa/.well-known/openid-configuration"
+          check "API Health"      "https://api.${SMOKE_DOMAIN}/health"
+          check "Gateway Health"  "https://mcp.${SMOKE_DOMAIN}/health/ready"
+          check "Portal"          "https://portal.${SMOKE_DOMAIN}"
+          check "Console"         "https://console.${SMOKE_DOMAIN}"
+          check "Keycloak OIDC"   "https://auth.${SMOKE_DOMAIN}/realms/stoa/.well-known/openid-configuration"
 
           echo "---"
-          echo "Results: $PASS passed, $FAIL failed (component: ${{ inputs.component }})"
+          echo "Results: $PASS passed, $FAIL failed (component: $SMOKE_COMPONENT)"
           [ "$FAIL" -eq 0 ] || exit 1

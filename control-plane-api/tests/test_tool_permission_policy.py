@@ -1,5 +1,6 @@
 """Bounds for the tool-permission policy payload (CAB-2222 S1)."""
 
+import json
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -76,6 +77,28 @@ def test_missing_entry_field_rejected(field: str) -> None:
 def test_invalid_entry_identity_rejected(field: str, value: object) -> None:
     with pytest.raises(ValidationError):
         ToolPermissionPolicy.model_validate(payload(permissions=[entry(**{field: value})]))
+
+
+@pytest.mark.parametrize("tenant_id", [None, "", "   ", "\t\n", "\u00a0\u2003"])
+@pytest.mark.parametrize("as_json", [False, True], ids=["model", "json"])
+def test_regression_invalid_tenant_identity_rejected(tenant_id: str | None, as_json: bool) -> None:
+    data = payload(tenant_id=tenant_id)
+    with pytest.raises(ValidationError, match="tenant_id"):
+        if as_json:
+            ToolPermissionPolicy.model_validate_json(json.dumps(data, default=str))
+        else:
+            ToolPermissionPolicy.model_validate(data)
+
+
+@pytest.mark.parametrize("as_json", [False, True], ids=["model", "json"])
+def test_missing_tenant_identity_rejected(as_json: bool) -> None:
+    data = payload()
+    del data["tenant_id"]
+    with pytest.raises(ValidationError, match="tenant_id"):
+        if as_json:
+            ToolPermissionPolicy.model_validate_json(json.dumps(data, default=str))
+        else:
+            ToolPermissionPolicy.model_validate(data)
 
 
 @pytest.mark.parametrize("seconds", [0, -1, 3601])

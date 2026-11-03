@@ -40,6 +40,13 @@ class ToolPermissionPolicy(BaseModel):
     expires_at: AwareDatetime
     permissions: list[ToolPermissionPolicyEntry] = Field(max_length=MAX_POLICY_ENTRIES)
 
+    @field_validator("tenant_id")
+    @classmethod
+    def require_tenant_identity(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Policy tenant identity must not be blank")
+        return value
+
     @model_validator(mode="after")
     def validate_bounds(self) -> Self:
         validity = (self.expires_at.astimezone(UTC) - self.issued_at.astimezone(UTC)).total_seconds()

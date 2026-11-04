@@ -125,3 +125,11 @@ class ManifestImagePinningGateRegressionTests(unittest.TestCase):
         self.assertIn("needs: changes", job)
         self.assertIn("if: always() && (github.event_name != 'push' || "
                       "needs.changes.outputs.runtime == 'true')", job)
+
+    def test_regression_live_e2e_never_runs_on_pull_requests(self):
+        # The live suite drives the deployed environment, so a pull request run
+        # cannot validate the PR. UI-only PRs rely on the mocked gates instead.
+        triggers = WORKFLOW.read_text().split("\non:\n", 1)[1].split("\nconcurrency:\n", 1)[0]
+        self.assertEqual(re.findall(r"(?m)^  ([a-z_]+):", triggers),
+                         ["push", "schedule", "workflow_dispatch"])
+        self.assertNotRegex(triggers, r"(?m)^\s*pull_request(_target)?:")

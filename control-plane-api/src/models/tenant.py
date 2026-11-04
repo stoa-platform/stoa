@@ -4,8 +4,10 @@ Model for multi-tenant management stored in the database.
 """
 
 import enum
+from uuid import uuid4
 
-from sqlalchemy import JSON, Column, DateTime, Integer, String, Text
+from sqlalchemy import JSON, Column, DateTime, Integer, String, Text, text
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 
 from src.database import Base
@@ -36,6 +38,19 @@ class Tenant(Base):
     # Primary key - slug-style identifier (e.g., "oasis-gunters")
     id = Column(String(64), primary_key=True)
 
+    # Stable identity that outlives slug reuse: a tenant deleted then recreated gets a
+    # new value. Set once at creation, never accepted from the API. The database default
+    # mirrors migration 110 so schemas built from this model (dev init_db, integration
+    # fixtures) also accept raw SQL seeds that omit the column.
+    uuid = Column(
+        UUID(as_uuid=True),
+        nullable=False,
+        unique=True,
+        index=True,
+        default=uuid4,
+        server_default=text("gen_random_uuid()"),
+    )
+
     # Display name (e.g., "OASIS Gunters")
     name = Column(String(255), nullable=False)
 
@@ -48,7 +63,7 @@ class Tenant(Base):
     # Tenant settings (JSON) - quotas, features, etc.
     settings = Column(JSON, default=dict, nullable=False)
 
-    # Provisioning fields (CAB-1315)
+    # Provisioning fields
     provisioning_status = Column(String(32), default=TenantProvisioningStatus.PENDING.value, nullable=False)
     provisioning_error = Column(Text, nullable=True)
     provisioning_started_at = Column(DateTime(timezone=True), nullable=True)

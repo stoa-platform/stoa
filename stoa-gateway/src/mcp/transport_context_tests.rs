@@ -2641,6 +2641,72 @@ async fn regression_fallback_targets_require_tenant_tool_permission() {
     }
 }
 
+#[tokio::test]
+async fn regression_fallback_targets_require_sub_account_allowlist() {
+    for names in [
+        vec!["echo_tool"],
+        vec!["echo_tool", "fallback_alias"],
+        vec!["echo_tool", "fallback_tool"],
+        vec!["echo_tool", "fallback_alias", "fallback_tool"],
+    ] {
+        let allowed = names.len() == 3;
+        let fixture = Fixture::new(|config| {
+            config.federation_enabled = true;
+            config.fallback_enabled = true;
+            config.fallback_chains = Some(r#"{"echo_tool":["fallback_alias"]}"#.into());
+        })
+        .await;
+        let items = ["echo_tool", "fallback_alias", "fallback_tool"]
+            .map(|name| permission(name, true))
+            .to_vec();
+        override_permissions(&fixture, items).await;
+        let tools: Vec<_> = names
+            .iter()
+            .map(|name| json!({"tool_name": name}))
+            .collect();
+        Mock::given(method("GET"))
+            .and(path(
+                "/v1/tenants/tenant-a/federation/accounts/master1/sub-accounts/sub1",
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"tools": tools})))
+            .mount(&fixture.server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/fallback"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("fallback ran"))
+            .mount(&fixture.server)
+            .await;
+        // The unmocked primary returns 404, forcing fallback authorization.
+        for (name, path) in [("echo_tool", "/primary"), ("fallback_tool", "/fallback")] {
+            let url = format!("{}{path}", fixture.server.uri());
+            let tool = DynamicTool::new(name, "probe", url, "GET", empty_schema(), "tenant-a");
+            fixture.state.tool_registry.register(Arc::new(tool));
+        }
+        fixture
+            .state
+            .tool_registry
+            .register_alias("fallback_alias", "fallback_tool");
+        let token =
+            fixture.token(json!({"sub_account_id": "sub1", "master_account_id": "master1"}));
+        let call = json!({"name": "echo_tool", "arguments": {}});
+        let (status, response) = fixture.post("/mcp/tools/call", Some(&token), call).await;
+        let requests = fixture.server.received_requests().await.unwrap();
+        assert!(requests.iter().any(|r| r.url.path() == "/primary"));
+        let ran = requests
+            .iter()
+            .filter(|r| r.url.path() == "/fallback")
+            .count();
+        assert_eq!(ran, usize::from(allowed), "names={names:?}");
+        let text = response["content"][0]["text"].as_str().unwrap();
+        if allowed {
+            assert_eq!((status, text), (StatusCode::OK, "fallback ran"));
+        } else {
+            assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+            assert!(text.starts_with("Execution failed: HTTP 404"), "{text}");
+        }
+    }
+}
+
 async fn tool_call(fixture: &Fixture, token: &str, tool: &str) -> u16 {
     let body = json!({"name": tool, "arguments": {}});
     let (status, _) = fixture.post("/mcp/tools/call", Some(token), body).await;

@@ -1,7 +1,7 @@
 # Known Issues — STOA Platform
 
 > Living document. Updated after each release or when new issues are discovered.
-> Last updated: 2026-03-01
+> Last updated: 2026-11-05
 
 ## Active Issues
 
@@ -24,7 +24,6 @@
 |-------|-------|----------|------------|----------|
 | Dependency Review fails (GitHub Advanced Security not enabled) | v1.0.0 | Low | Non-blocking check | — |
 | E2E tests require running infra, fail on UI-only PRs | v1.0.0 | Medium | Tag `@wip`, skip in UI PRs | — |
-| DCO Check fails on squash-merged commits | v1.0.0 | Low | Expected behavior with squash merge | — |
 | Branch protection `strict: true` requires update-branch before merge | v2.0.0 | Low | `gh api repos/.../pulls/{id}/update-branch -X PUT` | — |
 
 ### Helm / Deployment
@@ -38,7 +37,7 @@
 
 | Issue | Introduced | Resolved | Version | Resolution |
 |-------|-----------|----------|---------|------------|
-| — | — | — | — | — |
+| DCO Check fails on squash-merged commits | v1.0.0 | 2026-03-05 | — | `DCO Check` workflow removed (#1467); sign-off is verified in review, see [CONTRIBUTING.md](../../CONTRIBUTING.md#the-dco-check-and-squash-merges) |
 
 ## Reporting Issues
 

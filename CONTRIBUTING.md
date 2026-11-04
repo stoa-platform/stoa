@@ -263,6 +263,23 @@ git commit -s -m "feat(api): add new endpoint"
 
 This adds a `Signed-off-by: Your Name <email>` line to your commit. See [CLA.md](CLA.md) for detailed instructions on signing commits, configuring automatic sign-off, and fixing unsigned commits.
 
+#### The DCO check and squash merges
+
+No pull request check verifies the `Signed-off-by:` trailer today. A `DCO Check` GitHub Actions workflow enforced it from January to March 2026; it was removed on 2026-03-05 (#1467) as incompatible with the squash-merge strategy described below. The required `Verify Signed Commits` check verifies GPG signatures only. Sign-off remains mandatory and is verified during review.
+
+Pull requests are squash-merged into `main`. GitHub rewrites the author of the squash commit to the pull request author's GitHub account identity (for example `12345+login@users.noreply.github.com` when the address is private), while the `Signed-off-by:` trailer copied from the branch still carries the local git identity. Common DCO checkers (such as the DCO GitHub App) require the trailer to match the commit author or committer, so a squash-merged commit is not DCO-valid on its own. This is why a sign-off check that inspects every commit cannot coexist with squash merges unless the commits are re-signed.
+
+The mismatch matters when such a commit re-enters a pull request, for example a backport that cherry-picks it or a pull request that merges `main` into a release branch. Nothing is wrong with your own commits: re-sign the commits on your branch so the trailer matches the identity that commits them, then push.
+
+```bash
+git commit --amend -s --no-edit      # last commit only
+git rebase --signoff origin/main     # every commit on the branch
+git cherry-pick -s <sha>             # when backporting a squash-merged commit
+git push --force-with-lease
+```
+
+Re-signing on the branch is the expected fix; do not open a new pull request for it. Committing with the name and email GitHub puts on your web commits (your profile name and your primary or `noreply` address) keeps the trailer and the rewritten author identical and avoids the mismatch altogether.
+
 ### Code Style
 
 - **Python:** Follow PEP 8, use `ruff` for linting and `black` for formatting

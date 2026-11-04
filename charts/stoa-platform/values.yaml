@@ -84,8 +84,18 @@ stoaGateway:
   replicas: 2
   serviceAccount: default
 
-  # Control Plane (Python FastAPI backend)
-  controlPlaneUrl: 'http://stoa-control-plane-api.stoa-system.svc.cluster.local:80'
+  # Control Plane (Python FastAPI backend). The in-cluster Service listens on port 8000.
+  controlPlaneUrl: 'http://stoa-control-plane-api.stoa-system.svc.cluster.local:8000'
+
+  # Tenants whose tool policy is loaded at startup and refreshed in the background.
+  # When non-empty, rendered as the STOA_POLICY_BOOT_TENANTS env var (comma-separated).
+  # The gateway fails /ready closed until a fresh policy has loaded for every listed
+  # tenant, and stays not-ready while a Control Plane URL is set but this list is
+  # empty (ADR-070 §4). Empty by default so rendered manifests are unchanged.
+  # policyBootTenants:
+  #   - tenant-a
+  #   - tenant-b
+  policyBootTenants: []
 
   # Keycloak OIDC
   keycloakUrl: ''
@@ -226,8 +236,12 @@ stoaSidecar:
   serviceAccount: default
   environment: dev # dev | staging | prod
 
-  # Control Plane connection (for auto-registration)
-  controlPlaneUrl: 'http://stoa-control-plane-api.stoa-system.svc.cluster.local:80'
+  # Control Plane connection (for auto-registration). The in-cluster Service listens on port 8000.
+  controlPlaneUrl: 'http://stoa-control-plane-api.stoa-system.svc.cluster.local:8000'
+
+  # Tenants whose tool policy is loaded at startup; same semantics as
+  # stoaGateway.policyBootTenants (rendered as STOA_POLICY_BOOT_TENANTS when non-empty).
+  policyBootTenants: []
 
   # Keycloak OIDC (for token validation)
   keycloakUrl: ''

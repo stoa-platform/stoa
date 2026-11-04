@@ -47,7 +47,8 @@ kubectl apply -f charts/stoa-platform/crds/
 | `stoaGateway.replicas` | `2` | Pod replica count |
 | `stoaGateway.image.repository` | `ghcr.io/stoa-platform/stoa-gateway` | Container image |
 | `stoaGateway.image.tag` | `latest` | Image tag |
-| `stoaGateway.controlPlaneUrl` | `http://control-plane-api:8000` | API sync endpoint |
+| `stoaGateway.controlPlaneUrl` | `http://stoa-control-plane-api.stoa-system.svc.cluster.local:8000` | Control Plane API URL (in-cluster Service, port 8000) |
+| `stoaGateway.policyBootTenants` | `[]` | Tenants whose tool policy is loaded at startup. Rendered as comma-separated `STOA_POLICY_BOOT_TENANTS` when non-empty; `/ready` fails closed until their policy has loaded (ADR-070) |
 | `stoaGateway.keycloakUrl` | `http://keycloak:8080` | OIDC provider |
 | `stoaGateway.mode` | `edge-mcp` | Gateway mode (edge-mcp, sidecar, proxy, shadow) |
 | `stoaGateway.autoRegister` | `true` | Register with control plane on startup |
@@ -57,6 +58,8 @@ kubectl apply -f charts/stoa-platform/crds/
 | `stoaGateway.resources.requests.memory` | `128Mi` | Memory request |
 | `stoaGateway.resources.limits.memory` | `256Mi` | Memory limit |
 | `stoaSidecar.enabled` | `false` | Deploy a real same-pod third-party gateway + STOA sidecar |
+| `stoaSidecar.controlPlaneUrl` | `http://stoa-control-plane-api.stoa-system.svc.cluster.local:8000` | Control Plane API URL for the sidecar container |
+| `stoaSidecar.policyBootTenants` | `[]` | Same semantics as `stoaGateway.policyBootTenants`, for the sidecar container |
 | `gatewaySync.enabled` | `false` | Enable OpenAPI sync CronJob |
 | `gatewaySync.schedule` | `*/30 * * * *` | Sync frequency |
 | `autoscaling.enabled` | `false` | Enable HPA |

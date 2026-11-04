@@ -269,6 +269,14 @@ pub struct Config {
     #[serde(default, deserialize_with = "self::deserializers::string_list")]
     pub policy_boot_tenants: Vec<String>,
 
+    /// Pinned JWKS file of Control Plane public keys trusted for signed
+    /// tool-policy artifacts (Ed25519 `OKP`, `alg=EdDSA`, at most two: current
+    /// plus backup). Mount from a Kubernetes Secret and restrict write access
+    /// exactly as for the signing private key: whoever edits it picks the trusted
+    /// signer. Missing or refused: calls are denied. Env: STOA_POLICY_TRUST_JWKS_FILE
+    #[serde(default)]
+    pub policy_trust_jwks_file: Option<String>,
+
     // === Observability ===
     /// Informational log level (tracing itself is driven by `RUST_LOG`).
     /// Env: STOA_LOG_LEVEL (values: trace | debug | info | warn | error)
@@ -1028,6 +1036,7 @@ impl fmt::Debug for Config {
             .field("policy_path", &self.policy_path)
             .field("policy_enabled", &self.policy_enabled)
             .field("policy_boot_tenants", &self.policy_boot_tenants)
+            .field("policy_trust_jwks_file", &r(&self.policy_trust_jwks_file))
             .field("log_level", &self.log_level)
             .field("log_format", &self.log_format)
             .field("otel_endpoint", &self.otel_endpoint)

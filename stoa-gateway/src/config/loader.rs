@@ -269,6 +269,12 @@ impl Config {
         if let Some(ref p) = self.policy_path {
             super::path_safety::warn_if_unsafe("policy_path", p);
         }
+        if let Some(ref p) = self.policy_trust_jwks_file {
+            // Field only: the trust key set location never reaches the logs.
+            if super::path_safety::is_path_outside_safe_prefixes(p) {
+                tracing::warn!(field = "policy_trust_jwks_file", "outside safe prefixes");
+            }
+        }
         if let Some(ref p) = self.ip_blocklist_file {
             super::path_safety::warn_if_unsafe("ip_blocklist_file", p);
         }
@@ -376,6 +382,28 @@ mod tests {
         // Default config has no CP URL and no JWT — validate logs warnings
         // but does not fail.
         config.validate().expect("default config must validate");
+    }
+
+    /// The trust key set location stays out of validation logs and of the
+    /// `Config` `Debug` output, even when it sits outside the safe prefixes.
+    #[test]
+    fn trust_key_set_path_is_withheld_from_diagnostics() {
+        use crate::control_plane::tool_proxy::tests::LogBuffer;
+        let path = "/srv/synthetic-mount/trust-keys.json";
+        let config = Config {
+            policy_trust_jwks_file: Some(path.to_string()),
+            ..Config::default()
+        };
+        let logs = LogBuffer::default();
+        let subscriber = tracing_subscriber::fmt()
+            .with_writer(logs.clone())
+            .with_ansi(false)
+            .finish();
+        tracing::subscriber::with_default(subscriber, || config.validate().unwrap());
+        let captured = String::from_utf8(logs.0.lock().clone()).unwrap();
+        assert!(captured.contains("policy_trust_jwks_file"), "{captured}");
+        assert!(!captured.contains(path), "{captured}");
+        assert!(!format!("{config:?}").contains(path));
     }
 
     #[test]

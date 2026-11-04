@@ -362,6 +362,7 @@ impl Default for Config {
             policy_path: None,
             policy_enabled: default_policy_enabled(),
             policy_boot_tenants: Vec::new(),
+            policy_trust_jwks_file: None,
             log_level: default_log_level(),
             log_format: default_log_format(),
             otel_enabled: default_otel_enabled(),

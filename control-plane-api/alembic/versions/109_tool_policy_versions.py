@@ -16,15 +16,19 @@ def upgrade() -> None:
     counter = f"{namespace}.tool_policy_versions"
     permission = f"{namespace}.tenant_tool_permissions"
     schema_literal = sa.literal(schema).compile(dialect=bind.dialect, compile_kwargs={"literal_binds": True})
-    op.create_table(
+    counter_table = op.create_table(
         "tool_policy_versions",
         sa.Column("tenant_id", sa.String(255), primary_key=True),
         sa.Column("version", sa.BigInteger(), nullable=False, server_default="1"),
         sa.CheckConstraint("version >= 1", name="ck_tool_policy_version_positive"),
         schema=schema,
     )
-    # Backfill uses quoted catalog identifiers before installing the counter guards.
-    op.execute(f"INSERT INTO {counter} SELECT DISTINCT tenant_id, 1 FROM {permission}")  # noqa: S608
+    permissions = sa.table("tenant_tool_permissions", sa.column("tenant_id"), schema=schema)
+    op.execute(
+        counter_table.insert().from_select(
+            ["tenant_id", "version"], sa.select(permissions.c.tenant_id, sa.literal(1)).distinct()
+        )
+    )
     # Keep the statement exact: its complete call frame identifies the trusted writer.
     increment = f"""INSERT INTO {counter} AS counter (tenant_id, version)
             VALUES (CASE WHEN TG_OP = 'DELETE' THEN OLD.tenant_id ELSE NEW.tenant_id END, 2)

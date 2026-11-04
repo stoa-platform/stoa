@@ -4,7 +4,7 @@
 //! Eliminates the circular proxy pattern where gateway → CP-API → gateway
 //! was adding ~200-300ms of unnecessary latency per tool call.
 //!
-//! Missing or stale policy denies. A complete fresh policy carries the CP default explicitly.
+//! Only an explicit allow in a complete fresh policy permits a tool call.
 
 use super::ToolProxyClient;
 use moka::sync::Cache;
@@ -37,15 +37,11 @@ struct PermissionListResponse {
 #[derive(Debug, Clone)]
 pub struct PermissionRules {
     overrides: HashMap<String, bool>,
-    default_allowed: bool,
 }
 
 impl PermissionRules {
     fn allows(&self, tool: &str) -> bool {
-        self.overrides
-            .get(tool)
-            .copied()
-            .unwrap_or(self.default_allowed)
+        self.overrides.get(tool).copied().unwrap_or(false)
     }
 }
 
@@ -83,9 +79,11 @@ pub enum PermissionState {
 }
 
 impl PermissionState {
-    fn deny_reason(&self, tool_name: &str) -> Option<PermissionDenyReason> {
+    /// Decide a call requested as `requested` that resolved to `canonical`.
+    /// Both names need an explicit allow; a deny on either wins.
+    fn deny_reason(&self, requested: &str, canonical: &str) -> Option<PermissionDenyReason> {
         match self {
-            Self::Fresh { rules, .. } if rules.allows(tool_name) => None,
+            Self::Fresh { rules, .. } if rules.allows(requested) && rules.allows(canonical) => None,
             Self::Fresh { .. } => Some(PermissionDenyReason::PermissionAbsent),
             Self::Stale { .. } => Some(PermissionDenyReason::PermissionCacheExpired),
             Self::Unavailable { reason } => Some(*reason),
@@ -137,19 +135,36 @@ impl ToolPermissionService {
 
     /// Check if a tool is allowed for a tenant.
     ///
-    /// Uses only a complete fresh policy, including the CP default and overrides.
-    /// Missing, stale, or unavailable policy denies.
+    /// Requires an explicit allow in a complete fresh policy.
+    /// Missing permissions and stale or unavailable policy deny.
     pub async fn is_tool_allowed(&self, tenant_id: &str, tool_name: &str) -> bool {
+        self.is_tool_call_allowed(tenant_id, tool_name, tool_name)
+            .await
+    }
+
+    /// Check a call requested as `requested_name` that the tool registry
+    /// resolved to `canonical_name` (they differ only for deprecated aliases).
+    ///
+    /// The canonical tool is the one that executes, so it needs its own
+    /// explicit allow; the requested name keeps its allow requirement so an
+    /// alias can never widen access. A deny on either name wins.
+    pub async fn is_tool_call_allowed(
+        &self,
+        tenant_id: &str,
+        requested_name: &str,
+        canonical_name: &str,
+    ) -> bool {
         let state = self.get_permission_state(tenant_id).await;
         self.record_state(&state);
 
-        match state.deny_reason(tool_name) {
+        match state.deny_reason(requested_name, canonical_name) {
             None => true,
             Some(reason) => {
                 warn!(
                     audit_event = "tool_call_denied",
                     tenant_id = %tenant_id,
-                    tool_name = %tool_name,
+                    tool_name = %canonical_name,
+                    requested_name = %requested_name,
                     reason = %reason.as_str(),
                     "Tool permission fail-closed deny"
                 );
@@ -311,10 +326,7 @@ impl ToolPermissionService {
             }
             if received == list.total {
                 debug!(tenant_id = %tenant_id, total = received, "Loaded complete tool permissions");
-                return Ok(PermissionRules {
-                    overrides,
-                    default_allowed: list.default_allowed,
-                });
+                return Ok(PermissionRules { overrides });
             }
             page += 1;
             if page > 1000 {
@@ -568,21 +580,79 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn permissions_pagination_reads_all_pages_and_default() {
+    async fn regression_permissions_pagination_requires_explicit_allow() {
         use wiremock::matchers::{header, query_param};
         let server = MockServer::start().await;
         let service = authenticated_service(&server, Duration::from_secs(60)).await;
         for (page, server_id, allowed) in [(1, "first", true), (2, "second", false)] {
-            Mock::given(method("GET")).and(path("/v1/tenants/tenant-a/tool-permissions"))
+            let mut items = vec![serde_json::json!({
+                "mcp_server_id": server_id, "tool_name": "blocked", "allowed": allowed
+            })];
+            if page == 1 {
+                items.push(serde_json::json!({
+                    "mcp_server_id": server_id, "tool_name": "allowed", "allowed": true
+                }));
+            }
+            Mock::given(method("GET"))
+                .and(path("/v1/tenants/tenant-a/tool-permissions"))
                 .and(query_param("page", page.to_string()))
                 .and(header("Authorization", "Bearer fixture-service-access"))
                 .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                    "items": [{"mcp_server_id": server_id, "tool_name": "blocked", "allowed": allowed}],
-                    "total": 2, "page": page, "default_allowed": true
-                }))).expect(1).mount(&server).await;
+                    "items": items,
+                    "total": 3, "page": page, "default_allowed": true
+                })))
+                .expect(1)
+                .mount(&server)
+                .await;
         }
         assert!(!service.is_tool_allowed("tenant-a", "blocked").await);
-        assert!(service.is_tool_allowed("tenant-a", "ordinary_read").await);
+        assert!(service.is_tool_allowed("tenant-a", "allowed").await);
+        assert!(!service.is_tool_allowed("tenant-a", "ordinary_read").await);
+    }
+
+    #[tokio::test]
+    async fn regression_empty_permissions_deny_despite_cp_default_allow() {
+        let server = MockServer::start().await;
+        let service = authenticated_service(&server, Duration::from_secs(60)).await;
+        Mock::given(method("GET"))
+            .and(path("/v1/tenants/tenant-a/tool-permissions"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "items": [], "total": 0, "page": 1, "default_allowed": true
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        assert!(!service.is_tool_allowed("tenant-a", "unlisted").await);
+    }
+
+    #[tokio::test]
+    async fn regression_incomplete_permissions_deny_partial_allow() {
+        use wiremock::matchers::query_param;
+        let server = MockServer::start().await;
+        let service = authenticated_service(&server, Duration::from_secs(60)).await;
+        Mock::given(method("GET"))
+            .and(path("/v1/tenants/tenant-a/tool-permissions"))
+            .and(query_param("page", "1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "items": [{"mcp_server_id": "first", "tool_name": "allowed", "allowed": true}],
+                "total": 2, "page": 1, "default_allowed": true
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/v1/tenants/tenant-a/tool-permissions"))
+            .and(query_param("page", "2"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "items": [], "total": 2, "page": 2, "default_allowed": true
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        assert!(!service.is_tool_allowed("tenant-a", "allowed").await);
+        assert_eq!(service.readiness_failure_reason(), Some("cp_unreachable"));
     }
 
     #[tokio::test]
@@ -649,5 +719,58 @@ mod tests {
                 .count(),
             1
         );
+    }
+
+    #[tokio::test]
+    async fn regression_alias_allow_does_not_widen_canonical_deny() {
+        // The requested name is an allowed alias; the canonical tool it
+        // resolves to is denied or unlisted. The call must be denied.
+        for canonical in [
+            Some(
+                serde_json::json!({"mcp_server_id": "s1", "tool_name": "new_tool", "allowed": false}),
+            ),
+            None,
+        ] {
+            let server = MockServer::start().await;
+            let mut items = vec![serde_json::json!(
+                {"mcp_server_id": "s1", "tool_name": "old_tool", "allowed": true}
+            )];
+            items.extend(canonical);
+            Mock::given(method("GET"))
+                .and(path_regex(r"/v1/tenants/.+/tool-permissions"))
+                .respond_with(permissions_response(serde_json::Value::Array(items)))
+                .mount(&server)
+                .await;
+            let svc = authenticated_service(&server, Duration::from_secs(60)).await;
+            assert!(
+                !svc.is_tool_call_allowed("tenant1", "old_tool", "new_tool")
+                    .await
+            );
+            assert!(svc.is_tool_allowed("tenant1", "old_tool").await);
+        }
+    }
+
+    #[tokio::test]
+    async fn regression_alias_explicit_deny_wins_over_canonical_allow() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path_regex(r"/v1/tenants/.+/tool-permissions"))
+            .respond_with(permissions_response(serde_json::json!([
+                {"mcp_server_id": "s1", "tool_name": "old_tool", "allowed": false},
+                {"mcp_server_id": "s1", "tool_name": "new_tool", "allowed": true}
+            ])))
+            .mount(&server)
+            .await;
+        let svc = authenticated_service(&server, Duration::from_secs(60)).await;
+        assert!(
+            !svc.is_tool_call_allowed("tenant1", "old_tool", "new_tool")
+                .await
+        );
+        // The canonical name keeps working under its own allow.
+        assert!(
+            svc.is_tool_call_allowed("tenant1", "new_tool", "new_tool")
+                .await
+        );
+        assert!(svc.is_tool_allowed("tenant1", "new_tool").await);
     }
 }

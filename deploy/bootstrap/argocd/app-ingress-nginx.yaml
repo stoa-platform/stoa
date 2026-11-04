@@ -42,6 +42,19 @@ spec:
             enabled: true
             serviceMonitor:
               enabled: true
+          # Real client IP and rate-limit status codes.
+          # proxy-real-ip-cidr must cover only the upstream proxy hop (the CNI
+          # gateway of the node running Caddy). 10.42.0.0/16 is the k3s
+          # default pod CIDR, a provisional value: it trusts the whole pod
+          # network. Tighten it later outside this public repository, or
+          # complement it with a NetworkPolicy. The live override is a /32;
+          # only that /32 must be measured again whenever the controller pod
+          # moves to another node.
+          config:
+            use-forwarded-headers: "true"
+            proxy-real-ip-cidr: "10.42.0.0/16"
+            limit-req-status-code: "429"
+            limit-conn-status-code: "429"
   destination:
     server: https://kubernetes.default.svc
     namespace: ingress-nginx

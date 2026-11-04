@@ -1,7 +1,7 @@
 # =============================================================================
 # GitHub Actions: Dependency Review
 # =============================================================================
-# Blocks PRs that introduce dependencies with known vulnerabilities or
+# Reviews PRs that introduce dependencies with known vulnerabilities or
 # restricted licenses. Complements Dependabot by catching NEW vulnerable
 # deps (Dependabot only updates existing ones).
 # =============================================================================
@@ -30,6 +30,9 @@ jobs:
 
       - name: Dependency Review
         uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4.9.0
+        # Keep this advisory while GitHub Advanced Security (GHAS) is disabled.
+        # Remove continue-on-error once GHAS is enabled to restore enforcement.
+        continue-on-error: true
         with:
           fail-on-severity: high
           deny-licenses: GPL-3.0, AGPL-3.0, SSPL-1.0

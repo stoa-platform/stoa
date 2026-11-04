@@ -376,7 +376,9 @@ async def get_current_user(
             error=str(e),
             error_type=type(e).__name__,
         )
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid token: {e!s}")
+        # Application-owned claim rejections keep their text; library messages stay in the logs.
+        reason = str(e) if isinstance(e, TokenValidationError) else "verification failed"
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid token: {reason}")
     except httpx.HTTPError as e:
         logger.error(
             "Failed to fetch Keycloak public key",

@@ -137,7 +137,11 @@ async def test_access_claims(claim: str, value: Any, status: int, client: AsyncC
     response = await client.get("/me", headers={"Authorization": f"Bearer {_jws(claims, signing_key)}"})
     assert response.status_code == status
     if status == 401:
-        assert response.json()["detail"].startswith("Invalid token: ")
+        detail = response.json()["detail"]
+        if claim == "aud":
+            assert detail.startswith("Invalid token: Invalid audience: ")
+        else:
+            assert detail == "Invalid token: verification failed"
     else:
         assert response.json()["id"] == "contract-user"
 
@@ -156,7 +160,8 @@ async def test_access_signatures(case: str, client: AsyncClient, signing_key: An
             token = _corrupt(token)
     response = await client.get("/me", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 401
-    assert response.json()["detail"].startswith("Invalid token: ")
+    # Exact match: a leaked library message would fail this assertion.
+    assert response.json() == {"detail": "Invalid token: verification failed"}
 
 
 def _jwk(key: Any) -> dict[str, str]:
@@ -179,12 +184,15 @@ def _jwk(key: Any) -> dict[str, str]:
     return {"kty": "OKP", "crv": "Ed25519", "x": _b64(raw)}
 
 
-def _dpop(key: Any, alg: str = "RS256", overrides: dict[str, str] | None = None, corrupt: bool = False) -> Any:
+def _dpop(
+    key: Any, alg: str = "RS256", overrides: dict[str, str] | None = None, corrupt: bool = False, signer: Any = None
+) -> Any:
+    """Build a proof whose header JWK is `key`'s public key; `signer` (default `key`) produces the signature."""
     public = _jwk(key)
     canonical = json.dumps(public, sort_keys=True, separators=(",", ":")).encode()
     claims: dict[str, Any] = {"htm": "GET", "htu": URI, "ath": _b64(hashlib.sha256(b"access-token").digest())}
     claims.update(jti="contract-proof", iat=int(time.time()) + 10)
-    proof = _jws(claims, key, alg, typ="dpop+jwt", jwk=public | (overrides or {}))
+    proof = _jws(claims, signer or key, alg, typ="dpop+jwt", jwk=public | (overrides or {}))
     return validate_sender_constrained_token(
         {"cnf": {"jkt": _b64(hashlib.sha256(canonical).digest())}},
         "access-token",
@@ -230,10 +238,14 @@ def test_dpop_algorithm_policy(alg: str | None) -> None:
     assert result.error == "DPoP proof algorithm is not supported"
 
 
-def test_dpop_corrupted_signature(signing_key: Any) -> None:
-    result = _dpop(signing_key, corrupt=True)
+@pytest.mark.parametrize("case", ["tampered", "other-key"])
+def test_dpop_signature_rejections(case: str, signing_key: Any) -> None:
+    """A corrupted signature or a proof signed by another key is rejected with stable text only."""
+    other_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    result = _dpop(signing_key, corrupt=case == "tampered", signer=other_key if case == "other-key" else None)
     assert not result.valid
-    assert result.error.startswith("DPoP validation failed: ")
+    # Exact match: a leaked library message would fail this assertion.
+    assert result.error == "DPoP validation failed"
 
 
 @pytest.fixture(scope="module")

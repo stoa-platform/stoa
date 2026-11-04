@@ -14,7 +14,6 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption, PrivateFormat
 
 from src.auth.sender_constrained import (
-    SenderConstrainedResult,
     _compute_ath,
     _compute_jwk_thumbprint,
     _extract_client_cert_fingerprint,
@@ -55,12 +54,14 @@ _test_jwk = {
 }
 
 _test_jkt = _compute_jwk_thumbprint(_test_jwk)
+# Opaque placeholder bearer value shared by the proof builder and the router tests.
+_ACCESS_TOKEN = "test-access-token"
 
 
 def _make_dpop_proof(
     http_method: str = "GET",
     http_uri: str = "https://api.gostoa.dev/v1/apis",
-    access_token: str = "test-access-token",
+    access_token: str = _ACCESS_TOKEN,
     jti: str = "unique-jti-1",
     iat: float | None = None,
     typ: str = "dpop+jwt",
@@ -155,9 +156,7 @@ class TestDpopValidation:
         proof = _make_dpop_proof(access_token=access_token)
         headers = {"dpop": proof}
 
-        result = _validate_dpop_binding(
-            cnf, headers, access_token, "GET", "https://api.gostoa.dev/v1/apis"
-        )
+        result = _validate_dpop_binding(cnf, headers, access_token, "GET", "https://api.gostoa.dev/v1/apis")
         assert result.valid is True
         assert result.mode == "dpop"
 
@@ -167,9 +166,7 @@ class TestDpopValidation:
         proof = _make_dpop_proof()
         headers = {"dpop": proof}
 
-        result = _validate_dpop_binding(
-            cnf, headers, "test-access-token", "GET", "https://api.gostoa.dev/v1/apis"
-        )
+        result = _validate_dpop_binding(cnf, headers, "test-access-token", "GET", "https://api.gostoa.dev/v1/apis")
         assert result.valid is False
         assert "thumbprint" in result.error.lower()
 
@@ -179,9 +176,7 @@ class TestDpopValidation:
         proof = _make_dpop_proof(http_method="POST")
         headers = {"dpop": proof}
 
-        result = _validate_dpop_binding(
-            cnf, headers, "test-access-token", "GET", "https://api.gostoa.dev/v1/apis"
-        )
+        result = _validate_dpop_binding(cnf, headers, "test-access-token", "GET", "https://api.gostoa.dev/v1/apis")
         assert result.valid is False
         assert "htm" in result.error.lower()
 
@@ -191,9 +186,7 @@ class TestDpopValidation:
         proof = _make_dpop_proof(http_uri="https://other.example.com/api")
         headers = {"dpop": proof}
 
-        result = _validate_dpop_binding(
-            cnf, headers, "test-access-token", "GET", "https://api.gostoa.dev/v1/apis"
-        )
+        result = _validate_dpop_binding(cnf, headers, "test-access-token", "GET", "https://api.gostoa.dev/v1/apis")
         assert result.valid is False
         assert "htu" in result.error.lower()
 
@@ -204,17 +197,13 @@ class TestDpopValidation:
         headers = {"dpop": proof1}
 
         # First use succeeds
-        result1 = _validate_dpop_binding(
-            cnf, headers, "test-access-token", "GET", "https://api.gostoa.dev/v1/apis"
-        )
+        result1 = _validate_dpop_binding(cnf, headers, "test-access-token", "GET", "https://api.gostoa.dev/v1/apis")
         assert result1.valid is True
 
         # Second use with same jti fails
         proof2 = _make_dpop_proof(jti="replay-jti")
         headers2 = {"dpop": proof2}
-        result2 = _validate_dpop_binding(
-            cnf, headers2, "test-access-token", "GET", "https://api.gostoa.dev/v1/apis"
-        )
+        result2 = _validate_dpop_binding(cnf, headers2, "test-access-token", "GET", "https://api.gostoa.dev/v1/apis")
         assert result2.valid is False
         assert "replay" in result2.error.lower()
 
@@ -227,9 +216,7 @@ class TestDpopValidation:
 
         with patch("src.auth.sender_constrained.settings") as mock_settings:
             mock_settings.SENDER_CONSTRAINED_DPOP_MAX_CLOCK_SKEW = 60
-            result = _validate_dpop_binding(
-                cnf, headers, "test-access-token", "GET", "https://api.gostoa.dev/v1/apis"
-            )
+            result = _validate_dpop_binding(cnf, headers, "test-access-token", "GET", "https://api.gostoa.dev/v1/apis")
         assert result.valid is False
         assert "expired" in result.error.lower()
 
@@ -238,9 +225,7 @@ class TestDpopValidation:
         cnf = {"jkt": _test_jkt}
         headers = {"dpop": "not-a-jwt"}
 
-        result = _validate_dpop_binding(
-            cnf, headers, "test-access-token", "GET", "https://api.gostoa.dev/v1/apis"
-        )
+        result = _validate_dpop_binding(cnf, headers, "test-access-token", "GET", "https://api.gostoa.dev/v1/apis")
         assert result.valid is False
 
     def test_dpop_wrong_typ(self):
@@ -249,9 +234,7 @@ class TestDpopValidation:
         proof = _make_dpop_proof(typ="at+jwt")
         headers = {"dpop": proof}
 
-        result = _validate_dpop_binding(
-            cnf, headers, "test-access-token", "GET", "https://api.gostoa.dev/v1/apis"
-        )
+        result = _validate_dpop_binding(cnf, headers, "test-access-token", "GET", "https://api.gostoa.dev/v1/apis")
         assert result.valid is False
         assert "typ" in result.error.lower()
 
@@ -260,21 +243,17 @@ class TestDpopValidation:
         cnf = {"jkt": _test_jkt}
         headers = {}
 
-        result = _validate_dpop_binding(
-            cnf, headers, "test-access-token", "GET", "https://api.gostoa.dev/v1/apis"
-        )
+        result = _validate_dpop_binding(cnf, headers, "test-access-token", "GET", "https://api.gostoa.dev/v1/apis")
         assert result.valid is False
         assert "none found" in result.error.lower()
 
     def test_dpop_ath_mismatch(self):
         """DPoP proof ath doesn't match actual access token."""
         cnf = {"jkt": _test_jkt}
-        proof = _make_dpop_proof(access_token="token-A")
+        proof = _make_dpop_proof()
         headers = {"dpop": proof}
 
-        result = _validate_dpop_binding(
-            cnf, headers, "token-B", "GET", "https://api.gostoa.dev/v1/apis"
-        )
+        result = _validate_dpop_binding(cnf, headers, "token-B", "GET", "https://api.gostoa.dev/v1/apis")
         assert result.valid is False
         assert "ath" in result.error.lower()
 
@@ -292,7 +271,7 @@ class TestValidateSenderConstrainedToken:
         with patch("src.auth.sender_constrained.settings") as mock_settings:
             mock_settings.SENDER_CONSTRAINED_ENABLED = False
             result = validate_sender_constrained_token(
-                token_payload={}, access_token="t", headers={}, http_method="GET", http_uri="/"
+                token_payload={}, access_token=_ACCESS_TOKEN, headers={}, http_method="GET", http_uri="/"
             )
         assert result.valid is True
         assert result.mode == "disabled"
@@ -303,7 +282,7 @@ class TestValidateSenderConstrainedToken:
             mock_settings.SENDER_CONSTRAINED_ENABLED = True
             mock_settings.SENDER_CONSTRAINED_STRATEGY = "require-any"
             result = validate_sender_constrained_token(
-                token_payload={}, access_token="t", headers={}, http_method="GET", http_uri="/"
+                token_payload={}, access_token=_ACCESS_TOKEN, headers={}, http_method="GET", http_uri="/"
             )
         assert result.valid is False
         assert "cnf claim missing" in result.error
@@ -314,7 +293,7 @@ class TestValidateSenderConstrainedToken:
             mock_settings.SENDER_CONSTRAINED_ENABLED = True
             mock_settings.SENDER_CONSTRAINED_STRATEGY = "auto"
             result = validate_sender_constrained_token(
-                token_payload={}, access_token="t", headers={}, http_method="GET", http_uri="/"
+                token_payload={}, access_token=_ACCESS_TOKEN, headers={}, http_method="GET", http_uri="/"
             )
         assert result.valid is True
         assert result.mode == "unbound"
@@ -326,7 +305,7 @@ class TestValidateSenderConstrainedToken:
             mock_settings.SENDER_CONSTRAINED_STRATEGY = "require-any"
             result = validate_sender_constrained_token(
                 token_payload={"cnf": {"x5t#S256": "test-thumbprint"}},
-                access_token="t",
+                access_token=_ACCESS_TOKEN,
                 headers={},
                 http_method="GET",
                 http_uri="/",
@@ -341,7 +320,7 @@ class TestValidateSenderConstrainedToken:
             mock_settings.SENDER_CONSTRAINED_STRATEGY = "require-any"
             result = validate_sender_constrained_token(
                 token_payload={"cnf": {"jkt": "test-jkt"}},
-                access_token="t",
+                access_token=_ACCESS_TOKEN,
                 headers={},
                 http_method="GET",
                 http_uri="/",
@@ -356,7 +335,7 @@ class TestValidateSenderConstrainedToken:
             mock_settings.SENDER_CONSTRAINED_STRATEGY = "dpop-only"
             result = validate_sender_constrained_token(
                 token_payload={"cnf": {"x5t#S256": "test-thumbprint"}},
-                access_token="t",
+                access_token=_ACCESS_TOKEN,
                 headers={},
                 http_method="GET",
                 http_uri="/",
@@ -371,7 +350,7 @@ class TestValidateSenderConstrainedToken:
             mock_settings.SENDER_CONSTRAINED_STRATEGY = "auto"
             result = validate_sender_constrained_token(
                 token_payload={"cnf": {"unknown_key": "value"}},
-                access_token="t",
+                access_token=_ACCESS_TOKEN,
                 headers={},
                 http_method="GET",
                 http_uri="/",
@@ -392,11 +371,7 @@ class TestUtilities:
         """ATH is SHA-256 of access token in base64url."""
         token = "test-token"
         ath = _compute_ath(token)
-        expected = (
-            base64.urlsafe_b64encode(hashlib.sha256(token.encode()).digest())
-            .rstrip(b"=")
-            .decode()
-        )
+        expected = base64.urlsafe_b64encode(hashlib.sha256(token.encode()).digest()).rstrip(b"=").decode()
         assert ath == expected
 
     def test_jwk_thumbprint_ec(self):
@@ -406,10 +381,7 @@ class TestUtilities:
         # Verify deterministic
         assert thumbprint == _compute_jwk_thumbprint(jwk)
         # Verify it's base64url
-        assert all(
-            c in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
-            for c in thumbprint
-        )
+        assert all(c in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_" for c in thumbprint)
 
     def test_jwk_thumbprint_rsa(self):
         """JWK thumbprint for RSA key follows RFC 7638."""

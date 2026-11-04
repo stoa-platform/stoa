@@ -328,12 +328,9 @@ def _validate_dpop_binding(
         return SenderConstrainedResult(valid=True, mode="dpop")
 
     except Exception as e:
+        # The exception text stays in the logs; clients receive stable application-owned text.
         logger.warning("DPoP validation error", error=str(e), error_type=type(e).__name__)
-        return SenderConstrainedResult(
-            valid=False,
-            mode="dpop",
-            error=f"DPoP validation failed: {e}",
-        )
+        return SenderConstrainedResult(valid=False, mode="dpop", error="DPoP validation failed")
 
 
 def _compute_jwk_thumbprint(jwk: dict) -> str:

@@ -143,9 +143,7 @@ class TestRegressionCab2153AudienceMapper:
         private_pem, _ = rsa_keypair
         token = _sign(private_pem, _base_claims(aud=["control-plane-api"]))
 
-        async with AsyncClient(
-            transport=ASGITransport(app=_make_app()), base_url="http://t"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=_make_app()), base_url="http://t") as client:
             resp = await client.get("/me", headers={"Authorization": f"Bearer {token}"})
 
         assert resp.status_code == 200, resp.text
@@ -165,9 +163,7 @@ class TestRegressionCab2153AudienceMapper:
             _base_claims(aud=["some-other-api"], azp="stoa-mcp-gateway"),
         )
 
-        async with AsyncClient(
-            transport=ASGITransport(app=_make_app()), base_url="http://t"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=_make_app()), base_url="http://t") as client:
             resp = await client.get("/me", headers={"Authorization": f"Bearer {token}"})
 
         assert resp.status_code == 401
@@ -192,9 +188,7 @@ class TestRegressionCab2153AudienceMapper:
             _base_claims(aud=["stoa-mcp-gateway"], azp="stoa-mcp-gateway"),
         )
 
-        async with AsyncClient(
-            transport=ASGITransport(app=_make_app()), base_url="http://t"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=_make_app()), base_url="http://t") as client:
             resp = await client.get("/me", headers={"Authorization": f"Bearer {token}"})
 
         assert resp.status_code == 200, resp.text
@@ -213,9 +207,7 @@ class TestRegressionCab2153AudienceMapper:
             _base_claims(aud=["control-plane-api", "account"]),
         )
 
-        async with AsyncClient(
-            transport=ASGITransport(app=_make_app()), base_url="http://t"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=_make_app()), base_url="http://t") as client:
             resp = await client.get("/me", headers={"Authorization": f"Bearer {token}"})
 
         assert resp.status_code == 200, resp.text

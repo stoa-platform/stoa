@@ -34,15 +34,15 @@ cd deploy/docker-compose
 cp .env.example .env   # customize local settings before starting
 ```
 
-Default configuration — **you must set strong passwords in `.env`** before running:
+Configure the following variables in `.env` — **you must set strong passwords** before running:
 
 | Variable | Description |
 |----------|-------------|
-| `POSTGRES_USER` | Database user (default `stoa`) |
+| `POSTGRES_USER` | Database user name — set it in `.env`; the stack reads it from there |
 | `POSTGRES_PASSWORD` | **Required** — set a strong password |
-| `KEYCLOAK_ADMIN` | Keycloak admin user (default `admin`) |
+| `KEYCLOAK_ADMIN` | Keycloak admin user name — set it in `.env` and sign in to the admin console with that value |
 | `KEYCLOAK_ADMIN_PASSWORD` | **Required** — set a strong password |
-| `GRAFANA_USER` | Grafana admin user (default `admin`) |
+| `GRAFANA_USER` | Grafana admin user name — set it in `.env` and sign in to Grafana with that value |
 | `GRAFANA_PASSWORD` | **Required** — set a strong password |
 | `OPENSEARCH_ADMIN_PASSWORD` | **Required** — OpenSearch cluster admin |
 | `OPENSEARCH_DASHBOARDS_PASSWORD` | **Required** — Dashboards service account |
@@ -396,8 +396,8 @@ Users carry their role and tenant in JWT claims:
 ```json
 {
   "sub": "user-uuid",
-  "preferred_username": "parzival",
-  "email": "parzival@oasis.gg",
+  "preferred_username": "tenant-admin-username",
+  "email": "tenant-admin@example.com",
   "realm_access": {
     "roles": ["tenant-admin"]
   },

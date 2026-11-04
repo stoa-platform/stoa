@@ -180,6 +180,9 @@ class Settings(BaseSettings):
     TOOL_PERMISSION_POLICY_TTL_SECONDS: int = Field(default=900, gt=0, le=900)
     STOA_POLICY_SIGNING_KEY_FILE: str = Field(default="", repr=False)
     STOA_POLICY_SIGNING_KID: str = ""
+    # Each issued policy names this control plane and the gateways allowed to consume it.
+    STOA_POLICY_ISSUER: str = "stoa-control-plane"
+    STOA_POLICY_AUDIENCE: str = "stoa-gateway"
 
     # Base domain for URL construction. Drives the derived URL fields below
     # (KEYCLOAK_URL, GATEWAY_URL, …, VAULT_ADDR, CORS_ORIGINS) via the

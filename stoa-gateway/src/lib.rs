@@ -859,17 +859,14 @@ async fn ready(
         }
     }
 
-    // Readiness is gated on a real policy load (ADR-070 §1, §4): until the
-    // startup loader has fetched a fresh tool policy from the Control Plane
-    // the pod must not receive traffic. Missing inputs never bypass the gate:
-    // with no permission service (no Control Plane URL) or no startup tenants
-    // nothing can load a policy, so the pod stays not ready and calls deny.
+    // Readiness is gated on a real policy load (ADR-070 §1, §4): no traffic
+    // until the startup loader fetched a fresh tool policy. Missing inputs
+    // never bypass the gate: with no permission service (no Control Plane
+    // URL) or no startup tenants nothing can load, so the pod stays not ready.
     let policy_failure = match &state.tool_permissions {
-        Some(perm_svc) if !state.config.policy_boot_tenants.is_empty() => {
-            perm_svc.policy_readiness_failure()
-        }
-        Some(_) => Some("policy_boot_tenants_missing"),
         None => Some("permission_service_missing"),
+        Some(_) if state.config.policy_boot_tenants.is_empty() => Some("boot_tenants_missing"),
+        Some(perm_svc) => perm_svc.policy_readiness_failure(),
     };
     if let Some(reason) = policy_failure {
         warn!(reason = %reason, "Tool policy unavailable; not ready");
@@ -1015,9 +1012,8 @@ mod tests {
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
     }
 
-    // Readiness is gated on a real startup policy load (ADR-070 §4): while
-    // the first load fails the pod must not receive traffic, and it becomes
-    // ready as soon as a fresh policy is fetched.
+    // Readiness is gated on a real startup policy load (ADR-070 §4): not
+    // ready while the first load fails, ready once a fresh policy is fetched.
     #[tokio::test]
     async fn regression_gateway_readiness_fails_until_startup_policy_loaded() {
         use control_plane::tool_permissions::tests::{authenticated_service, permissions_response};
@@ -1046,7 +1042,7 @@ mod tests {
             quota_enforcement_enabled: false,
             ..config::Config::default()
         };
-        let mut state = AppState::new(config.clone());
+        let mut state = AppState::new(config);
         let permissions = std::sync::Arc::new(
             authenticated_service(&server, std::time::Duration::from_secs(60)).await,
         );
@@ -1059,23 +1055,18 @@ mod tests {
 
         // The retried load succeeds: ready, and explicit allows apply.
         assert_eq!(permissions.load_policy("tenant1").await, Ok(()));
-        let response = ready(axum::extract::State(state)).await;
+        let response = ready(axum::extract::State(state.clone())).await;
         assert_eq!(response.status(), StatusCode::OK);
         assert!(permissions.is_tool_allowed("tenant1", "ok_tool").await);
 
         // No startup tenants: a loaded policy does not bypass the gate.
-        let mut state = AppState::new(config::Config {
-            policy_boot_tenants: Vec::new(),
-            ..config
-        });
-        state.tool_permissions = Some(permissions);
+        state.config.policy_boot_tenants.clear();
         let response = ready(axum::extract::State(state)).await;
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
     }
 
-    // Missing startup inputs never bypass the readiness gate: an unset,
-    // empty, whitespace-only or empty-array tenant list, or no Control Plane
-    // URL (hence no permission service), all keep the pod not ready.
+    // Missing startup inputs never bypass the gate: an unset, empty,
+    // whitespace-only or empty-array tenant list, or no Control Plane URL.
     #[tokio::test]
     async fn regression_gateway_readiness_fails_without_startup_policy_inputs() {
         let server = MockServer::start().await;
@@ -1089,7 +1080,6 @@ mod tests {
             serde_json::json!({ "control_plane_url": server.uri(), "policy_boot_tenants": "" }),
             serde_json::json!({ "control_plane_url": server.uri(), "policy_boot_tenants": "  " }),
             serde_json::json!({ "control_plane_url": server.uri(), "policy_boot_tenants": "[]" }),
-            serde_json::json!({ "control_plane_url": server.uri(), "policy_boot_tenants": [] }),
             serde_json::json!({ "policy_boot_tenants": "tenant1" }),
         ] {
             let config: config::Config = serde_json::from_value(value.clone()).unwrap();

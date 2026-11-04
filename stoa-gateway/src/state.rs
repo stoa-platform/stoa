@@ -671,6 +671,16 @@ impl AppState {
 
     /// Start background tasks
     pub fn start_background_tasks(&self) {
+        match &self.tool_permissions {
+            Some(permissions) if !self.config.policy_boot_tenants.is_empty() => {
+                permissions.spawn_policy_refresher(self.config.policy_boot_tenants.clone());
+            }
+            _ => tracing::error!(
+                reason = "startup_policy_inputs_missing",
+                "No Control Plane URL or no startup policy tenants; readiness stays failed"
+            ),
+        }
+
         // Start memory budget polling (CAB-1829)
         self.memory_monitor.start_polling();
 

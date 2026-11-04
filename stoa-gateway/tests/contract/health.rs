@@ -19,8 +19,8 @@ async fn test_health_shape() {
 async fn test_ready_shape() {
     let app = TestApp::new();
     let (status, body) = app.get("/ready").await;
-    assert_eq!(status, axum::http::StatusCode::OK);
-    // /ready returns plain text "READY"
+    assert_eq!(status, axum::http::StatusCode::SERVICE_UNAVAILABLE);
+    // /ready returns plain text; without a Control Plane it fails closed
     assert_snapshot!("ready-response", body);
 }
 

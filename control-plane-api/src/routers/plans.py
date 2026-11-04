@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import User, get_current_user
+from ..auth.rbac import decide_tenant_access
 from ..database import get_db
 from ..models.plan import Plan, PlanStatus
 from ..repositories.plan import PlanRepository
@@ -26,9 +27,8 @@ router = APIRouter(prefix="/v1/plans", tags=["Plans"])
 
 def _has_tenant_access(user: User, tenant_id: str) -> bool:
     """Check if user has access to a tenant."""
-    if "cpi-admin" in user.roles:
-        return True
-    return user.tenant_id == tenant_id
+    decide_tenant_access(user, tenant_id, mode="resource")
+    return True
 
 
 # ============== CRUD Endpoints ==============

@@ -2,7 +2,7 @@
 
 When a GatewayInstance stores vault_path in auth_config, this module fetches
 the actual credentials from Vault before passing config to adapters.
-Graceful fallback: if Vault is unavailable, the original auth_config is used as-is.
+Vault-backed configurations fail closed if credentials cannot be retrieved.
 """
 
 import logging
@@ -41,59 +41,38 @@ class AgentManagedGatewayError(Exception):
         super().__init__(detail)
 
 
+class CredentialResolutionError(ValueError):
+    """A required secret-store read failed; safe to expose to callers."""
+
+    def __init__(self) -> None:
+        super().__init__("Required read failed; no fallback credentials allowed; operation refused.")
+
+
 async def resolve_gateway_auth_config(auth_config: dict[str, Any] | None) -> dict[str, Any]:
     """Resolve Vault-backed credentials in a gateway auth_config.
 
     If auth_config contains a 'vault_path' key, fetches secrets from Vault
     and merges them into the config. Vault values override existing keys.
-    On Vault error, falls back to remaining keys in auth_config.
-
-    Raises ValueError if Vault fails and no fallback credentials exist
-    (i.e. auth_config contained only vault_path with no direct credentials).
+    Raises CredentialResolutionError if required credentials cannot be read.
     """
     if not auth_config or "vault_path" not in auth_config:
         return auth_config or {}
 
     vault_path = auth_config["vault_path"]
-    vault_client = get_vault_client()
-    config_keys = [k for k in auth_config if k != "vault_path"]
-    logger.debug(
-        "Resolving gateway auth_config: vault_path=%s, fallback_keys=%s",
-        vault_path,
-        config_keys,
-    )
-
     try:
+        vault_client = get_vault_client()
         secrets = await vault_client.read_secret(vault_path)
     except Exception:
-        logger.warning("Vault read failed for %s, using stored auth_config", vault_path)
-        secrets = None
+        logger.warning("Secret store read failed; refusing gateway operation")
+        raise CredentialResolutionError() from None
 
     if not secrets:
-        fallback = {k: v for k, v in auth_config.items() if k != "vault_path"}
-        if not fallback:
-            msg = (
-                f"Vault unavailable and no fallback credentials in auth_config "
-                f"(only vault_path was stored). Vault path: {vault_path}. "
-                f"Store direct credentials alongside vault_path as fallback, "
-                f"or ensure Vault is reachable."
-            )
-            logger.error(msg)
-            raise ValueError(msg)
-        logger.warning(
-            "No Vault secrets at %s, falling back to stored auth_config (keys: %s)",
-            vault_path,
-            list(fallback.keys()),
-        )
-        return fallback
+        logger.warning("Secret store returned no credentials; refusing gateway operation")
+        raise CredentialResolutionError()
 
     resolved = {k: v for k, v in auth_config.items() if k != "vault_path"}
     resolved.update(secrets)
-    logger.info(
-        "Resolved gateway credentials from Vault path %s (keys: %s)",
-        vault_path,
-        list(resolved.keys()),
-    )
+    logger.info("Resolved gateway credentials from secret store")
     return resolved
 
 
@@ -114,8 +93,7 @@ async def create_adapter_with_credentials(
         AgentManagedGatewayError: if source is "self_register" AND gateway_type
             is "stoa" (pull-model agent). stoa_sidecar / stoa_edge_mcp are
             push-capable and should not be blocked.
-        ValueError: if credential resolution fails (e.g. Vault-only config with
-            Vault unavailable).
+        CredentialResolutionError: if required credentials cannot be retrieved.
     """
     deployment_mode = str(extra_config.get("deployment_mode") or "").strip().lower()
     topology = str(extra_config.get("topology") or "").strip().lower()

@@ -194,6 +194,7 @@ class TestUpdateBudget:
         with patch(SVC_PATH) as mock_cls:
             mock_svc = AsyncMock()
             mock_cls.return_value = mock_svc
+            mock_svc.get_budget.return_value = resp_data
             mock_svc.update_budget.return_value = resp_data
             resp = client_as_tenant_admin.put(
                 f"/v1/tenants/acme/budgets/{budget_id}",
@@ -207,7 +208,7 @@ class TestUpdateBudget:
         with patch(SVC_PATH) as mock_cls:
             mock_svc = AsyncMock()
             mock_cls.return_value = mock_svc
-            mock_svc.update_budget.side_effect = ValueError("not found")
+            mock_svc.get_budget.side_effect = ValueError("not found")
             resp = client_as_tenant_admin.put(
                 f"/v1/tenants/acme/budgets/{budget_id}",
                 json={"enforcement": "enabled"},

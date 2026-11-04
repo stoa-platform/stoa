@@ -3,4 +3,4 @@ source: tests/contract/health.rs
 assertion_line: 24
 expression: body
 ---
-READY
+NOT READY: tool policy unavailable

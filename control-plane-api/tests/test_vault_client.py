@@ -7,6 +7,7 @@ from hvac.exceptions import InvalidPath, VaultError
 from src.services.vault_client import (
     VaultClient,
     VaultSealedException,
+    VaultUnavailableError,
     get_vault_client,
     shutdown_vault_client,
 )
@@ -126,14 +127,14 @@ class TestEnsureUnsealed:
         # Should not raise
         vc._ensure_unsealed()
 
-    def test_health_check_error_is_warning(self):
+    def test_health_check_error_refuses_operation(self):
         vc = VaultClient(vault_addr="https://vault.dev", vault_token="tok")
         mock_client = MagicMock()
         mock_client.is_authenticated.return_value = True
         mock_client.sys.read_health_status.side_effect = Exception("network")
         vc._client = mock_client
-        # Should not raise (just warns)
-        vc._ensure_unsealed()
+        with pytest.raises(VaultUnavailableError):
+            vc._ensure_unsealed()
 
 
 # ── store_credential ──

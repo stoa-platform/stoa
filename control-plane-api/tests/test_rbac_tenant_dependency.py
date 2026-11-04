@@ -36,19 +36,12 @@ def _user(roles, tenant_id):
     return User(id="u", email="u@example.test", username="u", roles=roles, tenant_id=tenant_id)
 
 
-@pytest.mark.parametrize(
-    ("roles", "user_tenant", "expected"),
-    [
-        (["tenant-admin"], "acme", 200),
-        (["viewer"], "acme", 200),
-        (["tenant-admin"], "other", 403),
-        (["tenant-admin"], None, 403),
-        (["cpi-admin"], None, 200),
-    ],
-)
-def test_ensure_tenant(roles, user_tenant, expected):
-    client = TestClient(_app(_user(roles, user_tenant)))
-    assert client.get("/t/acme/ping").status_code == expected
+@pytest.mark.parametrize("role", ["cpi-admin", "tenant-admin", "devops", "viewer"])
+@pytest.mark.parametrize("user_tenant", ["acme", "other", None])
+def test_ensure_tenant(role, user_tenant):
+    client = TestClient(_app(_user([role], user_tenant)))
+    expected = 200 if role == "cpi-admin" or user_tenant == "acme" else 403
+    assert client.get("/t/acme/ping", headers={"X-Tenant-ID": "acme"}).status_code == expected
 
 
 def test_ensure_tenant_anonymous_is_401():

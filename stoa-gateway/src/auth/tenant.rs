@@ -109,14 +109,7 @@ pub async fn request_identity(
     if claims.sub.trim().is_empty() {
         return Err(AuthError::unauthorized("A subject claim is required"));
     }
-    let tenant = require_tenant(&claims)?;
-    for header in headers.get_all("X-Tenant-ID").iter() {
-        if header.to_str().ok() != Some(tenant) {
-            return Err(AuthError::forbidden(
-                "Tenant header does not match authenticated tenant",
-            ));
-        }
-    }
+    require_tenant(&claims)?;
     require_unbound_token(&claims)?;
     check_federation_claims(state, &claims)?;
     Ok((claims, token.to_string()))

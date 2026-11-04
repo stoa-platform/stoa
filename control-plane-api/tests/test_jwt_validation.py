@@ -102,8 +102,8 @@ class TestJwtValidation:
         assert resp.status_code == 401
 
     @pytest.mark.asyncio
-    async def test_tenant_id_as_list(self, mock_settings, mock_kc_key):
-        payload = _base_payload(tenant_id=["acme", "globex"])
+    async def test_tenant_id_as_singleton_list(self, mock_settings, mock_kc_key):
+        payload = _base_payload(tenant_id=["acme"])
         with patch("src.auth.dependencies.jwt.decode", return_value=payload):
             app = _make_app()
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:

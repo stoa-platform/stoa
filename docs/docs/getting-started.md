@@ -42,6 +42,8 @@ Default configuration — **you must set strong passwords in `.env`** before run
 | `POSTGRES_PASSWORD` | **Required** — set a strong password |
 | `KEYCLOAK_ADMIN` | Keycloak admin user (default `admin`) |
 | `KEYCLOAK_ADMIN_PASSWORD` | **Required** — set a strong password |
+| `GRAFANA_USER` | Grafana admin user (default `admin`) |
+| `GRAFANA_PASSWORD` | **Required** — set a strong password |
 | `OPENSEARCH_ADMIN_PASSWORD` | **Required** — OpenSearch cluster admin |
 | `OPENSEARCH_DASHBOARDS_PASSWORD` | **Required** — Dashboards service account |
 | `OPENSEARCH_OIDC_CLIENT_SECRET` | **Required** — OIDC client secret for Dashboards |
@@ -98,9 +100,9 @@ Expected output:
 | Service | URL | Credentials |
 |---------|-----|-------------|
 | **Console UI** | See the [local Compose guide](../../deploy/docker-compose/README.md) | Use `ANORAK_USER` and `ANORAK_PASSWORD` configured below |
-| **Keycloak Admin** | http://localhost:8280 | `admin` / `admin` |
+| **Keycloak Admin** | http://localhost:8280 | `KEYCLOAK_ADMIN` / `KEYCLOAK_ADMIN_PASSWORD` from `.env` |
 | **API Docs (Swagger)** | http://localhost:8000/docs | Bearer token |
-| **Grafana** | http://localhost:3002 | `admin` / `admin` |
+| **Grafana** | http://localhost:3002 | `GRAFANA_USER` / `GRAFANA_PASSWORD` from `.env` |
 | **Prometheus** | http://localhost:9090 | — |
 
 ### 1.6 Configure a Demo Admin User
@@ -413,7 +415,7 @@ The Docker Compose stack includes a full observability pipeline: Prometheus (met
 
 ### 4.1 Access Grafana
 
-Open http://localhost:3002 and log in with `admin` / `admin`.
+Open http://localhost:3002 and log in with `GRAFANA_USER` and the `GRAFANA_PASSWORD` you set in `.env`.
 
 The **STOA Platform Overview** dashboard loads automatically as the home dashboard.
 

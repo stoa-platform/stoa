@@ -2,7 +2,7 @@
 
 import base64
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -11,16 +11,18 @@ from uuid import UUID, uuid4
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ed25519
-from sqlalchemy import create_engine, event, insert, update
+from sqlalchemy import create_engine, delete, event, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from src.config import settings
+from src.models.tenant import Tenant
 from src.models.tenant_tool_permission import TenantToolPermission
 from src.models.tool_policy_version import ToolPolicyVersion
 from src.schemas.tool_permission_policy import MAX_POLICY_ENTRIES
 from src.services.tool_policy_snapshot import (
     PolicySnapshotConflictError,
     PolicySnapshotTooLargeError,
+    PolicySnapshotUnknownTenantError,
     issue_tool_policy_artifact,
     snapshot_tool_policy,
 )
@@ -30,6 +32,7 @@ ISSUED_AT = datetime(2026, 11, 4, 12, 0, tzinfo=UTC)
 SERVER_A = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
 SERVER_B = UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
 TENANT = "tenant-a"
+CLAIMS = {"iss", "aud", "tenant_id", "tenant_uuid", "version", "issued_at", "expires_at", "permissions"}
 # Identities an equality predicate must not confuse with TENANT.
 LOOKALIKES = ["tenant-ab", "tenant-", "TENANT-A", "tenant-a ", "tenant-a%", "tenant_a"]
 
@@ -53,6 +56,7 @@ async def db(tmp_path: Path) -> AsyncIterator[async_sessionmaker[AsyncSession]]:
     engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'policy.db'}")
     async with engine.begin() as connection:
         await connection.exec_driver_sql("PRAGMA journal_mode=WAL")
+        await connection.run_sync(Tenant.__table__.create)
         await connection.run_sync(TenantToolPermission.__table__.create)
         await connection.run_sync(ToolPolicyVersion.__table__.create)
     try:
@@ -61,8 +65,16 @@ async def db(tmp_path: Path) -> AsyncIterator[async_sessionmaker[AsyncSession]]:
         await engine.dispose()
 
 
-async def seed(db: async_sessionmaker[AsyncSession], rows: list[dict[str, Any]], versions: dict[str, int]) -> None:
+async def seed(
+    db: async_sessionmaker[AsyncSession],
+    rows: list[dict[str, Any]],
+    versions: dict[str, int],
+    tenants: Iterable[str] | None = None,
+) -> None:
+    # By default every tenant named by a row or a counter also exists as a tenant.
+    known = set(tenants) if tenants is not None else {*versions, *(row["tenant_id"] for row in rows)}
     async with db.begin() as session:
+        session.add_all(Tenant(id=tenant, name=tenant) for tenant in sorted(known))
         if rows:
             await session.execute(insert(TenantToolPermission), rows)
         session.add_all(ToolPolicyVersion(tenant_id=tenant, version=version) for tenant, version in versions.items())
@@ -98,7 +110,7 @@ async def test_snapshot_carries_every_rule_in_stable_order(db) -> None:
 @pytest.mark.parametrize("retained_version", [None, 5])
 async def test_empty_tenant_yields_empty_policy_with_counter(db, retained_version: int | None) -> None:
     versions = {"other": 3} | ({TENANT: retained_version} if retained_version else {})
-    await seed(db, [row("other", SERVER_A, "read")], versions)
+    await seed(db, [row("other", SERVER_A, "read")], versions, tenants=[TENANT, "other"])
     async with db() as session:
         policy = await snapshot_tool_policy(session, TENANT, issued_at=ISSUED_AT)
     assert policy.permissions == []
@@ -150,7 +162,7 @@ async def test_issuance_signs_the_validated_payload(
     assert json.loads(decode(header)) == {"alg": "EdDSA", "typ": "stoa-tool-policy+jws", "kid": "cp-policy-202611-1"}
     payload = json.loads(decode(body))
     assert payload == issued.policy.model_dump(mode="json")
-    assert set(payload) == {"tenant_id", "version", "issued_at", "expires_at", "permissions"}
+    assert set(payload) == CLAIMS
     assert payload["permissions"] == [
         {"mcp_server": str(SERVER_A), "tool": "read", "allowed": True},
         {"mcp_server": str(SERVER_B), "tool": "write", "allowed": False},
@@ -160,10 +172,49 @@ async def test_issuance_signs_the_validated_payload(
 
 
 async def test_issued_at_defaults_to_now(db, signing_key: ed25519.Ed25519PrivateKey) -> None:
+    await seed(db, [], {}, tenants=[TENANT])
     before = datetime.now(UTC)
     async with db() as session:
         issued = await issue_tool_policy_artifact(session, TENANT)
     assert before <= issued.policy.issued_at <= datetime.now(UTC)
+
+
+async def test_issuance_binds_configured_issuer_audience_and_stored_tenant_uuid(
+    db, signing_key: ed25519.Ed25519PrivateKey, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings, "STOA_POLICY_ISSUER", "cp-eu")
+    monkeypatch.setattr(settings, "STOA_POLICY_AUDIENCE", "gw-eu")
+    await seed(db, [row(TENANT, SERVER_A, "read")], {TENANT: 2})
+    async with db() as session:
+        stored = await session.scalar(select(Tenant.uuid).where(Tenant.id == TENANT))
+        issued = await issue_tool_policy_artifact(session, TENANT, issued_at=ISSUED_AT)
+    assert isinstance(stored, UUID) and issued.policy.tenant_uuid == stored
+    body = json.loads(decode(issued.artifact.split(".")[1]))
+    assert (body["iss"], body["aud"], body["tenant_uuid"]) == ("cp-eu", "gw-eu", str(stored))
+
+
+async def test_distinct_and_recreated_tenants_carry_distinct_uuids(db) -> None:
+    await seed(db, [], {}, tenants=[TENANT, "tenant-b"])
+    async with db() as session:
+        first = await snapshot_tool_policy(session, TENANT, issued_at=ISSUED_AT)
+        other = await snapshot_tool_policy(session, "tenant-b", issued_at=ISSUED_AT)
+    assert first.tenant_uuid != other.tenant_uuid
+    # A slug deleted then recreated is a new tenant: the old artifact no longer matches it.
+    async with db.begin() as session:
+        await session.execute(delete(Tenant).where(Tenant.id == TENANT))
+        session.add(Tenant(id=TENANT, name=TENANT))
+    async with db() as session:
+        recreated = await snapshot_tool_policy(session, TENANT, issued_at=ISSUED_AT)
+    assert recreated.tenant_uuid not in {first.tenant_uuid, other.tenant_uuid}
+
+
+async def test_unknown_tenant_is_refused_before_signing(db) -> None:
+    # Rules and a counter without a tenant row never yield an invented identity.
+    await seed(db, [row("ghost", SERVER_A, "read")], {"ghost": 4}, tenants=[TENANT])
+    async with db() as session:
+        with pytest.raises(PolicySnapshotUnknownTenantError, match="policy_tenant_unknown"):
+            await issue_tool_policy_artifact(session, "ghost", issued_at=ISSUED_AT)
+        assert (await snapshot_tool_policy(session, TENANT, issued_at=ISSUED_AT)).permissions == []
 
 
 @pytest.mark.parametrize("keep_mutating", [False, True])

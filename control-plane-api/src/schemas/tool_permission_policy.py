@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime, timedelta
 from typing import Self
+from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -34,17 +35,22 @@ class ToolPermissionPolicy(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    # Issuer and audience bind the artifact to one control plane and its gateways;
+    # the tenant UUID tells a recreated tenant apart from the one that held its slug.
+    iss: str = Field(min_length=1, strict=True)
+    aud: str = Field(min_length=1, strict=True)
     tenant_id: str = Field(min_length=1, strict=True)
+    tenant_uuid: UUID = Field(strict=True)
     version: int = Field(ge=1, strict=True)
     issued_at: AwareDatetime
     expires_at: AwareDatetime
     permissions: list[ToolPermissionPolicyEntry] = Field(max_length=MAX_POLICY_ENTRIES)
 
-    @field_validator("tenant_id")
+    @field_validator("iss", "aud", "tenant_id")
     @classmethod
-    def require_tenant_identity(cls, value: str) -> str:
+    def require_identities(cls, value: str) -> str:
         if not value.strip():
-            raise ValueError("Policy tenant identity must not be blank")
+            raise ValueError("Policy identities must not be blank")
         return value
 
     @model_validator(mode="after")
@@ -64,13 +70,17 @@ class ToolPermissionPolicy(BaseModel):
         cls,
         *,
         tenant_id: str,
+        tenant_uuid: UUID,
         version: int,
         permissions: list[ToolPermissionPolicyEntry],
         issued_at: datetime,
     ) -> Self:
-        """Build a payload using the configured CP validity duration."""
+        """Build a payload bound to the configured issuer, audience and validity duration."""
         return cls(
+            iss=settings.STOA_POLICY_ISSUER,
+            aud=settings.STOA_POLICY_AUDIENCE,
             tenant_id=tenant_id,
+            tenant_uuid=tenant_uuid,
             version=version,
             permissions=permissions,
             issued_at=issued_at,

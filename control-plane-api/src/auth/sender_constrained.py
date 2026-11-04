@@ -17,7 +17,7 @@ import time
 import urllib.parse
 from dataclasses import dataclass
 
-from jose import jwt as jose_jwt
+import jwt
 
 from ..config import settings
 from ..logging_config import get_logger
@@ -28,6 +28,8 @@ logger = get_logger(__name__)
 _jti_cache: dict[str, float] = {}
 _JTI_CACHE_MAX_SIZE = 10000
 _JTI_TTL_SECONDS = 300  # 5 minutes
+_DPOP_ALGORITHM_KEY_TYPES = {"ES256": "EC", "PS256": "RSA", "RS256": "RSA", "EdDSA": "OKP"}
+_DPOP_ALGORITHM_CURVES = {"ES256": "P-256", "EdDSA": "Ed25519"}
 
 
 @dataclass
@@ -203,12 +205,20 @@ def _validate_dpop_binding(
 
     try:
         # Step 1-2: Decode proof header (unverified) to get JWK
-        proof_header = jose_jwt.get_unverified_header(dpop_proof)
+        proof_header = jwt.get_unverified_header(dpop_proof)
         if proof_header.get("typ", "").lower() != "dpop+jwt":
             return SenderConstrainedResult(
                 valid=False,
                 mode="dpop",
                 error=f"DPoP proof has wrong typ: {proof_header.get('typ')}",
+            )
+
+        algorithm = proof_header.get("alg")
+        if not isinstance(algorithm, str) or algorithm not in _DPOP_ALGORITHM_KEY_TYPES:
+            return SenderConstrainedResult(
+                valid=False,
+                mode="dpop",
+                error="DPoP proof algorithm is not supported",
             )
 
         jwk = proof_header.get("jwk")
@@ -217,6 +227,27 @@ def _validate_dpop_binding(
                 valid=False,
                 mode="dpop",
                 error="DPoP proof missing jwk in header",
+            )
+
+        if jwk.get("kty") != _DPOP_ALGORITHM_KEY_TYPES[algorithm]:
+            return SenderConstrainedResult(
+                valid=False,
+                mode="dpop",
+                error="DPoP proof algorithm does not match JWK key type",
+            )
+
+        if any(member in jwk for member in ("d", "p", "q", "dp", "dq", "qi")):
+            return SenderConstrainedResult(
+                valid=False,
+                mode="dpop",
+                error="DPoP proof JWK must contain only public key material",
+            )
+
+        if algorithm in _DPOP_ALGORITHM_CURVES and jwk.get("crv") != _DPOP_ALGORITHM_CURVES[algorithm]:
+            return SenderConstrainedResult(
+                valid=False,
+                mode="dpop",
+                error="DPoP proof algorithm does not match JWK curve",
             )
 
         # Step 3: Compute JWK thumbprint and compare to cnf.jkt
@@ -229,15 +260,18 @@ def _validate_dpop_binding(
                 error="DPoP JWK thumbprint does not match token binding (cnf.jkt)",
             )
 
-        # Decode proof claims (verify signature with embedded JWK)
-        from jose import jwk as jose_jwk
-
-        algorithm = proof_header.get("alg", "ES256")
-        key = jose_jwk.construct(jwk, algorithm=algorithm)
-        proof_claims = jose_jwt.decode(
+        # Decode proof claims (verify signature with embedded JWK). The library
+        # leeway equals the application iat window below (60 s by default), so
+        # neither check contradicts the other. The same leeway also relaxes
+        # `exp` and `nbf` when a proof carries them; the symmetric
+        # |now - iat| <= max_skew check below remains the effective bound.
+        max_skew = settings.SENDER_CONSTRAINED_DPOP_MAX_CLOCK_SKEW
+        key = jwt.PyJWK.from_dict(jwk, algorithm=algorithm).key
+        proof_claims = jwt.decode(
             dpop_proof,
             key,
             algorithms=[algorithm],
+            leeway=max_skew,
             options={"verify_aud": False, "verify_sub": False},
         )
 
@@ -271,7 +305,6 @@ def _validate_dpop_binding(
         # Verify iat freshness
         iat = proof_claims.get("iat", 0)
         now = time.time()
-        max_skew = settings.SENDER_CONSTRAINED_DPOP_MAX_CLOCK_SKEW
         if abs(now - iat) > max_skew:
             return SenderConstrainedResult(
                 valid=False,
@@ -297,12 +330,9 @@ def _validate_dpop_binding(
         return SenderConstrainedResult(valid=True, mode="dpop")
 
     except Exception as e:
+        # The exception text stays in the logs; clients receive stable application-owned text.
         logger.warning("DPoP validation error", error=str(e), error_type=type(e).__name__)
-        return SenderConstrainedResult(
-            valid=False,
-            mode="dpop",
-            error=f"DPoP validation failed: {e}",
-        )
+        return SenderConstrainedResult(valid=False, mode="dpop", error="DPoP validation failed")
 
 
 def _compute_jwk_thumbprint(jwk: dict) -> str:

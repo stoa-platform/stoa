@@ -3,7 +3,7 @@
 
 # STOA Roadmap — 2026-05-11
 
-Vision: European Agent Gateway — v1.0 GA Mi-Mai 2026 (CAB-173)
+Vision: Sovereign iPaaS — API & integration platform — v1.0 GA Mi-Mai 2026 (CAB-173)
 
 ## Milestones
 | Status | Date | Milestone | Days remaining |

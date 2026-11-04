@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import User, get_current_user
+from ..auth.rbac import decide_tenant_access
 from ..database import get_db
 from ..models.external_mcp_server import (
     ExternalMCPAuthType,
@@ -54,25 +55,16 @@ router = APIRouter(
 _NAME_SEP = "--"
 
 
-def _has_tenant_access(user: User, tenant_id: str) -> bool:
-    """Check if user has access to a tenant."""
-    if "cpi-admin" in user.roles:
-        return True
-    return user.tenant_id == tenant_id
-
-
 def _require_write_access(user: User, tenant_id: str) -> None:
     """Require write access (tenant-admin or cpi-admin)."""
-    if not _has_tenant_access(user, tenant_id):
-        raise HTTPException(status_code=403, detail="Access denied to this tenant")
+    decide_tenant_access(user, tenant_id, mode="resource")
     if "cpi-admin" not in user.roles and "tenant-admin" not in user.roles:
         raise HTTPException(status_code=403, detail="Write access requires tenant-admin or cpi-admin role")
 
 
 def _require_read_access(user: User, tenant_id: str) -> None:
     """Require read access (any role with tenant access)."""
-    if not _has_tenant_access(user, tenant_id):
-        raise HTTPException(status_code=403, detail="Access denied to this tenant")
+    decide_tenant_access(user, tenant_id, mode="resource")
 
 
 def _make_scoped_name(tenant_id: str, display_name: str) -> str:

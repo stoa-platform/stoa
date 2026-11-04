@@ -68,6 +68,14 @@ pub(super) fn default_policy_enabled() -> bool {
     true
 }
 
+pub(super) fn default_policy_expected_issuer() -> String {
+    "stoa-control-plane".to_string()
+}
+
+pub(super) fn default_policy_audience() -> String {
+    "stoa-gateway".to_string()
+}
+
 pub(super) fn default_zombie_detection() -> bool {
     true
 }
@@ -361,6 +369,10 @@ impl Default for Config {
             websocket_enabled: false,
             policy_path: None,
             policy_enabled: default_policy_enabled(),
+            policy_boot_tenants: Vec::new(),
+            policy_trust_jwks_file: None,
+            policy_expected_issuer: default_policy_expected_issuer(),
+            policy_audience: default_policy_audience(),
             log_level: default_log_level(),
             log_format: default_log_format(),
             otel_enabled: default_otel_enabled(),

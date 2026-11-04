@@ -859,18 +859,26 @@ async fn ready(
         }
     }
 
-    // Tool-permission unavailability is fail-closed on the DATA PLANE
-    // (`is_tool_allowed` denies); it does NOT gate pod readiness. Coupling it
-    // to `/ready` took the whole gateway out of rotation when the gateway
-    // could not authenticate to CP's tenant tool-permissions endpoint
-    // (CAB-2227 incident 2026-05-19 — endpoint requires a user JWT the
-    // gateway does not hold). Re-couple once the gateway authenticates
-    // properly (Option 1 follow-up). Still surfaced via admin `/health`.
+    // Readiness is gated on a real startup policy load (ADR-070 §1, §4). Missing
+    // inputs (no permission service, no startup tenants) never bypass the gate.
+    let policy_failure = match &state.tool_permissions {
+        None => Some("permission_service_missing"),
+        Some(_) if state.config.policy_boot_tenants.is_empty() => Some("boot_tenants_missing"),
+        Some(perm_svc) => perm_svc.policy_readiness_failure(),
+    };
+    if let Some(reason) = policy_failure {
+        warn!(reason = %reason, "Tool policy unavailable; not ready");
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "NOT READY: tool policy unavailable",
+        )
+            .into_response();
+    }
     if let Some(ref perm_svc) = state.tool_permissions {
         if let Some(reason) = perm_svc.readiness_failure_reason() {
             warn!(
                 reason = %reason,
-                "Tool permission state degraded — data-plane fail-closed; not gating readiness"
+                "Tool permission state degraded — data-plane fail-closed"
             );
         }
     }
@@ -1005,38 +1013,111 @@ mod tests {
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
     }
 
-    // regression for CAB-2227
-    // Incident 2026-05-19: tool-permission unavailability must NOT 503 the
-    // `/ready` probe — coupling it took the whole gateway out of rotation
-    // when the gateway could not authenticate to CP's tenant
-    // tool-permissions endpoint. The data plane still fail-closed-denies;
-    // pod readiness stays OK. (Supersedes the prior test that asserted 503.)
     #[tokio::test]
-    async fn regression_gateway_readiness_not_gated_by_tool_permission_state() {
+    async fn regression_gateway_readiness_fails_until_startup_policy_loaded() {
+        use control_plane::tool_permissions::tests::{
+            authenticated_service, ok_tool_policy, serve_policy_once,
+        };
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/health"))
             .respond_with(ResponseTemplate::new(200))
             .mount(&server)
             .await;
-        Mock::given(method("GET"))
-            .and(path("/v1/tenants/tenant1/tool-permissions"))
-            .respond_with(ResponseTemplate::new(503))
-            .mount(&server)
-            .await;
-
+        serve_policy_once(&server, ResponseTemplate::new(503)).await;
+        serve_policy_once(&server, ok_tool_policy()).await;
         let config = config::Config {
             control_plane_url: Some(server.uri()),
+            policy_boot_tenants: vec!["tenant1".into()],
             quota_enforcement_enabled: false,
             ..config::Config::default()
         };
-        let state = AppState::new(config);
-        let permissions = state.tool_permissions.as_ref().unwrap();
-        // Data-plane fail-closed still holds: unavailable permission state denies.
-        assert!(!permissions.is_tool_allowed("tenant1", "any_tool").await);
-        // ...but the pod stays ready — readiness is not gated on it.
-        let response = ready(axum::extract::State(state)).await;
+        let mut state = AppState::new(config);
+        let permissions = std::sync::Arc::new(
+            authenticated_service(&server, std::time::Duration::from_secs(60)).await,
+        );
+        state.tool_permissions = Some(permissions.clone());
 
+        // First load fails: not ready, and the data plane denies.
+        assert!(permissions.load_policy("tenant1").await.is_err());
+        let response = ready(axum::extract::State(state.clone())).await;
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+
+        // The retried load succeeds: ready, and explicit allows apply.
+        assert_eq!(permissions.load_policy("tenant1").await, Ok(()));
+        let response = ready(axum::extract::State(state.clone())).await;
         assert_eq!(response.status(), StatusCode::OK);
+        assert!(permissions.is_tool_allowed("tenant1", "ok_tool").await);
+
+        // No startup tenants: a loaded policy does not bypass the gate.
+        state.config.policy_boot_tenants.clear();
+        let response = ready(axum::extract::State(state)).await;
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    // Missing or refused signer trust keeps readiness failed even after the startup policy loads.
+    #[tokio::test]
+    async fn regression_gateway_readiness_fails_while_trust_set_not_loaded() {
+        use control_plane::tool_permissions::tests::{
+            authenticated_service, ok_tool_policy, serve_policy_once, VALID_JWKS,
+        };
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/health"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&server)
+            .await;
+        serve_policy_once(&server, ok_tool_policy()).await;
+        let dir = tempfile::tempdir().unwrap();
+        let trust_path = dir.path().join("trust.json");
+        let trust = control_plane::policy_trust::PolicyTrustStore::open(&trust_path);
+        let mut state = AppState::new(config::Config {
+            control_plane_url: Some(server.uri()),
+            policy_boot_tenants: vec!["tenant1".into()],
+            quota_enforcement_enabled: false,
+            ..config::Config::default()
+        });
+        let permissions = authenticated_service(&server, std::time::Duration::from_secs(60))
+            .await
+            .with_trust_store(Some(trust.clone()));
+        state.tool_permissions = Some(std::sync::Arc::new(permissions.clone()));
+        let readiness = || ready(axum::extract::State(state.clone()));
+
+        // The startup policy loads, yet missing and then refused trust keep readiness down.
+        assert_eq!(permissions.load_policy("tenant1").await, Ok(()));
+        assert_eq!(readiness().await.status(), StatusCode::SERVICE_UNAVAILABLE);
+        std::fs::write(&trust_path, "not json").unwrap();
+        assert!(trust.reload().is_err());
+        assert_eq!(readiness().await.status(), StatusCode::SERVICE_UNAVAILABLE);
+
+        // A valid set recovers; refusing it again fails readiness despite the cached policy.
+        std::fs::write(&trust_path, VALID_JWKS).unwrap();
+        assert_eq!(trust.reload(), Ok(1));
+        assert_eq!(readiness().await.status(), StatusCode::OK);
+        std::fs::write(&trust_path, r#"{"keys":[]}"#).unwrap();
+        assert!(trust.reload().is_err());
+        assert_eq!(readiness().await.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    // Unset, empty, whitespace-only or empty-array tenants, or no Control Plane URL: never ready.
+    #[tokio::test]
+    async fn regression_gateway_readiness_fails_without_startup_policy_inputs() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/health"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&server)
+            .await;
+        for value in [
+            serde_json::json!({ "control_plane_url": server.uri() }),
+            serde_json::json!({ "control_plane_url": server.uri(), "policy_boot_tenants": "" }),
+            serde_json::json!({ "control_plane_url": server.uri(), "policy_boot_tenants": "  " }),
+            serde_json::json!({ "control_plane_url": server.uri(), "policy_boot_tenants": "[]" }),
+            serde_json::json!({ "policy_boot_tenants": "tenant1" }),
+        ] {
+            let state = AppState::new(serde_json::from_value(value.clone()).unwrap());
+            let status = ready(axum::extract::State(state)).await.status();
+            assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{value}");
+        }
     }
 }

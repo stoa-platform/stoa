@@ -4,8 +4,10 @@
 //! Eliminates the circular proxy pattern where gateway → CP-API → gateway
 //! was adding ~200-300ms of unnecessary latency per tool call.
 //!
-//! Missing or stale policy denies. A complete fresh policy carries the CP default explicitly.
+//! Only an explicit allow in a complete fresh policy permits a tool call.
+//! After boot nothing is allowed, and readiness stays down, until a fresh policy loads (ADR-070).
 
+use super::policy_trust::PolicyTrustStore;
 use super::ToolProxyClient;
 use moka::sync::Cache;
 use reqwest::Client;
@@ -14,6 +16,11 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 use tracing::{debug, warn};
+
+/// Hard cap on the permission cache TTL and the readiness window (ADR-070 §4, A4).
+pub const MAX_POLICY_AGE: Duration = Duration::from_secs(3600);
+/// Retry interval while no policy has been loaded since boot.
+const BOOT_RETRY_INTERVAL: Duration = Duration::from_secs(5);
 
 /// A single tool permission entry from CP-API.
 #[derive(Debug, Clone, Deserialize)]
@@ -37,15 +44,11 @@ struct PermissionListResponse {
 #[derive(Debug, Clone)]
 pub struct PermissionRules {
     overrides: HashMap<String, bool>,
-    default_allowed: bool,
 }
 
 impl PermissionRules {
     fn allows(&self, tool: &str) -> bool {
-        self.overrides
-            .get(tool)
-            .copied()
-            .unwrap_or(self.default_allowed)
+        self.overrides.get(tool).copied().unwrap_or(false)
     }
 }
 
@@ -55,6 +58,8 @@ pub enum PermissionDenyReason {
     PermissionCacheExpired,
     CpUnreachable,
     CpUnauthorized,
+    /// The pinned signer trust set is missing or was refused.
+    TrustSetNotLoaded,
 }
 
 impl PermissionDenyReason {
@@ -64,6 +69,7 @@ impl PermissionDenyReason {
             Self::PermissionCacheExpired => "permission_cache_expired",
             Self::CpUnreachable => "cp_unreachable",
             Self::CpUnauthorized => "cp_unauthorized",
+            Self::TrustSetNotLoaded => "trust_set_not_loaded",
         }
     }
 }
@@ -83,9 +89,11 @@ pub enum PermissionState {
 }
 
 impl PermissionState {
-    fn deny_reason(&self, tool_name: &str) -> Option<PermissionDenyReason> {
+    /// Decide a call requested as `requested` that resolved to `canonical`.
+    /// Both names need an explicit allow; a deny on either wins.
+    fn deny_reason(&self, requested: &str, canonical: &str) -> Option<PermissionDenyReason> {
         match self {
-            Self::Fresh { rules, .. } if rules.allows(tool_name) => None,
+            Self::Fresh { rules, .. } if rules.allows(requested) && rules.allows(canonical) => None,
             Self::Fresh { .. } => Some(PermissionDenyReason::PermissionAbsent),
             Self::Stale { .. } => Some(PermissionDenyReason::PermissionCacheExpired),
             Self::Unavailable { reason } => Some(*reason),
@@ -107,9 +115,13 @@ pub struct ToolPermissionService {
     client: Client,
     base_url: String,
     auth: Option<Arc<ToolProxyClient>>,
+    trust: Option<Arc<PolicyTrustStore>>,
     cache_ttl: Duration,
     cache: Arc<Cache<String, CachedPermissions>>,
     last_failure: Arc<RwLock<Option<PermissionDenyReason>>>,
+    /// Last successful complete policy load for any tenant since boot.
+    policy_loaded_at: Arc<RwLock<Option<Instant>>>,
+    max_policy_age: Duration,
 }
 
 impl ToolPermissionService {
@@ -117,15 +129,21 @@ impl ToolPermissionService {
     ///
     /// - `client`: shared HTTP client with connection pooling
     /// - `base_url`: Control Plane API base URL (e.g., `http://control-plane-api:8000`)
-    /// - `cache_ttl`: how long to cache permissions per tenant (default: 60s)
+    /// - `cache_ttl`: per-tenant cache lifetime (default: 60s), capped at [`MAX_POLICY_AGE`]
     pub fn new(client: Client, base_url: &str, cache_ttl: Duration) -> Self {
+        if cache_ttl > MAX_POLICY_AGE {
+            warn!(ttl_secs = cache_ttl.as_secs(), "Policy cache TTL capped");
+        }
         Self {
             client,
             base_url: base_url.trim_end_matches('/').to_string(),
             auth: None,
-            cache_ttl,
+            trust: None,
+            cache_ttl: cache_ttl.min(MAX_POLICY_AGE),
             cache: Arc::new(Cache::builder().max_capacity(10_000).build()),
             last_failure: Arc::new(RwLock::new(None)),
+            policy_loaded_at: Arc::new(RwLock::new(None)),
+            max_policy_age: MAX_POLICY_AGE,
         }
     }
 
@@ -135,21 +153,57 @@ impl ToolPermissionService {
         self
     }
 
+    /// While the pinned signer trust set is not loaded, every call is denied
+    /// without contacting the Control Plane.
+    pub fn with_trust_store(mut self, trust: Option<Arc<PolicyTrustStore>>) -> Self {
+        self.trust = trust;
+        self
+    }
+
+    /// A configured signer trust set is missing or was refused: deny everything.
+    pub fn trust_set_not_loaded(&self) -> bool {
+        self.trust.as_ref().is_some_and(|t| t.current().is_none())
+    }
+
     /// Check if a tool is allowed for a tenant.
     ///
-    /// Uses only a complete fresh policy, including the CP default and overrides.
-    /// Missing, stale, or unavailable policy denies.
+    /// Requires an explicit allow in a complete fresh policy.
+    /// Missing permissions and stale or unavailable policy deny.
     pub async fn is_tool_allowed(&self, tenant_id: &str, tool_name: &str) -> bool {
-        let state = self.get_permission_state(tenant_id).await;
-        self.record_state(&state);
+        self.is_tool_call_allowed(tenant_id, tool_name, tool_name)
+            .await
+    }
 
-        match state.deny_reason(tool_name) {
+    /// Check a call requested as `requested_name` that the tool registry
+    /// resolved to `canonical_name` (they differ only for deprecated aliases).
+    ///
+    /// The canonical tool is the one that executes, so it needs its own
+    /// explicit allow; the requested name keeps its allow requirement so an
+    /// alias can never widen access. A deny on either name wins.
+    pub async fn is_tool_call_allowed(
+        &self,
+        tenant_id: &str,
+        requested_name: &str,
+        canonical_name: &str,
+    ) -> bool {
+        let state = if self.trust.as_ref().is_some_and(|t| t.current().is_none()) {
+            PermissionState::Unavailable {
+                reason: PermissionDenyReason::TrustSetNotLoaded,
+            }
+        } else {
+            let state = self.get_permission_state(tenant_id).await;
+            self.record_state(&state);
+            state
+        };
+
+        match state.deny_reason(requested_name, canonical_name) {
             None => true,
             Some(reason) => {
                 warn!(
                     audit_event = "tool_call_denied",
                     tenant_id = %tenant_id,
-                    tool_name = %tool_name,
+                    tool_name = %canonical_name,
+                    requested_name = %requested_name,
                     reason = %reason.as_str(),
                     "Tool permission fail-closed deny"
                 );
@@ -159,10 +213,58 @@ impl ToolPermissionService {
     }
 
     pub fn readiness_failure_reason(&self) -> Option<&'static str> {
+        if self.trust.as_ref().is_some_and(|t| t.current().is_none()) {
+            return Some(PermissionDenyReason::TrustSetNotLoaded.as_str());
+        }
         self.last_failure
             .read()
             .ok()
             .and_then(|reason| reason.map(PermissionDenyReason::as_str))
+    }
+
+    /// Why `/ready` must fail: no policy loaded since boot, or the last load is
+    /// older than the hard cap (ADR-070 §4). Per-tenant denials never trip it.
+    /// A configured signer trust set that is not loaded fails it as well.
+    pub fn policy_readiness_failure(&self) -> Option<&'static str> {
+        if self.trust.as_ref().is_some_and(|t| t.current().is_none()) {
+            return Some(PermissionDenyReason::TrustSetNotLoaded.as_str());
+        }
+        match self.policy_loaded_at.read().ok().and_then(|at| *at) {
+            None => Some("policy_not_loaded"),
+            Some(at) if at.elapsed() > self.max_policy_age => Some("policy_stale"),
+            Some(_) => None,
+        }
+    }
+
+    /// Load a tenant's policy now; only a complete fresh policy counts as loaded.
+    pub async fn load_policy(&self, tenant_id: &str) -> Result<(), PermissionDenyReason> {
+        let state = self.get_permission_state(tenant_id).await;
+        self.record_state(&state);
+        match state {
+            PermissionState::Fresh { .. } => Ok(()),
+            PermissionState::Stale { .. } => Err(PermissionDenyReason::PermissionCacheExpired),
+            PermissionState::Unavailable { reason } => Err(reason),
+        }
+    }
+
+    /// Load the given tenants' policies at startup (always a fresh fetch, ADR-070
+    /// A7) and keep them refreshed, recovering once the Control Plane is back.
+    pub fn spawn_policy_refresher(self: &Arc<Self>, tenants: Vec<String>) {
+        let service = Arc::clone(self);
+        tokio::spawn(async move {
+            loop {
+                for tenant_id in &tenants {
+                    if let Err(reason) = service.load_policy(tenant_id).await {
+                        debug!(tenant_id = %tenant_id, reason = %reason.as_str(), "Startup policy load failed");
+                    }
+                }
+                let interval = match service.policy_readiness_failure() {
+                    Some(_) => BOOT_RETRY_INTERVAL,
+                    None => service.cache_ttl,
+                };
+                tokio::time::sleep(interval).await;
+            }
+        });
     }
 
     /// Get (or fetch) the explicit permission state for a tenant.
@@ -200,6 +302,9 @@ impl ToolPermissionService {
                     expires_at: fetched_at + self.cache_ttl,
                 };
                 self.cache.insert(cache_key, cached);
+                if let Ok(mut loaded_at) = self.policy_loaded_at.write() {
+                    *loaded_at = Some(fetched_at);
+                }
                 PermissionState::Fresh { rules, fetched_at }
             }
             Err(reason) => {
@@ -311,10 +416,7 @@ impl ToolPermissionService {
             }
             if received == list.total {
                 debug!(tenant_id = %tenant_id, total = received, "Loaded complete tool permissions");
-                return Ok(PermissionRules {
-                    overrides,
-                    default_allowed: list.default_allowed,
-                });
+                return Ok(PermissionRules { overrides });
             }
             page += 1;
             if page > 1000 {
@@ -325,12 +427,15 @@ impl ToolPermissionService {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use wiremock::matchers::{method, path, path_regex};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
-    async fn authenticated_service(server: &MockServer, ttl: Duration) -> ToolPermissionService {
+    pub(crate) async fn authenticated_service(
+        server: &MockServer,
+        ttl: Duration,
+    ) -> ToolPermissionService {
         Mock::given(method("POST"))
             .and(path("/token"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
@@ -568,21 +673,79 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn permissions_pagination_reads_all_pages_and_default() {
+    async fn regression_permissions_pagination_requires_explicit_allow() {
         use wiremock::matchers::{header, query_param};
         let server = MockServer::start().await;
         let service = authenticated_service(&server, Duration::from_secs(60)).await;
         for (page, server_id, allowed) in [(1, "first", true), (2, "second", false)] {
-            Mock::given(method("GET")).and(path("/v1/tenants/tenant-a/tool-permissions"))
+            let mut items = vec![serde_json::json!({
+                "mcp_server_id": server_id, "tool_name": "blocked", "allowed": allowed
+            })];
+            if page == 1 {
+                items.push(serde_json::json!({
+                    "mcp_server_id": server_id, "tool_name": "allowed", "allowed": true
+                }));
+            }
+            Mock::given(method("GET"))
+                .and(path("/v1/tenants/tenant-a/tool-permissions"))
                 .and(query_param("page", page.to_string()))
                 .and(header("Authorization", "Bearer fixture-service-access"))
                 .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                    "items": [{"mcp_server_id": server_id, "tool_name": "blocked", "allowed": allowed}],
-                    "total": 2, "page": page, "default_allowed": true
-                }))).expect(1).mount(&server).await;
+                    "items": items,
+                    "total": 3, "page": page, "default_allowed": true
+                })))
+                .expect(1)
+                .mount(&server)
+                .await;
         }
         assert!(!service.is_tool_allowed("tenant-a", "blocked").await);
-        assert!(service.is_tool_allowed("tenant-a", "ordinary_read").await);
+        assert!(service.is_tool_allowed("tenant-a", "allowed").await);
+        assert!(!service.is_tool_allowed("tenant-a", "ordinary_read").await);
+    }
+
+    #[tokio::test]
+    async fn regression_empty_permissions_deny_despite_cp_default_allow() {
+        let server = MockServer::start().await;
+        let service = authenticated_service(&server, Duration::from_secs(60)).await;
+        Mock::given(method("GET"))
+            .and(path("/v1/tenants/tenant-a/tool-permissions"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "items": [], "total": 0, "page": 1, "default_allowed": true
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        assert!(!service.is_tool_allowed("tenant-a", "unlisted").await);
+    }
+
+    #[tokio::test]
+    async fn regression_incomplete_permissions_deny_partial_allow() {
+        use wiremock::matchers::query_param;
+        let server = MockServer::start().await;
+        let service = authenticated_service(&server, Duration::from_secs(60)).await;
+        Mock::given(method("GET"))
+            .and(path("/v1/tenants/tenant-a/tool-permissions"))
+            .and(query_param("page", "1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "items": [{"mcp_server_id": "first", "tool_name": "allowed", "allowed": true}],
+                "total": 2, "page": 1, "default_allowed": true
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/v1/tenants/tenant-a/tool-permissions"))
+            .and(query_param("page", "2"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "items": [], "total": 2, "page": 2, "default_allowed": true
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        assert!(!service.is_tool_allowed("tenant-a", "allowed").await);
+        assert_eq!(service.readiness_failure_reason(), Some("cp_unreachable"));
     }
 
     #[tokio::test]
@@ -627,6 +790,33 @@ mod tests {
             .all(|r| r.headers.contains_key("Authorization")));
     }
 
+    /// One-key trust set built from the published RFC 8032 §7.1 public key.
+    pub(crate) const VALID_JWKS: &str = r#"{"keys":[{"kty":"OKP","crv":"Ed25519","alg":"EdDSA","kid":"k0","x":"11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo"}]}"#;
+
+    #[tokio::test]
+    async fn trust_set_not_loaded_denies_before_contacting_cp() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(permissions_response(serde_json::json!([
+                {"mcp_server_id": "srv1", "tool_name": "ok_tool", "allowed": true}
+            ])))
+            .mount(&server)
+            .await;
+        let dir = tempfile::tempdir().unwrap();
+        let trust = PolicyTrustStore::open(dir.path().join("trust.json"));
+        let svc = authenticated_service(&server, Duration::from_secs(60))
+            .await
+            .with_trust_store(Some(trust.clone()));
+        assert_eq!(svc.readiness_failure_reason(), Some("trust_set_not_loaded"));
+        assert!(!svc.is_tool_allowed("tenant1", "ok_tool").await);
+        assert!(server.received_requests().await.unwrap().is_empty());
+
+        std::fs::write(dir.path().join("trust.json"), VALID_JWKS).unwrap();
+        assert_eq!(trust.reload(), Ok(1));
+        assert_eq!(svc.readiness_failure_reason(), None);
+        assert!(svc.is_tool_allowed("tenant1", "ok_tool").await);
+    }
+
     #[tokio::test]
     async fn permissions_403_is_final() {
         let server = MockServer::start().await;
@@ -649,5 +839,151 @@ mod tests {
                 .count(),
             1
         );
+    }
+
+    #[tokio::test]
+    async fn regression_alias_allow_does_not_widen_canonical_deny() {
+        // The requested name is an allowed alias; the canonical tool it
+        // resolves to is denied or unlisted. The call must be denied.
+        for canonical in [
+            Some(
+                serde_json::json!({"mcp_server_id": "s1", "tool_name": "new_tool", "allowed": false}),
+            ),
+            None,
+        ] {
+            let server = MockServer::start().await;
+            let mut items = vec![serde_json::json!(
+                {"mcp_server_id": "s1", "tool_name": "old_tool", "allowed": true}
+            )];
+            items.extend(canonical);
+            Mock::given(method("GET"))
+                .and(path_regex(r"/v1/tenants/.+/tool-permissions"))
+                .respond_with(permissions_response(serde_json::Value::Array(items)))
+                .mount(&server)
+                .await;
+            let svc = authenticated_service(&server, Duration::from_secs(60)).await;
+            assert!(
+                !svc.is_tool_call_allowed("tenant1", "old_tool", "new_tool")
+                    .await
+            );
+            assert!(svc.is_tool_allowed("tenant1", "old_tool").await);
+        }
+    }
+
+    #[tokio::test]
+    async fn regression_alias_explicit_deny_wins_over_canonical_allow() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path_regex(r"/v1/tenants/.+/tool-permissions"))
+            .respond_with(permissions_response(serde_json::json!([
+                {"mcp_server_id": "s1", "tool_name": "old_tool", "allowed": false},
+                {"mcp_server_id": "s1", "tool_name": "new_tool", "allowed": true}
+            ])))
+            .mount(&server)
+            .await;
+        let svc = authenticated_service(&server, Duration::from_secs(60)).await;
+        assert!(
+            !svc.is_tool_call_allowed("tenant1", "old_tool", "new_tool")
+                .await
+        );
+        // The canonical name keeps working under its own allow.
+        assert!(
+            svc.is_tool_call_allowed("tenant1", "new_tool", "new_tool")
+                .await
+        );
+        assert!(svc.is_tool_allowed("tenant1", "new_tool").await);
+    }
+
+    /// Serve `reply` to exactly one `GET /v1/tenants/*/tool-permissions` request.
+    pub(crate) async fn serve_policy_once(server: &MockServer, reply: ResponseTemplate) {
+        Mock::given(method("GET"))
+            .and(path_regex("/v1/tenants/.*/tool-permissions"))
+            .respond_with(reply)
+            .up_to_n_times(1)
+            .mount(server)
+            .await;
+    }
+
+    /// Complete policy whose only explicit allow is `ok_tool`.
+    pub(crate) fn ok_tool_policy() -> ResponseTemplate {
+        permissions_response(serde_json::json!([
+            {"mcp_server_id": "srv1", "tool_name": "ok_tool", "allowed": true}
+        ]))
+    }
+
+    #[tokio::test]
+    async fn regression_startup_without_control_plane_denies_and_blocks_readiness() {
+        let server = MockServer::start().await;
+        let mut svc = authenticated_service(&server, Duration::from_secs(60)).await;
+        svc.base_url = "http://127.0.0.1:1".to_string();
+        assert_eq!(svc.policy_readiness_failure(), Some("policy_not_loaded"));
+        assert_eq!(
+            svc.load_policy("tenant1").await,
+            Err(PermissionDenyReason::CpUnreachable)
+        );
+        assert!(!svc.is_tool_allowed("tenant1", "any_tool").await);
+        assert_eq!(svc.policy_readiness_failure(), Some("policy_not_loaded"));
+    }
+
+    #[tokio::test]
+    async fn regression_first_policy_load_failure_then_success_opens_readiness() {
+        let server = MockServer::start().await;
+        serve_policy_once(&server, ResponseTemplate::new(503)).await;
+        serve_policy_once(&server, ok_tool_policy()).await;
+        let svc = authenticated_service(&server, Duration::from_secs(60)).await;
+
+        assert_eq!(
+            svc.load_policy("tenant1").await,
+            Err(PermissionDenyReason::CpUnreachable)
+        );
+        assert_eq!(svc.policy_readiness_failure(), Some("policy_not_loaded"));
+
+        assert_eq!(svc.load_policy("tenant1").await, Ok(()));
+        assert_eq!(svc.policy_readiness_failure(), None);
+        assert!(svc.is_tool_allowed("tenant1", "ok_tool").await);
+        assert!(!svc.is_tool_allowed("tenant1", "other_tool").await);
+    }
+
+    #[tokio::test]
+    async fn regression_stale_policy_denies_and_blocks_readiness() {
+        let server = MockServer::start().await;
+        serve_policy_once(&server, ok_tool_policy()).await;
+        let mut svc = authenticated_service(&server, Duration::from_millis(1)).await;
+        svc.max_policy_age = Duration::from_millis(1);
+
+        assert_eq!(svc.load_policy("tenant1").await, Ok(()));
+        assert_eq!(svc.policy_readiness_failure(), None);
+        tokio::time::sleep(Duration::from_millis(20)).await;
+
+        // Past the cap and no longer served: readiness fails and the call is denied as stale.
+        assert_eq!(svc.policy_readiness_failure(), Some("policy_stale"));
+        assert!(!svc.is_tool_allowed("tenant1", "ok_tool").await);
+        assert_eq!(
+            svc.readiness_failure_reason(),
+            Some("permission_cache_expired")
+        );
+    }
+
+    #[tokio::test]
+    async fn regression_startup_refresher_loads_policy_before_first_call() {
+        let server = MockServer::start().await;
+        serve_policy_once(&server, ok_tool_policy()).await;
+        let svc = Arc::new(authenticated_service(&server, Duration::from_secs(60)).await);
+        svc.spawn_policy_refresher(vec!["tenant1".into()]);
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while svc.policy_readiness_failure().is_some() {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("startup loader must load the policy");
+        // The first call is served from the warmed cache: still one fetch.
+        assert!(svc.is_tool_allowed("tenant1", "ok_tool").await);
+    }
+
+    #[test]
+    fn regression_cache_ttl_is_capped_at_hard_limit() {
+        let svc = ToolPermissionService::new(Client::new(), "http://cp", MAX_POLICY_AGE * 2);
+        assert_eq!(svc.cache_ttl, MAX_POLICY_AGE);
     }
 }

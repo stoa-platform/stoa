@@ -23,6 +23,8 @@ on:
       - '.github/workflows/claude-issue-to-pr.yml'
       - '.github/workflows/linear-reopen-on-close.yml'
       - '.github/workflows/ai-factory-scripts-tests.yml'
+      - '.github/workflows/reusable-python-ci.yml'
+      - '.github/workflows/control-plane-api-ci.yml'
       - '.yamllint'
 
 permissions:
@@ -130,7 +132,7 @@ jobs:
           if [ -f scripts/ci/requirements.txt ]; then
             pip install -r scripts/ci/requirements.txt
           fi
-          pip install pytest pytest-cov 'PyYAML==6.0.3'
+          pip install pytest pytest-cov 'pytest-xdist==3.8.0' 'pytest-split==0.11.0' 'PyYAML==6.0.3'
       - name: Run pytest
         # scripts/ci/tests/ covers both Python helpers and bash
         # helpers (bash via pytest+subprocess per Phase 2a K1).

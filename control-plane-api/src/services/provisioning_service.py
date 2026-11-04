@@ -20,6 +20,7 @@ from ..adapters.gateway_adapter_interface import GatewayAdapterInterface
 from ..models.subscription import ProvisioningStatus, Subscription
 from ..repositories.consumer import ConsumerRepository
 from ..repositories.plan import PlanRepository
+from .credential_resolver import CredentialResolutionError
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +76,8 @@ async def _resolve_adapter(db: AsyncSession, api_id: str, tenant_id: str) -> Gat
             source=gateway.source,
             gateway_name=gateway.name,
         )
+    except CredentialResolutionError:
+        raise
     except Exception as e:
         logger.error("Failed to resolve gateway adapter for API %s: %s", api_id, e)
         return None
@@ -138,7 +141,14 @@ async def _provision_with_session(
     subscription.provisioning_error = None
     await db.commit()
 
-    adapter = await _resolve_adapter(db, subscription.api_id, subscription.tenant_id)
+    try:
+        adapter = await _resolve_adapter(db, subscription.api_id, subscription.tenant_id)
+    except CredentialResolutionError as error:
+        subscription.provisioning_status = ProvisioningStatus.FAILED
+        subscription.provisioning_error = str(error)
+        subscription.provisioned_at = None
+        await db.commit()
+        return
 
     # No gateway deployment → virtual provisioning (OAuth2-only, no gateway route)
     if adapter is None:
@@ -386,7 +396,10 @@ async def _deprovision_with_session(
     subscription.provisioning_status = ProvisioningStatus.DEPROVISIONING
     await db.commit()
 
-    adapter = await _resolve_adapter(db, subscription.api_id, subscription.tenant_id)
+    try:
+        adapter = await _resolve_adapter(db, subscription.api_id, subscription.tenant_id)
+    except CredentialResolutionError:
+        adapter = None
     if adapter is None:
         subscription.provisioning_status = ProvisioningStatus.DEPROVISIONING_FAILED
         subscription.provisioning_error = "Deprovision failed: no gateway adapter resolved for existing gateway_app_id"

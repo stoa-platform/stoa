@@ -14,9 +14,10 @@ import hmac
 import time
 
 import httpx
+import jwt
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError, jwt
+from jwt.exceptions import PyJWTError
 from pydantic import BaseModel
 
 from ..config import settings
@@ -32,6 +33,8 @@ security = HTTPBearer(auto_error=False)
 _KC_PUBLIC_KEY_CACHE: dict[str, tuple[str, float]] = {}
 _KC_PUBLIC_KEY_TTL_SEC = 300.0
 _KC_HTTP_TIMEOUT_SEC = 3.0
+# Clock-skew tolerance for exp, nbf and iat; matches the gateway's JWT validator.
+_JWT_LEEWAY_SECONDS = 30
 
 
 def _kc_issuer_url() -> str:
@@ -56,8 +59,23 @@ class User(BaseModel):
     tenant_id: str | None = None
 
 
+class TokenValidationError(PyJWTError):
+    """Application-level claim rejection, mapped to 401 together with library errors."""
+
+
+def _normalize_tenant_claim(value: object) -> str:
+    """Match the gateway wire contract without coercing ambiguous identities."""
+    if isinstance(value, list) and len(value) == 1:
+        value = value[0]
+    if not isinstance(value, str) or not value or value != value.strip():
+        raise TokenValidationError("invalid_tenant_claim")
+    return value
+
+
 def _demo_auth_bypass_enabled(request: Request) -> bool:
-    return bool(getattr(settings, "STOA_DISABLE_AUTH", False)) and request.headers.get("X-Demo-Mode", "").lower() == "true"
+    return (
+        bool(getattr(settings, "STOA_DISABLE_AUTH", False)) and request.headers.get("X-Demo-Mode", "").lower() == "true"
+    )
 
 
 def _demo_bypass_user(request: Request) -> User:
@@ -178,12 +196,15 @@ async def get_current_user(
         # CAB-2094: issuer comes from the PUBLIC URL regardless of where we
         # fetched the public key (which may be the internal SVC URL).
         expected_issuer = _kc_issuer_url()
+        # `exp` and `iat` are required: the library verifies them only when present,
+        # and a token without `exp` would otherwise never expire.
         payload = jwt.decode(
             token,
             public_key,
             algorithms=["RS256"],
             issuer=expected_issuer,
-            options={"verify_aud": False, "verify_iss": True},
+            leeway=_JWT_LEEWAY_SECONDS,
+            options={"verify_aud": False, "verify_iss": True, "require": ["exp", "iat"]},
         )
 
         # Debug: log payload structure (not values) for troubleshooting
@@ -238,7 +259,8 @@ async def get_current_user(
                 azp=payload.get("azp"),
                 hint="Ensure Audience Mapper is configured in Keycloak for this client",
             )
-            raise JWTError(f"Invalid audience: {token_aud}. Expected: {list(valid_audiences)}")
+            # The token audiences and the accepted list stay in the log above, not in the response.
+            raise TokenValidationError("Invalid audience")
 
         # Deprecation warning for legacy audiences (control-plane-ui, stoa-portal)
         # These clients should configure Audience Mappers in Keycloak to include
@@ -282,9 +304,11 @@ async def get_current_user(
         from .rbac import normalize_roles
 
         roles = normalize_roles(payload.get("realm_access", {}).get("roles", []))
-        # Handle tenant_id as either string or list (from group membership mapper)
-        raw_tenant_id = payload.get("tenant_id")
-        tenant_id = (raw_tenant_id[0] if raw_tenant_id else None) if isinstance(raw_tenant_id, list) else raw_tenant_id
+        tenant_id = _normalize_tenant_claim(payload["tenant_id"]) if "tenant_id" in payload else None
+        legacy_tenant = _normalize_tenant_claim(payload["tenant"]) if "tenant" in payload else None
+        if tenant_id is not None and legacy_tenant is not None and tenant_id != legacy_tenant:
+            raise TokenValidationError("conflicting_tenant_claims")
+        # Legacy claims never establish identity; missing tenants remain valid for bootstrap.
 
         # Get user ID from 'sub' claim (Keycloak UUID)
         # The 'sub' claim is mandatory in OIDC access tokens — if missing, the
@@ -349,13 +373,15 @@ async def get_current_user(
             tenant_id=tenant_id,
         )
 
-    except JWTError as e:
+    except PyJWTError as e:
         logger.error(
             "JWT validation failed",
             error=str(e),
             error_type=type(e).__name__,
         )
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid token: {e!s}")
+        # Application-owned claim rejections keep their text; library messages stay in the logs.
+        reason = str(e) if isinstance(e, TokenValidationError) else "verification failed"
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid token: {reason}")
     except httpx.HTTPError as e:
         logger.error(
             "Failed to fetch Keycloak public key",

@@ -11,6 +11,50 @@ permissions:
   issues: write
 
 jobs:
+  advisory-fix-watch:
+    name: Advisory Tracking
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    continue-on-error: true
+    permissions:
+      contents: read
+      issues: write
+    concurrency:
+      group: advisory-fix-watch
+      cancel-in-progress: false
+    steps:
+      - name: Record disabled watcher
+        if: vars.DISABLE_L2_SCHEDULED == 'true'
+        run: echo 'Advisory tracking skipped (DISABLE_L2_SCHEDULED=true).' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        if: vars.DISABLE_L2_SCHEDULED != 'true'
+      - name: Test advisory tracking
+        if: vars.DISABLE_L2_SCHEDULED != 'true'
+        run: python3 -B -m unittest scripts.ci.tests.test_advisory_fix_watch -v
+      - name: Check advisory tracking
+        if: vars.DISABLE_L2_SCHEDULED != 'true'
+        id: watch
+        continue-on-error: true
+        run: python3 -B scripts/ci/advisory_fix_watch.py --register scripts/ci/tracked-advisories.json
+      - name: Request dependency review
+        if: steps.watch.outcome == 'failure'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const title = 'Advisory tracking: review requested';
+            const run = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = `Scheduled dependency tracking needs review. See the Advisory Tracking job summary for status and review dates. [View run](${run})`;
+            const repo = context.repo;
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              ...repo, labels: 'dependencies', state: 'open', per_page: 100
+            });
+            const existing = issues.find(issue => !issue.pull_request && issue.title === title);
+            if (existing) {
+              await github.rest.issues.createComment({...repo, issue_number: existing.number, body});
+            } else {
+              await github.rest.issues.create({...repo, title, body, labels: ['dependencies', 'ci-failure']});
+            }
+
   trivy-images:
     name: Trivy Container Scan (${{ matrix.image_name }})
     if: vars.DISABLE_L2_SCHEDULED != 'true'

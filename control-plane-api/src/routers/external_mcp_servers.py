@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import User, get_current_user
 from ..auth.gateway_key import gateway_key_is_valid
+from ..auth.rbac import decide_tenant_access
 from ..config import settings
 from ..database import get_db
 from ..models.external_mcp_server import (
@@ -54,20 +55,20 @@ from ..services.vault_client import get_vault_client
 logger = logging.getLogger(__name__)
 
 
-def _require_admin(user: User) -> None:
-    """Check if user has admin access."""
+def _require_admin(user: User) -> str | None:
+    """Require an admin role and resolve scope before any repository access."""
     if "cpi-admin" not in user.roles and "tenant-admin" not in user.roles:
         raise HTTPException(status_code=403, detail="Admin access required")
+    return decide_tenant_access(user, mode="global" if "cpi-admin" in user.roles else "filter")
 
 
 def _has_tenant_access(user: User, tenant_id: str | None) -> bool:
     """Check if user has access to manage a server with given tenant_id."""
-    if "cpi-admin" in user.roles:
+    try:
+        decide_tenant_access(user, tenant_id, mode="global" if tenant_id is None else "resource")
         return True
-    # Tenant admins can manage platform-wide (tenant_id=None) or their own tenant's servers
-    if tenant_id is None:
-        return False  # Only CPI admins can manage platform-wide servers
-    return user.tenant_id == tenant_id
+    except HTTPException:
+        return False
 
 
 def _convert_server_to_response(server: ExternalMCPServer) -> ExternalMCPServerResponse:
@@ -174,10 +175,7 @@ async def list_servers(
     Tenant admins see platform-wide servers and their tenant's servers.
     Supports environment filtering for multi-dataplane deployments.
     """
-    _require_admin(user)
-
-    # Determine tenant filter
-    tenant_id = None if "cpi-admin" in user.roles else user.tenant_id
+    tenant_id = _require_admin(user)
 
     repo = ExternalMCPServerRepository(db)
     servers, total = await repo.list_all(

@@ -3,10 +3,13 @@
 //! CAB-912: HTTP clients for the FastAPI control plane.
 
 pub mod client;
+pub mod policy_artifact;
+pub mod policy_trust;
 pub mod registration;
 pub mod tool_permissions;
 pub mod tool_proxy;
 
+pub use policy_trust::PolicyTrustStore;
 pub use registration::GatewayRegistrar;
 pub use tool_permissions::ToolPermissionService;
 pub use tool_proxy::{

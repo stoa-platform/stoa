@@ -69,6 +69,7 @@ jobs:
       coverage-threshold: 70
       test-markers: not integration
       parallel-tests: true
+      test-shards: 2
       runner: ubuntu-latest
     permissions:
       contents: read

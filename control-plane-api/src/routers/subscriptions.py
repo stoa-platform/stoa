@@ -4,6 +4,7 @@ import asyncio
 import logging
 import math
 import uuid as uuid_mod
+from typing import cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
@@ -11,6 +12,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import User, get_current_user
+from ..auth.rbac import decide_tenant_access
 from ..database import get_db
 from ..models.portal_application import SecurityProfile
 from ..models.subscription import Subscription, SubscriptionStatus
@@ -66,9 +68,11 @@ def _extract_auth_token(request: Request) -> str | None:
 
 def _has_tenant_access(user: User, tenant_id: str) -> bool:
     """Check if user has read access to a tenant's resources."""
-    if "cpi-admin" in user.roles:
-        return True
-    return user.tenant_id == tenant_id
+    try:
+        decide_tenant_access(user, tenant_id, mode="resource")
+    except HTTPException:
+        return False
+    return True
 
 
 def _has_tenant_admin_access(user: User, tenant_id: str) -> bool:
@@ -78,9 +82,14 @@ def _has_tenant_admin_access(user: User, tenant_id: str) -> bool:
     tenant-admin), not just tenant membership. Viewer and devops roles
     with matching tenant_id are denied.
     """
-    if "cpi-admin" in user.roles:
-        return True
-    return "tenant-admin" in user.roles and user.tenant_id == tenant_id
+    return bool({"cpi-admin", "tenant-admin"} & set(user.roles)) and _has_tenant_access(user, tenant_id)
+
+
+def _scoped_user(user: User = Depends(get_current_user)) -> User:
+    """Reject missing tenant identity before any subscription lookup."""
+    if "cpi-admin" not in user.roles:
+        decide_tenant_access(user, mode="filter")
+    return user
 
 
 async def _status_reason_from_request(request: Request, default: str) -> str:
@@ -105,7 +114,7 @@ async def _status_reason_from_request(request: Request, default: str) -> str:
 async def create_subscription(
     request: SubscriptionCreate,
     raw_request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(_scoped_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -118,6 +127,7 @@ async def create_subscription(
     Uses OAuth2 client_credentials flow — no API key is generated.
     The consumer's Application keycloak_client_id is stored as oauth_client_id.
     """
+    decide_tenant_access(user, request.tenant_id, mode="resource")
     repo = SubscriptionRepository(db)
 
     # Check for existing subscription
@@ -288,7 +298,7 @@ async def list_my_subscriptions(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     environment: str | None = Query(None, description="Filter by environment"),
-    user: User = Depends(get_current_user),
+    user: User = Depends(_scoped_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -298,6 +308,7 @@ async def list_my_subscriptions(
     """
     repo = SubscriptionRepository(db)
 
+    tenant_id = decide_tenant_access(user, mode="global" if "cpi-admin" in user.roles else "filter")
     is_admin = bool({"cpi-admin", "tenant-admin"} & set(user.roles))
     db_status = SubscriptionStatus(status.value) if status else None
     subscriptions, total = await repo.list_by_subscriber(
@@ -307,6 +318,7 @@ async def list_my_subscriptions(
         page_size=page_size,
         environment=environment,
         is_admin=is_admin,
+        tenant_id=tenant_id,
     )
 
     return SubscriptionListResponse(
@@ -321,7 +333,7 @@ async def list_my_subscriptions(
 @router.get("/{subscription_id}", response_model=SubscriptionResponse)
 async def get_subscription(
     subscription_id: UUID,
-    user: User = Depends(get_current_user),
+    user: User = Depends(_scoped_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Get subscription details by ID"""
@@ -331,8 +343,8 @@ async def get_subscription(
     if not subscription:
         raise HTTPException(status_code=404, detail="Subscription not found")
 
-    # Check access: subscriber or tenant admin
-    if subscription.subscriber_id != user.id and not _has_tenant_access(user, subscription.tenant_id):
+    # Authorize the object's tenant even when the subscriber matches.
+    if not _has_tenant_access(user, subscription.tenant_id):
         raise HTTPException(status_code=403, detail="Access denied")
 
     return SubscriptionResponse.model_validate(subscription)
@@ -341,7 +353,7 @@ async def get_subscription(
 @router.delete("/{subscription_id}", status_code=204)
 async def cancel_subscription(
     subscription_id: UUID,
-    user: User = Depends(get_current_user),
+    user: User = Depends(_scoped_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -354,6 +366,8 @@ async def cancel_subscription(
 
     if not subscription:
         raise HTTPException(status_code=404, detail="Subscription not found")
+
+    decide_tenant_access(user, cast(str, subscription.tenant_id), mode="resource")
 
     # Only subscriber can cancel their own subscription
     if subscription.subscriber_id != user.id:
@@ -380,7 +394,7 @@ async def rotate_api_key(
     subscription_id: UUID,
     response: Response,
     request: KeyRotationRequest = KeyRotationRequest(),
-    user: User = Depends(get_current_user),
+    user: User = Depends(_scoped_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -405,8 +419,8 @@ async def rotate_api_key(
     if not subscription:
         raise HTTPException(status_code=404, detail="Subscription not found")
 
-    # Check access: subscriber owns this subscription or is tenant admin
-    if subscription.subscriber_id != user.id and not _has_tenant_access(user, subscription.tenant_id):
+    # Authorize the object's tenant even when the subscriber matches.
+    if not _has_tenant_access(user, subscription.tenant_id):
         raise HTTPException(status_code=403, detail="Access denied")
 
     # Can only rotate active subscriptions
@@ -479,7 +493,7 @@ async def rotate_api_key(
 @router.get("/{subscription_id}/rotation-info", response_model=SubscriptionWithRotationInfo)
 async def get_subscription_rotation_info(
     subscription_id: UUID,
-    user: User = Depends(get_current_user),
+    user: User = Depends(_scoped_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -494,7 +508,7 @@ async def get_subscription_rotation_info(
         raise HTTPException(status_code=404, detail="Subscription not found")
 
     # Check access
-    if subscription.subscriber_id != user.id and not _has_tenant_access(user, subscription.tenant_id):
+    if not _has_tenant_access(user, subscription.tenant_id):
         raise HTTPException(status_code=403, detail="Access denied")
 
     # Check if there's an active grace period
@@ -521,7 +535,7 @@ MAX_TTL_TOTAL_DAYS = 60
 async def extend_subscription_ttl(
     subscription_id: UUID,
     request: TTLExtendRequest,
-    user: User = Depends(get_current_user),
+    user: User = Depends(_scoped_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -627,7 +641,7 @@ async def list_tenant_subscriptions(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     environment: str | None = Query(None, description="Filter by environment"),
-    user: User = Depends(get_current_user),
+    user: User = Depends(_scoped_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -663,7 +677,7 @@ async def list_pending_subscriptions(
     tenant_id: str,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    user: User = Depends(get_current_user),
+    user: User = Depends(_scoped_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -696,7 +710,7 @@ async def approve_subscription(
     subscription_id: UUID,
     request: SubscriptionApprove,
     raw_request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(_scoped_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -753,7 +767,7 @@ async def revoke_subscription(
     subscription_id: UUID,
     request: SubscriptionRevoke,
     raw_request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(_scoped_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -801,7 +815,7 @@ async def revoke_subscription(
 async def suspend_subscription(
     subscription_id: UUID,
     raw_request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(_scoped_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -843,7 +857,7 @@ async def suspend_subscription(
 async def reactivate_subscription(
     subscription_id: UUID,
     raw_request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(_scoped_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -885,7 +899,7 @@ async def reactivate_subscription(
 async def reject_subscription(
     subscription_id: UUID,
     request: SubscriptionReject,
-    user: User = Depends(get_current_user),
+    user: User = Depends(_scoped_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -928,7 +942,7 @@ async def reject_subscription(
 async def bulk_subscription_action(
     request: BulkSubscriptionAction,
     raw_request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(_scoped_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -1003,7 +1017,7 @@ async def bulk_subscription_action(
 @router.get("/tenant/{tenant_id}/stats", response_model=SubscriptionStats)
 async def get_subscription_stats(
     tenant_id: str,
-    user: User = Depends(get_current_user),
+    user: User = Depends(_scoped_user),
     db: AsyncSession = Depends(get_db),
 ):
     """

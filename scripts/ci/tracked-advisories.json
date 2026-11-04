@@ -1,0 +1,12 @@
+[
+  {
+    "ghsa": "GHSA-wj6h-64fc-37mp",
+    "aliases": ["CVE-2024-23342"],
+    "ecosystem": "pip",
+    "package": "ecdsa",
+    "pinned": "0.19.2",
+    "manifest": "control-plane-api/requirements.txt",
+    "reason": "Pending dependency review.",
+    "review_by": "2027-02-01"
+  }
+]

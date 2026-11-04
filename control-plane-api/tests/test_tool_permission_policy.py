@@ -1,4 +1,4 @@
-"""Bounds for the tool-permission policy payload (CAB-2222 S1)."""
+"""Bounds for the tool-permission policy payload."""
 
 import json
 from datetime import UTC, datetime, timedelta

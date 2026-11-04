@@ -1,4 +1,4 @@
-"""Validated payload for a signed tool-permission policy (CAB-2222 S1)."""
+"""Validated payload for a signed tool-permission policy."""
 
 from datetime import UTC, datetime, timedelta
 from typing import Self

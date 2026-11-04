@@ -18,7 +18,7 @@ RSA keypair (no ``jwt.decode`` mocking). If this passes, the demo runs Mode A.
 
 Boundary integrity
 ------------------
-- The JWT is signed by a real RSA keypair and decoded by the real ``jose``
+- The JWT is signed by a real RSA keypair and decoded by the real ``PyJWT``
   library. Only the public-key fetch is short-circuited (so we don't need a
   live Keycloak) and the sender-constrained validator is bypassed (it is
   disabled by default in ``Settings.SENDER_CONSTRAINED_ENABLED=False``).
@@ -29,15 +29,16 @@ Boundary integrity
 
 from __future__ import annotations
 
+import time
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
+import jwt
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import Depends, FastAPI
 from httpx import ASGITransport, AsyncClient
-from jose import jwt as jose_jwt
 
 from src.auth.dependencies import User, get_current_user
 
@@ -65,12 +66,13 @@ def rsa_keypair() -> tuple[str, str]:
 
 
 def _sign(private_pem: str, claims: dict[str, Any]) -> str:
-    """Sign a JWT with RS256 using the private PEM key (real ``jose`` encode)."""
-    token: str = jose_jwt.encode(claims, private_pem, algorithm="RS256")
+    """Sign a JWT with RS256 using the private PEM key (real ``PyJWT`` encode)."""
+    token: str = jwt.encode(claims, private_pem, algorithm="RS256")
     return token
 
 
 def _base_claims(**overrides: Any) -> dict[str, Any]:
+    now = int(time.time())
     base: dict[str, Any] = {
         "sub": "user-cab-2153",
         "email": "evidence@cab2153.test",
@@ -80,6 +82,8 @@ def _base_claims(**overrides: Any) -> dict[str, Any]:
         "aud": ["control-plane-api"],
         "azp": "stoa-mcp-gateway",
         "iss": "https://auth.gostoa.dev/realms/stoa",
+        "iat": now,
+        "exp": now + 300,
     }
     base.update(overrides)
     return base
@@ -143,9 +147,7 @@ class TestRegressionCab2153AudienceMapper:
         private_pem, _ = rsa_keypair
         token = _sign(private_pem, _base_claims(aud=["control-plane-api"]))
 
-        async with AsyncClient(
-            transport=ASGITransport(app=_make_app()), base_url="http://t"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=_make_app()), base_url="http://t") as client:
             resp = await client.get("/me", headers={"Authorization": f"Bearer {token}"})
 
         assert resp.status_code == 200, resp.text
@@ -165,9 +167,7 @@ class TestRegressionCab2153AudienceMapper:
             _base_claims(aud=["some-other-api"], azp="stoa-mcp-gateway"),
         )
 
-        async with AsyncClient(
-            transport=ASGITransport(app=_make_app()), base_url="http://t"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=_make_app()), base_url="http://t") as client:
             resp = await client.get("/me", headers={"Authorization": f"Bearer {token}"})
 
         assert resp.status_code == 401
@@ -192,9 +192,7 @@ class TestRegressionCab2153AudienceMapper:
             _base_claims(aud=["stoa-mcp-gateway"], azp="stoa-mcp-gateway"),
         )
 
-        async with AsyncClient(
-            transport=ASGITransport(app=_make_app()), base_url="http://t"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=_make_app()), base_url="http://t") as client:
             resp = await client.get("/me", headers={"Authorization": f"Bearer {token}"})
 
         assert resp.status_code == 200, resp.text
@@ -213,9 +211,7 @@ class TestRegressionCab2153AudienceMapper:
             _base_claims(aud=["control-plane-api", "account"]),
         )
 
-        async with AsyncClient(
-            transport=ASGITransport(app=_make_app()), base_url="http://t"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=_make_app()), base_url="http://t") as client:
             resp = await client.get("/me", headers={"Authorization": f"Bearer {token}"})
 
         assert resp.status_code == 200, resp.text

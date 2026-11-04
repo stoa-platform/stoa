@@ -88,7 +88,7 @@ async def test_regression_cab_2361_access_token_hs256_rejected(
         await _authenticate(token, idp_signing_key, httpx_mock)
 
     assert exc_info.value.status_code == 401
-    assert "alg" in exc_info.value.detail.lower()
+    assert exc_info.value.detail == "Invalid token: verification failed"
 
 
 async def test_regression_cab_2361_access_token_rs256_accepted(

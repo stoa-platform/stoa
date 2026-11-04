@@ -4,12 +4,12 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import jwt
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import Depends, FastAPI, Request
 from httpx import ASGITransport, AsyncClient
-from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from src.auth import dependencies
@@ -46,6 +46,7 @@ def signed_headers(signing_keys: tuple[bytes, str], **claims: Any) -> dict[str, 
         "realm_access": {"roles": ["viewer"]},
         "aud": "control-plane-api",
         "iss": "https://auth.example.invalid/realms/stoa",
+        "iat": datetime.now(UTC),
         "exp": datetime.now(UTC) + timedelta(minutes=5),
         **claims,
     }

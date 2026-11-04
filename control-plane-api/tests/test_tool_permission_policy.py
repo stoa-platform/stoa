@@ -58,7 +58,7 @@ def test_missing_binding_claim_rejected(field: str, as_json: bool) -> None:
 
 
 @pytest.mark.parametrize("field", ["iss", "aud"])
-@pytest.mark.parametrize("value", [None, "", "   ", 7])
+@pytest.mark.parametrize("value", [None, "", "   ", "\u00a0\u2003", 7])
 def test_invalid_binding_identity_rejected(field: str, value: object) -> None:
     with pytest.raises(ValidationError, match=field):
         ToolPermissionPolicy.model_validate(payload(**{field: value}))
@@ -86,6 +86,19 @@ def test_issue_binds_configured_issuer_and_audience(monkeypatch: pytest.MonkeyPa
         tenant_id="tenant-a", tenant_uuid=TENANT_UUID, version=1, permissions=[], issued_at=ISSUED_AT
     )
     assert (policy.iss, policy.aud, policy.tenant_uuid) == ("cp-eu", "gw-eu", TENANT_UUID)
+
+
+@pytest.mark.parametrize("blank", ["", "   "], ids=["empty", "spaces"])
+@pytest.mark.parametrize(("setting", "field"), [("STOA_POLICY_ISSUER", "iss"), ("STOA_POLICY_AUDIENCE", "aud")])
+def test_issue_refuses_blank_configured_identity(
+    monkeypatch: pytest.MonkeyPatch, setting: str, field: str, blank: str
+) -> None:
+    monkeypatch.setattr(settings, setting, blank)
+    with pytest.raises(ValidationError) as failure:
+        ToolPermissionPolicy.issue(
+            tenant_id="tenant-a", tenant_uuid=TENANT_UUID, version=1, permissions=[], issued_at=ISSUED_AT
+        )
+    assert [error["loc"] for error in failure.value.errors()] == [(field,)]
 
 
 def test_entry_count_boundary() -> None:

@@ -148,7 +148,7 @@ test -n "$TOKEN" && printf '%s\n' 'Token acquired.'
 
 ### 2.2 Understand the Tool CRD
 
-Tools are defined as Kubernetes Custom Resources following the `gostoa.dev/v1alpha1` API:
+Use the API version shown in the following example to declare a Kubernetes API resource:
 
 ```yaml
 apiVersion: gostoa.dev/v1alpha1

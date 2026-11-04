@@ -35,7 +35,7 @@ def _b64(value: bytes) -> str:
     return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
 
 
-def _public(key: Any, encoding: ser.Encoding = ser.Encoding.PEM) -> bytes:
+def _public(key: rsa.RSAPrivateKey, encoding: ser.Encoding = ser.Encoding.PEM) -> bytes:
     return key.public_key().public_bytes(encoding, ser.PublicFormat.SubjectPublicKeyInfo)
 
 
@@ -78,9 +78,9 @@ def signing_key() -> rsa.RSAPrivateKey:
 
 @pytest.fixture(autouse=True)
 def isolated_auth(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    config = {"KEYCLOAK_URL": "https://idp.example.test", "KEYCLOAK_INTERNAL_URL": "https://idp.example.test"}
-    config.update(KEYCLOAK_REALM="test", KEYCLOAK_CLIENT_ID="control-plane-api", STOA_DISABLE_AUTH=False)
-    config.update(LOG_DEBUG_AUTH_TOKENS=False, LOG_DEBUG_AUTH_PAYLOAD=False)
+    config: dict[str, Any] = {"KEYCLOAK_URL": "https://idp.example.test", "KEYCLOAK_REALM": "test"}
+    config.update(KEYCLOAK_INTERNAL_URL="https://idp.example.test", KEYCLOAK_CLIENT_ID="control-plane-api")
+    config.update(STOA_DISABLE_AUTH=False, LOG_DEBUG_AUTH_TOKENS=False, LOG_DEBUG_AUTH_PAYLOAD=False)
     config.update(SENDER_CONSTRAINED_ENABLED=True, SENDER_CONSTRAINED_STRATEGY="auto")
     config.update(SENDER_CONSTRAINED_DPOP_MAX_CLOCK_SKEW=60)
     for name, value in config.items():
@@ -162,10 +162,10 @@ async def test_access_signatures(case: str, client: AsyncClient, signing_key: An
 
 def _jwk(key: Any) -> dict[str, str]:
     if isinstance(key, rsa.RSAPrivateKey):
-        numbers = key.public_key().public_numbers()
+        rsa_numbers = key.public_key().public_numbers()
         fields = {
             name: _b64(v.to_bytes((v.bit_length() + 7) // 8, "big"))
-            for name, v in {"n": numbers.n, "e": numbers.e}.items()
+            for name, v in {"n": rsa_numbers.n, "e": rsa_numbers.e}.items()
         }
         return {"kty": "RSA", **fields}
     if isinstance(key, ec.EllipticCurvePrivateKey):
@@ -180,12 +180,12 @@ def _jwk(key: Any) -> dict[str, str]:
     return {"kty": "OKP", "crv": "Ed25519", "x": _b64(raw)}
 
 
-def _dpop(key: Any, alg: str = "RS256", corrupt: bool = False, **overrides: str) -> Any:
+def _dpop(key: Any, alg: str = "RS256", overrides: dict[str, str] | None = None, corrupt: bool = False) -> Any:
     public = _jwk(key)
     canonical = json.dumps(public, sort_keys=True, separators=(",", ":")).encode()
-    claims = {"htm": "GET", "htu": URI, "ath": _b64(hashlib.sha256(b"access-token").digest())}
+    claims: dict[str, Any] = {"htm": "GET", "htu": URI, "ath": _b64(hashlib.sha256(b"access-token").digest())}
     claims.update(jti="contract-proof", iat=int(time.time()) + 10)
-    proof = _jws(claims, key, alg, typ="dpop+jwt", jwk=public | overrides)
+    proof = _jws(claims, key, alg, typ="dpop+jwt", jwk=public | (overrides or {}))
     return validate_sender_constrained_token(
         {"cnf": {"jkt": _b64(hashlib.sha256(canonical).digest())}},
         "access-token",
@@ -219,7 +219,7 @@ def test_dpop_signed_proofs(alg: str, signing_key: Any) -> None:
 )
 def test_dpop_key_policy(overrides: dict[str, str], error: str, signing_key: Any) -> None:
     key = ec.generate_private_key(ec.SECP256R1()) if "crv" in overrides else signing_key
-    result = _dpop(key, "ES256" if "crv" in overrides else "RS256", **overrides)
+    result = _dpop(key, "ES256" if "crv" in overrides else "RS256", overrides)
     assert not result.valid
     assert error in result.error
 
@@ -241,14 +241,17 @@ def test_dpop_corrupted_signature(signing_key: Any) -> None:
 
 @pytest.fixture(scope="module")
 def gateway_endpoint(signing_key: Any) -> Any:
-    """Import the real fixture module; its environment, path and socket setup do not leak."""
+    """Import the real fixture module; its environment, path and socket setup do not leak, even on failure."""
     path = Path(__file__).resolve().parents[2] / "stoa-gateway/tests/fixtures/permission_control_plane.py"
     spec = importlib.util.spec_from_file_location("permission_control_plane", path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
-    with mock.patch.dict(os.environ), mock.patch.object(sys, "path", list(sys.path)):
-        spec.loader.exec_module(module)
-    module.listener.close()
+    try:
+        with mock.patch.dict(os.environ), mock.patch.object(sys, "path", list(sys.path)):
+            spec.loader.exec_module(module)
+    finally:
+        if hasattr(module, "listener"):
+            module.listener.close()
     pem = signing_key.private_bytes(ser.Encoding.PEM, ser.PrivateFormat.PKCS8, ser.NoEncryption()).decode()
     vars(module).update(issuer=ISSUER, client_public_pem=_public(signing_key).decode(), pem=pem)
     return module.token

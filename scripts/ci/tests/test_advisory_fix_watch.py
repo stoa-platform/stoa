@@ -3,6 +3,7 @@
 import io
 import json
 import re
+import sys
 import unittest
 from contextlib import redirect_stdout
 from copy import deepcopy
@@ -16,7 +17,9 @@ from typing import Any
 from unittest.mock import patch
 from urllib.error import URLError
 
-from scripts.ci.advisory_fix_watch import evaluate, main
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # as conftest.py, for -m unittest
+
+from advisory_fix_watch import evaluate, main  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[3]
 ENTRIES = json.loads((ROOT / "scripts/ci/tracked-advisories.json").read_text())
@@ -101,8 +104,8 @@ class AdvisoryWatchTests(unittest.TestCase):
                 register, summary = Path(folder) / "register.json", Path(folder) / "summary.md"
                 register.write_text(json.dumps([self.entry]))
                 with patch.dict("os.environ", {"GITHUB_STEP_SUMMARY": str(summary)}):
-                    with patch("scripts.ci.advisory_fix_watch.urlopen", side_effect=mode):
-                        with patch("scripts.ci.advisory_fix_watch.date", wraps=date) as clock:
+                    with patch("advisory_fix_watch.urlopen", side_effect=mode):
+                        with patch("advisory_fix_watch.date", wraps=date) as clock:
                             clock.today.return_value = TODAY
                             with redirect_stdout(io.StringIO()):
                                 self.assertEqual(main(["--register", str(register)]), expected)

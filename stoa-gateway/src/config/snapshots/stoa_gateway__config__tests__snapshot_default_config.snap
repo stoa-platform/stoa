@@ -58,6 +58,8 @@ expression: "Config::default()"
   "policy_enabled": true,
   "policy_boot_tenants": [],
   "policy_trust_jwks_file": null,
+  "policy_expected_issuer": "stoa-control-plane",
+  "policy_audience": "stoa-gateway",
   "log_level": "info",
   "log_format": "json",
   "otel_endpoint": null,

@@ -277,6 +277,16 @@ pub struct Config {
     #[serde(default)]
     pub policy_trust_jwks_file: Option<String>,
 
+    /// Exact `iss` claim required on signed tool-policy artifacts.
+    /// Env: STOA_POLICY_EXPECTED_ISSUER (default: stoa-control-plane)
+    #[serde(default = "default_policy_expected_issuer")]
+    pub policy_expected_issuer: String,
+
+    /// Exact `aud` claim required on signed tool-policy artifacts.
+    /// Env: STOA_POLICY_AUDIENCE (default: stoa-gateway)
+    #[serde(default = "default_policy_audience")]
+    pub policy_audience: String,
+
     // === Observability ===
     /// Informational log level (tracing itself is driven by `RUST_LOG`).
     /// Env: STOA_LOG_LEVEL (values: trace | debug | info | warn | error)
@@ -1037,6 +1047,8 @@ impl fmt::Debug for Config {
             .field("policy_enabled", &self.policy_enabled)
             .field("policy_boot_tenants", &self.policy_boot_tenants)
             .field("policy_trust_jwks_file", &r(&self.policy_trust_jwks_file))
+            .field("policy_expected_issuer", &self.policy_expected_issuer)
+            .field("policy_audience", &self.policy_audience)
             .field("log_level", &self.log_level)
             .field("log_format", &self.log_format)
             .field("otel_endpoint", &self.otel_endpoint)

@@ -263,9 +263,8 @@ pub struct Config {
     #[serde(default = "default_policy_enabled")]
     pub policy_enabled: bool,
 
-    /// Tenants whose tool policy is loaded from the Control Plane at startup
-    /// and refreshed in the background. When set, `/ready` fails until a
-    /// fresh policy has been loaded (ADR-070 §4). Comma-separated or JSON array.
+    /// Tenants whose tool policy is loaded at startup and refreshed in the background;
+    /// `/ready` fails until a fresh policy has loaded (ADR-070 §4). CSV or JSON array.
     /// Env: STOA_POLICY_BOOT_TENANTS
     #[serde(default, deserialize_with = "self::deserializers::string_list")]
     pub policy_boot_tenants: Vec<String>,

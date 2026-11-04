@@ -859,10 +859,8 @@ async fn ready(
         }
     }
 
-    // Readiness is gated on a real policy load (ADR-070 §1, §4): no traffic
-    // until the startup loader fetched a fresh tool policy. Missing inputs
-    // never bypass the gate: with no permission service (no Control Plane
-    // URL) or no startup tenants nothing can load, so the pod stays not ready.
+    // Readiness is gated on a real startup policy load (ADR-070 §1, §4). Missing
+    // inputs (no permission service, no startup tenants) never bypass the gate.
     let policy_failure = match &state.tool_permissions {
         None => Some("permission_service_missing"),
         Some(_) if state.config.policy_boot_tenants.is_empty() => Some("boot_tenants_missing"),
@@ -878,7 +876,10 @@ async fn ready(
     }
     if let Some(ref perm_svc) = state.tool_permissions {
         if let Some(reason) = perm_svc.readiness_failure_reason() {
-            warn!(reason = %reason, "Tool permission state degraded; data plane fail-closed");
+            warn!(
+                reason = %reason,
+                "Tool permission state degraded — data-plane fail-closed"
+            );
         }
     }
 
@@ -1012,30 +1013,19 @@ mod tests {
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
     }
 
-    // Readiness is gated on a real startup policy load (ADR-070 §4): not
-    // ready while the first load fails, ready once a fresh policy is fetched.
     #[tokio::test]
     async fn regression_gateway_readiness_fails_until_startup_policy_loaded() {
-        use control_plane::tool_permissions::tests::{authenticated_service, permissions_response};
+        use control_plane::tool_permissions::tests::{
+            authenticated_service, ok_tool_policy, serve_policy_once,
+        };
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/health"))
             .respond_with(ResponseTemplate::new(200))
             .mount(&server)
             .await;
-        Mock::given(method("GET"))
-            .and(path("/v1/tenants/tenant1/tool-permissions"))
-            .respond_with(ResponseTemplate::new(503))
-            .up_to_n_times(1)
-            .mount(&server)
-            .await;
-        Mock::given(method("GET"))
-            .and(path("/v1/tenants/tenant1/tool-permissions"))
-            .respond_with(permissions_response(serde_json::json!([
-                {"mcp_server_id": "s1", "tool_name": "ok_tool", "allowed": true}
-            ])))
-            .mount(&server)
-            .await;
+        serve_policy_once(&server, ResponseTemplate::new(503)).await;
+        serve_policy_once(&server, ok_tool_policy()).await;
         let config = config::Config {
             control_plane_url: Some(server.uri()),
             policy_boot_tenants: vec!["tenant1".into()],
@@ -1065,8 +1055,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
     }
 
-    // Missing startup inputs never bypass the gate: an unset, empty,
-    // whitespace-only or empty-array tenant list, or no Control Plane URL.
+    // Unset, empty, whitespace-only or empty-array tenants, or no Control Plane URL: never ready.
     #[tokio::test]
     async fn regression_gateway_readiness_fails_without_startup_policy_inputs() {
         let server = MockServer::start().await;
@@ -1082,8 +1071,7 @@ mod tests {
             serde_json::json!({ "control_plane_url": server.uri(), "policy_boot_tenants": "[]" }),
             serde_json::json!({ "policy_boot_tenants": "tenant1" }),
         ] {
-            let config: config::Config = serde_json::from_value(value.clone()).unwrap();
-            let state = AppState::new(config);
+            let state = AppState::new(serde_json::from_value(value.clone()).unwrap());
             let status = ready(axum::extract::State(state)).await.status();
             assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{value}");
         }

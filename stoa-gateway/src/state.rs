@@ -671,7 +671,6 @@ impl AppState {
 
     /// Start background tasks
     pub fn start_background_tasks(&self) {
-        // Startup tool-policy load and refresh (ADR-070 §4 readiness gate)
         match &self.tool_permissions {
             Some(permissions) if !self.config.policy_boot_tenants.is_empty() => {
                 permissions.spawn_policy_refresher(self.config.policy_boot_tenants.clone());

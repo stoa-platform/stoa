@@ -35,7 +35,6 @@
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/v1/tenants/provision` | Self-service tenant provisioning |
 | `POST` | `/v1/tenants/export` | Tenant export for disaster recovery |
 | `POST` | `/v1/tenants/import` | Tenant import/restore |
 | `GET` | `/v1/system/info` | System info with edition/licensing model |

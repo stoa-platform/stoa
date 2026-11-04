@@ -30,7 +30,6 @@ _None in this release._
 | Component | Change | Migration |
 |-----------|--------|-----------|
 | `api` | New database migrations required (billing, contracts, PII, signup tables) | Run `alembic upgrade head` before starting the new API version |
-| `api` | Tenant provisioning endpoint moved from internal to `/v1/tenants/provision` | Update any scripts calling the old provisioning path |
 
 ### Low
 

@@ -6115,30 +6115,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/tenants/provision": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Provision Tenant Endpoint
-         * @description Provision a new tenant with Keycloak realm (CAB-1547).
-         *
-         *     Idempotent: returns existing tenant if already provisioned.
-         *     Creates DB record + Keycloak realm synchronously.
-         *     CPI Admin only.
-         */
-        post: operations["provision_tenant_endpoint"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/tenants/{tenant_id}": {
         parameters: {
             query?: never;
@@ -20657,32 +20633,6 @@ export interface components {
             tool_prefix?: string | null;
             transport?: components["schemas"]["TransportTypeEnum"] | null;
         };
-        /** TenantProvisionRequest */
-        TenantProvisionRequest: {
-            /**
-             * Description
-             * @default
-             */
-            description: string;
-            /** Display Name */
-            display_name: string;
-            /** Name */
-            name: string;
-            /** Owner Email */
-            owner_email: string;
-        };
-        /** TenantProvisionResponse */
-        TenantProvisionResponse: {
-            /**
-             * Provisioning Status
-             * @default provisioning
-             */
-            provisioning_status: string;
-            /** Realm Name */
-            realm_name: string;
-            /** Tenant Id */
-            tenant_id: string;
-        };
         /** TenantProvisioningStatusResponse */
         TenantProvisioningStatusResponse: {
             /** Kc Group Id */
@@ -32464,39 +32414,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TenantResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    provision_tenant_endpoint: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TenantProvisionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TenantProvisionResponse"];
                 };
             };
             /** @description Validation Error */

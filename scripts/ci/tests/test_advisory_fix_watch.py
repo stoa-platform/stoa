@@ -7,8 +7,11 @@ import unittest
 from contextlib import redirect_stdout
 from copy import deepcopy
 from datetime import date
+from http.client import BadStatusLine, HTTPResponse
+from itertools import product
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 from urllib.error import URLError
@@ -18,6 +21,15 @@ from scripts.ci.advisory_fix_watch import evaluate, main
 ROOT = Path(__file__).resolve().parents[3]
 ENTRIES = json.loads((ROOT / "scripts/ci/tracked-advisories.json").read_text())
 TODAY = date(2026, 11, 4)
+
+
+def truncated_response(*args, **kwargs):
+    """Real stdlib response whose declared length exceeds its body, so read() is incomplete."""
+    raw = b"HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\n{}"
+    sock: Any = SimpleNamespace(makefile=lambda mode: io.BytesIO(raw))
+    response = HTTPResponse(sock)
+    response.begin()
+    return response
 
 
 class AdvisoryWatchTests(unittest.TestCase):
@@ -81,15 +93,15 @@ class AdvisoryWatchTests(unittest.TestCase):
                     evaluate(self.entry, advisory, pypi, TODAY)
 
     def test_feed_outage_preserves_review_signal_and_summary(self):
-        for review, expected in (("2020-01-01", 2), ("2027-02-01", 0)):
+        failures = (URLError("offline"), BadStatusLine("garbage"), truncated_response)
+        cases = product(failures, (("2020-01-01", 2), ("2027-02-01", 0)))
+        for mode, (review, expected) in cases:
             self.entry["review_by"] = review
-            with self.subTest(review=review), TemporaryDirectory(dir=ROOT) as folder:
+            with self.subTest(mode=mode, review=review), TemporaryDirectory(dir=ROOT) as folder:
                 register, summary = Path(folder) / "register.json", Path(folder) / "summary.md"
                 register.write_text(json.dumps([self.entry]))
                 with patch.dict("os.environ", {"GITHUB_STEP_SUMMARY": str(summary)}):
-                    with patch(
-                        "scripts.ci.advisory_fix_watch.urlopen", side_effect=URLError("offline")
-                    ):
+                    with patch("scripts.ci.advisory_fix_watch.urlopen", side_effect=mode):
                         with patch("scripts.ci.advisory_fix_watch.date", wraps=date) as clock:
                             clock.today.return_value = TODAY
                             with redirect_stdout(io.StringIO()):

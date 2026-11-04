@@ -5,6 +5,7 @@ import calendar
 import json
 import os
 from datetime import date
+from http.client import HTTPException
 from pathlib import Path
 from urllib.parse import quote
 from urllib.request import Request, urlopen
@@ -77,7 +78,8 @@ def main(argv=None):
                             today,
                         )
                     )
-                except (OSError, ValueError, KeyError, TypeError, AttributeError):
+                # Truncated or malformed responses raise HTTPException, which is not an OSError.
+                except (HTTPException, OSError, ValueError, KeyError, TypeError, AttributeError):
                     signals.append("NETWORK_OR_DATA_ERROR")
             statuses.update(signals)
             lines.append(f"- {entry['ghsa']}: {', '.join(sorted(set(signals))) or 'UNCHANGED'}")

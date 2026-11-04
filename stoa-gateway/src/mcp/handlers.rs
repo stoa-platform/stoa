@@ -198,6 +198,23 @@ impl FallbackAuthorizer for FallbackRequestAuthorizer<'_> {
         tool: &dyn Tool,
         ctx: &ToolContext,
     ) -> Result<(), String> {
+        if let (true, Some(sub_id), Some(master_id)) = (
+            self.state.config.federation_enabled,
+            self.auth.sub_account_id.as_deref(),
+            self.auth.master_account_id.as_deref(),
+        ) {
+            let allowed_tools = self
+                .state
+                .federation_cache
+                .get_allowed_tools(sub_id, &ctx.tenant_id, master_id)
+                .await;
+            if !allowed_tools
+                .is_some_and(|tools| tools.contains(requested) && tools.contains(tool.name()))
+            {
+                metrics::record_federation_request(sub_id, master_id, "denied");
+                return Err(format!("'{requested}' is not allowed for this sub-account"));
+            }
+        }
         // The requested name and the canonical name must both be allowed.
         for name in [requested, tool.name()] {
             if !self

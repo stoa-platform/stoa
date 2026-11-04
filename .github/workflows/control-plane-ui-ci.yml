@@ -115,11 +115,14 @@ jobs:
     # deployed (environment: dev above), never prod. Without a public dev
     # domain (SMOKE_BASE_DOMAIN_DEV) the reusable workflow skips the probes
     # with a visible warning. Keep this in sync with deploy.with.environment.
-    if: needs.deploy.result == 'success' && vars.GITOPS_DEPLOY_ENABLED == 'true'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.deploy.result == 'success' && vars.GITOPS_DEPLOY_ENABLED == 'true'
     uses: ./.github/workflows/reusable-health-smoke.yml
     with:
       component: control-plane-ui
       environment: dev
+    secrets:
+      cf-access-client-id: ${{ secrets.CF_ACCESS_E2E_CLIENT_ID }}
+      cf-access-client-secret: ${{ secrets.CF_ACCESS_E2E_CLIENT_SECRET }}
     permissions:
       contents: read
 

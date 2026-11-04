@@ -192,11 +192,14 @@ jobs:
     # A3: reusable-health-smoke.yml only probes production hosts
     # (api/mcp/portal/console/auth.gostoa.dev). Run it for prod deploys only
     # until dev endpoints exist; a dev deploy must not be judged on prod.
-    if: needs.deploy.result == 'success' && vars.GITOPS_DEPLOY_ENABLED == 'true' && github.event.inputs.environment == 'prod'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.deploy.result == 'success' && vars.GITOPS_DEPLOY_ENABLED == 'true' && github.event.inputs.environment == 'prod'
     uses: ./.github/workflows/reusable-health-smoke.yml
     with:
       component: control-plane-api
       environment: ${{ github.event.inputs.environment || 'dev' }}
+    secrets:
+      cf-access-client-id: ${{ secrets.CF_ACCESS_E2E_CLIENT_ID }}
+      cf-access-client-secret: ${{ secrets.CF_ACCESS_E2E_CLIENT_SECRET }}
     permissions:
       contents: read
 

@@ -859,22 +859,27 @@ async fn ready(
         }
     }
 
-    // Readiness is gated on a real policy load (ADR-070 §4): until the
-    // startup loader has fetched a fresh tool policy from the Control Plane,
-    // the pod must not receive traffic. The gate needs startup tenants to
-    // load against (`STOA_POLICY_BOOT_TENANTS`); without them a fresh pod
-    // could never become ready, so readiness then relies on the Control
-    // Plane health check above while the data plane keeps denying.
-    if let Some(ref perm_svc) = state.tool_permissions {
-        let gate_enabled = !state.config.policy_boot_tenants.is_empty();
-        if let Some(reason) = perm_svc.policy_readiness_failure().filter(|_| gate_enabled) {
-            warn!(reason = %reason, "Tool policy unavailable; not ready");
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                "NOT READY: tool policy unavailable",
-            )
-                .into_response();
+    // Readiness is gated on a real policy load (ADR-070 §1, §4): until the
+    // startup loader has fetched a fresh tool policy from the Control Plane
+    // the pod must not receive traffic. Missing inputs never bypass the gate:
+    // with no permission service (no Control Plane URL) or no startup tenants
+    // nothing can load a policy, so the pod stays not ready and calls deny.
+    let policy_failure = match &state.tool_permissions {
+        Some(perm_svc) if !state.config.policy_boot_tenants.is_empty() => {
+            perm_svc.policy_readiness_failure()
         }
+        Some(_) => Some("policy_boot_tenants_missing"),
+        None => Some("permission_service_missing"),
+    };
+    if let Some(reason) = policy_failure {
+        warn!(reason = %reason, "Tool policy unavailable; not ready");
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "NOT READY: tool policy unavailable",
+        )
+            .into_response();
+    }
+    if let Some(ref perm_svc) = state.tool_permissions {
         if let Some(reason) = perm_svc.readiness_failure_reason() {
             warn!(reason = %reason, "Tool permission state degraded; data plane fail-closed");
         }
@@ -1012,9 +1017,7 @@ mod tests {
 
     // Readiness is gated on a real startup policy load (ADR-070 §4): while
     // the first load fails the pod must not receive traffic, and it becomes
-    // ready as soon as a fresh policy is fetched. Without startup tenants
-    // nothing could ever load a policy, so the gate stays inactive instead
-    // of deadlocking a fresh pod.
+    // ready as soon as a fresh policy is fetched.
     #[tokio::test]
     async fn regression_gateway_readiness_fails_until_startup_policy_loaded() {
         use control_plane::tool_permissions::tests::{authenticated_service, permissions_response};
@@ -1060,12 +1063,39 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         assert!(permissions.is_tool_allowed("tenant1", "ok_tool").await);
 
-        // No startup tenants: nothing loaded, yet the pod stays ready.
-        let state = AppState::new(config::Config {
+        // No startup tenants: a loaded policy does not bypass the gate.
+        let mut state = AppState::new(config::Config {
             policy_boot_tenants: Vec::new(),
             ..config
         });
+        state.tool_permissions = Some(permissions);
         let response = ready(axum::extract::State(state)).await;
-        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    // Missing startup inputs never bypass the readiness gate: an unset,
+    // empty, whitespace-only or empty-array tenant list, or no Control Plane
+    // URL (hence no permission service), all keep the pod not ready.
+    #[tokio::test]
+    async fn regression_gateway_readiness_fails_without_startup_policy_inputs() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/health"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&server)
+            .await;
+        for value in [
+            serde_json::json!({ "control_plane_url": server.uri() }),
+            serde_json::json!({ "control_plane_url": server.uri(), "policy_boot_tenants": "" }),
+            serde_json::json!({ "control_plane_url": server.uri(), "policy_boot_tenants": "  " }),
+            serde_json::json!({ "control_plane_url": server.uri(), "policy_boot_tenants": "[]" }),
+            serde_json::json!({ "control_plane_url": server.uri(), "policy_boot_tenants": [] }),
+            serde_json::json!({ "policy_boot_tenants": "tenant1" }),
+        ] {
+            let config: config::Config = serde_json::from_value(value.clone()).unwrap();
+            let state = AppState::new(config);
+            let status = ready(axum::extract::State(state)).await.status();
+            assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{value}");
+        }
     }
 }

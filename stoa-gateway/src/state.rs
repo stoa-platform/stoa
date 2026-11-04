@@ -676,11 +676,14 @@ impl AppState {
             Some(permissions) if !self.config.policy_boot_tenants.is_empty() => {
                 permissions.spawn_policy_refresher(self.config.policy_boot_tenants.clone());
             }
-            Some(_) if is_regulated_profile(self.config.environment) => tracing::error!(
+            Some(_) => tracing::error!(
                 reason = "policy_boot_tenants_missing",
-                "No startup policy tenants configured; readiness is not gated on a policy load"
+                "No startup policy tenants configured; readiness stays failed"
             ),
-            _ => {}
+            None => tracing::error!(
+                reason = "permission_service_missing",
+                "No Control Plane URL, so no tool policy can load; readiness stays failed"
+            ),
         }
 
         // Start memory budget polling (CAB-1829)

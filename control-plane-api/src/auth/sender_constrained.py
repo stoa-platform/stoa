@@ -12,6 +12,7 @@ Strategies:
 
 import base64
 import hashlib
+import hmac
 import json
 import time
 import urllib.parse
@@ -28,8 +29,8 @@ logger = get_logger(__name__)
 _jti_cache: dict[str, float] = {}
 _JTI_CACHE_MAX_SIZE = 10000
 _JTI_TTL_SECONDS = 300  # 5 minutes
-_DPOP_ALGORITHM_KEY_TYPES = {"ES256": "EC", "PS256": "RSA", "RS256": "RSA", "EdDSA": "OKP"}
-_DPOP_ALGORITHM_CURVES = {"ES256": "P-256", "EdDSA": "Ed25519"}
+_DPOP_ALGORITHM_KEY_TYPES = {"ES256": "EC", "RS256": "RSA"}
+_DPOP_ALGORITHM_CURVES = {"ES256": "P-256"}
 
 
 @dataclass
@@ -210,7 +211,7 @@ def _validate_dpop_binding(
             return SenderConstrainedResult(
                 valid=False,
                 mode="dpop",
-                error=f"DPoP proof has wrong typ: {proof_header.get('typ')}",
+                error="DPoP proof has wrong typ",
             )
 
         algorithm = proof_header.get("alg")
@@ -236,7 +237,7 @@ def _validate_dpop_binding(
                 error="DPoP proof algorithm does not match JWK key type",
             )
 
-        if any(member in jwk for member in ("d", "p", "q", "dp", "dq", "qi")):
+        if any(member in jwk for member in ("d", "p", "q", "dp", "dq", "qi", "k")):
             return SenderConstrainedResult(
                 valid=False,
                 mode="dpop",
@@ -253,7 +254,7 @@ def _validate_dpop_binding(
         # Step 3: Compute JWK thumbprint and compare to cnf.jkt
         thumbprint = _compute_jwk_thumbprint(jwk)
         expected_jkt = cnf["jkt"]
-        if thumbprint != expected_jkt:
+        if not hmac.compare_digest(thumbprint, expected_jkt):
             return SenderConstrainedResult(
                 valid=False,
                 mode="dpop",
@@ -277,25 +278,27 @@ def _validate_dpop_binding(
 
         # Step 4: Validate htm, htu, ath
         if proof_claims.get("htm", "").upper() != http_method.upper():
+            logger.warning("DPoP HTTP method mismatch")
             return SenderConstrainedResult(
                 valid=False,
                 mode="dpop",
-                error=f"DPoP htm mismatch: expected {http_method}, got {proof_claims.get('htm')}",
+                error="DPoP htm mismatch",
             )
 
         proof_htu = proof_claims.get("htu", "")
         # Compare scheme + host + path (ignore query string)
         if _normalize_uri(proof_htu) != _normalize_uri(http_uri):
+            logger.warning("DPoP HTTP URI mismatch")
             return SenderConstrainedResult(
                 valid=False,
                 mode="dpop",
-                error=f"DPoP htu mismatch: expected {http_uri}, got {proof_htu}",
+                error="DPoP htu mismatch",
             )
 
         # Verify ath (access token hash)
         expected_ath = _compute_ath(access_token)
         proof_ath = proof_claims.get("ath", "")
-        if proof_ath != expected_ath:
+        if not hmac.compare_digest(proof_ath, expected_ath):
             return SenderConstrainedResult(
                 valid=False,
                 mode="dpop",
@@ -309,7 +312,7 @@ def _validate_dpop_binding(
             return SenderConstrainedResult(
                 valid=False,
                 mode="dpop",
-                error=f"DPoP proof expired (iat={iat}, now={now:.0f}, skew={max_skew}s)",
+                error="DPoP proof expired",
             )
 
         # Step 5: Replay prevention (jti)
@@ -330,8 +333,8 @@ def _validate_dpop_binding(
         return SenderConstrainedResult(valid=True, mode="dpop")
 
     except Exception as e:
-        # The exception text stays in the logs; clients receive stable application-owned text.
-        logger.warning("DPoP validation error", error=str(e), error_type=type(e).__name__)
+        # Library exception text can contain proof data; log only the failure category.
+        logger.warning("DPoP validation error", error_type=type(e).__name__)
         return SenderConstrainedResult(valid=False, mode="dpop", error="DPoP validation failed")
 
 

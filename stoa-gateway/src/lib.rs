@@ -1055,6 +1055,50 @@ mod tests {
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
     }
 
+    // Missing or refused signer trust keeps readiness failed even after the startup policy loads.
+    #[tokio::test]
+    async fn regression_gateway_readiness_fails_while_trust_set_not_loaded() {
+        use control_plane::tool_permissions::tests::{
+            authenticated_service, ok_tool_policy, serve_policy_once, VALID_JWKS,
+        };
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/health"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&server)
+            .await;
+        serve_policy_once(&server, ok_tool_policy()).await;
+        let dir = tempfile::tempdir().unwrap();
+        let trust_path = dir.path().join("trust.json");
+        let trust = control_plane::policy_trust::PolicyTrustStore::open(&trust_path);
+        let mut state = AppState::new(config::Config {
+            control_plane_url: Some(server.uri()),
+            policy_boot_tenants: vec!["tenant1".into()],
+            quota_enforcement_enabled: false,
+            ..config::Config::default()
+        });
+        let permissions = authenticated_service(&server, std::time::Duration::from_secs(60))
+            .await
+            .with_trust_store(Some(trust.clone()));
+        state.tool_permissions = Some(std::sync::Arc::new(permissions.clone()));
+        let readiness = || ready(axum::extract::State(state.clone()));
+
+        // The startup policy loads, yet missing and then refused trust keep readiness down.
+        assert_eq!(permissions.load_policy("tenant1").await, Ok(()));
+        assert_eq!(readiness().await.status(), StatusCode::SERVICE_UNAVAILABLE);
+        std::fs::write(&trust_path, "not json").unwrap();
+        assert!(trust.reload().is_err());
+        assert_eq!(readiness().await.status(), StatusCode::SERVICE_UNAVAILABLE);
+
+        // A valid set recovers; refusing it again fails readiness despite the cached policy.
+        std::fs::write(&trust_path, VALID_JWKS).unwrap();
+        assert_eq!(trust.reload(), Ok(1));
+        assert_eq!(readiness().await.status(), StatusCode::OK);
+        std::fs::write(&trust_path, r#"{"keys":[]}"#).unwrap();
+        assert!(trust.reload().is_err());
+        assert_eq!(readiness().await.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
     // Unset, empty, whitespace-only or empty-array tenants, or no Control Plane URL: never ready.
     #[tokio::test]
     async fn regression_gateway_readiness_fails_without_startup_policy_inputs() {

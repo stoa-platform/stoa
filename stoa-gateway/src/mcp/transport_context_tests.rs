@@ -2640,3 +2640,53 @@ async fn regression_fallback_targets_require_tenant_tool_permission() {
         }
     }
 }
+
+async fn tool_call(fixture: &Fixture, token: &str, tool: &str) -> u16 {
+    let body = json!({"name": tool, "arguments": {}});
+    let (status, _) = fixture.post("/mcp/tools/call", Some(token), body).await;
+    status.as_u16()
+}
+
+/// Control Plane requests so far; the identity provider shares the mock server.
+async fn cp_requests(fixture: &Fixture) -> usize {
+    let requests = fixture.server.received_requests().await.unwrap();
+    let to_cp = |request: &&wiremock::Request| request.url.path().starts_with("/v1/");
+    requests.iter().filter(to_cp).count()
+}
+
+// Missing or refused signer trust denies before the cold catalogue refresh or the
+// federation cache miss can send a Control Plane request; absent configuration refreshes.
+#[tokio::test]
+async fn trust_gate_denies_before_catalogue_refresh_and_federation_lookup() {
+    use crate::control_plane::tool_permissions::tests::{authenticated_service, VALID_JWKS};
+    let dir = tempfile::tempdir().unwrap();
+    let trust = crate::control_plane::PolicyTrustStore::open(dir.path().join("trust.json"));
+    let mut fixture = Fixture::new(|config| config.federation_enabled = true).await;
+    let plain = fixture.state.tool_permissions.take();
+    let permissions = authenticated_service(&fixture.server, std::time::Duration::from_secs(60))
+        .await
+        .with_trust_store(Some(trust.clone()));
+    fixture.state.tool_permissions = Some(Arc::new(permissions));
+    let token = fixture.token(json!({}));
+    let sub = fixture.token(json!({"sub_account_id": "sub1", "master_account_id": "master1"}));
+
+    // Missing trust: an unknown tool on a never-loaded tenant, then a federation cache miss.
+    assert_eq!(tool_call(&fixture, &token, "missing").await, 403);
+    assert_eq!(tool_call(&fixture, &sub, "echo_tool").await, 403);
+    assert_eq!(cp_requests(&fixture).await, 0);
+    // Loaded trust opens the gate: the federation lookup reaches the Control Plane.
+    std::fs::write(dir.path().join("trust.json"), VALID_JWKS).unwrap();
+    assert_eq!(trust.reload(), Ok(1));
+    assert_eq!(tool_call(&fixture, &sub, "echo_tool").await, 403);
+    assert_eq!(cp_requests(&fixture).await, 1);
+    // A refused reload closes the gate again while the catalogue is still cold.
+    std::fs::write(dir.path().join("trust.json"), "not json").unwrap();
+    assert!(trust.reload().is_err());
+    assert_eq!(tool_call(&fixture, &token, "missing").await, 403);
+    assert_eq!(tool_call(&fixture, &sub, "echo_tool").await, 403);
+    assert_eq!(cp_requests(&fixture).await, 1);
+    // Absent trust configuration: the cold catalogue refresh reaches the Control Plane.
+    fixture.state.tool_permissions = plain;
+    assert_eq!(tool_call(&fixture, &token, "missing").await, 404);
+    assert!(cp_requests(&fixture).await > 1);
+}

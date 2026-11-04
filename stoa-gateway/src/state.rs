@@ -14,6 +14,7 @@ use crate::auth::oidc::{OidcProvider, OidcProviderConfig};
 use crate::auth::subscription::SubscriptionValidator;
 use crate::cache::{PromptCache, PromptCacheConfig, SemanticCache, SemanticCacheConfig};
 use crate::config::{Config, Environment};
+use crate::control_plane::PolicyTrustStore;
 use crate::control_plane::{ClientCredential, OidcConfig, ToolPermissionService, ToolProxyClient};
 use crate::diagnostics::DiagnosticEngine;
 use crate::events::polling::EventBuffer;
@@ -579,12 +580,14 @@ impl AppState {
             Arc::new(SnapshotStore::disabled())
         };
 
-        // Initialize tenant tool permission service
+        // Tenant tool permissions, gated by the signer trust set when one is configured.
+        let policy_trust = config.policy_trust_jwks_file.as_deref();
         let tool_permissions = config.control_plane_url.as_ref().map(|cp_url| {
             tracing::info!("Tenant tool permission cache enabled (60s TTL)");
             Arc::new(
                 ToolPermissionService::new(http_client.clone(), cp_url, Duration::from_secs(60))
-                    .with_auth(control_plane.clone()),
+                    .with_auth(control_plane.clone())
+                    .with_trust_store(policy_trust.map(PolicyTrustStore::open)),
             )
         });
 

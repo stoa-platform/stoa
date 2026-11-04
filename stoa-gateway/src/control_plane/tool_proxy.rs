@@ -700,7 +700,7 @@ impl ToolProxyClient {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use wiremock::matchers::{body_string_contains, header, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -1410,7 +1410,7 @@ mod tests {
 
     /// In-memory writer used to capture log output.
     #[derive(Clone, Default)]
-    struct LogBuffer(Arc<parking_lot::Mutex<Vec<u8>>>);
+    pub(crate) struct LogBuffer(pub(crate) Arc<parking_lot::Mutex<Vec<u8>>>);
 
     impl std::io::Write for LogBuffer {
         fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {

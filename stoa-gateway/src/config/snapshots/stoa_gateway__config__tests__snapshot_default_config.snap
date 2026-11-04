@@ -57,6 +57,7 @@ expression: "Config::default()"
   "policy_path": null,
   "policy_enabled": true,
   "policy_boot_tenants": [],
+  "policy_trust_jwks_file": null,
   "log_level": "info",
   "log_format": "json",
   "otel_endpoint": null,

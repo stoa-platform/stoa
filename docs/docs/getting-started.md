@@ -31,17 +31,19 @@ cd stoa
 
 ```bash
 cd deploy/docker-compose
-cp .env .env.local   # optional: customize ports if needed
+cp .env.example .env   # customize local settings before starting
 ```
 
-Default configuration — **you must set strong passwords in `.env`** before running:
+Configure the following variables in `.env` — **you must set strong passwords** before running:
 
 | Variable | Description |
 |----------|-------------|
-| `POSTGRES_USER` | Database user (default `stoa`) |
+| `POSTGRES_USER` | Database user name — set it in `.env`; the stack reads it from there |
 | `POSTGRES_PASSWORD` | **Required** — set a strong password |
-| `KEYCLOAK_ADMIN` | Keycloak admin user (default `admin`) |
+| `KEYCLOAK_ADMIN` | Keycloak admin user name — set it in `.env` and sign in to the admin console with that value |
 | `KEYCLOAK_ADMIN_PASSWORD` | **Required** — set a strong password |
+| `GRAFANA_USER` | Grafana admin user name — set it in `.env` and sign in to Grafana with that value |
+| `GRAFANA_PASSWORD` | **Required** — set a strong password |
 | `OPENSEARCH_ADMIN_PASSWORD` | **Required** — OpenSearch cluster admin |
 | `OPENSEARCH_DASHBOARDS_PASSWORD` | **Required** — Dashboards service account |
 | `OPENSEARCH_OIDC_CLIENT_SECRET` | **Required** — OIDC client secret for Dashboards |
@@ -97,27 +99,32 @@ Expected output:
 
 | Service | URL | Credentials |
 |---------|-----|-------------|
-| **Console UI** | http://localhost:3000 | `halliday` / `readyplayerone` |
-| **Keycloak Admin** | http://localhost:8280 | `admin` / `admin` |
+| **Console UI** | See the [local Compose guide](../../deploy/docker-compose/README.md) | Use `ANORAK_USER` and `ANORAK_PASSWORD` configured below |
+| **Keycloak Admin** | http://localhost:8280 | `KEYCLOAK_ADMIN` / `KEYCLOAK_ADMIN_PASSWORD` from `.env` |
 | **API Docs (Swagger)** | http://localhost:8000/docs | Bearer token |
-| **Grafana** | http://localhost:3002 | `admin` / `admin` |
+| **Grafana** | http://localhost:3002 | `GRAFANA_USER` / `GRAFANA_PASSWORD` from `.env` |
 | **Prometheus** | http://localhost:9090 | — |
 
-### 1.6 Demo Users (OASIS Theme)
+### 1.6 Configure a Demo Admin User
 
-The Keycloak realm ships with pre-configured users across 3 tenants:
+After startup, sign in to the local Keycloak admin console with `KEYCLOAK_ADMIN` and
+`KEYCLOAK_ADMIN_PASSWORD` from `.env`. For this local setup, create or select a user in
+the imported application realm, assign the `cpi-admin` realm role, and set a strong,
+non-temporary password. Add the matching username as `ANORAK_USER` and the chosen
+password as `ANORAK_PASSWORD` to `.env`. These are the demo application credentials;
+setting the variables alone does not configure the account.
 
-| User | Password | Role | Tenant |
-|------|----------|------|--------|
-| `halliday` | `readyplayerone` | cpi-admin | gregarious-games |
-| `morrow` | `ogdensmcguffin` | cpi-admin | gregarious-games |
-| `parzival` | `copperkeystart` | tenant-admin | oasis-gunters |
-| `art3mis` | `samantha2045` | devops | oasis-gunters |
-| `aech` | `helen2045` | viewer | oasis-gunters |
-| `sorrento` | `ioi101` | tenant-admin | ioi-sixers |
-| `sixer42` | `loyalty2045` | viewer | ioi-sixers |
+Load the local configuration into the current shell, then seed demo data:
 
-Log in to the Console at http://localhost:3000 with `halliday` / `readyplayerone` to explore the platform as a CPI Admin.
+```bash
+set -a
+. ./.env
+set +a
+../../scripts/demo/seed-all.sh --skip-traffic
+```
+
+Log in to the Console with the demo admin user and the password you set in your
+local `.env`. Keep this shell session for the token and seeding examples below.
 
 ---
 
@@ -128,22 +135,22 @@ The MCP (Model Context Protocol) Gateway lets AI agents discover and invoke your
 ### 2.1 Get an Access Token
 
 ```bash
-# Authenticate as halliday (cpi-admin)
+# Authenticate as the configured demo admin user
 TOKEN=$(curl -s -X POST \
   "http://localhost:8280/realms/stoa/protocol/openid-connect/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=password" \
   -d "client_id=control-plane-ui" \
-  -d "username=halliday" \
-  -d "password=readyplayerone" \
+  --data-urlencode "username=${ANORAK_USER:?Set ANORAK_USER in your shell}" \
+  --data-urlencode "password=${ANORAK_PASSWORD:?Set ANORAK_PASSWORD in your shell}" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-echo "Token acquired: ${TOKEN:0:20}..."
+test -n "$TOKEN" && printf '%s\n' 'Token acquired.'
 ```
 
 ### 2.2 Understand the Tool CRD
 
-Tools are defined as Kubernetes Custom Resources following the `gostoa.dev/v1alpha1` API:
+Use the API version shown in the following example to declare a Kubernetes API resource:
 
 ```yaml
 apiVersion: gostoa.dev/v1alpha1
@@ -389,8 +396,8 @@ Users carry their role and tenant in JWT claims:
 ```json
 {
   "sub": "user-uuid",
-  "preferred_username": "parzival",
-  "email": "parzival@oasis.gg",
+  "preferred_username": "tenant-admin-username",
+  "email": "tenant-admin@example.com",
   "realm_access": {
     "roles": ["tenant-admin"]
   },
@@ -408,7 +415,7 @@ The Docker Compose stack includes a full observability pipeline: Prometheus (met
 
 ### 4.1 Access Grafana
 
-Open http://localhost:3002 and log in with `admin` / `admin`.
+Open http://localhost:3002 and log in with `GRAFANA_USER` and the `GRAFANA_PASSWORD` you set in `.env`.
 
 The **STOA Platform Overview** dashboard loads automatically as the home dashboard.
 
@@ -430,8 +437,9 @@ pip install httpx   # one-time dependency
 
 CONTROL_PLANE_URL=http://localhost:8000 \
 KEYCLOAK_URL=http://localhost:8280 \
-ANORAK_PASSWORD=readyplayerone \
-python scripts/seed-demo-data.py
+ANORAK_USER="${ANORAK_USER:?Set ANORAK_USER in your shell}" \
+ANORAK_PASSWORD="${ANORAK_PASSWORD:?Set ANORAK_PASSWORD in your shell}" \
+python ../../scripts/seed-demo-data.py
 ```
 
 This creates:

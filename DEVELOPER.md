@@ -21,8 +21,24 @@ The fastest way to run the full platform locally:
 ```bash
 cd deploy/docker-compose
 cp .env.example .env
+# Set a strong KEYCLOAK_ADMIN_PASSWORD in .env before continuing
 docker compose up -d
 ../../scripts/demo/check-health.sh --wait
+```
+
+After startup, sign in to the local Keycloak admin console with `KEYCLOAK_ADMIN` and
+`KEYCLOAK_ADMIN_PASSWORD` from `.env`. For this local setup, create or select a user in
+the imported application realm, assign the `cpi-admin` realm role, and set a strong,
+non-temporary password. Add the matching username as `ANORAK_USER` and the chosen
+password as `ANORAK_PASSWORD` to `.env`. These are the demo application credentials;
+setting the variables alone does not configure the account.
+
+Load the local configuration into the current shell, then seed demo data:
+
+```bash
+set -a
+. ./.env
+set +a
 ../../scripts/demo/seed-all.sh --skip-traffic
 ```
 
@@ -37,14 +53,8 @@ Access points (via nginx on port 80):
 | Grafana | http://localhost/grafana | 3001 |
 | Gateway | http://localhost/gateway/health | 8081 |
 
-Demo credentials:
-
-| User | Password | Role |
-|------|----------|------|
-| halliday | readyplayerone | Platform Admin |
-| parzival | copperkeystart | Tenant Admin |
-| art3mis | samantha2045 | DevOps |
-| aech | helen2045 | Viewer |
+Log in with the demo admin user configured in `ANORAK_USER` and the password
+you set in `ANORAK_PASSWORD` in your local `.env`.
 
 ## Quick Start (Individual Components)
 

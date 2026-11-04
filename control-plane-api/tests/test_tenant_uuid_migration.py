@@ -90,3 +90,21 @@ async def test_upgrade_downgrade_upgrade_round_trip(tenant_db: AsyncEngine) -> N
         uuids = (await connection.execute(text("SELECT uuid FROM tenants"))).scalars().all()
     assert len(uuids) == len(SEEDED) + 1
     assert len(set(uuids)) == len(uuids)
+
+
+async def test_model_built_schema_gives_raw_inserts_a_fresh_uuid() -> None:
+    # Dev init_db and the integration fixtures build tables from the ORM, not from the
+    # migration, so the model must carry the same database default as migration 110.
+    schema = f"tenant_uuid_model_{uuid4().hex}"
+    engine = create_async_engine(os.environ["DATABASE_URL"], connect_args={"server_settings": {"search_path": schema}})
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(text(f'CREATE SCHEMA "{schema}"'))
+            await connection.run_sync(Tenant.__table__.create)
+        async with engine.begin() as connection:
+            await connection.execute(SEED, {"id": "seeded"})
+            assert isinstance(await connection.scalar(text("SELECT uuid FROM tenants WHERE id = 'seeded'")), UUID)
+    finally:
+        async with engine.begin() as connection:
+            await connection.execute(text(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE'))
+        await engine.dispose()

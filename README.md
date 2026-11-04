@@ -62,21 +62,34 @@ cd stoa/deploy/docker-compose
 
 # Start the demo stack
 cp .env.example .env
+# Set a strong KEYCLOAK_ADMIN_PASSWORD in .env before continuing
 docker compose up -d
 
 # Wait for services to become healthy
 ../../scripts/demo/check-health.sh --wait
 
-# Seed demo data
+```
+
+After startup, sign in to the local Keycloak admin console with `KEYCLOAK_ADMIN` and
+`KEYCLOAK_ADMIN_PASSWORD` from `.env`. For this local setup, create or select a user in
+the imported application realm, assign the `cpi-admin` realm role, and set a strong,
+non-temporary password. Add the matching username as `ANORAK_USER` and the chosen
+password as `ANORAK_PASSWORD` to `.env`. These are the demo application credentials;
+setting the variables alone does not configure the account.
+
+Load the local configuration into the current shell, then seed demo data:
+
+```bash
+set -a
+. ./.env
+set +a
 ../../scripts/demo/seed-all.sh --skip-traffic
 ```
 
 Open `http://localhost` and log in with:
 
-```text
-username: halliday
-password: readyplayerone
-```
+The demo admin user configured in `ANORAK_USER`, with the password you set in
+`ANORAK_PASSWORD` in your local `.env`.
 
 | Service | URL |
 | --- | --- |

@@ -13,8 +13,6 @@ def upgrade() -> None:
     bind = op.get_bind()
     schema = bind.scalar(sa.text("SELECT current_schema()"))
     namespace = bind.dialect.identifier_preparer.quote_schema(schema)
-    counter = f"{namespace}.tool_policy_versions"
-    permission = f"{namespace}.tenant_tool_permissions"
     schema_literal = sa.literal(schema).compile(dialect=bind.dialect, compile_kwargs={"literal_binds": True})
     counter_table = op.create_table(
         "tool_policy_versions",
@@ -24,13 +22,10 @@ def upgrade() -> None:
         schema=schema,
     )
     permissions = sa.table("tenant_tool_permissions", sa.column("tenant_id"), schema=schema)
-    op.execute(
-        counter_table.insert().from_select(
-            ["tenant_id", "version"], sa.select(permissions.c.tenant_id, sa.literal(1)).distinct()
-        )
-    )
+    tenants = sa.select(permissions.c.tenant_id, sa.literal(1)).distinct()
+    op.execute(counter_table.insert().from_select(["tenant_id", "version"], tenants))
     # Keep the statement exact: its complete call frame identifies the trusted writer.
-    increment = f"""INSERT INTO {counter} AS counter (tenant_id, version)
+    increment = f"""INSERT INTO {namespace}.tool_policy_versions AS counter (tenant_id, version)
             VALUES (CASE WHEN TG_OP = 'DELETE' THEN OLD.tenant_id ELSE NEW.tenant_id END, 2)
             ON CONFLICT (tenant_id) DO UPDATE SET version = counter.version + 1"""  # noqa: S608 - Quoted schema.
     caller = f'SQL statement "{increment}"\nPL/pgSQL function {namespace}.bump_tool_policy_version() line '
@@ -51,7 +46,7 @@ def upgrade() -> None:
         $$
     """)
     op.execute(f"""
-        CREATE TRIGGER tool_permission_version AFTER INSERT OR UPDATE OR DELETE ON {permission}
+        CREATE TRIGGER tool_permission_version AFTER INSERT OR UPDATE OR DELETE ON {namespace}.tenant_tool_permissions
         FOR EACH ROW EXECUTE FUNCTION {namespace}.bump_tool_policy_version()
     """)
     op.execute(f"""

@@ -36,10 +36,10 @@ listener.bind(("127.0.0.1", 0))
 base_url = f"http://127.0.0.1:{listener.getsockname()[1]}"
 os.environ["KEYCLOAK_URL"] = base_url
 
+import jwt  # noqa: E402
 import uvicorn  # noqa: E402
 from cryptography.hazmat.primitives import serialization  # noqa: E402
 from fastapi import FastAPI, Request  # noqa: E402
-from jose import jwt  # noqa: E402
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine  # noqa: E402
 
 from src.database import get_db  # noqa: E402
@@ -114,7 +114,7 @@ async def token(request: Request):
     from urllib.parse import parse_qs
 
     from fastapi import HTTPException
-    from jose import JWTError
+    from jwt.exceptions import PyJWTError
 
     form = parse_qs((await request.body()).decode())
     if (
@@ -134,7 +134,7 @@ async def token(request: Request):
             audience=f"{issuer}/protocol/openid-connect/token",
             issuer="stoa-mcp-gateway",
         )
-    except JWTError as error:
+    except PyJWTError as error:
         raise HTTPException(401) from error
     if assertion.get("sub") != "stoa-mcp-gateway" or not assertion.get("jti"):
         raise HTTPException(401)

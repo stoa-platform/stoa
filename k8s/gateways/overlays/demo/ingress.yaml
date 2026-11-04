@@ -5,7 +5,13 @@ metadata:
   annotations:
     nginx.ingress.kubernetes.io/auth-type: basic
     nginx.ingress.kubernetes.io/auth-secret: demo-access
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # TLS is terminated once, by the upstream reverse proxy; the controller
+    # receives plain HTTP and must not redirect it again.
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    # Per client IP (real IP from the trusted upstream proxy), applied before
+    # basic auth, so requests without a key are rate-limited as well.
+    nginx.ingress.kubernetes.io/limit-rps: "5"
+    nginx.ingress.kubernetes.io/limit-connections: "10"
     nginx.ingress.kubernetes.io/proxy-body-size: 64k
     nginx.ingress.kubernetes.io/proxy-connect-timeout: "2"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "5"
@@ -13,9 +19,6 @@ metadata:
     nginx.ingress.kubernetes.io/enable-access-log: "false"
 spec:
   ingressClassName: nginx
-  tls:
-    - hosts: [demo.invalid]
-      secretName: demo-tls
   rules:
     - host: demo.invalid
       http:

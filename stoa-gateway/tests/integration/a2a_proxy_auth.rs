@@ -18,12 +18,25 @@ use stoa_gateway::proxy::credentials::{AuthType, BackendCredential, OAuth2Config
 use stoa_gateway::state::AppState;
 
 async fn request(router: &Router, uri: &str, token: Option<&str>, body: &str) -> Response {
+    request_with_headers(router, uri, token, body, &[]).await
+}
+
+async fn request_with_headers(
+    router: &Router,
+    uri: &str,
+    token: Option<&str>,
+    body: &str,
+    headers: &[(&str, &str)],
+) -> Response {
     let mut builder = Request::builder()
         .method("POST")
         .uri(uri)
         .header("Content-Type", "application/json");
     if let Some(token) = token {
         builder = builder.header("Authorization", format!("Bearer {token}"));
+    }
+    for (name, value) in headers {
+        builder = builder.header(*name, *value);
     }
     router
         .clone()
@@ -499,12 +512,23 @@ async fn a2a_call(
     method: &str,
     text: Option<&str>,
 ) -> serde_json::Value {
+    a2a_call_with_headers(router, token, method, text, &[]).await
+}
+
+async fn a2a_call_with_headers(
+    router: &Router,
+    token: &str,
+    method: &str,
+    text: Option<&str>,
+    headers: &[(&str, &str)],
+) -> serde_json::Value {
     let mut params = json!({"id": "owner-task"});
     if let Some(text) = text {
         params["message"] = json!({"role": "user", "parts": [{"type": "text", "text": text}]});
     }
     let body = json!({"jsonrpc": "2.0", "id": 1, "method": method, "params": params});
-    let response = request(router, "/a2a", Some(token), &body.to_string()).await;
+    let response =
+        request_with_headers(router, "/a2a", Some(token), &body.to_string(), headers).await;
     assert_eq!(response.status(), StatusCode::OK, "{method}");
     serde_json::from_slice(&to_bytes(response.into_body(), 65536).await.unwrap()).unwrap()
 }
@@ -529,20 +553,123 @@ async fn regression_a2a_task_owner_survives_token_renewal() {
 }
 
 #[tokio::test]
+async fn regression_a2a_ignores_client_tenant_headers_for_task_ownership() {
+    let oidc = jwt::oidc_server().await;
+    for headers in [
+        vec![("X-Tenant-ID", "tenant-b")],
+        vec![("X-Tenant-ID", "tenant-a"), ("X-Tenant-ID", "tenant-b")],
+        vec![("X-Tenant-ID", "tenant/invalid")],
+    ] {
+        let state = AppState::new(jwt::config(&oidc));
+        let router = stoa_gateway::build_router(state.clone());
+        let registry = state.a2a_registry.as_ref().unwrap();
+        let created = a2a_call_with_headers(
+            &router,
+            valid_token(),
+            "tasks/send",
+            Some("hello"),
+            &headers,
+        )
+        .await;
+        assert!(created["error"].is_null(), "{created}");
+        let owner = registry
+            .get_task("owner-task")
+            .unwrap()
+            .unwrap()
+            .owner
+            .unwrap();
+        assert_eq!(owner.tenant_id, "tenant-a");
+        assert_eq!(owner.subject, "auth-regression-user");
+        let read =
+            a2a_call_with_headers(&router, renewed_token(), "tasks/get", None, &headers).await;
+        assert_eq!(read["result"]["history"][0]["parts"][0]["text"], "hello");
+        let continued = a2a_call_with_headers(
+            &router,
+            renewed_token(),
+            "tasks/send",
+            Some("again"),
+            &headers,
+        )
+        .await;
+        assert!(continued["error"].is_null(), "{continued}");
+        assert_eq!(continued["result"]["history"].as_array().unwrap().len(), 4);
+
+        // Text tasks complete immediately; make this one cancellable without changing its owner.
+        let mut task = registry.get_task("owner-task").unwrap().unwrap();
+        task.status.state = stoa_gateway::a2a::types::TaskState::Working;
+        registry.store_task(task).unwrap();
+        let canceled =
+            a2a_call_with_headers(&router, renewed_token(), "tasks/cancel", None, &headers).await;
+        assert_eq!(canceled["result"]["status"]["state"], "canceled");
+        assert_eq!(
+            registry.get_task("owner-task").unwrap().unwrap().owner,
+            Some(owner)
+        );
+    }
+}
+
+#[tokio::test]
+async fn regression_a2a_tenant_headers_cannot_replace_verified_claims() {
+    let oidc = jwt::oidc_server().await;
+    let state = AppState::new(jwt::config(&oidc));
+    let router = stoa_gateway::build_router(state.clone());
+    let missing = jwt::token_with(json!({"tenant_id": null}));
+    let empty = jwt::token_with(json!({"tenant_id": ""}));
+    for (token, expected) in [
+        (None, StatusCode::UNAUTHORIZED),
+        (Some("invalid"), StatusCode::UNAUTHORIZED),
+        (Some(missing.as_str()), StatusCode::FORBIDDEN),
+        (Some(empty.as_str()), StatusCode::FORBIDDEN),
+    ] {
+        for method in ["tasks/send", "tasks/get", "tasks/cancel"] {
+            let body = json!({"jsonrpc": "2.0", "id": 1, "method": method, "params": {
+                "id": "unowned-task",
+                "message": {"role": "user", "parts": [{"type": "text", "text": "hello"}]}
+            }});
+            let response = request_with_headers(
+                &router,
+                "/a2a",
+                token,
+                &body.to_string(),
+                &[("X-Tenant-ID", "tenant-a")],
+            )
+            .await;
+            assert_eq!(response.status(), expected, "{method}");
+            assert!(state
+                .a2a_registry
+                .as_ref()
+                .unwrap()
+                .get_task("unowned-task")
+                .unwrap()
+                .is_none());
+        }
+    }
+}
+
+#[tokio::test]
 async fn regression_a2a_task_refused_to_same_subject_in_other_tenant() {
     let oidc = jwt::oidc_server().await;
     let router = stoa_gateway::build_router(AppState::new(jwt::config(&oidc)));
     let created = a2a_call(&router, valid_token(), "tasks/send", Some("hello")).await;
     assert!(created["error"].is_null(), "{created}");
+    let headers = [("X-Tenant-ID", "tenant-a")];
     for method in ["tasks/get", "tasks/cancel"] {
-        let other = a2a_call(&router, other_tenant_token(), method, None).await;
+        let other =
+            a2a_call_with_headers(&router, other_tenant_token(), method, None, &headers).await;
         assert_eq!(
             error_message(&other),
             "Task not found: owner-task",
             "{method}"
         );
     }
-    let other = a2a_call(&router, other_tenant_token(), "tasks/send", Some("x")).await;
+    let other = a2a_call_with_headers(
+        &router,
+        other_tenant_token(),
+        "tasks/send",
+        Some("x"),
+        &headers,
+    )
+    .await;
     assert!(other["result"].is_null(), "{other}");
     let read = a2a_call(&router, valid_token(), "tasks/get", None).await;
     assert_eq!(read["result"]["id"], "owner-task", "{read}");
@@ -556,6 +683,7 @@ async fn a2a_status(router: &Router, token: &str, method: &str, extra: &[(&str, 
         .method("POST")
         .uri("/a2a")
         .header("Content-Type", "application/json")
+        .header("X-Tenant-ID", "tenant-b")
         .header("Authorization", format!("Bearer {token}"));
     for (name, value) in extra {
         req = req.header(*name, *value);
@@ -575,7 +703,7 @@ async fn regression_a2a_dpop_bound_token_refused_without_verified_proof() {
         let mut config = jwt::config(&oidc);
         config.sender_constraint.enabled = sender;
         let router = stoa_gateway::build_router(AppState::new(config));
-        for method in ["tasks/send", "tasks/get"] {
+        for method in ["tasks/send", "tasks/get", "tasks/cancel"] {
             let status = a2a_status(&router, &token, method, &[("DPoP", "not-a-proof")]).await;
             assert_eq!(status, 401, "{method} sender={sender}");
         }

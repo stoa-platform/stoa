@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import User, get_current_user
+from ..auth.rbac import decide_tenant_access
 from ..database import get_db
 from ..models.federation import MasterAccountStatus, SubAccountStatus
 from ..schemas.federation import (
@@ -38,10 +39,12 @@ router = APIRouter(prefix="/v1/tenants/{tenant_id}/federation/accounts", tags=["
 
 
 def _has_tenant_access(user: User, tenant_id: str) -> bool:
-    """Check if user has access to a tenant."""
-    if "cpi-admin" in user.roles:
-        return True
-    return user.tenant_id == tenant_id
+    """Preserve the boolean facade over the central resource decision."""
+    try:
+        decide_tenant_access(user, tenant_id, mode="resource")
+    except HTTPException:
+        return False
+    return True
 
 
 def _require_write_access(user: User, tenant_id: str) -> None:

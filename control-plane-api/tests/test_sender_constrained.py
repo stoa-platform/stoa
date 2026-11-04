@@ -8,10 +8,10 @@ import hashlib
 import time
 from unittest.mock import patch
 
+import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption, PrivateFormat
-from jose import jwt as jose_jwt
 
 from src.auth.sender_constrained import (
     SenderConstrainedResult,
@@ -89,7 +89,7 @@ def _make_dpop_proof(
         NoEncryption(),
     )
 
-    return jose_jwt.encode(claims, private_pem, algorithm="ES256", headers=headers)
+    return jwt.encode(claims, private_pem, algorithm="ES256", headers=headers)
 
 
 # ============================================================

@@ -28,7 +28,6 @@ from src.config import settings
 ISSUER = "https://idp.example.test/realms/test"
 URI = "https://api.example.test/me"
 LEEWAY = 30  # Matches the gateway's JwtValidatorConfig.
-AFTER_SWAP = pytest.mark.xfail(strict=True, raises=AssertionError, reason="enforced after library swap")
 
 
 def _b64(value: bytes) -> str:
@@ -122,10 +121,10 @@ async def client(signing_key: rsa.RSAPrivateKey, httpx_mock: HTTPXMock) -> Async
         ("aud", "stoa-mcp-gateway", 200),
         ("iat", "not-an-integer", 401),
         ("iat", LEEWAY // 3, 200),
-        pytest.param("iat", LEEWAY * 4, 401, marks=AFTER_SWAP),
-        pytest.param("exp", -LEEWAY // 3, 200, marks=AFTER_SWAP),
+        ("iat", LEEWAY * 4, 401),
+        ("exp", -LEEWAY // 3, 200),
         ("exp", -LEEWAY * 4, 401),
-        pytest.param("nbf", LEEWAY // 3, 200, marks=AFTER_SWAP),
+        ("nbf", LEEWAY // 3, 200),
         ("nbf", LEEWAY * 4, 401),
     ],
 )
@@ -195,9 +194,7 @@ def _dpop(key: Any, alg: str = "RS256", overrides: dict[str, str] | None = None,
     )
 
 
-@pytest.mark.parametrize(
-    "alg", ["RS256", "ES256", pytest.param("PS256", marks=AFTER_SWAP), pytest.param("EdDSA", marks=AFTER_SWAP)]
-)
+@pytest.mark.parametrize("alg", ["RS256", "ES256", "PS256", "EdDSA"])
 def test_dpop_signed_proofs(alg: str, signing_key: Any) -> None:
     key = signing_key
     if alg == "ES256":

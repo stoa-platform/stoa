@@ -131,9 +131,9 @@ class TestJwtValidation:
 
     @pytest.mark.asyncio
     async def test_jwt_decode_error_401(self, mock_settings, mock_kc_key):
-        from jose import JWTError
+        from jwt.exceptions import InvalidTokenError
 
-        with patch("src.auth.dependencies.jwt.decode", side_effect=JWTError("bad token")):
+        with patch("src.auth.dependencies.jwt.decode", side_effect=InvalidTokenError("bad token")):
             app = _make_app()
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
                 resp = await c.get("/me", headers={"Authorization": "Bearer bad-jwt"})

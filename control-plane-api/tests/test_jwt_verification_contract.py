@@ -119,9 +119,11 @@ async def client(signing_key: rsa.RSAPrivateKey, httpx_mock: HTTPXMock) -> Async
         ("aud", [], 401),
         ("aud", ["other-api", "control-plane-api"], 200),
         ("aud", "stoa-mcp-gateway", 200),
+        ("iat", None, 401),
         ("iat", "not-an-integer", 401),
         ("iat", LEEWAY // 3, 200),
         ("iat", LEEWAY * 4, 401),
+        ("exp", None, 401),
         ("exp", -LEEWAY // 3, 200),
         ("exp", -LEEWAY * 4, 401),
         ("nbf", LEEWAY // 3, 200),
@@ -137,11 +139,9 @@ async def test_access_claims(claim: str, value: Any, status: int, client: AsyncC
     response = await client.get("/me", headers={"Authorization": f"Bearer {_jws(claims, signing_key)}"})
     assert response.status_code == status
     if status == 401:
-        detail = response.json()["detail"]
-        if claim == "aud":
-            assert detail.startswith("Invalid token: Invalid audience: ")
-        else:
-            assert detail == "Invalid token: verification failed"
+        # Exact match: neither the token claims nor the accepted audiences may be echoed.
+        reason = "Invalid audience" if claim == "aud" else "verification failed"
+        assert response.json() == {"detail": f"Invalid token: {reason}"}
     else:
         assert response.json()["id"] == "contract-user"
 

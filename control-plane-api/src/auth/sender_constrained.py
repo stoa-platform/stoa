@@ -261,8 +261,10 @@ def _validate_dpop_binding(
             )
 
         # Decode proof claims (verify signature with embedded JWK). The library
-        # leeway equals the application iat window below, so neither check
-        # contradicts the other.
+        # leeway equals the application iat window below (60 s by default), so
+        # neither check contradicts the other. The same leeway also relaxes
+        # `exp` and `nbf` when a proof carries them; the symmetric
+        # |now - iat| <= max_skew check below remains the effective bound.
         max_skew = settings.SENDER_CONSTRAINED_DPOP_MAX_CLOCK_SKEW
         key = jwt.PyJWK.from_dict(jwk, algorithm=algorithm).key
         proof_claims = jwt.decode(

@@ -29,6 +29,7 @@ Boundary integrity
 
 from __future__ import annotations
 
+import time
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
@@ -71,6 +72,7 @@ def _sign(private_pem: str, claims: dict[str, Any]) -> str:
 
 
 def _base_claims(**overrides: Any) -> dict[str, Any]:
+    now = int(time.time())
     base: dict[str, Any] = {
         "sub": "user-cab-2153",
         "email": "evidence@cab2153.test",
@@ -80,6 +82,8 @@ def _base_claims(**overrides: Any) -> dict[str, Any]:
         "aud": ["control-plane-api"],
         "azp": "stoa-mcp-gateway",
         "iss": "https://auth.gostoa.dev/realms/stoa",
+        "iat": now,
+        "exp": now + 300,
     }
     base.update(overrides)
     return base

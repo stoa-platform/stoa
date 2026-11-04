@@ -46,6 +46,7 @@ def signed_headers(signing_keys: tuple[bytes, str], **claims: Any) -> dict[str, 
         "realm_access": {"roles": ["viewer"]},
         "aud": "control-plane-api",
         "iss": "https://auth.example.invalid/realms/stoa",
+        "iat": datetime.now(UTC),
         "exp": datetime.now(UTC) + timedelta(minutes=5),
         **claims,
     }

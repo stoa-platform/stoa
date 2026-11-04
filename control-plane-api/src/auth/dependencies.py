@@ -196,13 +196,15 @@ async def get_current_user(
         # CAB-2094: issuer comes from the PUBLIC URL regardless of where we
         # fetched the public key (which may be the internal SVC URL).
         expected_issuer = _kc_issuer_url()
+        # `exp` and `iat` are required: the library verifies them only when present,
+        # and a token without `exp` would otherwise never expire.
         payload = jwt.decode(
             token,
             public_key,
             algorithms=["RS256"],
             issuer=expected_issuer,
             leeway=_JWT_LEEWAY_SECONDS,
-            options={"verify_aud": False, "verify_iss": True},
+            options={"verify_aud": False, "verify_iss": True, "require": ["exp", "iat"]},
         )
 
         # Debug: log payload structure (not values) for troubleshooting
@@ -257,7 +259,8 @@ async def get_current_user(
                 azp=payload.get("azp"),
                 hint="Ensure Audience Mapper is configured in Keycloak for this client",
             )
-            raise TokenValidationError(f"Invalid audience: {token_aud}. Expected: {list(valid_audiences)}")
+            # The token audiences and the accepted list stay in the log above, not in the response.
+            raise TokenValidationError("Invalid audience")
 
         # Deprecation warning for legacy audiences (control-plane-ui, stoa-portal)
         # These clients should configure Audience Mappers in Keycloak to include

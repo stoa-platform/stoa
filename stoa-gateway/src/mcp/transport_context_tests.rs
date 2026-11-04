@@ -2707,6 +2707,99 @@ async fn regression_fallback_targets_require_sub_account_allowlist() {
     }
 }
 
+#[tokio::test]
+async fn regression_fallback_denied_when_allowlist_becomes_empty_or_provider_fails() {
+    struct InvalidatingPrimary(Arc<crate::federation::FederationCache>);
+
+    #[async_trait]
+    impl Tool for InvalidatingPrimary {
+        fn name(&self) -> &str {
+            "echo_tool"
+        }
+        fn description(&self) -> &str {
+            "Invalidate the allowlist after primary authorization"
+        }
+        fn input_schema(&self) -> ToolSchema {
+            empty_schema()
+        }
+        fn required_action(&self) -> Action {
+            Action::Read
+        }
+        async fn execute(&self, _args: Value, _ctx: &ToolContext) -> Result<ToolResult, ToolError> {
+            self.0.invalidate("sub1").await;
+            Err(ToolError::ExecutionFailed(
+                "primary failed after invalidation".into(),
+            ))
+        }
+    }
+
+    for provider_status in [200, 503] {
+        let fixture = Fixture::new(|config| {
+            config.federation_enabled = true;
+            config.fallback_enabled = true;
+            config.fallback_chains = Some(r#"{"echo_tool":["counting_tool"]}"#.into());
+        })
+        .await;
+        override_permissions(
+            &fixture,
+            vec![
+                permission("echo_tool", true),
+                permission("counting_tool", true),
+            ],
+        )
+        .await;
+        let allowlist_path = "/v1/tenants/tenant-a/federation/accounts/master1/sub-accounts/sub1";
+        // The first lookup permits both tools; only fallback sees the changed policy.
+        Mock::given(method("GET"))
+            .and(path(allowlist_path))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"tools": [
+                {"tool_name": "echo_tool"}, {"tool_name": "counting_tool"}
+            ]})))
+            .up_to_n_times(1)
+            .with_priority(1)
+            .expect(1)
+            .mount(&fixture.server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path(allowlist_path))
+            .respond_with(
+                ResponseTemplate::new(provider_status).set_body_json(json!({"tools": []})),
+            )
+            .expect(1)
+            .mount(&fixture.server)
+            .await;
+        fixture
+            .state
+            .tool_registry
+            .register(Arc::new(InvalidatingPrimary(
+                fixture.state.federation_cache.clone(),
+            )));
+        let fallback_calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        fixture
+            .state
+            .tool_registry
+            .register(Arc::new(CountingTool(fallback_calls.clone())));
+        let token =
+            fixture.token(json!({"sub_account_id": "sub1", "master_account_id": "master1"}));
+        let (status, response) = fixture
+            .post(
+                "/mcp/tools/call",
+                Some(&token),
+                json!({"name": "echo_tool", "arguments": {}}),
+            )
+            .await;
+
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(
+            response["content"][0]["text"],
+            "Execution failed: primary failed after invalidation"
+        );
+        assert_eq!(fallback_calls.load(std::sync::atomic::Ordering::SeqCst), 0);
+        assert_eq!(fixture.state.federation_cache.stats().misses, 2);
+        fixture.server.verify().await;
+    }
+}
+
 async fn tool_call(fixture: &Fixture, token: &str, tool: &str) -> u16 {
     let body = json!({"name": tool, "arguments": {}});
     let (status, _) = fixture.post("/mcp/tools/call", Some(token), body).await;

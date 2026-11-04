@@ -125,10 +125,10 @@ Given('que je suis connecte en tant que {string}', async ({ page }, persona) => 
 
 ## CI/CD
 
-Les tests sont executes automatiquement via GitHub Actions:
-- Sur push vers `main` ou `develop`
-- Sur pull requests
-- Manuellement via workflow dispatch
+The live suite (`.github/workflows/e2e-tests.yml`) runs automatically through GitHub Actions:
+- On push to `main` or `develop`, when the diff touches runtime code of `e2e/`, `portal/` or `control-plane-ui/`
+- On the daily schedule, and manually via workflow dispatch
+- Never on pull requests: the suite targets the deployed environment, which does not contain the PR code. UI-only PRs are covered by the mocked gates (`e2e-smoke-mock.yml`, `e2e-a11y-gate.yml`)
 
 ## Liens
 

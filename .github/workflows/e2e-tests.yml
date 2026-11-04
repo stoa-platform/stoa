@@ -1,6 +1,14 @@
 name: E2E Tests
 
 on:
+  # No pull_request trigger, on purpose (PR #2891): this suite drives the
+  # deployed environment, which never contains the code of an open pull
+  # request, so a PR run could not validate that PR. UI-only PRs (portal/,
+  # control-plane-ui/ and their docs) rely on the mocked gates
+  # (e2e-smoke-mock.yml, e2e-a11y-gate.yml) and on the component CI called
+  # from ci-gate.yml. Live E2E runs on pushes to main/develop (runtime changes
+  # only, see the changes job), on the daily schedule and on demand.
+  # Guarded by scripts/ci/tests/test_regression_manifest_image_pinning_gates.py.
   push:
     branches:
       - main

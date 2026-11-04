@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import User, get_current_user
+from ..auth.rbac import decide_tenant_access
 from ..database import get_db
 from ..repositories.quota_usage import QuotaUsageRepository
 from ..schemas.quota import (
@@ -23,9 +24,10 @@ router = APIRouter(prefix="/v1/admin/quotas", tags=["Quotas"])
 
 def _has_admin_access(user: User, tenant_id: str) -> bool:
     """Check if user has admin access to tenant quotas."""
-    if "cpi-admin" in user.roles:
-        return True
-    return "tenant-admin" in user.roles and user.tenant_id == tenant_id
+    if not any(role in user.roles for role in ("cpi-admin", "tenant-admin")):
+        return False
+    decide_tenant_access(user, tenant_id, mode="resource")
+    return True
 
 
 @router.get("/{tenant_id}", response_model=QuotaListResponse)

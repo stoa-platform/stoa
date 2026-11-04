@@ -30,7 +30,7 @@ use crate::metering::{
 };
 use crate::metrics;
 use crate::optimization::{OptimizationLevel, OptimizationSettings, TokenOptimizer};
-use crate::resilience::CircuitBreaker;
+use crate::resilience::{CircuitBreaker, FallbackAuthorizer, FallbackCaller};
 use crate::state::{AppState, PolicyCallerCtx};
 use crate::uac::Action;
 
@@ -116,13 +116,15 @@ pub(crate) async fn request_tool_context(
     tool_name: &str,
 ) -> Result<(ToolContext, Arc<dyn Tool>), AuthError> {
     let auth = extract_auth_context(state, headers).await?;
-    check_tool_permission(state, &auth.tenant_id, tool_name)
+    // Resolve aliases before deciding so the canonical tool is what gets
+    // authorized. An unknown name is still checked under the requested name
+    // first, so the catalogue is not disclosed to callers without permission.
+    let tool = state.tool_registry.get(tool_name);
+    let canonical_name = tool.as_ref().map_or(tool_name, |tool| tool.name());
+    check_tool_permission(state, &auth.tenant_id, tool_name, canonical_name)
         .await
         .map_err(|status| (status, "Tool call rejected"))?;
-    let tool = state
-        .tool_registry
-        .get(tool_name)
-        .ok_or((StatusCode::NOT_FOUND, "Tool not found"))?;
+    let tool = tool.ok_or((StatusCode::NOT_FOUND, "Tool not found"))?;
     let mut ctx = auth.tool_context(headers, request_id(headers));
     // A2A is a client surface; its source header cannot assert a trusted origin.
     ctx.from_control_plane = false;
@@ -150,16 +152,23 @@ fn check_tool_policy(state: &AppState, tool: &dyn Tool, ctx: &ToolContext) -> Re
 }
 
 /// Every transport uses the same fail-closed CP permission decision.
+///
+/// `requested_name` is the name on the wire and `canonical_name` the tool the
+/// registry resolved it to; they differ only for deprecated aliases.
 pub(crate) async fn check_tool_permission(
     state: &AppState,
     tenant_id: &str,
-    tool_name: &str,
+    requested_name: &str,
+    canonical_name: &str,
 ) -> Result<(), StatusCode> {
     let permissions = state
         .tool_permissions
         .as_ref()
         .ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
-    if permissions.is_tool_allowed(tenant_id, tool_name).await {
+    if permissions
+        .is_tool_call_allowed(tenant_id, requested_name, canonical_name)
+        .await
+    {
         Ok(())
     } else {
         Err(StatusCode::FORBIDDEN)
@@ -175,8 +184,40 @@ fn require_admin_action(auth: &AuthContext, action: Action) -> Result<(), &'stat
     }
 }
 
+/// Applies the primary call's per-tool checks to each fallback target.
+struct FallbackRequestAuthorizer<'a> {
+    state: &'a AppState,
+    auth: &'a AuthContext,
+}
+
+#[async_trait::async_trait]
+impl FallbackAuthorizer for FallbackRequestAuthorizer<'_> {
+    async fn authorize(
+        &self,
+        requested: &str,
+        tool: &dyn Tool,
+        ctx: &ToolContext,
+    ) -> Result<(), String> {
+        // The requested name and the canonical name must both be allowed.
+        for name in [requested, tool.name()] {
+            if !self
+                .state
+                .guardrail_policy_store
+                .is_tool_allowed(&ctx.tenant_id, name)
+            {
+                return Err(format!("'{name}' is not permitted for this tenant"));
+            }
+        }
+        check_tool_permission(self.state, &ctx.tenant_id, requested, tool.name())
+            .await
+            .map_err(|status| format!("'{requested}' tenant permission {}", status.as_u16()))?;
+        require_admin_action(self.auth, tool.required_action()).map_err(str::to_string)?;
+        check_tool_policy(self.state, tool, ctx)
+    }
+}
+
 /// Validate the JWT before accepting any client identity or tenant.
-/// A client tenant header cannot override or disagree with the validated identity.
+/// Client tenant headers are ignored; only the verified identity supplies the tenant.
 pub(super) async fn extract_auth_context(
     state: &AppState,
     headers: &HeaderMap,
@@ -812,8 +853,10 @@ async fn mcp_tools_call_inner(
 
     // Tenant tool permission check (replaces circular CP-API proxy)
     // Fetches permissions from CP-API and caches locally (60s TTL).
-    // Fail-closed: only fresh explicit allow entries can execute.
-    let permission = check_tool_permission(&state, &auth.tenant_id, &request.name).await;
+    // Fail-closed: only fresh explicit allow entries can execute, on both
+    // the requested name and the canonical tool it resolved to.
+    let permission =
+        check_tool_permission(&state, &auth.tenant_id, &request.name, tool.name()).await;
     if permission == Err(StatusCode::FORBIDDEN) {
         warn!(
             tenant = %auth.tenant_id,
@@ -1234,14 +1277,21 @@ async fn mcp_tools_call_inner(
         Err(_) => tool_cb.record_failure(),
     }
 
-    // CAB-708: Fallback chain — try alternate providers if primary failed
+    // CAB-708: Fallback chain — try alternate providers if primary failed.
+    // Each target is authorized like the primary call before it runs.
     let result = crate::resilience::execute_or_direct(
         &state.fallback_chain,
         &state.circuit_breakers,
         &state.tool_registry,
         &request.name,
         arguments,
-        &ctx,
+        &FallbackCaller {
+            ctx: &ctx,
+            authorizer: &FallbackRequestAuthorizer {
+                state: &state,
+                auth: &auth,
+            },
+        },
         primary_result,
     )
     .await;

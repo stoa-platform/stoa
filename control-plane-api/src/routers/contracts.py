@@ -14,6 +14,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth.dependencies import User, get_current_user
+from src.auth.rbac import decide_tenant_access
 from src.config import settings
 from src.database import get_db
 from src.logging_config import get_logger
@@ -66,9 +67,11 @@ router = APIRouter(prefix="/v1/tenants/{tenant_id}/contracts", tags=["Contracts"
 
 def _has_tenant_access(user: User, tenant_id: str) -> bool:
     """Check if user has access to the specified tenant."""
-    if "cpi-admin" in (user.roles or []):
-        return True
-    return user.tenant_id == tenant_id
+    try:
+        decide_tenant_access(user, tenant_id, mode="resource")
+    except HTTPException:
+        return False
+    return True
 
 
 async def _get_or_create_default_bindings(db: AsyncSession, contract: Contract) -> list[ProtocolBinding]:
@@ -320,9 +323,7 @@ async def get_contract(
     if not _has_tenant_access(user, tenant_id):
         raise HTTPException(status_code=403, detail="Access denied to this tenant")
 
-    result = await db.execute(
-        select(Contract).where(and_(Contract.id == contract_id, Contract.tenant_id == tenant_id))
-    )
+    result = await db.execute(select(Contract).where(and_(Contract.id == contract_id, Contract.tenant_id == tenant_id)))
     contract = result.scalar_one_or_none()
 
     if not contract:
@@ -367,9 +368,7 @@ async def update_contract(
     if not _has_tenant_access(user, tenant_id):
         raise HTTPException(status_code=403, detail="Access denied to this tenant")
 
-    result = await db.execute(
-        select(Contract).where(and_(Contract.id == contract_id, Contract.tenant_id == tenant_id))
-    )
+    result = await db.execute(select(Contract).where(and_(Contract.id == contract_id, Contract.tenant_id == tenant_id)))
     contract = result.scalar_one_or_none()
 
     if not contract:
@@ -414,9 +413,7 @@ async def delete_contract(
     if not _has_tenant_access(user, tenant_id):
         raise HTTPException(status_code=403, detail="Access denied to this tenant")
 
-    result = await db.execute(
-        select(Contract).where(and_(Contract.id == contract_id, Contract.tenant_id == tenant_id))
-    )
+    result = await db.execute(select(Contract).where(and_(Contract.id == contract_id, Contract.tenant_id == tenant_id)))
     contract = result.scalar_one_or_none()
 
     if not contract:
@@ -453,9 +450,7 @@ async def publish_contract(
     if not _has_tenant_access(user, tenant_id):
         raise HTTPException(status_code=403, detail="Access denied to this tenant")
 
-    result = await db.execute(
-        select(Contract).where(and_(Contract.id == contract_id, Contract.tenant_id == tenant_id))
-    )
+    result = await db.execute(select(Contract).where(and_(Contract.id == contract_id, Contract.tenant_id == tenant_id)))
     contract = result.scalar_one_or_none()
 
     if not contract:
@@ -531,9 +526,7 @@ async def deprecate_contract(
     if not _has_tenant_access(user, tenant_id):
         raise HTTPException(status_code=403, detail="Access denied to this tenant")
 
-    result = await db.execute(
-        select(Contract).where(and_(Contract.id == contract_id, Contract.tenant_id == tenant_id))
-    )
+    result = await db.execute(select(Contract).where(and_(Contract.id == contract_id, Contract.tenant_id == tenant_id)))
     contract = result.scalar_one_or_none()
 
     if not contract:
@@ -593,9 +586,7 @@ async def reactivate_contract(
     if not _has_tenant_access(user, tenant_id):
         raise HTTPException(status_code=403, detail="Access denied to this tenant")
 
-    result = await db.execute(
-        select(Contract).where(and_(Contract.id == contract_id, Contract.tenant_id == tenant_id))
-    )
+    result = await db.execute(select(Contract).where(and_(Contract.id == contract_id, Contract.tenant_id == tenant_id)))
     contract = result.scalar_one_or_none()
 
     if not contract:
@@ -625,9 +616,7 @@ async def get_deprecation_info(
     if not _has_tenant_access(user, tenant_id):
         raise HTTPException(status_code=403, detail="Access denied to this tenant")
 
-    result = await db.execute(
-        select(Contract).where(and_(Contract.id == contract_id, Contract.tenant_id == tenant_id))
-    )
+    result = await db.execute(select(Contract).where(and_(Contract.id == contract_id, Contract.tenant_id == tenant_id)))
     contract = result.scalar_one_or_none()
 
     if not contract:
@@ -718,9 +707,7 @@ async def list_bindings(
     if not _has_tenant_access(user, tenant_id):
         raise HTTPException(status_code=403, detail="Access denied to this tenant")
 
-    result = await db.execute(
-        select(Contract).where(and_(Contract.id == contract_id, Contract.tenant_id == tenant_id))
-    )
+    result = await db.execute(select(Contract).where(and_(Contract.id == contract_id, Contract.tenant_id == tenant_id)))
     contract = result.scalar_one_or_none()
 
     if not contract:
@@ -756,9 +743,7 @@ async def enable_binding(
     if not _has_tenant_access(user, tenant_id):
         raise HTTPException(status_code=403, detail="Access denied to this tenant")
 
-    result = await db.execute(
-        select(Contract).where(and_(Contract.id == contract_id, Contract.tenant_id == tenant_id))
-    )
+    result = await db.execute(select(Contract).where(and_(Contract.id == contract_id, Contract.tenant_id == tenant_id)))
     contract = result.scalar_one_or_none()
 
     if not contract:
@@ -843,8 +828,11 @@ async def enable_binding(
     for gw in gateways:
         try:
             adapter = await create_adapter_with_credentials(
-                gw.gateway_type.value, gw.base_url, gw.auth_config,
-                source=gw.source, gateway_name=gw.name,
+                gw.gateway_type.value,
+                gw.base_url,
+                gw.auth_config,
+                source=gw.source,
+                gateway_name=gw.name,
             )
             await adapter.connect()
             result = await adapter.deploy_contract(contract_spec)
@@ -921,9 +909,7 @@ async def disable_binding(
     if not _has_tenant_access(user, tenant_id):
         raise HTTPException(status_code=403, detail="Access denied to this tenant")
 
-    result = await db.execute(
-        select(Contract).where(and_(Contract.id == contract_id, Contract.tenant_id == tenant_id))
-    )
+    result = await db.execute(select(Contract).where(and_(Contract.id == contract_id, Contract.tenant_id == tenant_id)))
     contract = result.scalar_one_or_none()
 
     if not contract:
@@ -1002,9 +988,7 @@ async def generate_mcp_tools(
     if not _has_tenant_access(user, tenant_id):
         raise HTTPException(status_code=403, detail="Access denied to this tenant")
 
-    result = await db.execute(
-        select(Contract).where(and_(Contract.id == contract_id, Contract.tenant_id == tenant_id))
-    )
+    result = await db.execute(select(Contract).where(and_(Contract.id == contract_id, Contract.tenant_id == tenant_id)))
     contract = result.scalars().first()
     if not contract:
         raise HTTPException(status_code=404, detail="Contract not found")
@@ -1062,9 +1046,7 @@ async def list_mcp_tools(
     if not _has_tenant_access(user, tenant_id):
         raise HTTPException(status_code=403, detail="Access denied to this tenant")
 
-    result = await db.execute(
-        select(Contract).where(and_(Contract.id == contract_id, Contract.tenant_id == tenant_id))
-    )
+    result = await db.execute(select(Contract).where(and_(Contract.id == contract_id, Contract.tenant_id == tenant_id)))
     contract = result.scalars().first()
     if not contract:
         raise HTTPException(status_code=404, detail="Contract not found")

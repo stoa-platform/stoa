@@ -1,7 +1,7 @@
 """RBAC permissions and middleware"""
 import logging
 from functools import wraps
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from fastapi import Depends, HTTPException
 
@@ -21,10 +21,30 @@ class Role:
     VIEWER = "viewer"
 
 
-def resolve_effective_tenant(user: "User", requested: str | None = None) -> str | None:
-    """Resolve a discovery filter without granting cross-tenant access."""
+def decide_tenant_access(
+    user: "User", requested: str | None = None, *, mode: Literal["resource", "filter", "global"]
+) -> str | None:
+    """Authorize a resource, a bounded discovery filter, or an admin global read.
+
+    Identity comes only from the authenticated user. Resource targets are exact;
+    discovery filters retain their compatibility behavior of clamping to the
+    caller's tenant. Only explicit global mode may return an unbounded scope.
+    """
+    is_admin = Role.CPI_ADMIN in user.roles
+    if mode == "global":
+        if is_admin and requested is None:
+            return None
+        raise HTTPException(status_code=403, detail="Global tenant access requires a platform administrator")
+    if mode == "resource":
+        if requested and requested.strip() and (is_admin or user.tenant_id == requested):
+            return requested
+        raise HTTPException(status_code=403, detail="Access denied to this tenant")
+    if mode != "filter":
+        raise HTTPException(status_code=403, detail="Unsupported tenant access mode")
     requested = (requested or "").strip() or None
-    if Role.CPI_ADMIN in user.roles:
+    if is_admin:
+        if requested is None:
+            raise HTTPException(status_code=403, detail="Target tenant is required")
         return requested
     tenant = user.tenant_id.strip() if user.tenant_id else ""
     if not tenant:
@@ -33,6 +53,13 @@ def resolve_effective_tenant(user: "User", requested: str | None = None) -> str 
         # Never log the requested value, identity, bearer token or claims.
         logger.warning("Cross-tenant discovery filter ignored for non-admin")
     return tenant
+
+
+def resolve_effective_tenant(user: "User", requested: str | None = None) -> str | None:
+    """Resolve a discovery filter, preserving explicit admin global discovery."""
+    requested = (requested or "").strip() or None
+    mode: Literal["filter", "global"] = "global" if Role.CPI_ADMIN in user.roles and requested is None else "filter"
+    return decide_tenant_access(user, requested, mode=mode)
 
 
 class Permission:
@@ -231,13 +258,7 @@ def require_permission(permission: str):
 def require_tenant_access(func):
     @wraps(func)
     async def wrapper(*args, tenant_id: str, user=Depends(get_current_user), **kwargs):
-        if "cpi-admin" in user.roles:
-            return await func(*args, tenant_id=tenant_id, user=user, **kwargs)
-        if user.tenant_id != tenant_id:
-            raise HTTPException(
-                status_code=403,
-                detail="Access denied to this tenant"
-            )
+        decide_tenant_access(user, tenant_id, mode="resource")
         return await func(*args, tenant_id=tenant_id, user=user, **kwargs)
     return wrapper
 
@@ -249,10 +270,7 @@ async def ensure_tenant(tenant_id: str, user=Depends(get_current_user)):
     admins (cpi-admin) may act on any tenant; any other caller gets 403 when the
     path tenant is not their own. Use it with ``APIRouter(dependencies=[...])``.
     """
-    if Role.CPI_ADMIN in user.roles:
-        return user
-    if not user.tenant_id or user.tenant_id != tenant_id:
-        raise HTTPException(status_code=403, detail="Access denied to this tenant")
+    decide_tenant_access(user, tenant_id, mode="resource")
     return user
 
 

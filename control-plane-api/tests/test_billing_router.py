@@ -260,6 +260,7 @@ class TestUpdateBudget:
         budget = _mock_budget(id=bid, budget_limit_microcents=200_000_000)
         budget_resp = _mock_budget_response(budget)
         mock_svc = MagicMock()
+        mock_svc.get_budget = AsyncMock(return_value=budget_resp)
         mock_svc.update_budget = AsyncMock(return_value=budget_resp)
 
         with (
@@ -275,7 +276,7 @@ class TestUpdateBudget:
 
     def test_update_404_not_found(self, app_with_tenant_admin, mock_db_session):
         mock_svc = MagicMock()
-        mock_svc.update_budget = AsyncMock(side_effect=ValueError("Budget not found"))
+        mock_svc.get_budget = AsyncMock(side_effect=ValueError("Budget not found"))
 
         with (
             patch(BILLING_SVC_PATH, return_value=mock_svc),

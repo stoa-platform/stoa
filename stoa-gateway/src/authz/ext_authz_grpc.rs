@@ -138,14 +138,6 @@ impl ExtAuthzService {
                 .get("tenant_id")
                 .map(String::as_str)
                 != Some(tenant)
-            || [
-                "x-stoa-tenant",
-                "x-stoa-tenant-id",
-                "x-tenant-id",
-                "x-tenant",
-            ]
-            .iter()
-            .any(|key| headers.get(*key).is_some_and(|value| value != tenant))
         {
             return denied(403);
         }

@@ -56,6 +56,7 @@ expression: "Config::default()"
   "ws_proxy_rate_limit_burst": 50,
   "policy_path": null,
   "policy_enabled": true,
+  "policy_boot_tenants": [],
   "log_level": "info",
   "log_format": "json",
   "otel_endpoint": null,

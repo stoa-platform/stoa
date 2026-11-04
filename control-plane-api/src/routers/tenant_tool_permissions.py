@@ -17,6 +17,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import User, get_current_user, require_role
+from ..auth.rbac import decide_tenant_access
 from ..database import get_db
 from ..models.tenant_tool_permission import TenantToolPermission
 from ..schemas.tenant_tool_permission import (
@@ -42,20 +43,14 @@ async def _invalidate_cache(tenant_id: str) -> None:
     await _permission_cache.delete(f"tenant:{tenant_id}")
 
 
-async def _load_permission_cache(
-    tenant_id: str, db: AsyncSession
-) -> dict[tuple[str, str], bool]:
+async def _load_permission_cache(tenant_id: str, db: AsyncSession) -> dict[tuple[str, str], bool]:
     """Load all permissions for a tenant into cache."""
     cache_key = f"tenant:{tenant_id}"
     cached = await _permission_cache.get(cache_key)
     if cached is not None:
         return cached
 
-    result = await db.execute(
-        select(TenantToolPermission).where(
-            TenantToolPermission.tenant_id == tenant_id
-        )
-    )
+    result = await db.execute(select(TenantToolPermission).where(TenantToolPermission.tenant_id == tenant_id))
     permissions = result.scalars().all()
 
     permission_map: dict[tuple[str, str], bool] = {}
@@ -86,18 +81,12 @@ async def check_tool_allowed(
         return permission_map.get((str(mcp_server_id), tool_name), True)
 
     # No server_id — check all servers for this tool_name
-    return all(
-        allowed or tname != tool_name
-        for (_sid, tname), allowed in permission_map.items()
-    )
+    return all(allowed or tname != tool_name for (_sid, tname), allowed in permission_map.items())
 
 
 def _ensure_tenant_access(user: User, tenant_id: str) -> None:
     """Verify user has access to the tenant."""
-    if "cpi-admin" in user.roles:
-        return
-    if user.tenant_id != tenant_id:
-        raise HTTPException(status_code=403, detail="Access denied to this tenant")
+    decide_tenant_access(user, tenant_id, mode="resource")
 
 
 @router.get(
@@ -116,25 +105,17 @@ async def list_permissions(
     """List tool permissions for a tenant. Requires stoa:read."""
     _ensure_tenant_access(user, tenant_id)
 
-    query = select(TenantToolPermission).where(
-        TenantToolPermission.tenant_id == tenant_id
-    )
-    count_query = select(TenantToolPermission).where(
-        TenantToolPermission.tenant_id == tenant_id
-    )
+    query = select(TenantToolPermission).where(TenantToolPermission.tenant_id == tenant_id)
+    count_query = select(TenantToolPermission).where(TenantToolPermission.tenant_id == tenant_id)
 
     if mcp_server_id:
         query = query.where(TenantToolPermission.mcp_server_id == mcp_server_id)
-        count_query = count_query.where(
-            TenantToolPermission.mcp_server_id == mcp_server_id
-        )
+        count_query = count_query.where(TenantToolPermission.mcp_server_id == mcp_server_id)
 
     # Count total
     from sqlalchemy import func
 
-    total_result = await db.execute(
-        count_query.with_only_columns(func.count(TenantToolPermission.id))
-    )
+    total_result = await db.execute(count_query.with_only_columns(func.count(TenantToolPermission.id)))
     total = total_result.scalar() or 0
 
     # Paginate
@@ -236,11 +217,7 @@ async def delete_permission(
     if not permission:
         raise HTTPException(status_code=404, detail="Permission not found")
 
-    await db.execute(
-        delete(TenantToolPermission).where(
-            TenantToolPermission.id == permission_id
-        )
-    )
+    await db.execute(delete(TenantToolPermission).where(TenantToolPermission.id == permission_id))
     await db.commit()
     await _invalidate_cache(tenant_id)
 

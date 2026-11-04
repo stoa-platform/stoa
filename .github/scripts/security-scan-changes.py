@@ -22,6 +22,15 @@ SAST_COMMON = {
 }
 
 
+def web_filters() -> dict[str, list[str]]:
+    """Share SAST inputs with paths-filter without duplicating global rules."""
+    common = ["shared/**", "tsconfig.base.json", ".cargo/**", *sorted(COMMON | SAST_COMMON)]
+    return {component: [
+        "{" + ",".join([f"{component}/**", *common]) + "}",
+        "!**/*.{md,mdx}", "!.claude/**",
+    ] for component in sorted(WEB)}
+
+
 def select_components(event: str, paths: list[str], *, sast: bool = False) -> list[str]:
     if event in {"merge_group", "push", "schedule", "workflow_dispatch"}:
         return list(COMPONENTS)
@@ -59,6 +68,7 @@ def main() -> None:
     outputs = {c: str(c in selected).lower() for c in COMPONENTS}
     outputs.update({"container-scan": str(bool(selected)).lower(),
                     "container-matrix": json.dumps(matrix, separators=(",", ":")),
+                    "web-filters": json.dumps(web_filters(), separators=(",", ":")),
                     "sast-rust": str("stoa-gateway" in sast).lower(),
                     "sast-python": str("control-plane-api" in sast).lower(),
                     "sast-javascript": str(bool(WEB.intersection(sast))).lower()})

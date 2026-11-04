@@ -13,13 +13,14 @@ use axum::{
 };
 use tracing::{info, warn};
 
+use crate::auth::tenant::{request_identity, require_tenant};
 use crate::metrics;
 use crate::state::AppState;
 
 /// POST /soap/:route_id — SOAP proxy passthrough.
 ///
-/// 1. Validates auth (Bearer token from Authorization header)
-/// 2. Looks up backend URL from RouteRegistry
+/// 1. Validates the signed identity and required tenant
+/// 2. Looks up the backend URL and verifies route tenant ownership
 /// 3. Forwards the raw SOAP request body to the backend
 /// 4. Returns the raw SOAP response with metrics tracking
 pub async fn soap_proxy(
@@ -33,22 +34,14 @@ pub async fn soap_proxy(
         return (StatusCode::NOT_FOUND, "SOAP proxy is not enabled").into_response();
     }
 
-    // Auth: require Bearer token
-    let token = headers
-        .get("authorization")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| {
-            v.strip_prefix("Bearer ")
-                .or_else(|| v.strip_prefix("bearer "))
-        });
-
-    if token.is_none() {
-        return (
-            StatusCode::UNAUTHORIZED,
-            "Missing Bearer token in Authorization header",
-        )
-            .into_response();
-    }
+    let (claims, _) = match request_identity(&state, &headers).await {
+        Ok(identity) => identity,
+        Err(error) => return error.into_response(),
+    };
+    let tenant_id = match require_tenant(&claims) {
+        Ok(tenant) => tenant,
+        Err(error) => return error.into_response(),
+    };
 
     // Look up backend URL from route registry
     let route = state.route_registry.get(&route_id);
@@ -60,6 +53,10 @@ pub async fn soap_proxy(
             .into_response();
     };
 
+    if route.tenant_id != tenant_id {
+        return (StatusCode::FORBIDDEN, "Route belongs to another tenant").into_response();
+    }
+
     if !route.activated {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
@@ -69,7 +66,6 @@ pub async fn soap_proxy(
     }
 
     let backend_url = &route.backend_url;
-    let tenant_id = &route.tenant_id;
 
     // Extract SOAPAction header (optional, forwarded to backend)
     let soap_action = headers
@@ -108,8 +104,8 @@ pub async fn soap_proxy(
         request = request.header("SOAPAction", &soap_action);
     }
 
-    // Forward relevant headers
-    for key in &["x-request-id", "x-correlation-id", "x-tenant-id"] {
+    // Forward correlation only; client headers never assert a backend tenant.
+    for key in &["x-request-id", "x-correlation-id"] {
         if let Some(val) = headers.get(*key) {
             if let Ok(val_str) = val.to_str() {
                 request = request.header(*key, val_str);
@@ -171,5 +167,232 @@ pub async fn soap_proxy(
             )
                 .into_response()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::{HeaderValue, Request};
+    use serde_json::{json, Value};
+    use tower::ServiceExt;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    use crate::auth::jwt::tests::{mcp_test_jwks, mcp_test_mint};
+    use crate::config::Config;
+
+    const SOAP_BODY: &str = "<soap:Envelope>request</soap:Envelope>";
+
+    struct Fixture {
+        server: MockServer,
+        state: AppState,
+        _spool: tempfile::TempDir,
+    }
+
+    impl Fixture {
+        async fn new() -> Self {
+            let server = MockServer::start().await;
+            let issuer = format!("{}/realms/stoa", server.uri());
+            Mock::given(method("GET"))
+                .and(path("/realms/stoa/.well-known/openid-configuration"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                    "issuer": issuer,
+                    "authorization_endpoint": format!("{issuer}/auth"),
+                    "token_endpoint": format!("{issuer}/token"),
+                    "jwks_uri": format!("{}/jwks", server.uri())
+                })))
+                .mount(&server)
+                .await;
+            Mock::given(method("GET"))
+                .and(path("/jwks"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(mcp_test_jwks()))
+                .mount(&server)
+                .await;
+            Mock::given(method("POST"))
+                .and(path("/backend"))
+                .respond_with(ResponseTemplate::new(200).set_body_string("<reply>ok</reply>"))
+                .mount(&server)
+                .await;
+            let spool = tempfile::tempdir().unwrap();
+            let state = AppState::new(Config {
+                soap_proxy_enabled: true,
+                keycloak_url: Some(server.uri()),
+                keycloak_realm: Some("stoa".into()),
+                mcp_audience: Some("control-plane-api".into()),
+                audit_spool_dir: spool.path().into(),
+                ..Config::default()
+            });
+            for tenant in ["tenant-a", "tenant-b", ""] {
+                state.route_registry.upsert(
+                    serde_json::from_value(json!({
+                        "id": format!("route-{tenant}"), "name": "SOAP test",
+                        "tenant_id": tenant, "path_prefix": "/soap",
+                        "backend_url": format!("{}/backend", server.uri()),
+                        "methods": ["POST"], "spec_hash": "", "activated": true
+                    }))
+                    .unwrap(),
+                );
+            }
+            Self {
+                server,
+                state,
+                _spool: spool,
+            }
+        }
+
+        fn token(&self, overrides: Value) -> String {
+            mcp_test_mint(&format!("{}/realms/stoa", self.server.uri()), overrides)
+        }
+
+        async fn post(
+            &self,
+            route_tenant: &str,
+            token: Option<&str>,
+            tenants: &[HeaderValue],
+        ) -> Response {
+            let mut request = Request::builder()
+                .method("POST")
+                .uri(format!("/soap/route-{route_tenant}"))
+                .header("content-type", "text/xml")
+                .header("soapaction", "urn:echo")
+                .header("x-request-id", "soap-request")
+                .header("x-correlation-id", "soap-correlation");
+            if let Some(token) = token {
+                request = request.header("authorization", format!("Bearer {token}"));
+            }
+            for tenant in tenants {
+                request = request.header("x-tenant-id", tenant);
+            }
+            crate::build_router(self.state.clone())
+                .oneshot(request.body(Body::from(SOAP_BODY)).unwrap())
+                .await
+                .unwrap()
+        }
+
+        async fn backend_requests(&self) -> Vec<wiremock::Request> {
+            self.server
+                .received_requests()
+                .await
+                .unwrap()
+                .into_iter()
+                .filter(|request| request.url.path() == "/backend")
+                .collect()
+        }
+    }
+
+    #[tokio::test]
+    async fn regression_client_tenant_headers_never_reach_soap_backend() {
+        let fixture = Fixture::new().await;
+        let token = fixture.token(json!({}));
+        let header_cases = [
+            vec![],
+            vec![HeaderValue::from_static("tenant-a")],
+            vec![HeaderValue::from_static("tenant-b")],
+            vec![
+                HeaderValue::from_static("tenant-b"),
+                HeaderValue::from_static("tenant-a"),
+            ],
+            vec![HeaderValue::from_static(" ")],
+            vec![HeaderValue::from_bytes(&[0xff]).unwrap()],
+        ];
+        for tenants in &header_cases {
+            let response = fixture.post("tenant-a", Some(&token), tenants).await;
+            assert_eq!(response.status(), StatusCode::OK);
+            assert_eq!(
+                axum::body::to_bytes(response.into_body(), 1024)
+                    .await
+                    .unwrap(),
+                "<reply>ok</reply>"
+            );
+        }
+        let requests = fixture.backend_requests().await;
+        assert_eq!(requests.len(), header_cases.len());
+        for request in requests {
+            assert!(!request.headers.contains_key("x-tenant-id"));
+            assert_eq!(request.headers["x-request-id"], "soap-request");
+            assert_eq!(request.headers["x-correlation-id"], "soap-correlation");
+            assert_eq!(request.headers["soapaction"], "urn:echo");
+            assert_eq!(request.body, SOAP_BODY.as_bytes());
+        }
+    }
+
+    #[tokio::test]
+    async fn regression_soap_requires_verified_identity_and_matching_route_tenant() {
+        let fixture = Fixture::new().await;
+        let cases =
+            [
+                (None, "tenant-a", StatusCode::UNAUTHORIZED),
+                (Some("invalid".into()), "tenant-a", StatusCode::UNAUTHORIZED),
+                (
+                    Some(fixture.token(json!({"tenant_id": null}))),
+                    "tenant-a",
+                    StatusCode::FORBIDDEN,
+                ),
+                (
+                    Some(fixture.token(
+                        json!({"tenant_id": null, "realm_access": {"roles": ["cpi-admin"]}}),
+                    )),
+                    "tenant-a",
+                    StatusCode::FORBIDDEN,
+                ),
+                (
+                    Some(fixture.token(json!({"tenant_id": "tenant-b"}))),
+                    "tenant-a",
+                    StatusCode::FORBIDDEN,
+                ),
+                (
+                    Some(fixture.token(json!({}))),
+                    "tenant-b",
+                    StatusCode::FORBIDDEN,
+                ),
+                (Some(fixture.token(json!({}))), "", StatusCode::FORBIDDEN),
+                (
+                    Some(fixture.token(json!({"exp": chrono::Utc::now().timestamp() - 120}))),
+                    "tenant-a",
+                    StatusCode::UNAUTHORIZED,
+                ),
+                (
+                    Some(fixture.token(json!({"aud": "other-resource"}))),
+                    "tenant-a",
+                    StatusCode::UNAUTHORIZED,
+                ),
+                (
+                    Some(fixture.token(json!({"iss": "https://other.example/realms/stoa"}))),
+                    "tenant-a",
+                    StatusCode::UNAUTHORIZED,
+                ),
+                (
+                    Some(fixture.token(json!({"sub": ""}))),
+                    "tenant-a",
+                    StatusCode::UNAUTHORIZED,
+                ),
+                (
+                    Some(fixture.token(json!({"cnf": {"jkt": "unverified-proof"}}))),
+                    "tenant-a",
+                    StatusCode::UNAUTHORIZED,
+                ),
+            ];
+        for (token, route_tenant, status) in cases {
+            let response = fixture
+                .post(
+                    route_tenant,
+                    token.as_deref(),
+                    &[HeaderValue::from_static("tenant-a")],
+                )
+                .await;
+            assert_eq!(response.status(), status, "route tenant: {route_tenant}");
+        }
+        assert!(fixture.backend_requests().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn soap_fails_closed_without_jwt_validator() {
+        let mut fixture = Fixture::new().await;
+        fixture.state.jwt_validator = None;
+        let token = fixture.token(json!({}));
+        let response = fixture.post("tenant-a", Some(&token), &[]).await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert!(fixture.backend_requests().await.is_empty());
     }
 }

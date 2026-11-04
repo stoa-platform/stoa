@@ -270,7 +270,7 @@ pub(super) async fn extract_auth_context(
     })
 }
 
-fn auth_failure((status, message): AuthError) -> Response {
+fn auth_failure((status, message): (StatusCode, impl std::fmt::Display)) -> Response {
     let mut response = (
         status,
         Json(ToolsCallResponse {
@@ -609,6 +609,20 @@ async fn mcp_tools_call_inner(
         scopes = ?auth.scopes,
         "Executing MCP tool"
     );
+
+    // A configured signer trust set that is not loaded denies before any Control Plane request.
+    if matches!(&state.tool_permissions, Some(p) if p.trust_set_not_loaded()) {
+        record_tool_denial(
+            &auth,
+            &request.name,
+            &request_id,
+            StatusCode::FORBIDDEN,
+            "permission_denied",
+            "trust_set_not_loaded",
+        );
+        let message = format!("Tool '{}' is not allowed for this tenant", request.name);
+        return auth_failure((StatusCode::FORBIDDEN, message));
+    }
 
     // Get tool from registry (CAB-1558: skip sync refresh if cache was ever loaded)
     let tool = match state

@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import User, get_current_user
+from ..auth.rbac import decide_tenant_access
 from ..database import get_db
 from ..schemas.billing import (
     DepartmentBudgetCreate,
@@ -26,9 +27,8 @@ router = APIRouter(
 
 def _has_tenant_access(user: User, tenant_id: str) -> bool:
     """Check if user has access to a tenant."""
-    if "cpi-admin" in user.roles:
-        return True
-    return user.tenant_id == tenant_id
+    decide_tenant_access(user, tenant_id, mode="resource")
+    return True
 
 
 @router.post("", response_model=DepartmentBudgetResponse, status_code=201)
@@ -78,9 +78,12 @@ async def get_billing_budget(
 
     service = BillingService(db)
     try:
-        return await service.get_budget(budget_id)
+        budget = await service.get_budget(budget_id)
     except ValueError:
         raise HTTPException(status_code=404, detail="Budget not found")
+    if budget.tenant_id != tenant_id:
+        raise HTTPException(status_code=404, detail="Budget not found")
+    return budget
 
 
 @router.put("/{budget_id}", response_model=DepartmentBudgetResponse)
@@ -97,6 +100,9 @@ async def update_billing_budget(
 
     service = BillingService(db)
     try:
+        budget = await service.get_budget(budget_id)
+        if budget.tenant_id != tenant_id:
+            raise HTTPException(status_code=404, detail="Budget not found")
         budget = await service.update_budget(budget_id, request)
     except ValueError:
         raise HTTPException(status_code=404, detail="Budget not found")

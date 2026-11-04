@@ -66,12 +66,15 @@ class SubscriptionRepository:
         page_size: int = 20,
         environment: str | None = None,
         is_admin: bool = False,
+        tenant_id: str | None = None,
     ) -> tuple[list[Subscription], int]:
         """List subscriptions for a subscriber with pagination.
 
-        When is_admin=True, returns all subscriptions regardless of subscriber.
+        Admins bypass subscriber filtering; tenant scope still applies when supplied.
         """
         query = select(Subscription)
+        if tenant_id is not None:
+            query = query.where(Subscription.tenant_id == tenant_id)
         if not is_admin:
             query = query.where(Subscription.subscriber_id == subscriber_id)
 

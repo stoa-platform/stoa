@@ -58,7 +58,7 @@ pub async fn a2a_handler(
     // claim and subject), never the raw bearer: a renewed token for the same
     // identity keeps its tasks.
     let identity = match user {
-        Some(Extension(user)) => task_owner(&state, &user.claims, &headers, cert.as_deref()),
+        Some(Extension(user)) => task_owner(&state, &user.claims, cert.as_deref()),
         None => Err(crate::auth::middleware::AuthError::unauthorized(
             "Authentication required",
         )),
@@ -103,14 +103,13 @@ pub async fn a2a_handler(
     (status, Json(response)).into_response()
 }
 
-/// Task owner from validated claims; an `X-Tenant-ID` header must match.
+/// Task owner from validated claims only; client tenant headers are ignored.
 /// Federation claims follow `request_identity`. No DPoP proof verifier is
 /// wired, so a `cnf.jkt` token is refused; a `cnf.x5t#S256` token needs the
 /// client certificate extracted by the mTLS layer, and must match it.
 fn task_owner(
     state: &AppState,
     claims: &crate::auth::claims::Claims,
-    headers: &HeaderMap,
     cert: Option<&ClientCertInfo>,
 ) -> Result<TaskOwner, crate::auth::middleware::AuthError> {
     use crate::auth::middleware::AuthError;
@@ -118,15 +117,6 @@ fn task_owner(
         return Err(AuthError::unauthorized("A subject claim is required"));
     }
     let tenant = crate::auth::tenant::require_tenant(claims)?;
-    if headers
-        .get_all("X-Tenant-ID")
-        .iter()
-        .any(|h| h.to_str().ok() != Some(tenant))
-    {
-        return Err(AuthError::forbidden(
-            "Tenant header does not match authenticated tenant",
-        ));
-    }
     if let Some(cnf) = &claims.cnf {
         let bound_to_cert = match (&cnf.jkt, &cnf.x5t_s256, cert) {
             (None, None, _) => true,
@@ -983,7 +973,7 @@ mod tests {
                 "tenant_id": "tenant-a", "sub_account_id": sub_account, "master_account_id": "m-1"
             }))
             .unwrap();
-            task_owner(&state, &claims, &HeaderMap::new(), None).unwrap()
+            task_owner(&state, &claims, None).unwrap()
         };
         assert_ne!(owner("sub-1"), owner("sub-2"));
         assert_eq!(owner("sub-1").sub_account_id.as_deref(), Some("sub-1"));
@@ -1001,7 +991,7 @@ mod tests {
                 "tenant_id": "tenant-a", "sub_account_id": "sub-1", "master_account_id": master
             }))
             .unwrap();
-            task_owner(&state, &claims, &HeaderMap::new(), None).unwrap()
+            task_owner(&state, &claims, None).unwrap()
         };
         assert_ne!(owner("m-1"), owner("m-2"));
     }

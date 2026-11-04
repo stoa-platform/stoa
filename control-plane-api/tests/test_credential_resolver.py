@@ -12,6 +12,11 @@ from src.services.credential_resolver import (
 # ── resolve_gateway_auth_config ──
 
 
+async def assert_refused(auth: dict[str, str]) -> None:
+    with pytest.raises(ValueError, match="operation refused"):
+        await resolve_gateway_auth_config(auth)
+
+
 class TestResolveGatewayAuthConfig:
     async def test_passthrough_no_vault_path(self):
         """Auth config without vault_path is returned unchanged."""
@@ -64,29 +69,23 @@ class TestResolveGatewayAuthConfig:
         assert "vault_path" not in result
         assert result["api_key"] == "secret"
 
-    async def test_fallback_vault_disabled(self):
-        """When Vault returns None (disabled), returns auth_config minus vault_path."""
+    async def test_vault_disabled_refuses_operation(self):
+        """A Vault-backed config cannot proceed when Vault is disabled."""
         auth = {"vault_path": "gateways/kong-dev", "type": "api_key"}
         mock_vault = MagicMock()
         mock_vault.read_secret = AsyncMock(return_value=None)
 
         with patch("src.services.credential_resolver.get_vault_client", return_value=mock_vault):
-            result = await resolve_gateway_auth_config(auth)
+            await assert_refused(auth)
 
-        assert result == {"type": "api_key"}
-        assert "vault_path" not in result
-
-    async def test_fallback_vault_unavailable(self):
-        """On Vault exception, returns auth_config minus vault_path."""
+    async def test_vault_unavailable_refuses_operation(self):
+        """A Vault-backed config cannot proceed on a Vault exception."""
         auth = {"vault_path": "gateways/kong-dev", "type": "api_key"}
         mock_vault = MagicMock()
         mock_vault.read_secret = AsyncMock(side_effect=Exception("connection refused"))
 
         with patch("src.services.credential_resolver.get_vault_client", return_value=mock_vault):
-            result = await resolve_gateway_auth_config(auth)
-
-        assert result == {"type": "api_key"}
-        assert "vault_path" not in result
+            await assert_refused(auth)
 
     async def test_regression_cab_1908_vault_only_raises_on_failure(self):
         """CAB-1908: vault_path-only config with Vault unavailable must raise, not return {}."""
@@ -112,17 +111,14 @@ class TestResolveGatewayAuthConfig:
         ):
             await resolve_gateway_auth_config(auth)
 
-    async def test_regression_cab_1908_hybrid_config_falls_back(self):
-        """CAB-1908: vault_path + direct creds with Vault unavailable must use fallback."""
+    async def test_regression_cab_1908_hybrid_config_refuses_fallback(self):
+        """CAB-2282: a Vault outage must never select direct credentials."""
         auth = {"vault_path": "gateways/kong-prod", "api_key": "direct-fallback-key"}
         mock_vault = MagicMock()
         mock_vault.read_secret = AsyncMock(return_value=None)
 
         with patch("src.services.credential_resolver.get_vault_client", return_value=mock_vault):
-            result = await resolve_gateway_auth_config(auth)
-
-        assert result == {"api_key": "direct-fallback-key"}
-        assert "vault_path" not in result
+            await assert_refused(auth)
 
 
 # ── create_adapter_with_credentials ──

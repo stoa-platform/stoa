@@ -739,3 +739,36 @@ class TestGatewayLiteralDriftGuard:
         items = {item["name"]: item for item in data["items"]}
         assert items["drift-guard"][field] == expected
         assert items["valid-gateway"][field] == (None if field == "mode" else "self_register")
+
+
+@pytest.mark.parametrize("operation", ["health", "import/preview", "import"])
+async def test_regression_cab_2282_gateway_admin_refuses_unavailable_secret_store(
+    operation: str,
+    persisted_gateway_client: tuple[AsyncClient, AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from src.features.error_snapshots.middleware import ErrorSnapshotMiddleware
+    from src.services import credential_resolver
+    from src.services.vault_client import VaultClient
+
+    client, session = persisted_gateway_client
+    marker = "cab-2282-synthetic-credential"
+    gateway = _drift_gateway(source="manual", auth_config={"vault_path": "gateways/test", "api_key": marker})
+    session.add(gateway)
+    await session.commit()
+    await session.refresh(gateway)
+    original_state = {column.name: getattr(gateway, column.name) for column in GatewayInstance.__table__.columns}
+    vault = VaultClient(vault_addr="https://vault.example.test", enabled=False)
+    monkeypatch.setattr(credential_resolver, "get_vault_client", lambda: vault)
+    monkeypatch.setattr(ErrorSnapshotMiddleware, "_should_skip_path", lambda *_: True)
+    monkeypatch.setattr(credential_resolver.AdapterRegistry, "create", lambda *_, **__: pytest.fail("Adapter created"))
+    caplog.clear()
+    with caplog.at_level(logging.DEBUG):
+        response = await client.post(f"/v1/admin/gateways/{gateway.id}/{operation}")
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Required read failed; no fallback credentials allowed; operation refused."}
+    assert marker not in caplog.text
+    await session.refresh(gateway)
+    assert {c.name: getattr(gateway, c.name) for c in GatewayInstance.__table__.columns} == original_state

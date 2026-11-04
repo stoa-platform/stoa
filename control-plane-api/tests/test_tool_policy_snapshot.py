@@ -1,4 +1,4 @@
-"""Per-tenant policy snapshots built from permission rows and the version counter (CAB-2222 S2)."""
+"""Per-tenant policy snapshots built from permission rows and the version counter."""
 
 import base64
 import json

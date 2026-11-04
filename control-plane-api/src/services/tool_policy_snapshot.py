@@ -1,4 +1,4 @@
-"""Build and sign one tenant's tool-permission policy snapshot (CAB-2222 S2).
+"""Build and sign one tenant's tool-permission policy snapshot.
 
 A snapshot pairs the tenant's permission rows with the version the DB trigger
 assigned to them. Publication over HTTP is a separate concern.

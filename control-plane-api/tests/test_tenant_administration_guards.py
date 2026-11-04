@@ -78,7 +78,7 @@ async def access(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[SimpleNamespa
             return await super().get(key)
 
     monkeypatch.setattr(tenants, "tenant_cache", ObservedCache())
-    monkeypatch.setattr(tenants, "keycloak_service", SimpleNamespace(get_clients=external, create_realm=external))
+    monkeypatch.setattr(tenants, "keycloak_service", SimpleNamespace(get_clients=external))
     monkeypatch.setattr(tenants, "kafka_service", SimpleNamespace(publish=external, emit_audit_event=external))
     monkeypatch.setattr(tenants, "provision_tenant", external)
     monkeypatch.setattr(tenants, "deprovision_tenant", external)
@@ -155,22 +155,21 @@ async def test_reads_are_scoped_to_signed_identity(access: SimpleNamespace, role
 
 
 @pytest.mark.parametrize("role", ["tenant-admin", "devops", "viewer"])
-@pytest.mark.parametrize("operation", [*WRITES, ("POST", "/create", CREATE), ("POST", "/provision", CREATE)])
+@pytest.mark.parametrize("operation", [*WRITES, ("POST", "/create", CREATE)])
 async def test_existing_write_permissions_are_preserved(
     access: SimpleNamespace, role: str, operation: Operation
 ) -> None:
     access.user = identity(role)
     method, suffix, body = operation
-    path = ROOT if suffix == "/create" else f"{ROOT}{suffix}" if suffix == "/provision" else f"{ROOT}/tenant-a{suffix}"
+    path = ROOT if suffix == "/create" else f"{ROOT}/tenant-a{suffix}"
     response = await access.client.request(method, path, json=body)
     assert response.status_code == 403
     assert access.sql == access.effects == []
 
 
-@pytest.mark.parametrize("suffix", ["", "/provision"])
-async def test_admin_creation_requires_target(access: SimpleNamespace, suffix: str) -> None:
+async def test_admin_creation_requires_target(access: SimpleNamespace) -> None:
     access.user = identity("cpi-admin", None)
-    response = await access.client.post(f"{ROOT}{suffix}", json={**CREATE, "name": ""})
+    response = await access.client.post(ROOT, json={**CREATE, "name": ""})
     assert response.status_code == 403
     assert access.sql == access.effects == []
 
@@ -198,7 +197,6 @@ async def test_admin_explicit_targets_and_portable_import(access: SimpleNamespac
     assert response.json()["name"] == "Changed"
     assert (await access.client.get(f"{ROOT}/tenant-b")).json()["name"] == "tenant-b"
     assert (await access.client.post(ROOT, json=CREATE)).status_code == 200
-    assert (await access.client.post(f"{ROOT}/provision", json={**CREATE, "name": "provisioned"})).status_code == 201
     assert (await access.client.delete(f"{ROOT}/tenant-a")).status_code == 200
 
 
@@ -217,8 +215,7 @@ async def test_anonymous_requests_are_refused(access: SimpleNamespace) -> None:
     for method, suffix, body in READS + WRITES:
         response = await access.client.request(method, f"{ROOT}/tenant-a{suffix}", json=body)
         assert response.status_code == 401
-    for suffix in ("", "/provision"):
-        response = await access.client.post(f"{ROOT}{suffix}", json=CREATE)
-        assert response.status_code == 401
+    response = await access.client.post(ROOT, json=CREATE)
+    assert response.status_code == 401
     assert (await access.client.get(ROOT)).status_code == 401
     assert access.sql == access.effects == []

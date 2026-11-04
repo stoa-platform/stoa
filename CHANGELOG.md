@@ -145,7 +145,6 @@
 * **api:** add dynamic MCP tool generation from UAC contracts (CAB-605) ([#937](https://github.com/stoa-platform/stoa/issues/937)) ([ff3134f](https://github.com/stoa-platform/stoa/commit/ff3134fcadf10b77683357c88c15a9bbef8df6ea))
 * **api:** add LLM budget service + provider config API (CAB-1491) ([#1126](https://github.com/stoa-platform/stoa/issues/1126)) ([c81700e](https://github.com/stoa-platform/stoa/commit/c81700e0ac8e009a0099a660d7cf3daeebdc0fce))
 * **api:** add PII masking middleware + admin endpoints (CAB-430) ([#1024](https://github.com/stoa-platform/stoa/issues/1024)) ([be8063f](https://github.com/stoa-platform/stoa/commit/be8063fa0b14256049a8027e2d58b822e13c0633))
-* **api:** add POST /v1/tenants/provision endpoint (CAB-1547) ([#1204](https://github.com/stoa-platform/stoa/issues/1204)) ([1256162](https://github.com/stoa-platform/stoa/commit/12561629eb58c35f4646ef6a5cbffe970bb7299a))
 * **api:** add SCIM↔Gateway reconciliation service (CAB-1484) ([#1131](https://github.com/stoa-platform/stoa/issues/1131)) ([384e42a](https://github.com/stoa-platform/stoa/commit/384e42ac8c2e1cee8972331148cfe0d967f3eb6c))
 * **api:** add security posture scanner service (CAB-1461 P1) ([#1093](https://github.com/stoa-platform/stoa/issues/1093)) ([cd769e0](https://github.com/stoa-platform/stoa/commit/cd769e0b0dfcf98c4e81ecb34e68a99b449c0b02))
 * **api:** add self-service signup service (CAB-1541) ([#1190](https://github.com/stoa-platform/stoa/issues/1190)) ([2827a69](https://github.com/stoa-platform/stoa/commit/2827a695a2b8258b0959368554a17e3b1bb84204))

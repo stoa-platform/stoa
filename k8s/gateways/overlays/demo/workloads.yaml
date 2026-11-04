@@ -38,8 +38,8 @@ spec:
           env: &adminEnv
             - {name: ADMIN_URL, value: "http://localhost:8080"}
             - {name: STOA_ADMIN_API_TOKEN, valueFrom: {secretKeyRef: {name: demo-admin, key: token}}}
-          resources: &pythonResources {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 64Mi}}
-          readinessProbe: {exec: {command: [python, -B, /runtime/bootstrap.py, --check]}, periodSeconds: 5, timeoutSeconds: 4}
+          resources: &pythonResources {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 250m, memory: 64Mi}}
+          readinessProbe: {exec: {command: [python, -B, /runtime/bootstrap.py, --check]}, periodSeconds: 15, timeoutSeconds: 10, failureThreshold: 3}
           volumeMounts: &runtimeMounts [{name: runtime, mountPath: /runtime, readOnly: true}]
       volumes:
         - &runtimeVolume {name: runtime, configMap: {name: demo-runtime}}

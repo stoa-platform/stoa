@@ -40,6 +40,11 @@ SBOM artifacts are retained for 90 days and downloadable from the GitHub Actions
 - Python dependencies: `pip-audit`
 - Rust dependencies: `cargo-audit`
 - JavaScript dependencies: `npm audit`
+- Dated dependency reviews are recorded in `scripts/ci/tracked-advisories.json`.
+- The Monday Advisory Tracking job checks public advisory and release metadata.
+- Fixes, withdrawals and overdue reviews request review through one deduplicated issue.
+- The watcher is non-blocking; disabled runs and feed errors appear in its summary.
+- Feed errors in three consecutive weekly summaries require review.
 
 ### Container Security
 - Container images are scanned with Trivy before deployment

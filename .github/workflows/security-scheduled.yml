@@ -7,8 +7,6 @@ on:
 
 permissions:
   contents: read
-  security-events: write
-  issues: write
 
 jobs:
   advisory-fix-watch:
@@ -60,6 +58,9 @@ jobs:
     if: vars.DISABLE_L2_SCHEDULED != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write  # upload-sarif
     strategy:
       matrix:
         # Anonymous GHCR GETs verified 2026-11-01: header/body SHA-256 and digest GET agree.
@@ -116,6 +117,9 @@ jobs:
     if: vars.DISABLE_L2_SCHEDULED != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: write  # github-script creates an issue on findings
     steps:
       - uses: actions/checkout@v6
         with:

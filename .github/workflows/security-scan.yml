@@ -22,8 +22,6 @@ on:
 
 permissions:
   contents: read
-  security-events: write
-  actions: read
 
 concurrency:
   group: security-scan-${{ github.event.pull_request.number || github.ref }}
@@ -387,6 +385,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30  # Rust build (~10 min) + Trivy scan
     continue-on-error: true  # Base image vulns — tracked, not blocking
+    permissions:
+      contents: read
+      security-events: write  # upload-sarif
+      actions: read  # upload-sarif reads workflow run metadata
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.scan-changes.outputs.container-matrix) }}

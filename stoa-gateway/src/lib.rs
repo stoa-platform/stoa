@@ -998,6 +998,43 @@ mod tests {
         assert_eq!(mcp.status(), StatusCode::NOT_FOUND);
     }
 
+    #[tokio::test]
+    async fn sidecar_route_surface_preserves_operational_routes_and_method_gates() {
+        let app = sidecar_app();
+        for (method, path, expected) in [
+            ("GET", "/health", StatusCode::OK),
+            ("HEAD", "/health", StatusCode::OK),
+            ("GET", "/health/live", StatusCode::OK),
+            ("GET", "/ready", StatusCode::SERVICE_UNAVAILABLE),
+            ("GET", "/health/ready", StatusCode::SERVICE_UNAVAILABLE),
+            ("GET", "/metrics", StatusCode::OK),
+            ("GET", "/admin/health", StatusCode::SERVICE_UNAVAILABLE),
+            ("GET", "/authz", StatusCode::METHOD_NOT_ALLOWED),
+            ("POST", "/health", StatusCode::METHOD_NOT_ALLOWED),
+            ("POST", "/authz", StatusCode::UNSUPPORTED_MEDIA_TYPE),
+            ("GET", "/mcp", StatusCode::NOT_FOUND),
+            ("POST", "/mcp", StatusCode::NOT_FOUND),
+            ("POST", "/mcp/tools/call", StatusCode::NOT_FOUND),
+            ("GET", "/mcp/sse", StatusCode::NOT_FOUND),
+            ("GET", "/oauth/authorize", StatusCode::NOT_FOUND),
+            ("GET", "/v1/messages", StatusCode::NOT_FOUND),
+            ("GET", "/unknown", StatusCode::NOT_FOUND),
+        ] {
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method(method)
+                        .uri(path)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), expected, "{method} {path}");
+        }
+    }
+
     async fn sidecar_authz(app: Router, body: serde_json::Value) -> axum::response::Response {
         app.oneshot(
             Request::builder()

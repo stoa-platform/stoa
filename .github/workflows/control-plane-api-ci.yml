@@ -32,15 +32,12 @@ on:
           - dev
           - prod
 
+permissions:
+  contents: read
+
 concurrency:
   group: control-plane-api-ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
-permissions:
-  contents: read
-  id-token: write
-  checks: write
-  attestations: write
 
 jobs:
   # === Git provider config gate (CAB-1889 CP-2) ===

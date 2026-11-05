@@ -12,8 +12,9 @@ for a step-by-step webMethods deployment see
 
 ## What Sidecar Mode Is in the Code
 
-- Same `stoa-gateway` binary, started with `STOA_GATEWAY_MODE=sidecar`
-  (default port `8081`).
+- Same `stoa-gateway` binary, started with `STOA_GATEWAY_MODE=sidecar`. It
+  listens on `STOA_PORT` (default `8080` in every mode); the Helm chart sets
+  `8081`.
 - Routes: `POST /authz`, plus the routes common to every mode (`/health`,
   `/health/live`, `/health/ready`, `/ready`, `/metrics`, `/admin/*`). No `/mcp`
   route is mounted.
@@ -98,9 +99,13 @@ What exists to support it:
 
 - The Helm chart renders the two-container pod and refuses to render
   `stoaSidecar.enabled=true` unless `stoaSidecar.mainGateway.enabled=true`.
-- The chart binds STOA to `127.0.0.1:8081`. The gateway Service exposes the
-  gateway port. A separate metrics Service (`*-stoa-sidecar`, used by the
-  ServiceMonitor) targets port `8081`, the same listener that serves `/authz`.
+- The chart sets `STOA_PORT=8081` and `STOA_HOST=127.0.0.1`, but the HTTP
+  listener does not use `STOA_HOST`: it always binds `0.0.0.0:<STOA_PORT>`, so
+  `/authz` is reachable on the pod IP, not only from inside the pod. The
+  gateway Service exposes the gateway port. When
+  `stoaSidecar.serviceMonitor.enabled=true`, a separate ClusterIP Service
+  (`*-stoa-sidecar`, used by the ServiceMonitor) targets port `8081`, the same
+  listener that serves `/authz`.
 - The gateway receives `EXT_AUTHZ_URL=http://localhost:8081/authz`.
 
 What the host must provide: a plugin, policy callout or script that builds the
@@ -181,10 +186,15 @@ These are stated from the code on `main`, not from the roadmap.
 2. **Identity comes only from the JSON body.** `STOA_USER_INFO_HEADER`,
    `STOA_TENANT_ID_HEADER` and `STOA_UPSTREAM_TYPE` are read into settings but
    not used by `/authz`.
-3. **No token validation on `/authz`.** Any caller that can reach the port can
-   assert any identity. Keep the listener on loopback. `/metrics` and `/authz`
-   share one port, so making `/metrics` reachable from outside the pod also
-   exposes `/authz`.
+3. **No token validation on `/authz`, and no loopback-only listener.** Any
+   caller that can reach the port can assert any identity. The HTTP listener
+   binds `0.0.0.0:<STOA_PORT>`; `STOA_HOST` is read but not used for binding,
+   so it cannot restrict `/authz` to loopback. `/metrics` and `/authz` share
+   one port, so the `*-stoa-sidecar` metrics Service also exposes `/authz`
+   inside the cluster. The chart ships no NetworkPolicy for the sidecar, and
+   `STOA_IP_BLOCKLIST` is a blocklist, not an allowlist. Isolation must come
+   from the network, for example a NetworkPolicy that admits only the metrics
+   scraper on port `8081`.
 4. **Scope enforcement is not wired in sidecar mode.** The router never sets
    required scopes on the sidecar engine; only the gRPC listener uses
    `STOA_EXT_AUTHZ_REQUIRED_SCOPES`. Where the engine does check scopes, one

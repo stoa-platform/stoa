@@ -60,6 +60,7 @@ Operational runbooks organized by severity:
 
 - **[IBM webMethods Gateway API](./ibm/webmethods-gateway-api.md)** - Gateway integration
 - **[WebMethods + STOA Sidecar](./integrations/webmethods-sidecar-integration.md)** - Policy enforcement via sidecar
+- **[Sidecar Usage Patterns](./integrations/sidecar-usage-patterns.md)** - Companion usage next to gateways, applications and meshes, with current limits
 
 ## Getting Help
 

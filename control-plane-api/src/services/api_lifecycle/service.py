@@ -52,6 +52,8 @@ from .ports import (
     ValidateApiDraftCommand,
 )
 
+PRODUCTION_GIT_GUARD_CODE = "production_requires_git_backed_desired_state"
+
 
 class ApiLifecycleService:
     """Coordinates the lifecycle of one catalog API across STOA control-plane state."""
@@ -330,6 +332,17 @@ class ApiLifecycleService:
                 status_code=failure_status,
             )
             raise
+        guard_message = _production_git_guard_violation(api, gateway)
+        if guard_message:
+            await self._audit_deploy_failure(
+                api,
+                actor,
+                environment=environment,
+                code=PRODUCTION_GIT_GUARD_CODE,
+                message=guard_message,
+                status_code=409,
+            )
+            raise ApiLifecycleTransitionError(guard_message)
         desired_state = {
             **GatewayDeploymentService.build_desired_state(api),
             "target_environment": environment,
@@ -598,6 +611,22 @@ class ApiLifecycleService:
             source_environment=source_environment,
             gateway_role="target",
         )
+        # Refuse before _upsert_promotion: the router commits on refusal, so a later
+        # check would persist a Promotion row (or revive a stale one with force=true).
+        guard_message = _production_git_guard_violation(api, target_gateway)
+        if guard_message:
+            await self._audit_promotion_failure(
+                api,
+                actor,
+                source_environment=source_environment,
+                target_environment=target_environment,
+                code=PRODUCTION_GIT_GUARD_CODE,
+                message=guard_message,
+                status_code=409,
+                source_gateway_instance_id=source_gateway.id,
+                target_gateway_instance_id=target_gateway.id,
+            )
+            raise ApiLifecycleTransitionError(guard_message)
 
         source_deployment = await self.repository.get_gateway_deployment(api.id, source_gateway.id)
         if not source_deployment:
@@ -869,10 +898,10 @@ class ApiLifecycleService:
         force: bool,
         promotion_id: UUID | None = None,
     ) -> tuple[GatewayDeployment, str]:
-        try:
-            GatewayDeploymentService.require_git_backed_desired_state(api, gateway)
-        except PermissionError as exc:
-            raise ApiLifecycleTransitionError(str(exc)) from exc
+        # Backstop only: public actions run the audited production guard before this point.
+        guard_message = _production_git_guard_violation(api, gateway)
+        if guard_message:
+            raise ApiLifecycleTransitionError(guard_message)
         now = datetime.now(UTC)
         existing = await self.repository.get_gateway_deployment(api.id, gateway.id)
         if existing:
@@ -1281,6 +1310,18 @@ def _normalize_deployment_environment(value: str) -> str:
 
 def _wire_value(value: object) -> str:
     return str(getattr(value, "value", value))
+
+
+def _production_git_guard_violation(api: APICatalog, gateway: GatewayTarget) -> str | None:
+    """Return the refusal message when a production target lacks a Git-backed desired state."""
+    # Production targets require a Git-backed desired state (runtime reconciliation
+    # contract, ADF-G2). Lifecycle drafts without a catalog commit stay db_shortcut
+    # and are only tolerated in dev/staging.
+    try:
+        GatewayDeploymentService.require_git_backed_desired_state(api, gateway)
+    except PermissionError as exc:
+        return str(exc)
+    return None
 
 
 def _deployment_synced_to_desired_generation(deployment: GatewayDeployment) -> bool:

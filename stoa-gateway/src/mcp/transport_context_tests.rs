@@ -2377,7 +2377,7 @@ async fn a2a_policy_uses_required_action_and_scopes() {
 
 #[tokio::test]
 async fn a2a_policy_rejects_foreign_tool_tenant() {
-    a2a_policy_probe(Action::Read, Some("tenant-b"), false, StatusCode::FORBIDDEN).await;
+    a2a_policy_probe(Action::Read, Some("tenant-b"), false, StatusCode::NOT_FOUND).await;
 }
 
 #[tokio::test]
@@ -2539,10 +2539,108 @@ async fn call_tool_everywhere(
             "JSON-RPC must follow REST"
         );
     } else {
-        assert_denied(&rpc_response, "JSON-RPC must follow the REST decision");
+        if rest_status == StatusCode::NOT_FOUND {
+            assert_eq!(rpc_response["error"]["code"], -32601);
+            assert!(rpc_response.get("result").is_none());
+        } else {
+            assert_denied(&rpc_response, "JSON-RPC must follow the REST decision");
+        }
         assert_denied(&a2a_response, "A2A must follow the REST decision");
     }
     (rest_status, a2a_status)
+}
+
+// Discovery currently projects tenant ownership, not CP execution permissions.
+async fn assert_permission_catalog(fixture: &Fixture, token: &str, name: &str, listed: bool) {
+    let (status, rest) = fixture
+        .post("/mcp/tools/list", Some(token), json!({}))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, rpc) = fixture
+        .post(
+            "/mcp",
+            Some(token),
+            json!({
+                "jsonrpc": "2.0", "id": 8, "method": "tools/list"
+            }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    for tools in [&rest["tools"], &rpc["result"]["tools"]] {
+        assert_eq!(
+            tools
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|tool| tool["name"] == name),
+            listed,
+            "catalog visibility for {name}: {tools}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn regression_permission_same_name_across_servers_denies_in_either_order() {
+    for reverse in [false, true] {
+        let fixture = Fixture::new(|config| config.a2a_enabled = true).await;
+        let mut items = vec![
+            json!({"mcp_server_id": "server-a", "tool_name": "echo_tool", "allowed": true}),
+            json!({"mcp_server_id": "server-b", "tool_name": "echo_tool", "allowed": false}),
+        ];
+        if reverse {
+            items.reverse();
+        }
+        override_permissions(&fixture, items).await;
+        let token = fixture.token(json!({}));
+        assert_permission_catalog(&fixture, &token, "echo_tool", true).await;
+        assert_eq!(
+            call_tool_everywhere(&fixture, &token, "echo_tool").await,
+            (StatusCode::FORBIDDEN, StatusCode::FORBIDDEN)
+        );
+    }
+}
+
+#[tokio::test]
+async fn regression_permission_case_variants_do_not_inherit_an_allow() {
+    let fixture = Fixture::new(|config| config.a2a_enabled = true).await;
+    override_permissions(
+        &fixture,
+        vec![
+            permission("echo_tool", true),
+            permission("Echo_Tool", false),
+        ],
+    )
+    .await;
+    for name in ["Echo_Tool", "ECHO_TOOL"] {
+        let tool = DynamicTool::new(
+            name,
+            "Case probe",
+            format!("{}/case-probe", fixture.server.uri()),
+            "GET",
+            empty_schema(),
+            "tenant-a",
+        );
+        fixture.state.tool_registry.register(Arc::new(tool));
+    }
+    let token = fixture.token(json!({}));
+    for name in ["Echo_Tool", "ECHO_TOOL"] {
+        assert_permission_catalog(&fixture, &token, name, true).await;
+        assert_eq!(
+            call_tool_everywhere(&fixture, &token, name).await,
+            (StatusCode::FORBIDDEN, StatusCode::FORBIDDEN)
+        );
+    }
+    assert_eq!(
+        call_tool_everywhere(&fixture, &token, "echo_tool").await,
+        (StatusCode::OK, StatusCode::OK)
+    );
+    assert!(fixture
+        .server
+        .received_requests()
+        .await
+        .unwrap()
+        .iter()
+        .all(|request| request.url.path() != "/case-probe"));
 }
 
 #[tokio::test]
@@ -2559,6 +2657,8 @@ async fn regression_alias_allow_does_not_widen_canonical_tool_access() {
         items.extend(canonical);
         override_permissions(&fixture, items).await;
         let token = fixture.token(json!({}));
+        assert_permission_catalog(&fixture, &token, "echo_tool", true).await;
+        assert_permission_catalog(&fixture, &token, "legacy_echo", false).await;
         assert_eq!(
             call_tool_everywhere(&fixture, &token, "legacy_echo").await,
             (StatusCode::FORBIDDEN, StatusCode::FORBIDDEN)
@@ -2623,6 +2723,18 @@ async fn regression_fallback_targets_require_tenant_tool_permission() {
             .tool_registry
             .register_alias("fallback_alias", "fallback_tool");
         let token = fixture.token(json!({}));
+        assert_permission_catalog(&fixture, &token, "fallback_tool", true).await;
+        assert_permission_catalog(&fixture, &token, "fallback_alias", false).await;
+        if !allowed {
+            let (status, _) = fixture
+                .post(
+                    "/mcp/tools/call",
+                    Some(&token),
+                    json!({"name": "fallback_tool", "arguments": {}}),
+                )
+                .await;
+            assert_eq!(status, StatusCode::FORBIDDEN);
+        }
         let call = json!({"name": "echo_tool", "arguments": {}});
         let (status, response) = fixture.post("/mcp/tools/call", Some(&token), call).await;
         let requests = fixture.server.received_requests().await.unwrap();
@@ -2848,4 +2960,172 @@ async fn trust_gate_denies_before_catalogue_refresh_and_federation_lookup() {
     fixture.state.tool_permissions = plain;
     assert_eq!(tool_call(&fixture, &token, "missing").await, 404);
     assert!(cp_requests(&fixture).await > 1);
+}
+
+#[tokio::test]
+async fn regression_primary_alias_requires_both_allowlist_names() {
+    for federation in [false, true] {
+        for names in [
+            vec![],
+            vec!["legacy_echo"],
+            vec!["echo_tool"],
+            vec!["legacy_echo", "echo_tool"],
+        ] {
+            let fixture = Fixture::new(|config| config.federation_enabled = federation).await;
+            fixture
+                .state
+                .tool_registry
+                .register_alias("legacy_echo", "echo_tool");
+            override_permissions(
+                &fixture,
+                vec![
+                    permission("legacy_echo", true),
+                    permission("echo_tool", true),
+                ],
+            )
+            .await;
+            if federation {
+                let tools: Vec<_> = names
+                    .iter()
+                    .map(|name| json!({"tool_name": name}))
+                    .collect();
+                Mock::given(method("GET"))
+                    .and(path(
+                        "/v1/tenants/tenant-a/federation/accounts/master1/sub-accounts/sub1",
+                    ))
+                    .respond_with(ResponseTemplate::new(200).set_body_json(json!({"tools": tools})))
+                    .mount(&fixture.server)
+                    .await;
+            } else {
+                fixture.state.guardrail_policy_store.upsert(
+                    "tenant-a".into(),
+                    TenantGuardrailPolicy {
+                        allowed_tools: Some(names.iter().map(|name| (*name).into()).collect()),
+                        ..Default::default()
+                    },
+                );
+            }
+            let token = fixture.token(if federation {
+                json!({"sub_account_id": "sub1", "master_account_id": "master1"})
+            } else {
+                json!({})
+            });
+            let expected = if names.len() == 2 {
+                StatusCode::OK
+            } else {
+                StatusCode::FORBIDDEN
+            };
+            let (status, _) = fixture
+                .post(
+                    "/mcp/tools/call",
+                    Some(&token),
+                    json!({"name": "legacy_echo", "arguments": {}}),
+                )
+                .await;
+            assert_eq!(status, expected, "federation={federation}, names={names:?}");
+            let (_, response) = fixture.post("/mcp", Some(&token), json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "legacy_echo", "arguments": {}}})).await;
+            if expected == StatusCode::OK {
+                assert!(response.get("result").is_some());
+            } else {
+                assert_denied(&response, "Both allowlist names are required");
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn regression_a2a_dynamic_tool_lookup_is_tenant_scoped() {
+    for owner in ["tenant-a", "tenant-b"] {
+        for name in ["echo_tool", "legacy_echo"] {
+            let fixture = Fixture::new(|config| config.a2a_enabled = true).await;
+            let tool = DynamicTool::new(
+                "echo_tool",
+                "probe",
+                format!("{}/dynamic-probe", fixture.server.uri()),
+                "GET",
+                empty_schema(),
+                owner,
+            );
+            fixture.state.tool_registry.register(Arc::new(tool));
+            fixture
+                .state
+                .tool_registry
+                .register_alias("legacy_echo", "echo_tool");
+            override_permissions(
+                &fixture,
+                vec![
+                    permission("echo_tool", true),
+                    permission("legacy_echo", true),
+                ],
+            )
+            .await;
+            Mock::given(method("GET"))
+                .and(path("/dynamic-probe"))
+                .respond_with(ResponseTemplate::new(200).set_body_string("authorized"))
+                .mount(&fixture.server)
+                .await;
+            let token = fixture.token(json!({}));
+            let (status, response) = a2a_probe_request(&fixture, Some(&token), name, false).await;
+            let own = owner == "tenant-a";
+            assert_eq!(
+                status,
+                if own {
+                    StatusCode::OK
+                } else {
+                    StatusCode::NOT_FOUND
+                }
+            );
+            if own {
+                assert_eq!(response["result"]["status"]["state"], "completed");
+            } else {
+                assert_eq!(response["error"]["message"], "Tool not found");
+                assert!(fixture
+                    .state
+                    .a2a_registry
+                    .as_ref()
+                    .unwrap()
+                    .get_task("policy-probe")
+                    .unwrap()
+                    .is_none());
+            }
+            let requests = fixture.server.received_requests().await.unwrap();
+            assert_eq!(
+                requests
+                    .iter()
+                    .filter(|r| r.url.path() == "/dynamic-probe")
+                    .count(),
+                usize::from(own)
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn regression_unknown_alias_never_executes() {
+    for dangling in [false, true] {
+        let fixture = Fixture::new(|config| config.a2a_enabled = true).await;
+        if dangling {
+            fixture
+                .state
+                .tool_registry
+                .register_alias("unknown_alias", "missing_tool");
+        }
+        override_permissions(
+            &fixture,
+            vec![
+                permission("unknown_alias", true),
+                permission("echo_tool", true),
+            ],
+        )
+        .await;
+        let token = fixture.token(json!({}));
+        assert_eq!(
+            call_tool_everywhere(&fixture, &token, "unknown_alias").await,
+            (StatusCode::NOT_FOUND, StatusCode::NOT_FOUND)
+        );
+        assert_eq!(
+            call_tool_everywhere(&fixture, &token, "echo_tool").await,
+            (StatusCode::OK, StatusCode::OK)
+        );
+    }
 }

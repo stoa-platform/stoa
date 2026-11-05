@@ -1,4 +1,4 @@
-FROM python:3.11-slim-bookworm AS base
+FROM python:3.11-slim-bookworm@sha256:94a8fee35252d06ab75856f15f12c7bae67b10e8a6da93c7fded82b2610926cd AS base
 
 # Non-root user
 RUN groupadd -g 12345 bench && useradd -u 12345 -g bench -s /bin/sh bench

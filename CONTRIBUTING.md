@@ -96,9 +96,74 @@ Issues that don't meet the Marchemalo Standard will be labeled `needs-triage` an
 3. Add tests if applicable
 4. Ensure the test suite passes
 5. Update documentation as needed
-6. Submit your pull request!
+6. Add a line under **Unreleased** in [CHANGELOG.md](CHANGELOG.md) if the change is visible to users
+7. Submit your pull request!
+
+## AI Usage Policy
+
+Contributors may use AI tools to explore ideas, explain code, draft code or
+documentation, propose tests, and assist with debugging and review. The same
+contribution standards apply regardless of the tool used.
+
+- **You remain responsible.** Understand every submitted change and verify its
+  correctness, security, licensing, and suitability for the project. AI output
+  is a draft, not evidence that a change is correct.
+- **Human verification is required before merge.** A human must inspect the final
+  diff, check generated claims and references, and run or review the relevant
+  tests and checks. Automated reviews and passing CI do not replace this review.
+- **Keep prompts free of secrets and private data.** Never send credentials,
+  tokens, private keys, personal data, customer data, or confidential source code
+  or documents to an AI tool, including through attachments or automatic context
+  collection. Use public material or sanitized, synthetic examples instead.
+- **Make AI involvement explicit.** Follow the commit trailer convention below
+  for AI-produced content and completed human verification.
+
+### AI and Human Verification Trailers
+
+**Traceability start marker: 2026-11-05.** This convention applies prospectively
+to new contributions from this date. Do not rewrite past history, backfill
+trailers on old commits, or infer AI use or human verification for older work.
+
+Use these exact trailer names in the final paragraph of the commit message:
+
+```text
+AI-Generated-By: <tool>
+Human-Verified-By: <name>
+```
+
+Keep them in the same trailer block as `Signed-off-by`, with no blank line in
+between, so that `git interpret-trailers` sees both.
+
+- Add `AI-Generated-By` when an AI tool produced any submitted content, including
+  code, tests, or documentation. Replace `<tool>` with the actual tool name;
+  repeat the trailer if multiple tools produced content.
+- Add `Human-Verified-By` only after the named human has actually verified the
+  final change. Replace `<name>` with that person's name, with their agreement.
+  An AI agent must never claim to be the human verifier or invent an attestation.
+- If human review is pending, omit `Human-Verified-By` and state that review is
+  pending in the pull request. Record the completed verification with this
+  trailer in the final merge commit message before merge, without rewriting
+  earlier commits. Preserve applicable AI trailers in squash merge messages.
+- These trailers complement the required DCO `Signed-off-by` trailer and commit
+  signature; they do not replace either or establish human review by themselves.
+
+An optional [commit message template](.gitmessage) provides commented prompts.
+From the repository root, enable it in the local repository configuration:
+
+```bash
+git config --local commit.template "$(pwd)/.gitmessage"
+git commit -S -s
+```
+
+Edit the message in your editor: write a Conventional Commit subject and body,
+then copy and fill in only the applicable trailers, removing the leading `#`.
+Do not submit placeholder values. The template leaves attestations commented
+out so that it cannot assert a review that has not happened. `-S` signs the
+commit and `-s` adds DCO sign-off; `git commit -m` bypasses the template.
 
 ## Development Setup
+
+New to the project? The [contributor getting-started guide](docs/contributing/getting-started.md) walks through fork, environment, local run, tests and the pull request checks, and links back here for the conventions.
 
 ### Prerequisites
 
@@ -252,6 +317,8 @@ docs: update API reference for v0.2
 
 > Commits are validated automatically by [commitlint](https://commitlint.js.org/) via a Husky git hook. Invalid commit messages will be rejected locally.
 
+> For AI-produced content and completed human verification, add the footers described in [AI and Human Verification Trailers](#ai-and-human-verification-trailers).
+
 ### Developer Certificate of Origin (DCO)
 
 All contributions must be signed off to certify you have the right to submit the code under the project's open source license.
@@ -262,6 +329,23 @@ git commit -s -m "feat(api): add new endpoint"
 ```
 
 This adds a `Signed-off-by: Your Name <email>` line to your commit. See [CLA.md](CLA.md) for detailed instructions on signing commits, configuring automatic sign-off, and fixing unsigned commits.
+
+#### The DCO check and squash merges
+
+No pull request check verifies the `Signed-off-by:` trailer today. A `DCO Check` GitHub Actions workflow enforced it from January to March 2026; it was removed on 2026-03-05 (#1467) as incompatible with the squash-merge strategy described below. The required `Verify Signed Commits` check verifies GPG signatures only. Sign-off remains mandatory and is verified during review.
+
+Pull requests are squash-merged into `main`. GitHub rewrites the author of the squash commit to the pull request author's GitHub account identity (for example `12345+login@users.noreply.github.com` when the address is private), while the `Signed-off-by:` trailer copied from the branch still carries the local git identity. Common DCO checkers (such as the DCO GitHub App) require the trailer to match the commit author or committer, so a squash-merged commit is not DCO-valid on its own. This is why a sign-off check that inspects every commit cannot coexist with squash merges unless the commits are re-signed.
+
+The mismatch matters when such a commit re-enters a pull request, for example a backport that cherry-picks it or a pull request that merges `main` into a release branch. Nothing is wrong with your own commits: re-sign the commits on your branch so the trailer matches the identity that commits them, then push.
+
+```bash
+git commit --amend -s --no-edit      # last commit only
+git rebase --signoff origin/main     # every commit on the branch
+git cherry-pick -s <sha>             # when backporting a squash-merged commit
+git push --force-with-lease
+```
+
+Re-signing on the branch is the expected fix; do not open a new pull request for it. Committing with the name and email GitHub puts on your web commits (your profile name and your primary or `noreply` address) keeps the trailer and the rewritten author identical and avoids the mismatch altogether.
 
 ### Code Style
 
@@ -329,6 +413,7 @@ make help
 - Write in English (see [Language](#language)), using clear, concise wording
 - Include code examples where helpful
 - Keep the README up to date
+- Record user-visible changes under **Unreleased** in [CHANGELOG.md](CHANGELOG.md); releases are cut per milestone as described in [RELEASING.md](RELEASING.md)
 
 ## Community
 

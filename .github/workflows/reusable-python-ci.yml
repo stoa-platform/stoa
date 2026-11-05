@@ -52,6 +52,9 @@ on:
         description: 'Test job result (success/failure)'
         value: ${{ inputs.test-shards == 1 && jobs.test.outputs.result || jobs.coverage.outputs.result }}
 
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Lint and Test (${{ inputs.component }})${{ inputs.test-shards == 2 && format(' ({0}/2)', matrix.shard) || '' }}

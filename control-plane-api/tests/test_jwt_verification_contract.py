@@ -210,7 +210,9 @@ def test_dpop_signed_proofs(alg: str, signing_key: Any) -> None:
     elif alg == "EdDSA":
         key = ed25519.Ed25519PrivateKey.generate()
     result = _dpop(key, alg)
-    assert result.valid, result.error
+    assert result.valid is (alg in {"RS256", "ES256"})
+    if not result.valid:
+        assert result.error == "DPoP proof algorithm is not supported"
     assert result.mode == "dpop"
 
 

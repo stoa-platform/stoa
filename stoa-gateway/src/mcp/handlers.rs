@@ -119,7 +119,9 @@ pub(crate) async fn request_tool_context(
     // Resolve aliases before deciding so the canonical tool is what gets
     // authorized. An unknown name is still checked under the requested name
     // first, so the catalogue is not disclosed to callers without permission.
-    let tool = state.tool_registry.get(tool_name);
+    let tool = state
+        .tool_registry
+        .get_for_tenant(tool_name, &auth.tenant_id);
     let canonical_name = tool.as_ref().map_or(tool_name, |tool| tool.name());
     check_tool_permission(state, &auth.tenant_id, tool_name, canonical_name)
         .await
@@ -762,7 +764,7 @@ async fn mcp_tools_call_inner(
             .get_allowed_tools(sub_id, &auth.tenant_id, master_id)
             .await;
         if let Some(ref tools) = allowed_tools {
-            if !tools.contains(&request.name) {
+            if !tools.contains(&request.name) || !tools.contains(tool.name()) {
                 warn!(
                     tool = %request.name,
                     sub_account_id = %sub_id,
@@ -861,10 +863,12 @@ async fn mcp_tools_call_inner(
     );
 
     // CAB-1337 Phase 3: Tool allowlist check (per-tenant GuardrailPolicy)
-    if !state
-        .guardrail_policy_store
-        .is_tool_allowed(&auth.tenant_id, &request.name)
-    {
+    // Both the requested alias and the resolved tool must be permitted.
+    if [request.name.as_str(), tool.name()].iter().any(|name| {
+        !state
+            .guardrail_policy_store
+            .is_tool_allowed(&auth.tenant_id, name)
+    }) {
         warn!(
             tenant = %auth.tenant_id,
             tool = %request.name,

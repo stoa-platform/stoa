@@ -23,6 +23,7 @@ def _resolve(
     var_domain: str = "",
     *,
     with_summary: bool = False,
+    prod_domain: str = "",
 ):
     out = tmp_path / "out"
     out.write_text("")
@@ -31,6 +32,7 @@ def _resolve(
         "SMOKE_ENV": env,
         "SMOKE_INPUT_DOMAIN": input_domain,
         "SMOKE_VAR_DOMAIN": var_domain,
+        "SMOKE_PROD_DOMAIN": prod_domain,
         "GITHUB_OUTPUT": str(out),
     }
     if with_summary:
@@ -158,3 +160,59 @@ def test_no_hard_coded_host_outside_derived_default():
     script_hits = [l for l in SCRIPT.read_text().splitlines() if PROD in l and not l.lstrip().startswith("#")]
     assert script_hits == [f'PROD_DEFAULT_DOMAIN="{PROD}"']
     assert "continue-on-error" not in wf
+
+
+@pytest.mark.parametrize("domain", ["prod.example.com", "dev.prod.example.com", "preview.dev.prod.example.com"])
+@pytest.mark.parametrize("source", ["input_domain", "var_domain"])
+def test_dev_rejects_configured_prod_domain_and_subdomains(tmp_path, domain, source):
+    proc, out = _resolve(
+        tmp_path, "dev", prod_domain="prod.example.com", with_summary=True, **{source: domain}
+    )
+    assert proc.returncode != 0
+    assert "::error::" in proc.stdout
+    assert out == {}
+    assert domain not in proc.stdout + proc.stderr + (tmp_path / "summary").read_text()
+
+
+@pytest.mark.parametrize("prod_domain", ["PROD.EXAMPLE.COM", "prod.example.com.", " PROD.EXAMPLE.COM. "])
+@pytest.mark.parametrize("domain", ["prod.example.com", "PROD.EXAMPLE.COM", " prod.example.com. "])
+@pytest.mark.parametrize("prefix", ["", "preview."])
+@pytest.mark.parametrize("source", ["input_domain", "var_domain"])
+def test_dev_rejects_equivalent_configured_prod_domains(tmp_path, prod_domain, domain, prefix, source):
+    candidate = f"{prefix}{domain.strip()}"
+    proc, out = _resolve(
+        tmp_path, "dev", prod_domain=prod_domain, with_summary=True, **{source: f" {candidate} "}
+    )
+    assert proc.returncode != 0
+    assert "refusing to probe prod" in proc.stdout
+    assert out == {}
+    assert "Smoke targets:" not in proc.stdout
+    assert (tmp_path / "summary").read_text() == ""
+
+
+@pytest.mark.parametrize("source", ["input_domain", "var_domain"])
+def test_dev_accepts_canonicalized_distinct_domain(tmp_path, source):
+    proc, out = _resolve(
+        tmp_path, "dev", prod_domain=" PROD.EXAMPLE.COM. ", **{source: " DEV.EXAMPLE.COM. "}
+    )
+    assert proc.returncode == 0
+    assert out == {"domain": "dev.example.com", "skip": "false"}
+
+
+@pytest.mark.parametrize("domain", [PROD, f"dev.{PROD}", f"preview.dev.{PROD}"])
+def test_configured_prod_does_not_replace_default_guard(tmp_path, domain):
+    proc, out = _resolve(tmp_path, "dev", input_domain=domain, prod_domain="prod.example.com")
+    assert proc.returncode != 0
+    assert out == {}
+
+
+@pytest.mark.parametrize("domain", ["dev.example.com", "notprod.example.com", "prod.example.com.example.org"])
+def test_configured_prod_guard_allows_distinct_dev_domains(tmp_path, domain):
+    proc, out = _resolve(tmp_path, "dev", var_domain=domain, prod_domain="prod.example.com")
+    assert proc.returncode == 0
+    assert out == {"domain": domain, "skip": "false"}
+
+
+def test_workflow_passes_configured_prod_domain_to_resolver():
+    job = yaml.safe_load((WF / "reusable-health-smoke.yml").read_text())["jobs"]["health-check"]
+    assert job["env"]["SMOKE_PROD_DOMAIN"] == "${{ vars.SMOKE_BASE_DOMAIN_PROD }}"

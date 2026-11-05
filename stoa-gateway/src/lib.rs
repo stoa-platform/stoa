@@ -998,6 +998,92 @@ mod tests {
         assert_eq!(mcp.status(), StatusCode::NOT_FOUND);
     }
 
+    async fn sidecar_authz(app: Router, body: serde_json::Value) -> axum::response::Response {
+        app.oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/authz")
+                .header("content-type", "application/json")
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn sidecar_router_authorization_decisions() {
+        // The upstream gateway supplies pre-validated identity; no JWT service is used here.
+        let cases = [
+            (
+                serde_json::json!({"id": "proof-user"}),
+                serde_json::json!("proof-tenant"),
+                StatusCode::OK,
+            ),
+            (
+                serde_json::json!({"id": "proof-user"}),
+                serde_json::Value::Null,
+                StatusCode::FORBIDDEN,
+            ),
+            (
+                serde_json::Value::Null,
+                serde_json::json!("proof-tenant"),
+                StatusCode::UNAUTHORIZED,
+            ),
+        ];
+        let app = sidecar_app();
+        for (user, tenant_id, expected) in cases {
+            let response = sidecar_authz(
+                app.clone(),
+                serde_json::json!({
+                    "method": "GET", "path": "/proof", "user": user, "tenant_id": tenant_id
+                }),
+            )
+            .await;
+            assert_eq!(response.status(), expected);
+            // The production router currently selects StatusCode, so it returns no JSON.
+            let body = axum::body::to_bytes(response.into_body(), 1024)
+                .await
+                .unwrap();
+            assert!(body.is_empty());
+        }
+    }
+
+    #[tokio::test]
+    async fn sidecar_router_enforces_optional_consumer_quota() {
+        for enabled in [false, true] {
+            let state = AppState::new(config::Config {
+                gateway_mode: mode::GatewayMode::Sidecar,
+                quota_enforcement_enabled: enabled,
+                ..config::Config::default()
+            });
+            state.consumer_rate_limiter.set_plan_quota(
+                "proof-tenant:proof-user",
+                quota::PlanQuota {
+                    rate_limit_per_minute: 1,
+                    ..quota::PlanQuota::default()
+                },
+            );
+            let app = build_router(state);
+            let body = serde_json::json!({
+                "method": "GET", "path": "/proof", "tenant_id": "proof-tenant",
+                "user": {"id": "proof-user"}
+            });
+            assert_eq!(
+                sidecar_authz(app.clone(), body.clone()).await.status(),
+                StatusCode::OK
+            );
+            assert_eq!(
+                sidecar_authz(app, body).await.status(),
+                if enabled {
+                    StatusCode::TOO_MANY_REQUESTS
+                } else {
+                    StatusCode::OK
+                }
+            );
+        }
+    }
+
     // regression for CAB-2227
     #[tokio::test]
     async fn regression_gateway_readiness_fails_when_policy_not_loaded_in_regulated_profile() {

@@ -85,6 +85,7 @@ RUN apt-get update && apt-get install -y \
       ca-certificates \
       libssl3 \
       curl \
+    && apt-get install --only-upgrade -y --no-install-recommends apt libapt-pkg6.0 \
     && rm -rf /var/lib/apt/lists/*
 
 # UID 1000 for k8s runAsNonRoot compatibility

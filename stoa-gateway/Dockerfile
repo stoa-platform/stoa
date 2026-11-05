@@ -39,6 +39,8 @@ FROM rust:1.99-bookworm@sha256:9181b56c2a21ab1d5e73cffe04fc762426d30aa7fac3c9114
 #   pingora = Pingora connection pool (pingora-core, needs cmake)
 # Example: docker build --build-arg FEATURES="kafka,pingora" .
 ARG FEATURES=""
+# Companion profile: disable Cargo defaults explicitly, including future defaults.
+ARG NO_DEFAULT_FEATURES=false
 
 # Install cargo-chef and build deps
 RUN cargo install cargo-chef --locked && \
@@ -59,7 +61,8 @@ WORKDIR /app
 
 # Cook dependencies (cached unless Cargo.toml/Cargo.lock change)
 COPY --from=planner /app/recipe.json recipe.json
-RUN cargo chef cook --locked --release --features "${FEATURES}" --recipe-path recipe.json
+RUN if [ "${NO_DEFAULT_FEATURES}" = true ]; then set -- --no-default-features; else set --; fi && \
+    cargo chef cook --locked --release --features "${FEATURES}" "$@" --recipe-path recipe.json
 
 # Cache-bust: ensures source changes always trigger recompilation
 # (GHA Docker layer cache can otherwise serve stale compiled artifacts)
@@ -73,7 +76,8 @@ COPY policies ./policies
 COPY benches ./benches
 COPY build.rs ./
 COPY proto ./proto
-RUN cargo build --locked --release --features "${FEATURES}" && strip target/release/stoa-gateway
+RUN if [ "${NO_DEFAULT_FEATURES}" = true ]; then set -- --no-default-features; else set --; fi && \
+    cargo build --locked --release --features "${FEATURES}" "$@" && strip target/release/stoa-gateway
 
 # --- Stage 3: Runtime (minimal) -----------------------------------------------
 FROM debian:bookworm-slim@sha256:99c0b25c46d0214d5a2091092e7908907dcaecd6a962cde0ac700acee222b6f3 AS runtime

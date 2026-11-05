@@ -1,0 +1,4 @@
+# Hash-locked CI tools; existing pins and observed versions from 2026-11-05.
+# Version evidence: https://github.com/stoa-platform/stoa/actions/runs/41980889504
+# Generated with uv pip compile --generate-hashes; one requirement per line.
+pip==26.3 --hash=sha256:6c36ae7da8695be67e3cd9f7d87919667ced53f57ce2ede75d89b5912ed2bc4c --hash=sha256:f3b60b20ffaadd4415ed7957212a38ac63fa4c5fa375bd0f4a797777940fad13

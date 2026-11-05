@@ -62,7 +62,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install yamllint jsonschema pyyaml
+          pip install --require-hashes -r .github/workflows/requirements/platform.txt
 
       - name: Lint YAML files
         run: |

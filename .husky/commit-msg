@@ -1,1 +1,2 @@
+python3 scripts/ci/precommit_secrets.py "$1" || exit $?
 npx --no -- commitlint --edit "$1"

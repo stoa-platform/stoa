@@ -19,6 +19,9 @@ on:
   workflow_call:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: helm-lint-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}

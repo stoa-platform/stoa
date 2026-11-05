@@ -247,3 +247,20 @@ class TestMCPGitOpsRouter:
             response = client.get("/v1/mcp/gitops/status")
 
         assert response.status_code == 403
+
+
+    def test_regression_server_sync_error_response_and_log(self, app_with_git_provider, mock_git_provider, caplog):
+        """Connection failures keep internal details in the server log."""
+        error = RuntimeError("internal git connection diagnostic")
+        mock_git_provider.is_connected.return_value = False
+        mock_git_provider.connect.side_effect = error
+
+        with TestClient(app_with_git_provider) as client:
+            response = client.post("/v1/mcp/gitops/sync/server/acme/example-mcp")
+
+        assert response.status_code == 500
+        assert response.json() == {"detail": "Sync failed. Check server logs for details."}
+        assert str(error) not in response.text
+        records = [record for record in caplog.records if record.name == "src.routers.mcp_gitops"]
+        assert any(record.exc_info and record.exc_info[1] is error for record in records)
+        assert str(error) in caplog.text

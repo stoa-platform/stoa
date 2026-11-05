@@ -28,6 +28,7 @@ Welcome to the STOA Platform documentation. STOA is a multi-tenant API managemen
 
 ### Gateway
 
+- **[Gateway Deployment Modes](./architecture/gateway-deployment-modes.md)** - Standalone, sidecar and external agent: what is implemented today
 - **[Gateway Auto-Registration](./guides/gateway-auto-registration.md)** - Zero-config gateway deployment (ADR-028)
 - **[WebMethods Sidecar Integration](./integrations/webmethods-sidecar-integration.md)** - STOA sidecar with WebMethods
 
@@ -60,6 +61,8 @@ Operational runbooks organized by severity:
 
 - **[IBM webMethods Gateway API](./ibm/webmethods-gateway-api.md)** - Gateway integration
 - **[WebMethods + STOA Sidecar](./integrations/webmethods-sidecar-integration.md)** - Policy enforcement via sidecar
+- **[Sidecar Usage Patterns](./integrations/sidecar-usage-patterns.md)** - Companion usage next to gateways, applications and meshes, with current limits
+- **[webMethods-to-Camel Migration Walkthrough](./guides/webmethods-to-camel-migration-walkthrough.md)** - Synthetic, offline generation, differential and campaign demo
 
 ## Getting Help
 

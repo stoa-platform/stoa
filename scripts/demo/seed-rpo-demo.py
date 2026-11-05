@@ -6,12 +6,12 @@ Creates tenants, users, and subscriptions for the RPO-themed demo.
 Presentation date: January 20, 2026
 
 Usage:
-    # With default settings (production)
+    # With localhost defaults
     python scripts/demo/seed-rpo-demo.py
 
-    # With custom URLs
-    CONTROL_PLANE_URL=https://api.gostoa.dev \
-    KEYCLOAK_URL=https://auth.gostoa.dev \
+    # With explicit development URLs
+    CONTROL_PLANE_URL=http://localhost:8000 \
+    KEYCLOAK_URL=http://localhost:8080 \
     python scripts/demo/seed-rpo-demo.py
 
 Theme: Ready Player One
@@ -32,8 +32,8 @@ except ImportError:
     sys.exit(1)
 
 # Configuration
-API_URL = os.getenv("CONTROL_PLANE_URL", "https://api.gostoa.dev")
-KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "https://auth.gostoa.dev")
+API_URL = os.getenv("CONTROL_PLANE_URL", "http://localhost:8000")
+KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "http://localhost:8080")
 KEYCLOAK_REALM = os.getenv("KEYCLOAK_REALM", "stoa")
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
@@ -137,7 +137,7 @@ def get_keycloak_admin_token() -> str | None:
 
 
 def create_keycloak_user(token: str, user: dict) -> bool:
-    """Create a user in Keycloak."""
+    """Create a demo user who must change their password at first login."""
     users_url = f"{KEYCLOAK_URL}/admin/realms/{KEYCLOAK_REALM}/users"
 
     user_payload = {
@@ -147,6 +147,7 @@ def create_keycloak_user(token: str, user: dict) -> bool:
         "lastName": user["lastName"],
         "enabled": True,
         "emailVerified": True,
+        "requiredActions": ["UPDATE_PASSWORD"],
         "attributes": {
             "tenant_id": [user["tenant_id"]],
         },
@@ -154,7 +155,7 @@ def create_keycloak_user(token: str, user: dict) -> bool:
             {
                 "type": "password",
                 "value": user["password"],
-                "temporary": False,
+                "temporary": True,
             }
         ],
     }

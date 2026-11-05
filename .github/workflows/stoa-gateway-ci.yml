@@ -32,15 +32,12 @@ on:
           - dev
           - prod
 
+permissions:
+  contents: read
+
 concurrency:
   group: stoa-gateway-ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
-permissions:
-  contents: read
-  id-token: write
-  checks: write
-  attestations: write
 
 jobs:
   # === CI: fmt + clippy + test + coverage (single job, sccache) ===

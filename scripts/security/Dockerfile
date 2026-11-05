@@ -6,7 +6,7 @@
 # `security-scripts` ConfigMap in `stoa-system`, so the image only ships the
 # tools — keeps script iteration cheap (kubectl apply on the ConfigMap, no
 # image rebuild).
-FROM alpine:3.21
+FROM alpine:3.21@sha256:ee16d92f96db08d9d2d07da48555a27f3a69d8f0759021dbc601195ed0d2b5bd
 
 # Preserve the project distribution notices in the runtime image.
 COPY LICENSE NOTICE /usr/share/licenses/stoa/

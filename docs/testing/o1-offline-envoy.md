@@ -82,3 +82,19 @@ dependencies before this offline command, then archive the evidence directory
 and candidate SHA. Use `workflow_dispatch`, never a pull-request E2E trigger.
 That CI execution and independent acceptance review remain required before
 closing the ticket; this local run is not a CI result.
+
+## Streaming regression
+
+`go test ./internal/xds` in `stoa-go` checks the generated filter contract.
+To exercise both body directions with a real local Envoy binary, run:
+
+```sh
+cd stoa-go
+ENVOY_BINARY=/usr/local/bin/envoy go test ./internal/xds -run 'Test(StreamingFilterContract|EnvoyStreamingRelay)$' -v -timeout 30s
+```
+
+The integration test uses loopback listeners, a real gRPC authorization witness,
+and the generated snapshot with only ADS route delivery replaced by an inline
+route. Producers withhold the final fragment until consumers receive the first;
+full-body buffering therefore fails within seconds. No external host is used.
+Without `ENVOY_BINARY`, this integration test skips; the filter contract still runs.

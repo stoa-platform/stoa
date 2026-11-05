@@ -1,1 +1,2 @@
+python3 scripts/ci/precommit_secrets.py || exit $?
 npx lint-staged

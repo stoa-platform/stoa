@@ -1,4 +1,4 @@
-FROM python:3.11-slim@sha256:db20d8506e2f15b6db39b40b6015ca46bae855dec6dd326d462cfe79ae972893
+FROM python:3.11-slim@sha256:064f01707f2fc8b06bae86bb43875266c6e41bac7994e77ec5dc623c4a4d0545
 
 # Preserve the project distribution notices in the runtime image.
 COPY LICENSE NOTICE /usr/share/licenses/stoa/

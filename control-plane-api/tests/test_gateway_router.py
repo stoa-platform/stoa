@@ -2,6 +2,11 @@
 
 from unittest.mock import AsyncMock, patch
 
+import httpx
+import pytest
+
+from src.services.gateway_service import GatewayAdminService
+
 GW_PATH = "src.routers.gateway.gateway_service"
 
 
@@ -200,3 +205,37 @@ class TestUnauthenticated:
         resp = client.get("/v1/gateway/apis")
         # HTTPBearer with auto_error=True returns 403 when no credentials
         assert resp.status_code in (401, 403)
+
+
+@pytest.mark.asyncio
+async def test_regression_oidc_error_response_and_log(client_as_cpi_admin, caplog):
+    """Transport failures keep internal details in the server log."""
+    error = RuntimeError("internal gateway connection diagnostic")
+
+    def fail_request(request: httpx.Request) -> httpx.Response:
+        raise error
+
+    service = GatewayAdminService(auth_config={"type": "basic"})
+    async with httpx.AsyncClient(
+        base_url="https://gateway.example.test", transport=httpx.MockTransport(fail_request)
+    ) as upstream:
+        service._client = upstream
+        with patch(GW_PATH, service):
+            response = client_as_cpi_admin.post(
+                "/v1/gateway/configure-oidc",
+                json={
+                    "tenant_id": "acme",
+                    "api_name": "weather",
+                    "api_version": "1.0",
+                    "api_id": "weather-api",
+                    "client_id": "weather-client",
+                },
+                headers={"Authorization": "Bearer mock-token"},
+            )
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Gateway OIDC configuration error"}
+    assert str(error) not in response.text
+    records = [record for record in caplog.records if record.name == "src.routers.gateway"]
+    assert any(record.exc_info and record.exc_info[1] is error for record in records)
+    assert str(error) in caplog.text

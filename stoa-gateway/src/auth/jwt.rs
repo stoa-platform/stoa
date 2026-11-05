@@ -492,6 +492,59 @@ pub(crate) mod tests {
     }
 
     #[tokio::test]
+    async fn published_contract_enforces_its_resource_audience() {
+        use crate::uac::binders::ProtocolBinder;
+        use wiremock::{matchers::method, Mock, ResponseTemplate};
+
+        let (validator, issuer, server) = validator_against_test_key().await;
+        Mock::given(method("GET"))
+            .and(wiremock::matchers::path("/upstream"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("accepted"))
+            .mount(&server)
+            .await;
+        let mut state = crate::state::AppState::new(crate::config::Config::default());
+        state.jwt_validator = Some(Arc::new(validator));
+        let contract: crate::uac::UacContractSpec = serde_json::from_value(serde_json::json!({
+            "name": "sample", "tenant_id": "sandbox", "version": "1",
+            "status": "published", "inboundAuth": "jwt", "inboundAuthAudience": "items-read",
+            "endpoints": [{"path": "/items/", "methods": ["GET"],
+                "backend_url": format!("{}/upstream/", server.uri())}]
+        }))
+        .expect("contract");
+        crate::uac::binders::rest::RestBinder::with_policies(
+            state.route_registry.clone(),
+            state.policy_registry.clone(),
+        )
+        .bind(&contract)
+        .await
+        .expect("bind");
+        state.contract_registry.upsert(contract);
+        for (audience, expected) in [
+            (serde_json::json!("account"), 401),
+            (serde_json::json!("different-resource"), 401),
+            (serde_json::json!("stoa-caller"), 401),
+            (serde_json::json!("items-read"), 200),
+            (serde_json::json!(["account", "items-read"]), 200),
+        ] {
+            let token = mint_tenant_payload(
+                &issuer,
+                serde_json::json!({
+                    "tenant_id": "sandbox", "aud": audience
+                }),
+            );
+            let request = axum::http::Request::builder()
+                .uri("/apis/sandbox/sample/items/")
+                .header("Authorization", format!("Bearer {token}"))
+                .body(axum::body::Body::empty())
+                .expect("request");
+            let response =
+                crate::proxy::dynamic::dynamic_proxy(axum::extract::State(state.clone()), request)
+                    .await;
+            assert_eq!(response.status().as_u16(), expected);
+        }
+    }
+
+    #[tokio::test]
     async fn regression_signed_tenant_claim_contract() {
         let (validator, issuer, _server) = validator_against_test_key().await;
         for extra in [

@@ -4,8 +4,8 @@ import userEvent from '@testing-library/user-event';
 import { useLocation } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
-import { renderWithProviders } from './test/helpers';
-import App from './App';
+import { renderWithProviders } from '../../test/helpers';
+import App from '../../App';
 
 const { oidc } = vi.hoisted(() => ({
   oidc: {

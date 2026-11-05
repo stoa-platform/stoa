@@ -61,6 +61,7 @@ Operational runbooks organized by severity:
 
 - **[IBM webMethods Gateway API](./ibm/webmethods-gateway-api.md)** - Gateway integration
 - **[WebMethods + STOA Sidecar](./integrations/webmethods-sidecar-integration.md)** - Policy enforcement via sidecar
+- **[webMethods-to-Camel Migration Walkthrough](./guides/webmethods-to-camel-migration-walkthrough.md)** - Synthetic, offline generation, differential and campaign demo
 
 ## Getting Help
 

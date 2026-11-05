@@ -233,70 +233,30 @@ impl From<Decision> for AuthzResponse {
 }
 
 impl AuthzResponse {
-    /// Create an allow response
+    /// Create an allow response through the shared decision model.
     pub fn allow() -> Self {
-        Self {
-            allowed: true,
-            status_code: None,
-            headers_to_add: std::collections::HashMap::new(),
-            headers_to_remove: Vec::new(),
-            denial_reason: None,
-            denied_by_policy: None,
-            metadata: None,
-        }
+        Decision::allow().into()
     }
 
-    /// Create a deny response
+    /// Create a deny response through the shared decision model.
     pub fn deny(reason: impl Into<String>) -> Self {
-        Self {
-            allowed: false,
-            status_code: Some(403),
-            headers_to_add: std::collections::HashMap::new(),
-            headers_to_remove: Vec::new(),
-            denial_reason: Some(reason.into()),
-            denied_by_policy: None,
-            metadata: None,
-        }
+        Decision::deny(reason).into()
     }
 
-    /// Create an unauthorized response (missing auth)
+    /// Create an unauthorized response through the shared decision model.
     pub fn unauthorized(reason: impl Into<String>) -> Self {
-        Self {
-            allowed: false,
-            status_code: Some(401),
-            headers_to_add: std::collections::HashMap::new(),
-            headers_to_remove: Vec::new(),
-            denial_reason: Some(reason.into()),
-            denied_by_policy: None,
-            metadata: None,
-        }
+        Decision::unauthorized(reason).into()
     }
 
-    /// Create a rate limited response
+    /// Create a rate limited response through the shared decision model.
     pub fn rate_limited(state: RateLimitState) -> Self {
-        Self {
-            allowed: false,
-            status_code: Some(429),
-            headers_to_add: [
-                ("X-RateLimit-Limit".to_string(), state.limit.to_string()),
-                (
-                    "X-RateLimit-Remaining".to_string(),
-                    state.remaining.to_string(),
-                ),
-                ("X-RateLimit-Reset".to_string(), state.reset_at.to_string()),
-            ]
-            .into_iter()
-            .collect(),
-            headers_to_remove: Vec::new(),
-            denial_reason: Some("Rate limit exceeded".to_string()),
-            denied_by_policy: Some("rate_limit".to_string()),
-            metadata: Some(RequestMetadata {
-                request_id: uuid::Uuid::new_v4().to_string(),
-                policies_evaluated: vec!["rate_limit".to_string()],
-                evaluation_time_us: 0,
-                rate_limit: Some(state),
-            }),
-        }
+        Decision::rate_limited(DecisionRateLimitState {
+            current: state.current,
+            limit: state.limit,
+            reset_at: state.reset_at,
+            remaining: state.remaining,
+        })
+        .into()
     }
 
     /// Add a header to the allowed request

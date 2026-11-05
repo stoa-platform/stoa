@@ -8,9 +8,10 @@ python3 -m pytest scripts/tests/test_migration_differential.py -q
 ruff check scripts/migration_differential.py scripts/tests/test_migration_differential.py
 ```
 
-This is the comparator core for the webMethods-to-Camel POC. No flow exporter,
-Camel route generator or execution adapter was found in the repository. The
-sample is synthetic, not a capture from either runtime and not migration proof.
+This is the comparator core for the webMethods-to-Camel POC. The
+[Camel generator](migration-camel.md) and [offline campaign](migration-campaign.md)
+exercise synthetic constant assignments; no runtime execution adapter is included.
+The sample is synthetic, not a capture from either runtime and not migration proof.
 It demonstrates the recorded-fixture fallback, without contacting any host.
 
 A suite is a non-empty JSON array of uniquely named cases. Each case specifies
@@ -35,5 +36,5 @@ only under an explicitly agreed contract. Input differences also fail.
 Stdout contains PASS/FAIL per case and a unified reference/candidate JSON diff.
 Exit codes: 0 = all equal, 1 = any mismatch, 2 = invalid suite/capture or I/O error.
 Redirect stdout to retain the report. Reports contain captured data; use only
-sanitized fixtures. Remaining work: real captures, route generation/execution,
+sanitized fixtures. Remaining work: real captures, runtime execution,
 side-effect collectors, broader flow coverage and CI integration.

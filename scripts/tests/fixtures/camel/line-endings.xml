@@ -1,0 +1,7 @@
+<FLOW NAME="syntheticLineEndings">
+  <SEQUENCE><MAP>
+    <MAPSET FIELD="body" VALUE="first&#13;&#10;second" />
+    <MAPSET FIELD="header.X-Synthetic" VALUE="old" />
+    <MAPSET FIELD="header.X-Synthetic" VALUE="  new &amp; final  " />
+  </MAP></SEQUENCE>
+</FLOW>

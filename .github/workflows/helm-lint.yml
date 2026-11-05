@@ -58,6 +58,9 @@ jobs:
           python3 -m pip install PyYAML==6.0.3
           python3 -B -m unittest discover -s scripts/security -p test_regression_cab_2262_tenant_claim.py -v
 
+      - name: Verify companion colocation and authorization wiring
+        run: python3 -B -m unittest discover -s scripts/tests -p test_companion_helm.py -v
+
       - name: Lint stoa-observability chart
         run: helm lint charts/stoa-observability
 

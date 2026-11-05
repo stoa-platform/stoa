@@ -1,0 +1,19 @@
+# Render locally: helm template companion charts/stoa-platform -f this-file.yaml
+# Supply an existing Secret with an htpasswd key; never put passwords in values.
+stoaSidecar:
+  enabled: true
+  targetGateway: nginx
+  replicas: 1
+  nginxExample:
+    enabled: true
+    authSecret: companion-basic-auth
+    tenantId: example-tenant
+    backendUrl: http://example-backend:8080
+  mainGateway:
+    image:
+      repository: openresty/openresty
+      tag: 1.27.1.2-0-alpine
+    port: 8080
+    env: []
+  serviceMonitor:
+    enabled: false

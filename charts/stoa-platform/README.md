@@ -101,6 +101,25 @@ authz service rather than a Kubernetes sidecar. Standalone remote links are kept
 under `k8s/gateways/base/stoa-link-wm` and are labelled
 `stoa.io/deployment-kind=standalone-link`.
 
+For a wired Nginx/OpenResty example, render with:
+
+```sh
+helm template companion charts/stoa-platform -f charts/stoa-platform/examples/companion-nginx.yaml
+python3 -m unittest discover -s scripts/tests -p test_companion_helm.py
+```
+
+`stoaSidecar.nginxExample` is off by default. Set `authSecret` to an existing
+Secret containing an `htpasswd` key, `tenantId` to the tenant assigned to those
+users, and `backendUrl` to an HTTP backend origin. Use a TLS ingress for Basic
+authentication; the example Service is ClusterIP. Nginx authenticates first,
+then sends the authenticated username and configured tenant to the existing
+`POST /authz` decision endpoint. Client-supplied identity headers are not trusted.
+Only a 200 decision permits proxying; denial, timeout and connection failure
+stop the request. This example grants no roles or scopes. The ConfigMap and
+read-only Secret mount are rendered only when the example is enabled.
+See [sidecar usage and limits](../../docs/integrations/sidecar-usage-patterns.md)
+for the existing decision contract and runtime limitations.
+
 ## CRDs
 
 Custom Resource Definitions in `crds/` (applied separately, not managed by Helm lifecycle):

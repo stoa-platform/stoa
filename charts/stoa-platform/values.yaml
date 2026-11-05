@@ -260,6 +260,13 @@ stoaSidecar:
     type: ClusterIP
     port: 80
 
+  # Optional Nginx/OpenResty example; requires an existing htpasswd Secret.
+  nginxExample:
+    enabled: false
+    authSecret: ""
+    tenantId: ""
+    backendUrl: "http://example-backend:8080"
+
   # Main gateway container (third-party gateway running alongside)
   mainGateway:
     enabled: true

@@ -1,0 +1,7 @@
+<FLOW NAME="syntheticGreeting">
+  <SEQUENCE>
+    <MAP><MAPSET FIELD="header.Content-Type" VALUE="text/plain" /></MAP>
+    <MAP><MAPSET FIELD="body" VALUE="Hello &amp; welcome" /></MAP>
+    <MAP><MAPSET FIELD="body" VALUE="  Synthetic &lt;reply&gt;  " /></MAP>
+  </SEQUENCE>
+</FLOW>

@@ -100,6 +100,8 @@ Issues that don't meet the Marchemalo Standard will be labeled `needs-triage` an
 
 ## Development Setup
 
+New to the project? The [contributor getting-started guide](docs/contributing/getting-started.md) walks through fork, environment, local run, tests and the pull request checks, and links back here for the conventions.
+
 ### Prerequisites
 
 | Tool | Version | Install |

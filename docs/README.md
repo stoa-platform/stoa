@@ -69,4 +69,4 @@ Operational runbooks organized by severity:
 
 ## Contributing
 
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for contribution guidelines.
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for contribution guidelines and the [Contributor Getting Started](./contributing/getting-started.md) guide for a first local setup and pull request.

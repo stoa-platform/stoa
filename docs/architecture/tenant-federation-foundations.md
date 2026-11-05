@@ -10,17 +10,17 @@ reviewed on 2026-11-05. ADR and glossary references were checked against
 
 ## Read decisions before implementation
 
-- [ADR-074: Tenant Model](https://docs.gostoa.dev/architecture/adr/adr-074-tenant-model)
+- [ADR-074: Tenant Model](https://docs.gostoa.dev/docs/architecture/adr/adr-074-tenant-model)
   is **Accepted** and supersedes ADR-026. The delivered identity model uses one
   application realm (default `stoa`), one group per tenant and a `tenant_id`
   claim. Group membership alone does not assign the claim; the user attribute
   supplies it. Roles do not identify tenants.
-- [ADR-026: Multi-IAM Federation](https://docs.gostoa.dev/architecture/adr/adr-026-multi-iam-federation)
+- [ADR-026: Multi-IAM Federation](https://docs.gostoa.dev/docs/architecture/adr/adr-026-multi-iam-federation)
   is **Superseded**. Its realm-per-organization model, `stoa_realm` claim and
   zero-user-storage goal must not be treated as delivered platform behavior.
   [Demo scripts](../../scripts/demo-federation/) and the
   [demo stack](../../deploy/demo-federation/) preserve that historical experiment.
-- [ADR-046: MCP Federation](https://docs.gostoa.dev/architecture/adr/adr-046-mcp-federation-architecture)
+- [ADR-046: MCP Federation](https://docs.gostoa.dev/docs/architecture/adr/adr-046-mcp-federation-architecture)
   is **Draft**. Use it as design context for master/sub-accounts, not as an
   accepted authorization to implement partner or cross-IdP federation.
 
@@ -28,8 +28,8 @@ reviewed on 2026-11-05. ADR and glossary references were checked against
 
 | Term | Reference and interpretation for this baseline |
 |------|-----------------------------------------------|
-| Tenant | [Glossary: T](https://docs.gostoa.dev/reference/glossary#t). Use ADR-074 for identity boundaries: the glossary still says each tenant has its own realm. |
-| Multi-tenancy and isolation | [Glossary: M](https://docs.gostoa.dev/reference/glossary#m) and [I](https://docs.gostoa.dev/reference/glossary#i). The [concept guide](https://docs.gostoa.dev/concepts/multi-tenant) describes isolation layers; their presence in a guide is not deployment evidence. |
+| Tenant | [Glossary: T](https://docs.gostoa.dev/docs/reference/glossary#t). Use ADR-074 for identity boundaries: the glossary still says each tenant has its own realm. |
+| Multi-tenancy and isolation | [Glossary: M](https://docs.gostoa.dev/docs/reference/glossary#m) and [I](https://docs.gostoa.dev/docs/reference/glossary#i). The [concept guide](https://docs.gostoa.dev/docs/concepts/multi-tenant) describes isolation layers; their presence in a guide is not deployment evidence. |
 | Tenant identifier | [Tenant model](../../control-plane-api/src/models/tenant.py): `id` is the slug-style primary key; `uuid` is a separate stable identity. Do not infer a change to token or route identifiers from that column. |
 | MCP federation | [Federation model](../../control-plane-api/src/models/federation.py): master accounts own developer/agent sub-accounts within a tenant. This is distinct from identity provider brokering. |
 | Identity federation | ADR-026's historical pattern. ADR-074 explicitly leaves organizational identity brokering unverified. |

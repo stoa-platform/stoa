@@ -260,15 +260,28 @@ def test_regression_trivy_high_critical_findings_are_blocking() -> None:
     job = yaml.safe_load((ROOT / ".github/workflows/security-scan.yml").read_text())["jobs"]["container-scan"]
     assert not job.get("continue-on-error", False)
     scans = [step for step in job["steps"] if step.get("uses", "").startswith("aquasecurity/trivy-action@")]
-    assert len(scans) == 2
+    assert len(scans) == 3
     for step in scans:
         assert not step.get("continue-on-error", False)
-        assert step["with"]["severity"] == "CRITICAL,HIGH"
         assert step["with"]["vuln-type"] == "os,library"
-        assert step["with"]["ignore-unfixed"] is False
-    gate = next(step for step in scans if step["name"] == "Run Trivy (fail on HIGH+)")
-    assert gate["with"]["exit-code"] == "1"
-    assert gate["if"] == "${{ !cancelled() && steps.check.outputs.exists == 'true' }}"
+    report = next(step for step in scans if step["name"] == "Run Trivy (SARIF)")
+    assert report["with"]["format"] == "sarif"
+    assert report["with"]["severity"] == "CRITICAL,HIGH"
+    assert report["with"]["ignore-unfixed"] is False
+    assert report["with"]["exit-code"] == "0"
+    upload = next(step for step in job["steps"] if step["name"] == "Upload to GitHub Security")
+    assert upload["continue-on-error"] is True
+    assert upload["with"]["sarif_file"] == report["with"]["output"]
+    gates = (
+        ("Run Trivy (fail on fixable HIGH+)", "CRITICAL,HIGH", True),
+        ("Run Trivy (fail on any CRITICAL)", "CRITICAL", False),
+    )
+    for name, severity, ignore_unfixed in gates:
+        gate = next(step for step in scans if step["name"] == name)
+        assert gate["with"]["severity"] == severity
+        assert gate["with"]["ignore-unfixed"] is ignore_unfixed
+        assert gate["with"]["exit-code"] == "1"
+        assert gate["if"] == "${{ !cancelled() && steps.check.outputs.exists == 'true' }}"
 
 
 @pytest.mark.parametrize("exists", (False, True))

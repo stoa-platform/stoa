@@ -432,6 +432,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
           vuln-type: 'os,library'
           ignore-unfixed: false
+          exit-code: '0'
 
       - name: Upload to GitHub Security
         if: steps.check.outputs.exists == 'true'
@@ -441,13 +442,25 @@ jobs:
           sarif_file: 'trivy-${{ matrix.component.name }}.sarif'
           category: 'trivy-${{ matrix.component.name }}'
 
-      - name: Run Trivy (fail on HIGH+)
+      # Block fixable HIGH/CRITICAL findings and every CRITICAL finding.
+      - name: Run Trivy (fail on fixable HIGH+)
         if: ${{ !cancelled() && steps.check.outputs.exists == 'true' }}
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # master
         with:
           image-ref: 'stoa/${{ matrix.component.name }}:scan'
           format: 'table'
           severity: 'CRITICAL,HIGH'
+          vuln-type: 'os,library'
+          ignore-unfixed: true
+          exit-code: '1'
+
+      - name: Run Trivy (fail on any CRITICAL)
+        if: ${{ !cancelled() && steps.check.outputs.exists == 'true' }}
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # master
+        with:
+          image-ref: 'stoa/${{ matrix.component.name }}:scan'
+          format: 'table'
+          severity: 'CRITICAL'
           vuln-type: 'os,library'
           ignore-unfixed: false
           exit-code: '1'

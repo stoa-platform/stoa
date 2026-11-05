@@ -28,6 +28,7 @@ Welcome to the STOA Platform documentation. STOA is a multi-tenant API managemen
 
 ### Gateway
 
+- **[Gateway Deployment Modes](./architecture/gateway-deployment-modes.md)** - Standalone, sidecar and external agent: what is implemented today
 - **[Gateway Auto-Registration](./guides/gateway-auto-registration.md)** - Zero-config gateway deployment (ADR-028)
 - **[WebMethods Sidecar Integration](./integrations/webmethods-sidecar-integration.md)** - STOA sidecar with WebMethods
 

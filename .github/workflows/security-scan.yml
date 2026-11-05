@@ -146,7 +146,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install Bandit
-        run: pip install bandit[toml]
+        run: pip install --require-hashes -r .github/workflows/requirements/bandit.txt
 
       - name: Run Bandit
         run: |
@@ -285,7 +285,7 @@ jobs:
 
       - name: Install pip-audit
         if: needs.scan-changes.outputs.control-plane-api == 'true'
-        run: pip install pip-audit
+        run: pip install --require-hashes -r .github/workflows/requirements/pip-audit.txt
 
       - name: Pip audit — control-plane-api
         if: needs.scan-changes.outputs.control-plane-api == 'true'

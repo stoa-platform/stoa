@@ -43,7 +43,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: first-admin
-          image: {{ .Values.stoa.bootstrap.firstAdmin.image | quote }}
+          {{- include "stoa-platform.pinnedImageReference" .Values.stoa.bootstrap.firstAdmin.image | nindent 10 }}
           imagePullPolicy: IfNotPresent
           command: ["/bin/sh", "-c"]
           args:

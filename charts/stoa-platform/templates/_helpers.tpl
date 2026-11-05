@@ -40,3 +40,12 @@ app.kubernetes.io/part-of: stoa-platform
 {{- end -}}
 {{- printf "image: %s" (printf "%s@%s" $repository $digest | quote) -}}
 {{- end -}}
+
+{{/* Validate complete image references while preserving scalar values overrides. */}}
+{{- define "stoa-platform.pinnedImageReference" -}}
+{{- $image := required "image reference is required" . -}}
+{{- if not (regexMatch "^[^@[:space:]]+@sha256:[0-9a-f]{64}$" $image) -}}
+{{- fail "image reference must include @sha256: followed by 64 lowercase hexadecimal characters" -}}
+{{- end -}}
+{{- printf "image: %s" ($image | quote) -}}
+{{- end -}}

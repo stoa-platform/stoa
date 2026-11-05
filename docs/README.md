@@ -32,6 +32,10 @@ Welcome to the STOA Platform documentation. STOA is a multi-tenant API managemen
 - **[Gateway Auto-Registration](./guides/gateway-auto-registration.md)** - Zero-config gateway deployment (ADR-028)
 - **[WebMethods Sidecar Integration](./integrations/webmethods-sidecar-integration.md)** - STOA sidecar with WebMethods
 
+### Tenant and Federation Foundations
+
+- **[Phase 0 contributor index](./architecture/tenant-federation-foundations.md)** - Accepted tenant model, glossary cautions, existing API pointers and explicit non-goals
+
 ### Architecture Decisions (ADRs)
 
 ADRs live in [stoa-docs](https://docs.gostoa.dev/architecture/adr/):

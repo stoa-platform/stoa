@@ -1347,7 +1347,7 @@ pub fn canonicalize_tenant_labels(families: &mut [prometheus::proto::MetricFamil
             label.set_value(tenant);
             let mut labels = metric.get_label().to_vec();
             labels.push(label);
-            metric.set_label(labels.into());
+            metric.set_label(labels);
         }
     }
 }

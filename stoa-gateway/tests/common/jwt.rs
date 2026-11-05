@@ -3,12 +3,12 @@
 
 use std::sync::OnceLock;
 
+use aws_lc_rs::encoding::{AsDer, Pkcs8V1Der};
+use aws_lc_rs::rsa::{KeyPair, KeySize, PublicKeyComponents};
+use aws_lc_rs::signature::KeyPair as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use jsonwebtoken::{encode, EncodingKey, Header};
-use rsa::pkcs8::{EncodePrivateKey, LineEnding};
-use rsa::traits::PublicKeyParts;
-use rsa::RsaPrivateKey;
 use serde::Serialize;
 use serde_json::json;
 use stoa_gateway::config::Config;
@@ -26,14 +26,12 @@ struct TestKey {
 }
 
 fn generate_key() -> TestKey {
-    let mut rng = rsa::rand_core::OsRng;
-    let key = RsaPrivateKey::new(&mut rng, 2048).expect("generate test RSA key");
-    let pem = key
-        .to_pkcs8_pem(LineEnding::LF)
-        .expect("encode test RSA key")
-        .to_string();
-    let n = URL_SAFE_NO_PAD.encode(key.n().to_bytes_be());
-    let e = URL_SAFE_NO_PAD.encode(key.e().to_bytes_be());
+    let key = KeyPair::generate(KeySize::Rsa2048).expect("generate test RSA key");
+    let der: Pkcs8V1Der<'_> = key.as_der().expect("encode test RSA key");
+    let pem = pem::encode(&pem::Pem::new("PRIVATE KEY", der.as_ref()));
+    let public = PublicKeyComponents::<Vec<u8>>::from(key.public_key());
+    let n = URL_SAFE_NO_PAD.encode(&public.n);
+    let e = URL_SAFE_NO_PAD.encode(&public.e);
     TestKey { pem, n, e }
 }
 

@@ -101,8 +101,11 @@ as `connect` / `remote-agent`.
   only if required scopes are set on the engine; the `/authz` router sets none.
   OPA evaluation and Kafka metering are not part of `DecisionEngine`.
 - `/authz` trusts the user and tenant sent by the calling gateway; it does not
-  validate a token. The Helm template binds STOA to `127.0.0.1:8081` and does
-  not expose that port through the Service.
+  validate a token. The Helm template sets `STOA_HOST=127.0.0.1` and
+  `STOA_PORT=8081`, but the HTTP listener binds `0.0.0.0:<port>` and ignores
+  `STOA_HOST` ([`stoa-gateway/src/main.rs`](../../stoa-gateway/src/main.rs)),
+  so `/authz` also listens on the pod IP, not only on loopback. The Service
+  does not expose port 8081.
 - `SidecarSettings::from_env()` always selects the `StatusCode` response format.
   The JSON, Envoy ext_authz and Kong formatters in
   [`mode/sidecar.rs`](../../stoa-gateway/src/mode/sidecar.rs) are unit tested
@@ -125,6 +128,10 @@ as `connect` / `remote-agent`.
   ([verification](../audits/2026-04-25-sidecar-deployment-reality/02-verification.md))
   proved the route split with Rust tests and the topology with `helm template`.
   It ran no live webMethods or Kong smoke test and built no container image.
+- Loopback-only binding is not implemented. The "STOA binding" invariant in
+  the [sidecar contract](../../specs/gateway-sidecar-contract.md) (§4) expects
+  STOA on `127.0.0.1:8081`; the chart sets `STOA_HOST`, but the binary does not
+  use it for the listener.
 - Whether a given gateway honours the injected variables (`EXT_AUTHZ_URL` in the
   chart, `apigw_ext_authz_*` in the
   [webMethods sidecar guide](../integrations/webmethods-sidecar-integration.md))
@@ -174,9 +181,25 @@ Maturity labels:
   production.
 - **Legacy demo**: kept for local traffic seeding; the name predates the current
   vocabulary.
+- **Demo overlay**: Kustomize overlay for an isolated public demo, applied
+  manually; no Argo CD application references it (see its
+  [README](../../k8s/gateways/overlays/demo/README.md)).
+- **VPS compose**: Docker Compose file for a single VPS host; no workflow or
+  Argo CD application in this repository references it.
+- **Benchmark**: Gateway Arena manifest, applied manually by
+  [`k8s/arena/deploy.sh`](../../k8s/arena/deploy.sh).
+- **Out of scope**: the file runs only a third-party gateway and its
+  dependencies, so no STOA mode applies.
 
-No workflow under `.github/` references the compose files, the k3d manifest,
-`stoa-link-wm` or the `stoaSidecar` values.
+In CI, only [`demo-smoke.yml`](../../.github/workflows/demo-smoke.yml)
+(observation only, non-blocking by default) starts a STOA runtime from the
+files below: the `stoa-gateway` service of
+`deploy/docker-compose/docker-compose.yml`. No workflow starts the companion
+services `stoa-gateway-connect` and `stoa-gateway-link`,
+`docker-compose.sidecar.yml`, `docker-compose.webmethods.yml`, the k3d manifest
+or `stoa-link-wm`, and none renders the chart with `stoaSidecar.enabled=true`.
+Control Plane API tests only parse the `stoa-link-wm` overlay patches as static
+YAML.
 
 | File | STOA runtime | Mode | Maturity | Notes |
 |------|--------------|------|----------|-------|
@@ -184,7 +207,8 @@ No workflow under `.github/` references the compose files, the k3d manifest,
 | [`k8s/gateways/base/stoa-gateway/deployment.yaml`](../../k8s/gateways/base/stoa-gateway/deployment.yaml) | `edge-mcp` | Standalone | GitOps | Included by the dev, staging and production overlays. |
 | [`k8s/gateways/overlays/demo/workloads.yaml`](../../k8s/gateways/overlays/demo/workloads.yaml) | default (`edge-mcp`) | Standalone | Demo overlay | In-pod nginx only filters paths; it does not call `/authz`. `test_runtime.py` tests the demo helper scripts, not the gateway. |
 | [`deploy/vps/stoa-gateway/docker-compose.staging.yml`](../../deploy/vps/stoa-gateway/docker-compose.staging.yml) | `edge-mcp` | Standalone | VPS compose | Single gateway container. |
-| [`deploy/docker-compose/docker-compose.yml`](../../deploy/docker-compose/docker-compose.yml), service `stoa-gateway` | `edge-mcp` | Standalone | Local demo | Full local stack. |
+| [`k8s/arena/stoa-minimal.yaml`](../../k8s/arena/stoa-minimal.yaml) | not set (default `edge-mcp`) | Standalone | Benchmark | Optional features disabled; no Control Plane URL. |
+| [`deploy/docker-compose/docker-compose.yml`](../../deploy/docker-compose/docker-compose.yml), service `stoa-gateway` | `edge-mcp` | Standalone | Local demo | Full local stack. This service is started by `demo-smoke.yml`. |
 | Same file, service `stoa-gateway-connect` | `edge-mcp` | Standalone, behind nginx | Local demo | nginx simulates a third-party gateway. Not the `stoa-connect` agent. |
 | Same file, services `stoa-gateway-link` + `link-proxy` | `sidecar` | Companion on a Docker network, not a Kubernetes sidecar | Local demo | nginx calls `/authz` before forwarding; any `Bearer` value becomes a fixed demo principal. |
 | [`deploy/docker-compose/docker-compose.sidecar.yml`](../../deploy/docker-compose/docker-compose.sidecar.yml) | `sidecar` | Companion on a Docker network, not a Kubernetes sidecar | Local demo | Same fixed demo principal. See its [README](../../deploy/docker-compose/sidecar/README.md); its response-format note describes intent, not current wiring. |
@@ -193,7 +217,7 @@ No workflow under `.github/` references the compose files, the k3d manifest,
 | [`k8s/gateways/base/stoa-link-wm/deployment.yaml`](../../k8s/gateways/base/stoa-link-wm/deployment.yaml) | `sidecar` | External agent (standalone link) | GitOps | Labelled `standalone-link`. |
 | [`deploy/docker-compose/docker-compose.webmethods.yml`](../../deploy/docker-compose/docker-compose.webmethods.yml), service `stoa-connect` | `stoa-connect` (Go) | External agent | Local demo | Its `STOA_GATEWAY_MODE: "connect"` is not read by `stoa-connect` and is not a valid `stoa-gateway` mode. |
 | [`k8s/gateways/overlays/*/gateway-instances.yaml`](../../k8s/gateways/overlays/production/gateway-instances.yaml) | None (`GatewayInstance` declarations) | `edge` and `connect` only | GitOps | No `sidecar` entry. |
-| [`deploy/vps/webmethods/`](../../deploy/vps/webmethods/docker-compose.yml) compose files, [`k8s/arena/`](../../k8s/arena/kong.yaml) gateways | None | Not applicable | Out of scope | Third-party gateway only; no STOA runtime in the file. |
+| [`deploy/vps/webmethods/`](../../deploy/vps/webmethods/docker-compose.yml) compose files; [`k8s/arena/kong.yaml`](../../k8s/arena/kong.yaml), [`gravitee.yaml`](../../k8s/arena/gravitee.yaml), [`agentgateway.yaml`](../../k8s/arena/agentgateway.yaml) | None | Not applicable | Out of scope | Third-party gateway and its dependencies only; no STOA runtime in these files. |
 
 ## Sources
 

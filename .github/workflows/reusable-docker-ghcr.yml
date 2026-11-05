@@ -32,6 +32,9 @@ on:
         type: boolean
         default: false
     outputs:
+      image-ref:
+        description: 'Validated content-addressed image reference (registry/repo@sha256:digest)'
+        value: ${{ jobs.docker.outputs.image_ref }}
       image-tag:
         description: 'Full image tag (registry/repo:env-sha)'
         value: ${{ jobs.docker.outputs.image_tag }}
@@ -53,6 +56,7 @@ jobs:
       id-token: write
       attestations: write
     outputs:
+      image_ref: ${{ steps.image.outputs.ref }}
       image_tag: ${{ env.IMAGE_NAME }}:${{ inputs.environment }}-${{ github.sha }}
       image_digest: ${{ steps.build.outputs.digest }}
 
@@ -105,6 +109,13 @@ jobs:
             ${{ inputs.build-args }}
             CACHEBUST=${{ github.sha }}
 
+      - name: Validate published image digest
+        id: image
+        env:
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: python3 -B scripts/ci/publish_image_ref.py
+
       - name: Generate SLSA provenance (attestation)
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
@@ -116,7 +127,7 @@ jobs:
         run: |
           echo "### ${{ inputs.component }} Docker Image" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Image:** \`${{ env.IMAGE_NAME }}:${{ inputs.environment }}-${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`${{ steps.image.outputs.ref }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Digest:** \`${{ steps.build.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY

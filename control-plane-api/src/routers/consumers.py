@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import User, get_current_user
-from ..auth.rbac import decide_tenant_access
+from ..auth.rbac import decide_tenant_access, require_role
 from ..config import settings
 from ..database import get_db
 from ..models.consumer import CertificateStatus, Consumer, ConsumerStatus
@@ -66,7 +66,7 @@ def _has_tenant_access(user: User, tenant_id: str) -> bool:
 async def create_consumer(
     tenant_id: str,
     request: ConsumerCreate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_role(["cpi-admin", "tenant-admin", "devops"])),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new consumer for a tenant."""
@@ -191,7 +191,7 @@ async def update_consumer(
     tenant_id: str,
     consumer_id: UUID,
     request: ConsumerUpdate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_role(["cpi-admin", "tenant-admin", "devops"])),
     db: AsyncSession = Depends(get_db),
 ):
     """Update consumer details."""
@@ -223,7 +223,7 @@ async def update_consumer(
 async def delete_consumer(
     tenant_id: str,
     consumer_id: UUID,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_role(["cpi-admin", "tenant-admin", "devops"])),
     db: AsyncSession = Depends(get_db),
 ):
     """Delete a consumer."""

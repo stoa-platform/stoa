@@ -6,6 +6,7 @@
 #   SMOKE_ENV            deployed environment: dev | prod
 #   SMOKE_INPUT_DOMAIN   optional workflow input `base-domain` (highest priority)
 #   SMOKE_VAR_DOMAIN     optional repo variable SMOKE_BASE_DOMAIN_<ENV>
+#   SMOKE_PROD_DOMAIN    optional repo variable SMOKE_BASE_DOMAIN_PROD (dev guard)
 # Outputs (GITHUB_OUTPUT, or stdout when unset): domain=<base>, skip=true|false
 #
 # Precedence: input > repo variable > derived default. The only derived default
@@ -16,9 +17,18 @@ set -euo pipefail
 
 PROD_DEFAULT_DOMAIN="gostoa.dev"
 
+canonicalize_domain() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  value="${value,,}"
+  printf '%s' "${value%.}"
+}
+
 env_name="${SMOKE_ENV:-}"
 input="${SMOKE_INPUT_DOMAIN:-}"
 var="${SMOKE_VAR_DOMAIN:-}"
+prod_domain="$(canonicalize_domain "${SMOKE_PROD_DOMAIN:-}")"
 out="${GITHUB_OUTPUT:-/dev/stdout}"
 
 case "$env_name" in
@@ -27,8 +37,8 @@ case "$env_name" in
   *) echo "::error::Unknown smoke environment '${env_name}' (expected dev or prod)"; exit 1 ;;
 esac
 
-domain="${input// /}"
-[ -n "$domain" ] || domain="${var// /}"
+domain="$(canonicalize_domain "$input")"
+[ -n "$domain" ] || domain="$(canonicalize_domain "$var")"
 [ -n "$domain" ] || domain="$default"
 
 if [ -z "$domain" ]; then
@@ -153,7 +163,10 @@ if [[ ! "$public_tlds" =~ [[:space:]]${domain##*.}[[:space:]] ]]; then
 fi
 
 # A dev deploy must never be judged on prod or any of its subdomains.
-if [ "$env_name" = "dev" ] && [[ "$domain" = "$PROD_DEFAULT_DOMAIN" || "$domain" = *."$PROD_DEFAULT_DOMAIN" ]]; then
+if [ "$env_name" = "dev" ] && {
+  [[ "$domain" = "$PROD_DEFAULT_DOMAIN" || "$domain" = *."$PROD_DEFAULT_DOMAIN" ]] ||
+    { [ -n "$prod_domain" ] && [[ "$domain" = "$prod_domain" || "$domain" = *."$prod_domain" ]]; }
+}; then
   echo "::error::Dev smoke resolved to prod or its subdomain; refusing to probe prod after a dev deploy"
   exit 1
 fi

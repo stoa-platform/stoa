@@ -157,7 +157,13 @@ async def test_billing_foreign_budget_is_hidden_and_unchanged(billing_app, metho
     )
     assert response.status_code == 404
     assert statements
-    assert all(statement.lstrip().upper().startswith("SELECT") for statement in statements)
+    if method == "PUT":
+        assert len(statements) == 1
+        where = statements[0].partition("WHERE")[2]
+        assert "department_budgets.id =" in where
+        assert "department_budgets.tenant_id =" in where
+    else:
+        assert all(statement.lstrip().upper().startswith("SELECT") for statement in statements)
     identify(app, "tenant-admin", "tenant-b")
     response = await client.get(f"/v1/tenants/tenant-b/budgets/{budget['id']}")
     assert response.json()["department_name"] == budget["department_name"]

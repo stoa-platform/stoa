@@ -215,58 +215,51 @@ class TestUpdateBudget:
     async def test_partial_update_applies_non_none_fields(self, service: BillingService) -> None:
         budget_id = uuid4()
         orm_obj = _make_budget_orm(department_name="Old Name", enforcement="disabled")
-        service.repo.get_by_id = AsyncMock(return_value=orm_obj)
-        service.repo.update = AsyncMock(return_value=orm_obj)
+        service.repo.update_configuration = AsyncMock(return_value=orm_obj)
 
         data = DepartmentBudgetUpdate(department_name="New Name")
 
         with patch("src.services.billing_service.DepartmentBudgetResponse.model_validate"):
-            await service.update_budget(budget_id, data)
+            await service.update_budget(budget_id, data, tenant_id="acme")
 
-        # department_name should be updated
-        assert orm_obj.department_name == "New Name"
-        # enforcement was not in update data, so stays unchanged
-        assert orm_obj.enforcement == "disabled"
-        service.repo.update.assert_called_once_with(orm_obj)
+        service.repo.update_configuration.assert_awaited_once_with(budget_id, "acme", {"department_name": "New Name"})
 
     async def test_update_limit_and_enforcement(self, service: BillingService) -> None:
         budget_id = uuid4()
         orm_obj = _make_budget_orm(budget_limit_microcents=50_000_000, enforcement="disabled")
-        service.repo.get_by_id = AsyncMock(return_value=orm_obj)
-        service.repo.update = AsyncMock(return_value=orm_obj)
+        service.repo.update_configuration = AsyncMock(return_value=orm_obj)
 
         data = DepartmentBudgetUpdate(budget_limit_microcents=200_000_000, enforcement="enabled")
 
         with patch("src.services.billing_service.DepartmentBudgetResponse.model_validate"):
-            await service.update_budget(budget_id, data)
+            await service.update_budget(budget_id, data, tenant_id="acme")
 
-        assert orm_obj.budget_limit_microcents == 200_000_000
-        assert orm_obj.enforcement == "enabled"
+        service.repo.update_configuration.assert_awaited_once_with(
+            budget_id, "acme", {"budget_limit_microcents": 200_000_000, "enforcement": "enabled"}
+        )
 
     async def test_update_not_found_raises_value_error(self, service: BillingService) -> None:
         budget_id = uuid4()
-        service.repo.get_by_id = AsyncMock(return_value=None)
+        service.repo.update_configuration = AsyncMock(return_value=None)
 
         data = DepartmentBudgetUpdate(department_name="Anything")
 
         with pytest.raises(ValueError, match=str(budget_id)):
-            await service.update_budget(budget_id, data)
+            await service.update_budget(budget_id, data, tenant_id="acme")
 
     async def test_none_fields_not_applied(self, service: BillingService) -> None:
         """Fields explicitly set to None in the update schema must not overwrite existing values."""
         budget_id = uuid4()
         orm_obj = _make_budget_orm(warning_threshold_pct=80, critical_threshold_pct=95)
-        service.repo.get_by_id = AsyncMock(return_value=orm_obj)
-        service.repo.update = AsyncMock(return_value=orm_obj)
+        service.repo.update_configuration = AsyncMock(return_value=orm_obj)
 
         # Only update enforcement, leave thresholds as None
         data = DepartmentBudgetUpdate(enforcement="warn_only")
 
         with patch("src.services.billing_service.DepartmentBudgetResponse.model_validate"):
-            await service.update_budget(budget_id, data)
+            await service.update_budget(budget_id, data, tenant_id="acme")
 
-        assert orm_obj.warning_threshold_pct == 80
-        assert orm_obj.critical_threshold_pct == 95
+        service.repo.update_configuration.assert_awaited_once_with(budget_id, "acme", {"enforcement": "warn_only"})
 
 
 # ---------------------------------------------------------------------------

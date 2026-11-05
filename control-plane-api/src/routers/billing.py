@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import User, get_current_user
-from ..auth.rbac import decide_tenant_access
+from ..auth.rbac import decide_tenant_access, require_role
 from ..database import get_db
 from ..schemas.billing import (
     DepartmentBudgetCreate,
@@ -35,7 +35,7 @@ def _has_tenant_access(user: User, tenant_id: str) -> bool:
 async def create_budget(
     tenant_id: str,
     request: DepartmentBudgetCreate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_role(["cpi-admin", "tenant-admin", "devops"])),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new department budget."""
@@ -91,7 +91,7 @@ async def update_billing_budget(
     tenant_id: str,
     budget_id: UUID,
     request: DepartmentBudgetUpdate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_role(["cpi-admin", "tenant-admin", "devops"])),
     db: AsyncSession = Depends(get_db),
 ):
     """Update a department budget configuration."""
@@ -100,10 +100,7 @@ async def update_billing_budget(
 
     service = BillingService(db)
     try:
-        budget = await service.get_budget(budget_id)
-        if budget.tenant_id != tenant_id:
-            raise HTTPException(status_code=404, detail="Budget not found")
-        budget = await service.update_budget(budget_id, request)
+        budget = await service.update_budget(budget_id, request, tenant_id=tenant_id)
     except ValueError:
         raise HTTPException(status_code=404, detail="Budget not found")
 
@@ -116,7 +113,7 @@ async def update_billing_budget(
 async def delete_budget(
     tenant_id: str,
     budget_id: UUID,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_role(["cpi-admin", "tenant-admin", "devops"])),
     db: AsyncSession = Depends(get_db),
 ):
     """Delete a department budget."""

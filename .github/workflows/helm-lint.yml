@@ -13,6 +13,8 @@ on:
       - main
     paths:
       - 'charts/**'
+      - 'stoa-gateway/Dockerfile'
+      - '.github/workflows/reusable-docker-ghcr.yml'
       - '.github/workflows/stoa-gateway-ci.yml'
       - 'scripts/ci/tests/test_regression_gateway_chart_capabilities.py'
       - '.github/workflows/helm-lint.yml'

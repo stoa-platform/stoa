@@ -17,13 +17,21 @@ type Gateway interface {
 type Options struct {
 	AllowUnauthenticatedREST bool `json:"allowUnauthenticatedREST"`
 }
+type InboundAuth struct {
+	Audience     string `json:"audience"`
+	Issuer       string `json:"issuer"`
+	JWKSURI      string `json:"jwksUri"`
+	DiscoveryURL string `json:"discoveryURL"`
+	Realm        string `json:"realm"`
+}
 type Target struct {
-	Name       string                 `json:"name"`
-	AdminURL   string                 `json:"adminURL"`
-	GatewayURL string                 `json:"gatewayURL"`
-	TokenEnv   string                 `json:"tokenEnv"`
-	Options    Options                `json:"options"`
-	Contracts  []stoagateway.Contract `json:"contracts"`
+	InboundAuth InboundAuth            `json:"inboundAuth"`
+	Name        string                 `json:"name"`
+	AdminURL    string                 `json:"adminURL"`
+	GatewayURL  string                 `json:"gatewayURL"`
+	TokenEnv    string                 `json:"tokenEnv"`
+	Options     Options                `json:"options"`
+	Contracts   []stoagateway.Contract `json:"contracts"`
 }
 type GatewayStatus struct {
 	Name       string `json:"name"`

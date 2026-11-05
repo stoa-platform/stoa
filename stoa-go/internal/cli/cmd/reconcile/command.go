@@ -17,6 +17,10 @@ import (
 
 // NewReconcileCmd reconciles a local governance snapshot. It never writes to Git.
 func NewReconcileCmd() *cobra.Command {
+	return newReconcileCmd(runFile)
+}
+
+func newReconcileCmd(run func(*cobra.Command, string, string) (Status, error)) *cobra.Command {
 	var file, state string
 	var once bool
 	var interval time.Duration
@@ -26,7 +30,7 @@ func NewReconcileCmd() *cobra.Command {
 				return errors.New("interval must be positive")
 			}
 			for {
-				status, err := runFile(cmd, file, state)
+				status, err := run(cmd, file, state)
 				if err != nil {
 					return err
 				}
@@ -34,7 +38,7 @@ func NewReconcileCmd() *cobra.Command {
 					return err
 				}
 				if once {
-					return nil
+					return onceError(status, nil)
 				}
 				timer := time.NewTimer(interval)
 				select {
@@ -104,6 +108,8 @@ func runFile(cmd *cobra.Command, file, state string) (Status, error) {
 		}
 		a := stoagateway.New(target.AdminURL, target.GatewayURL, token, nil)
 		a.AllowUnauthenticatedREST = target.Options.AllowUnauthenticatedREST
+		a.Audience = target.InboundAuth.Audience
+		a.Realms = stoagateway.RealmNames(target.InboundAuth.Realm, target.InboundAuth.Issuer, target.InboundAuth.JWKSURI, target.InboundAuth.DiscoveryURL)
 		clients[target.Name] = a
 		content[target.Name] = target.Contracts
 		target.Contracts = nil
@@ -127,7 +133,7 @@ func saveStatus(path string, status Status) error {
 		return err
 	}
 	tmp := f.Name()
-	defer os.Remove(tmp)
+	defer func() { _ = os.Remove(tmp) }()
 	if err = f.Chmod(0600); err == nil {
 		_, err = f.Write(append(b, '\n'))
 	}
@@ -142,4 +148,16 @@ func saveStatus(path string, status Status) error {
 		return closeErr
 	}
 	return os.Rename(tmp, path)
+}
+
+// onceError exposes failed and unresolved passes to automation. Explicitly
+// accepted degraded operation remains a successful invocation.
+func onceError(status Status, err error) error {
+	if err != nil {
+		return err
+	}
+	if status.Result == "failed" || status.Result == "drift-unresolved" {
+		return fmt.Errorf("reconcile: %s", status.Result)
+	}
+	return nil
 }

@@ -188,6 +188,13 @@ pub struct UacContractSpec {
         skip_serializing_if = "Option::is_none"
     )]
     pub inbound_auth: Option<String>,
+    /// Resource-server audience required by the generated REST JWT policy.
+    #[serde(
+        default,
+        alias = "inboundAuthAudience",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub inbound_auth_audience: Option<String>,
     /// Explicit policies. A `jwt_validation` entry is enforced on the REST proxy.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub policies: Vec<ContractPolicy>,
@@ -218,6 +225,7 @@ impl UacContractSpec {
             spec_hash: None,
             llm_config: None,
             inbound_auth: None,
+            inbound_auth_audience: None,
             policies: Vec::new(),
         }
     }
@@ -262,6 +270,19 @@ impl UacContractSpec {
             && self.status == ContractStatus::Published
         {
             errors.push("published contract must have at least one endpoint".to_string());
+        }
+
+        if let Some(audience) = &self.inbound_auth_audience {
+            if audience.trim().is_empty()
+                || audience.contains(['*', '?'])
+                || audience.eq_ignore_ascii_case("account")
+            {
+                errors
+                    .push("inbound_auth_audience must be a specific resource audience".to_string());
+            }
+            if !self.requires_jwt_validation() {
+                errors.push("inbound_auth_audience requires JWT authentication".to_string());
+            }
         }
 
         // Validate LLM config if present
@@ -385,6 +406,34 @@ mod tests {
             input: serde_json::json!({"id": "pay_123"}),
             expected_output_contains: Some(serde_json::json!({"id": "pay_123"})),
         }
+    }
+
+    #[test]
+    fn contract_audience_round_trips_and_rejects_generic_values() {
+        let mut spec = sample_contract();
+        spec.inbound_auth = Some("jwt".into());
+        for audience in ["", "*", "items?", "ACCOUNT"] {
+            spec.inbound_auth_audience = Some(audience.into());
+            assert!(spec
+                .validate()
+                .iter()
+                .any(|error| error.contains("specific resource audience")));
+        }
+        let mut value = serde_json::to_value(&spec).expect("serialize");
+        value
+            .as_object_mut()
+            .expect("object")
+            .remove("inbound_auth_audience");
+        value["inboundAuthAudience"] = serde_json::json!("items-read");
+        let parsed: UacContractSpec = serde_json::from_value(value).expect("parse alias");
+        assert_eq!(parsed.inbound_auth_audience.as_deref(), Some("items-read"));
+        let round_trip: UacContractSpec =
+            serde_json::from_value(serde_json::to_value(parsed).expect("serialize"))
+                .expect("read back");
+        assert_eq!(
+            round_trip.inbound_auth_audience.as_deref(),
+            Some("items-read")
+        );
     }
 
     #[test]

@@ -9,7 +9,7 @@ import (
 )
 
 func contract(version, owner string) Contract {
-	return Contract{"name": "sample", "tenant_id": "sandbox", "version": version, "status": "published", "classification": "H", "description": owner, "endpoints": []any{map[string]any{"path": "/items/", "methods": []string{"GET"}, "backend_url": "/upstream/"}}}
+	return Contract{"name": "sample", "tenant_id": "sandbox", "version": version, "status": "published", "classification": "H", "description": owner, "inboundAuth": "jwt", "inboundAuthAudience": "items-read", "endpoints": []any{map[string]any{"path": "/items/", "methods": []string{"GET"}, "backend_url": "/upstream/"}}}
 }
 
 func TestPublishRollbackAndOwnership(t *testing.T) {

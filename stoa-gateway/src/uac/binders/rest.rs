@@ -99,6 +99,7 @@ impl RestBinder {
                 config: serde_json::json!({
                     "source": "contract",
                     "inbound_auth": contract.inbound_auth,
+                    "audience": contract.inbound_auth_audience,
                 }),
                 priority: 0,
                 api_id: route.id.clone(),
@@ -361,11 +362,13 @@ mod tests {
 
         let mut contract = sample_contract();
         contract.inbound_auth = Some("jwt".into());
+        contract.inbound_auth_audience = Some("items-read".into());
         binder.bind(&contract).await.expect("bind");
 
         let stored = policies.list_for_api("uac:acme:payments:0");
         assert_eq!(stored.len(), 1);
         assert_eq!(stored[0].policy_type, "jwt_validation");
+        assert_eq!(stored[0].config["audience"], "items-read");
 
         binder.unbind("acme:payments").await.expect("unbind");
         assert!(policies.list_for_api("uac:acme:payments:0").is_empty());

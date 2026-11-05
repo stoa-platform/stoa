@@ -216,7 +216,7 @@ pub async fn dynamic_proxy(State(state): State<AppState>, mut request: Request<B
     // with no such policy stay unchanged. Classification `auth-jwt` is not
     // this check — that list is advisory and log-only.
     if published_route_requires_jwt(&state, &route) {
-        if let Err(response) = require_published_route_jwt(&state, &mut request).await {
+        if let Err(response) = require_published_route_jwt(&state, &route, &mut request).await {
             record_proxy_status(401);
             return *response;
         }
@@ -1022,6 +1022,7 @@ fn published_route_requires_jwt(state: &AppState, route: &crate::routes::ApiRout
 /// `WWW-Authenticate`. A successful validation inserts [`AuthenticatedUser`].
 async fn require_published_route_jwt(
     state: &AppState,
+    route: &crate::routes::ApiRoute,
     request: &mut Request<Body>,
 ) -> Result<(), Box<Response>> {
     let header = request
@@ -1053,7 +1054,16 @@ async fn require_published_route_jwt(
         }
     };
 
-    let claims = match validator.validate(token).await {
+    let audience = route
+        .contract_key
+        .as_deref()
+        .and_then(|key| state.contract_registry.get(key))
+        .and_then(|contract| contract.inbound_auth_audience);
+    let validation = match audience.as_deref() {
+        Some(audience) => validator.validate_with_audience(token, audience).await,
+        None => validator.validate(token).await,
+    };
+    let claims = match validation {
         Ok(claims) => claims,
         Err(error) => {
             warn!(error = %error, "JWT validation failed on published route");

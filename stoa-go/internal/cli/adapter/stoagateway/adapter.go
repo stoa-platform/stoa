@@ -24,6 +24,8 @@ func (c Contract) Key() string              { return c.String("tenant_id") + ":"
 type Adapter struct {
 	adminURL, gatewayURL, token string
 	client                      *http.Client
+	Audience                    string
+	Realms                      []string
 	AllowUnauthenticatedREST    bool
 }
 
@@ -34,7 +36,7 @@ func New(adminURL, gatewayURL, token string, client *http.Client) *Adapter {
 	// Never forward bearer credentials to a redirect target.
 	copyClient := *client
 	copyClient.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	return &Adapter{adminURL: strings.TrimRight(adminURL, "/"), gatewayURL: strings.TrimRight(gatewayURL, "/"), token: token, client: &copyClient}
+	return &Adapter{adminURL: strings.TrimRight(adminURL, "/"), gatewayURL: strings.TrimRight(gatewayURL, "/"), token: token, client: &copyClient, Realms: []string{"stoa"}}
 }
 
 func (a *Adapter) request(ctx context.Context, method, path string, body Contract) (Contract, bool, error) {
@@ -56,7 +58,7 @@ func (a *Adapter) request(ctx context.Context, method, path string, body Contrac
 	if err != nil {
 		return nil, false, errors.New("admin request failed")
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == 404 && method == http.MethodGet {
 		return nil, false, nil
 	}
@@ -83,8 +85,13 @@ func (a *Adapter) ForeignObjects(ctx context.Context, want Contract) (bool, erro
 	return found && !owned(live, want), err
 }
 func (a *Adapter) Missing(ctx context.Context, want Contract) (bool, error) {
+	var err error
+	want, err = a.authenticatedContract(want)
+	if err != nil {
+		return false, err
+	}
 	live, found, err := a.request(ctx, http.MethodGet, contractPath(want), nil)
-	return !found || !owned(live, want) || live.String("version") != want.String("version") || live.String("status") != "published", err
+	return !found || !owned(live, want) || live.String("version") != want.String("version") || live.String("status") != "published" || !verifiedAuth(live, want), err
 }
 func (a *Adapter) Delete(ctx context.Context, want Contract) error {
 	live, found, err := a.request(ctx, http.MethodGet, contractPath(want), nil)
@@ -116,7 +123,7 @@ func (a *Adapter) probe(ctx context.Context, c Contract) (string, error) {
 	if err != nil {
 		return "", errors.New("anonymous probe failed")
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == 401 || resp.StatusCode == 403 {
 		return "enforced", nil
 	}
@@ -129,6 +136,11 @@ func (a *Adapter) probe(ctx context.Context, c Contract) (string, error) {
 // Publish rolls back only failures after a successful POST. The gateway already
 // rolls back binder failures inside POST /admin/contracts.
 func (a *Adapter) Publish(ctx context.Context, want Contract) (string, error) {
+	var err error
+	want, err = a.authenticatedContract(want)
+	if err != nil {
+		return "", err
+	}
 	if want.String("name") == "" || want.String("tenant_id") == "" || want.String("version") == "" || want.String("description") == "" {
 		return "", errors.New("contract identity and ownership description are required")
 	}
@@ -143,7 +155,7 @@ func (a *Adapter) Publish(ctx context.Context, want Contract) (string, error) {
 		return "", err
 	}
 	live, found, err := a.request(ctx, http.MethodGet, contractPath(want), nil)
-	if err == nil && (!found || !owned(live, want) || live.String("version") != want.String("version") || live.String("status") != "published") {
+	if err == nil && (!found || !owned(live, want) || live.String("version") != want.String("version") || live.String("status") != "published" || !verifiedAuth(live, want)) {
 		err = errors.New("published contract verification failed")
 	}
 	var protection string
@@ -170,6 +182,14 @@ func (a *Adapter) rollback(ctx context.Context, want, previous Contract, existed
 		return errors.New("refusing rollback of foreign-owned contract")
 	}
 	if existed {
+		if !a.mayRestore(previous) {
+			if found {
+				if _, _, err = a.request(ctx, http.MethodDelete, contractPath(want), nil); err != nil {
+					return err
+				}
+			}
+			return errors.New("refusing to restore open or generic-audience contract; classification H requires options.allowUnauthenticatedREST")
+		}
 		_, _, err = a.request(ctx, http.MethodPost, "/admin/contracts", previous)
 		return err
 	}

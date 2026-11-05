@@ -631,7 +631,17 @@ networkPolicy:
   # API watcher and secret providers when configured. Supply destination peers
   # (podSelector + namespaceSelector, or ipBlock CIDRs) AND ports; no broad allow.
   # These rules also cover custom controlPlaneUrl/otelEndpoint destinations.
-  # Example: [{to: [{ipBlock: {cidr: 192.0.2.10/32}}], ports: [{port: 443}]}]
+  # Example:
+  # - to:
+  #   - namespaceSelector:
+  #       matchLabels:
+  #         kubernetes.io/metadata.name: upstream
+  #     podSelector:
+  #       matchLabels:
+  #         app: backend
+  #   ports:
+  #   - port: 443
+  #     protocol: TCP
   gatewayEgress: []
   sidecarEgress: []
   # The companion's localhost:8081 authorization endpoint needs no network allow;

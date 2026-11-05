@@ -101,13 +101,17 @@ class NetworkPolicyTests(unittest.TestCase):
         policy, = self.policies(**{
             "stoaGateway.otelEndpoint": "",
             "stoaGateway.serviceMonitor.enabled": False,
-            "networkPolicy.gatewayEgress[0].to[0].ipBlock.cidr": "192.0.2.10/32",
+            "networkPolicy.gatewayEgress[0].to[0].namespaceSelector.matchLabels.backend-namespace": "upstream",
+            "networkPolicy.gatewayEgress[0].to[0].podSelector.matchLabels.app": "backend",
             "networkPolicy.gatewayEgress[0].ports[0].port": 443,
             "networkPolicy.gatewayEgress[0].ports[0].protocol": "TCP",
         })
         self.assertEqual(len(policy["spec"]["ingress"]), 2)
         self.assertEqual(policy["spec"]["egress"][-1], {
-            "to": [{"ipBlock": {"cidr": "192.0.2.10/32"}}],
+            "to": [{
+                "namespaceSelector": {"matchLabels": {"backend-namespace": "upstream"}},
+                "podSelector": {"matchLabels": {"app": "backend"}},
+            }],
             "ports": [{"port": 443, "protocol": "TCP"}],
         })
         self.assertEqual(len(policy["spec"]["egress"]), 3)

@@ -2,17 +2,19 @@
 
 Endpoints:
 - GET    /v1/tenants/{tenant_id}/tool-permissions — list permissions
+- GET    /v1/tenants/{tenant_id}/tool-permissions/artifact — complete compact JWS
 - POST   /v1/tenants/{tenant_id}/tool-permissions — create/upsert permission
 - DELETE /v1/tenants/{tenant_id}/tool-permissions/{permission_id} — delete
 
 RBAC: stoa:read for list, stoa:write for create/delete. Tenant-scoped.
 """
 
+import hashlib
 import logging
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,6 +28,12 @@ from ..schemas.tenant_tool_permission import (
     TenantToolPermissionResponse,
 )
 from ..services.cache_service import TTLCache
+from ..services.tool_policy_snapshot import (
+    IssuedToolPolicy,
+    PolicySnapshotTooLargeError,
+    PolicySnapshotUnknownTenantError,
+    issue_tool_policy_artifact,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +44,7 @@ router = APIRouter(
 
 # In-memory cache: key = "tenant:{tenant_id}" → dict[tuple(server_id, tool_name), bool]
 _permission_cache = TTLCache(default_ttl_seconds=60, max_size=5000)
+_artifact_cache = TTLCache(default_ttl_seconds=900, max_size=1000)
 
 
 async def _invalidate_cache(tenant_id: str) -> None:
@@ -129,6 +138,61 @@ async def list_permissions(
         page=page,
         page_size=page_size,
     )
+
+
+@router.get(
+    "/artifact",
+    response_class=Response,
+    summary="Read a complete signed tool policy",
+    responses={
+        200: {"content": {"application/jose": {"schema": {"type": "string"}}}},
+        304: {"description": "The complete signed artifact is unchanged"},
+    },
+)
+async def get_policy_artifact(
+    tenant_id: str,
+    reissue: bool = Query(False, description="Issue fresh control-plane timestamps"),
+    if_none_match: str | None = Header(None),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """Return compact JWS bytes; revalidate SQL and signing before every 304.
+
+    The bounded local cache only stabilizes issuance dates for unchanged policies.
+    Expiry, content changes and explicit reissue start a fresh validity window.
+    """
+    _ensure_tenant_access(user, tenant_id)
+    now = datetime.now(UTC)
+    cached: IssuedToolPolicy | None = await _artifact_cache.get(tenant_id)
+    if reissue or (cached is not None and cached.policy.expires_at <= now):
+        cached = None
+    try:
+        issued = await issue_tool_policy_artifact(db, tenant_id, issued_at=cached.policy.issued_at if cached else now)
+        if cached is not None and issued.artifact != cached.artifact:
+            issued = await issue_tool_policy_artifact(db, tenant_id, issued_at=now)
+    except PolicySnapshotUnknownTenantError:
+        raise HTTPException(
+            404, detail={"code": "policy_tenant_unknown"}, headers={"Cache-Control": "no-store"}
+        ) from None
+    except PolicySnapshotTooLargeError:
+        raise HTTPException(
+            413, detail={"code": "policy_entries_exceed_cap"}, headers={"Cache-Control": "no-store"}
+        ) from None
+    except HTTPException as exc:
+        # The signer emits fixed error codes, never key material or mounted paths.
+        raise HTTPException(exc.status_code, detail=exc.detail, headers={"Cache-Control": "no-store"}) from None
+    except Exception:
+        # SQL, validation and assembly diagnostics can contain sensitive row values.
+        raise HTTPException(
+            503, detail={"code": "policy_issuance_unavailable"}, headers={"Cache-Control": "no-store"}
+        ) from None
+    await _artifact_cache.set(tenant_id, issued)
+    etag = '"' + hashlib.sha256(issued.artifact.encode("ascii")).hexdigest() + '"'
+    headers = {"ETag": etag, "Cache-Control": "private, no-cache"}
+    candidates = [value.strip().removeprefix("W/") for value in (if_none_match or "").split(",")]
+    if etag in candidates or "*" in candidates:
+        return Response(status_code=304, headers=headers)
+    return Response(content=issued.artifact, media_type="application/jose", headers=headers)
 
 
 @router.post(

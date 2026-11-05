@@ -98,6 +98,68 @@ Issues that don't meet the Marchemalo Standard will be labeled `needs-triage` an
 5. Update documentation as needed
 6. Submit your pull request!
 
+## AI Usage Policy
+
+Contributors may use AI tools to explore ideas, explain code, draft code or
+documentation, propose tests, and assist with debugging and review. The same
+contribution standards apply regardless of the tool used.
+
+- **You remain responsible.** Understand every submitted change and verify its
+  correctness, security, licensing, and suitability for the project. AI output
+  is a draft, not evidence that a change is correct.
+- **Human verification is required before merge.** A human must inspect the final
+  diff, check generated claims and references, and run or review the relevant
+  tests and checks. Automated reviews and passing CI do not replace this review.
+- **Keep prompts free of secrets and private data.** Never send credentials,
+  tokens, private keys, personal data, customer data, or confidential source code
+  or documents to an AI tool, including through attachments or automatic context
+  collection. Use public material or sanitized, synthetic examples instead.
+- **Make AI involvement explicit.** Follow the commit trailer convention below
+  for AI-produced content and completed human verification.
+
+### AI and Human Verification Trailers
+
+**Traceability start marker: 2026-11-05.** This convention applies prospectively
+to new contributions from this date. Do not rewrite past history, backfill
+trailers on old commits, or infer AI use or human verification for older work.
+
+Use these exact trailer names in the final paragraph of the commit message:
+
+```text
+AI-Generated-By: <tool>
+Human-Verified-By: <name>
+```
+
+Keep them in the same trailer block as `Signed-off-by`, with no blank line in
+between, so that `git interpret-trailers` sees both.
+
+- Add `AI-Generated-By` when an AI tool produced any submitted content, including
+  code, tests, or documentation. Replace `<tool>` with the actual tool name;
+  repeat the trailer if multiple tools produced content.
+- Add `Human-Verified-By` only after the named human has actually verified the
+  final change. Replace `<name>` with that person's name, with their agreement.
+  An AI agent must never claim to be the human verifier or invent an attestation.
+- If human review is pending, omit `Human-Verified-By` and state that review is
+  pending in the pull request. Record the completed verification with this
+  trailer in the final merge commit message before merge, without rewriting
+  earlier commits. Preserve applicable AI trailers in squash merge messages.
+- These trailers complement the required DCO `Signed-off-by` trailer and commit
+  signature; they do not replace either or establish human review by themselves.
+
+An optional [commit message template](.gitmessage) provides commented prompts.
+From the repository root, enable it in the local repository configuration:
+
+```bash
+git config --local commit.template "$(pwd)/.gitmessage"
+git commit -S -s
+```
+
+Edit the message in your editor: write a Conventional Commit subject and body,
+then copy and fill in only the applicable trailers, removing the leading `#`.
+Do not submit placeholder values. The template leaves attestations commented
+out so that it cannot assert a review that has not happened. `-S` signs the
+commit and `-s` adds DCO sign-off; `git commit -m` bypasses the template.
+
 ## Development Setup
 
 ### Prerequisites
@@ -251,6 +313,8 @@ docs: update API reference for v0.2
 ```
 
 > Commits are validated automatically by [commitlint](https://commitlint.js.org/) via a Husky git hook. Invalid commit messages will be rejected locally.
+
+> For AI-produced content and completed human verification, add the footers described in [AI and Human Verification Trailers](#ai-and-human-verification-trailers).
 
 ### Developer Certificate of Origin (DCO)
 

@@ -35,6 +35,8 @@ Please include the following information in your report:
 3. **Fix Development**: We will work on a fix for verified vulnerabilities.
 4. **Disclosure**: Once the fix is ready, we will coordinate disclosure timing with you.
 
+See the [vulnerability handling process](docs/security/vulnerability-handling.md) for roles, triage, remediation, disclosure and notification practices.
+
 ### Safe Harbor
 
 We support responsible disclosure and will not take legal action against researchers who:

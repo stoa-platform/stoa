@@ -1,0 +1,78 @@
+{{- if .Values.stoaSidecar.nginxExample.enabled }}
+{{- if or (not .Values.stoaSidecar.enabled) (not .Values.stoaSidecar.mainGateway.enabled) (ne .Values.stoaSidecar.targetGateway "nginx") }}
+{{- fail "nginxExample requires the nginx target and both companion containers enabled" }}
+{{- end }}
+{{- $secret := required "nginxExample.authSecret is required" .Values.stoaSidecar.nginxExample.authSecret }}
+{{- $tenant := required "nginxExample.tenantId is required" .Values.stoaSidecar.nginxExample.tenantId }}
+{{- if not (regexMatch "^[a-zA-Z0-9_-]+$" $tenant) }}
+{{- fail "nginxExample.tenantId must contain only letters, digits, underscores or hyphens" }}
+{{- end }}
+{{- $backend := .Values.stoaSidecar.nginxExample.backendUrl }}
+{{- if not (regexMatch "^http://[a-zA-Z0-9.-]+(:[0-9]+)?$" $backend) }}
+{{- fail "nginxExample.backendUrl must be an HTTP origin without a path" }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-companion-config
+  namespace: {{ .Release.Namespace }}
+data:
+  default.conf: |
+    worker_processes 1;
+    pid /tmp/nginx.pid;
+    error_log /dev/stderr;
+    events { worker_connections 1024; }
+    http {
+      access_log /dev/stdout;
+      client_body_temp_path /tmp/client_body;
+      proxy_temp_path /tmp/proxy;
+      fastcgi_temp_path /tmp/fastcgi;
+      uwsgi_temp_path /tmp/uwsgi;
+      scgi_temp_path /tmp/scgi;
+      server {
+        listen {{ .Values.stoaSidecar.mainGateway.port }};
+        location = /health { return 200 'OK'; }
+        location = /_companion_authz {
+          internal;
+          proxy_method POST;
+          proxy_set_header Content-Type application/json;
+          proxy_set_header Authorization "";
+          proxy_pass http://127.0.0.1:8081/authz;
+          proxy_connect_timeout 1s;
+          proxy_read_timeout 2s;
+        }
+        location / {
+          auth_basic "Companion example";
+          auth_basic_user_file /etc/companion-auth/htpasswd;
+          access_by_lua_block {
+            -- The access handler runs after Nginx Basic authentication.
+            if not ngx.var.remote_user then return ngx.exit(401) end
+            local cjson = require "cjson.safe"
+            local response = ngx.location.capture("/_companion_authz", {
+              method = ngx.HTTP_POST,
+              body = cjson.encode({
+                method = ngx.req.get_method(), path = ngx.var.uri,
+                user = { id = ngx.var.remote_user },
+                tenant_id = {{ $tenant | toJson }}
+              })
+            })
+            -- The existing sidecar returns 200 only for an allow decision.
+            if not response then return ngx.exit(503) end
+            if response.status ~= 200 then
+              local status = response.status
+              if status ~= 401 and status ~= 403 and status ~= 429 then status = 503 end
+              return ngx.exit(status)
+            end
+          }
+          proxy_set_header Authorization "";
+          proxy_set_header X-User-ID $remote_user;
+          proxy_set_header X-Tenant-ID {{ $tenant | toJson }};
+          proxy_set_header X-User-Roles "";
+          proxy_set_header X-User-Scopes "";
+          set $backend {{ $backend | quote }};
+          resolver kube-dns.kube-system.svc.cluster.local valid=30s;
+          proxy_pass $backend;
+        }
+      }
+    }
+{{- end }}

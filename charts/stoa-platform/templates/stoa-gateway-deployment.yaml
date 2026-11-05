@@ -43,8 +43,8 @@ spec:
       {{- end }}
       containers:
         - name: stoa-gateway
-          image: "{{ .Values.stoaGateway.image.repository }}:{{ .Values.stoaGateway.image.tag }}"
-          imagePullPolicy: {{ .Values.stoaGateway.image.pullPolicy | default "Always" }}
+          {{- include "stoa-platform.pinnedImage" .Values.stoaGateway.image | nindent 10 }}
+          imagePullPolicy: {{ .Values.stoaGateway.image.pullPolicy | default "IfNotPresent" }}
           ports:
             - name: http
               containerPort: 8080

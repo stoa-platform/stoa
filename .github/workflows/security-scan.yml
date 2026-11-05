@@ -260,72 +260,59 @@ jobs:
 
       # --- Rust ---
       - name: Install Rust toolchain
-        if: needs.scan-changes.outputs.stoa-gateway == 'true'
+        if: ${{ !cancelled() && needs.scan-changes.outputs.stoa-gateway == 'true' }}
         uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7 # stable
 
       - name: Install cargo-audit
-        if: needs.scan-changes.outputs.stoa-gateway == 'true'
+        if: ${{ !cancelled() && needs.scan-changes.outputs.stoa-gateway == 'true' }}
         uses: taiki-e/install-action@1919c4a95903d2c33e4a221102edca87309fc14b # v2.89.0
         with:
           tool: cargo-audit@0.22.2
           fallback: none
 
       - name: Cargo audit
-        if: needs.scan-changes.outputs.stoa-gateway == 'true'
+        if: ${{ !cancelled() && needs.scan-changes.outputs.stoa-gateway == 'true' }}
         working-directory: stoa-gateway
-        continue-on-error: true  # thiserror v1 transitive dep from prometheus — tracked
         run: cargo audit
 
       # --- Python ---
       - name: Set up Python
-        if: needs.scan-changes.outputs.control-plane-api == 'true'
+        if: ${{ !cancelled() && needs.scan-changes.outputs.control-plane-api == 'true' }}
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: '3.11'
 
       - name: Install pip-audit
-        if: needs.scan-changes.outputs.control-plane-api == 'true'
+        if: ${{ !cancelled() && needs.scan-changes.outputs.control-plane-api == 'true' }}
         run: pip install --require-hashes -r .github/workflows/requirements/pip-audit.txt
 
       - name: Pip audit — control-plane-api
-        if: needs.scan-changes.outputs.control-plane-api == 'true'
-        continue-on-error: true  # tracked vulns (CVE-2024-23342), not blocking
+        if: ${{ !cancelled() && needs.scan-changes.outputs.control-plane-api == 'true' }}
         run: |
-          if [ -f "control-plane-api/requirements.txt" ]; then
-            # CVE-2024-23342: ecdsa Minerva timing attack — transitive dep of python-jose.
-            # python-jose[cryptography] uses the 'cryptography' backend for all signing ops;
-            # ecdsa is never exercised. Upstream (python-ecdsa) won't fix: side-channel
-            # attacks are out of scope for that project. No replacement version available.
-            pip-audit -r control-plane-api/requirements.txt --desc \
-              --ignore-vuln CVE-2024-23342
-          fi
+          # CVE-2024-23342: ecdsa Minerva timing attack — transitive dep of python-jose.
+          # python-jose[cryptography] uses the 'cryptography' backend for all signing ops;
+          # ecdsa is never exercised. Upstream (python-ecdsa) won't fix: side-channel
+          # attacks are out of scope for that project. No replacement version available.
+          pip-audit -r control-plane-api/requirements.txt --desc \
+            --ignore-vuln CVE-2024-23342
 
       # --- JavaScript ---
       - name: Set up Node.js
-        if: needs.scan-changes.outputs.control-plane-ui == 'true' || needs.scan-changes.outputs.portal == 'true'
+        if: ${{ !cancelled() && (needs.scan-changes.outputs.control-plane-ui == 'true' || needs.scan-changes.outputs.portal == 'true') }}
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: '20'
 
       - name: NPM audit — control-plane-ui
-        if: needs.scan-changes.outputs.control-plane-ui == 'true'
-        continue-on-error: true  # GHSA-3ppc-4f35-3m26 in dev chain, not blocking
-        run: |
-          if [ -f "control-plane-ui/package-lock.json" ]; then
-            # --omit=dev: audit only production dependencies.
-            # GHSA-3ppc-4f35-3m26 (minimatch ReDoS) is in @typescript-eslint/eslint-plugin
-            # dev-dep chain. Not present in production runtime. Fix requires eslint v10
-            # breaking upgrade; deferring until typescript-eslint v8 migration is planned.
-            cd control-plane-ui && npm audit --audit-level=high --omit=dev
-          fi
+        if: ${{ !cancelled() && needs.scan-changes.outputs.control-plane-ui == 'true' }}
+        working-directory: control-plane-ui
+        # Production dependencies only; development tooling is outside this gate.
+        run: npm audit --audit-level=high --omit=dev
 
       - name: NPM audit — portal
-        if: needs.scan-changes.outputs.portal == 'true'
-        continue-on-error: true  # audit-level=high, non-blocking
-        run: |
-          if [ -f "portal/package-lock.json" ]; then
-            cd portal && npm audit --audit-level=high --omit=dev
-          fi
+        if: ${{ !cancelled() && needs.scan-changes.outputs.portal == 'true' }}
+        working-directory: portal
+        run: npm audit --audit-level=high --omit=dev
 
   # ==========================================================================
   # 6. Secret Scan (Gitleaks)
@@ -384,7 +371,6 @@ jobs:
     if: needs.scan-changes.outputs.container-scan == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30  # Rust build (~10 min) + Trivy scan
-    continue-on-error: true  # Base image vulns — tracked, not blocking
     permissions:
       contents: read
       security-events: write  # upload-sarif
@@ -402,8 +388,8 @@ jobs:
           if [ -f "${{ matrix.component.path }}/Dockerfile" ]; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::No Dockerfile for ${{ matrix.component.name }}, skipping"
+            echo "::error::No Dockerfile for ${{ matrix.component.name }}"
+            exit 1
           fi
 
       - name: Cache Trivy DB
@@ -439,13 +425,17 @@ jobs:
       - name: Run Trivy (SARIF)
         if: steps.check.outputs.exists == 'true'
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # master
+        env:
+          # Never suppress findings through the repository's .trivyignore.
+          TRIVY_IGNOREFILE: /dev/null
         with:
           image-ref: 'stoa/${{ matrix.component.name }}:scan'
           format: 'sarif'
           output: 'trivy-${{ matrix.component.name }}.sarif'
           severity: 'CRITICAL,HIGH'
           vuln-type: 'os,library'
-          ignore-unfixed: true
+          ignore-unfixed: false
+          exit-code: '0'
 
       - name: Upload to GitHub Security
         if: steps.check.outputs.exists == 'true'
@@ -455,15 +445,31 @@ jobs:
           sarif_file: 'trivy-${{ matrix.component.name }}.sarif'
           category: 'trivy-${{ matrix.component.name }}'
 
-      - name: Run Trivy (fail on HIGH+)
-        if: steps.check.outputs.exists == 'true'
+      # Block fixable HIGH/CRITICAL findings and every CRITICAL finding.
+      - name: Run Trivy (fail on fixable HIGH+)
+        if: ${{ !cancelled() && steps.check.outputs.exists == 'true' }}
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # master
+        env:
+          TRIVY_IGNOREFILE: /dev/null
         with:
           image-ref: 'stoa/${{ matrix.component.name }}:scan'
           format: 'table'
           severity: 'CRITICAL,HIGH'
           vuln-type: 'os,library'
           ignore-unfixed: true
+          exit-code: '1'
+
+      - name: Run Trivy (fail on any CRITICAL)
+        if: ${{ !cancelled() && steps.check.outputs.exists == 'true' }}
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # master
+        env:
+          TRIVY_IGNOREFILE: /dev/null
+        with:
+          image-ref: 'stoa/${{ matrix.component.name }}:scan'
+          format: 'table'
+          severity: 'CRITICAL'
+          vuln-type: 'os,library'
+          ignore-unfixed: false
           exit-code: '1'
 
   scan-summary:

@@ -40,7 +40,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install pyyaml jsonschema
+          pip install --require-hashes -r .github/workflows/requirements/uac.txt
 
       - name: Validate UAC templates
         run: |
@@ -87,7 +87,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install pyyaml jsonschema
+          pip install --require-hashes -r .github/workflows/requirements/uac.txt
 
       - name: Test valid files pass
         run: |

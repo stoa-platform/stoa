@@ -319,6 +319,20 @@ docs: update API reference for v0.2
 
 > For AI-produced content and completed human verification, add the footers described in [AI and Human Verification Trailers](#ai-and-human-verification-trailers).
 
+The Husky hooks also require Python 3 and scan staged additions and commit messages for private
+keys, access tokens, and literal credentials. Sensitive filenames (`.env*` except
+`.env*.example`/`.sample`/`.template`, `*.pem`, `*.key`, `*.tfvars`, `credentials`,
+`credentials.json`) are rejected when added or renamed. Install the hooks with `npm ci` at the
+repository root. Use variable references (for example `process.env.API_KEY`) or
+`REPLACE_FROM_VAULT` instead of literal credentials; diagnostics omit matched data.
+This local check complements the full Gitleaks scan in CI.
+
+Run the offline hook regression tests with:
+
+```bash
+python3 -B -m unittest scripts.ci.tests.test_regression_precommit_secrets -v
+```
+
 ### Developer Certificate of Origin (DCO)
 
 All contributions must be signed off to certify you have the right to submit the code under the project's open source license.

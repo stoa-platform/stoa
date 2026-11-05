@@ -32,26 +32,31 @@ async fn resolve_credential_header(
     state: &AppState,
     route_id: &str,
     credential: Option<&BackendCredential>,
-) -> Option<(String, String)> {
-    let cred = credential?;
+) -> Result<Option<(String, String)>, Box<Response>> {
+    let Some(cred) = credential else {
+        return Ok(None);
+    };
     if cred.auth_type == AuthType::OAuth2ClientCredentials {
         match state
             .credential_store
-            .get_oauth2_token(route_id, get_proxy_client())
+            .get_oauth2_token(route_id, get_proxy_client()?)
             .await
         {
-            Ok(token) => Some(("Authorization".to_string(), format!("Bearer {token}"))),
+            Ok(token) => Ok(Some((
+                "Authorization".to_string(),
+                format!("Bearer {token}"),
+            ))),
             Err(e) => {
                 warn!(
                     route_id = %route_id,
                     error = %e,
                     "OAuth2 token fetch failed — skipping credential injection"
                 );
-                None
+                Ok(None)
             }
         }
     } else {
-        Some((cred.header_name.clone(), cred.header_value.clone()))
+        Ok(Some((cred.header_name.clone(), cred.header_value.clone())))
     }
 }
 
@@ -70,9 +75,9 @@ use crate::routes::registry::UpstreamHttpVersion;
 /// - Auto: ALPN negotiation (h2 if supported, h1 fallback)
 /// - H2: HTTP/2 prior knowledge (h2c, no TLS negotiation)
 struct ProxyClients {
-    h1: reqwest::Client,
-    auto_client: reqwest::Client,
-    h2: reqwest::Client,
+    h1: Result<reqwest::Client, reqwest::Error>,
+    auto_client: Result<reqwest::Client, reqwest::Error>,
+    h2: Result<reqwest::Client, reqwest::Error>,
 }
 
 static PROXY_CLIENTS: std::sync::OnceLock<ProxyClients> = std::sync::OnceLock::new();
@@ -90,32 +95,39 @@ fn get_proxy_clients() -> &'static ProxyClients {
         };
 
         ProxyClients {
-            h1: base()
-                .http1_only()
-                .build()
-                .expect("Failed to create H1 proxy client"),
-            auto_client: base().build().expect("Failed to create Auto proxy client"),
-            h2: base()
-                .http2_prior_knowledge()
-                .build()
-                .expect("Failed to create H2 proxy client"),
+            h1: base().http1_only().build(),
+            auto_client: base().build(),
+            h2: base().http2_prior_knowledge().build(),
         }
     })
 }
 
 /// Select the appropriate reqwest client based on upstream HTTP version preference.
-fn get_proxy_client() -> &'static reqwest::Client {
-    &get_proxy_clients().h1
+fn get_proxy_client() -> Result<&'static reqwest::Client, Box<Response>> {
+    get_client_for_version(UpstreamHttpVersion::H1)
 }
 
 /// Select the appropriate reqwest client for a given HTTP version preference.
-fn get_client_for_version(version: UpstreamHttpVersion) -> &'static reqwest::Client {
-    let clients = get_proxy_clients();
-    match version {
+fn get_client_for_version(
+    version: UpstreamHttpVersion,
+) -> Result<&'static reqwest::Client, Box<Response>> {
+    select_proxy_client(get_proxy_clients(), version)
+}
+
+fn select_proxy_client(
+    clients: &ProxyClients,
+    version: UpstreamHttpVersion,
+) -> Result<&reqwest::Client, Box<Response>> {
+    let client = match version {
         UpstreamHttpVersion::H1 => &clients.h1,
         UpstreamHttpVersion::Auto => &clients.auto_client,
         UpstreamHttpVersion::H2 => &clients.h2,
-    }
+    };
+    // Keep initialization failures out of the response and preserve healthy clients.
+    client.as_ref().map_err(|_| {
+        error!("Failed to initialize proxy HTTP client");
+        Box::new((StatusCode::SERVICE_UNAVAILABLE, "Proxy service unavailable").into_response())
+    })
 }
 
 /// Record HTTP status on the current proxy span for all exit paths.
@@ -216,7 +228,7 @@ pub async fn dynamic_proxy(State(state): State<AppState>, mut request: Request<B
     // with no such policy stay unchanged. Classification `auth-jwt` is not
     // this check — that list is advisory and log-only.
     if published_route_requires_jwt(&state, &route) {
-        if let Err(response) = require_published_route_jwt(&state, &mut request).await {
+        if let Err(response) = require_published_route_jwt(&state, &route, &mut request).await {
             record_proxy_status(401);
             return *response;
         }
@@ -361,7 +373,13 @@ pub async fn dynamic_proxy(State(state): State<AppState>, mut request: Request<B
         Some((cc.header_name.clone(), cc.header_value.clone()))
     } else {
         let credential = state.credential_store.get(&route.id);
-        resolve_credential_header(&state, &route.id, credential.as_ref()).await
+        match resolve_credential_header(&state, &route.id, credential.as_ref()).await {
+            Ok(header) => header,
+            Err(response) => {
+                record_proxy_status(response.status().as_u16());
+                return *response;
+            }
+        }
     };
 
     // CAB-1455 Phase 2: extract incoming W3C trace context (injected by
@@ -689,7 +707,10 @@ async fn forward_request(
     trace_ctx: Option<&crate::trace_context::RequestTraceContext>,
     http_version: UpstreamHttpVersion,
 ) -> Response {
-    let client = get_client_for_version(http_version);
+    let client = match get_client_for_version(http_version) {
+        Ok(client) => client,
+        Err(response) => return *response,
+    };
     let headers = request.headers().clone();
 
     // Build the proxied request
@@ -838,7 +859,10 @@ async fn retry_forward(
     resolved_header: Option<&(String, String)>,
     trace_ctx: Option<&crate::trace_context::RequestTraceContext>,
 ) -> Response {
-    let client = get_proxy_client();
+    let client = match get_proxy_client() {
+        Ok(client) => client,
+        Err(response) => return *response,
+    };
     let mut builder = match *method {
         Method::GET => client.get(target_url),
         Method::HEAD => client.head(target_url),
@@ -1022,6 +1046,7 @@ fn published_route_requires_jwt(state: &AppState, route: &crate::routes::ApiRout
 /// `WWW-Authenticate`. A successful validation inserts [`AuthenticatedUser`].
 async fn require_published_route_jwt(
     state: &AppState,
+    route: &crate::routes::ApiRoute,
     request: &mut Request<Body>,
 ) -> Result<(), Box<Response>> {
     let header = request
@@ -1053,7 +1078,16 @@ async fn require_published_route_jwt(
         }
     };
 
-    let claims = match validator.validate(token).await {
+    let audience = route
+        .contract_key
+        .as_deref()
+        .and_then(|key| state.contract_registry.get(key))
+        .and_then(|contract| contract.inbound_auth_audience);
+    let validation = match audience.as_deref() {
+        Some(audience) => validator.validate_with_audience(token, audience).await,
+        None => validator.validate(token).await,
+    };
+    let claims = match validation {
         Ok(claims) => claims,
         Err(error) => {
             warn!(error = %error, "JWT validation failed on published route");
@@ -1379,34 +1413,105 @@ mod tests {
         assert_eq!(parts[3], "01", "flags sampled");
     }
 
+    #[tokio::test]
+    async fn regression_proxy_client_init_failure_returns_generic_503() {
+        let invalid_client = || reqwest::Client::builder().user_agent("\n").build();
+        for version in [
+            UpstreamHttpVersion::H1,
+            UpstreamHttpVersion::Auto,
+            UpstreamHttpVersion::H2,
+        ] {
+            let clients = ProxyClients {
+                h1: invalid_client(),
+                auto_client: invalid_client(),
+                h2: invalid_client(),
+            };
+            let response = select_proxy_client(&clients, version).unwrap_err();
+            assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+            let body = axum::body::to_bytes(response.into_body(), 1024)
+                .await
+                .unwrap();
+            assert_eq!(body.as_ref(), b"Proxy service unavailable");
+        }
+
+        // A failed client must not disable healthy clients for other versions.
+        let mixed = ProxyClients {
+            h1: invalid_client(),
+            auto_client: invalid_client(),
+            h2: reqwest::Client::builder().http2_prior_knowledge().build(),
+        };
+        let h2 = select_proxy_client(&mixed, UpstreamHttpVersion::H2).unwrap();
+        assert!(std::ptr::eq(h2, mixed.h2.as_ref().unwrap()));
+        let response = select_proxy_client(&mixed, UpstreamHttpVersion::H1).unwrap_err();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[tokio::test]
+    async fn forward_validation_errors_return_safe_responses() {
+        for (method, status, message) in [
+            (
+                Method::TRACE,
+                StatusCode::METHOD_NOT_ALLOWED,
+                "Method not allowed",
+            ),
+            (Method::GET, StatusCode::BAD_GATEWAY, "Bad gateway"),
+        ] {
+            let response = forward_request(
+                Request::new(Body::empty()),
+                &method,
+                "invalid target",
+                None,
+                None,
+                UpstreamHttpVersion::H1,
+            )
+            .await;
+            assert_eq!(response.status(), status);
+            let body = axum::body::to_bytes(response.into_body(), 1024)
+                .await
+                .unwrap();
+            assert_eq!(body.as_ref(), message.as_bytes());
+        }
+    }
+
+    #[tokio::test]
+    async fn valid_upstream_response_preserves_status_and_body() {
+        let upstream = reqwest::Response::from(axum::http::Response::new("ok"));
+        let response = convert_response(upstream);
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024)
+            .await
+            .unwrap();
+        assert_eq!(body.as_ref(), b"ok");
+    }
+
     #[test]
     fn test_client_selection_h1() {
-        let client = get_client_for_version(UpstreamHttpVersion::H1);
+        let client = get_client_for_version(UpstreamHttpVersion::H1).unwrap();
         // Should return a valid client (same pointer as h1 field)
         let clients = get_proxy_clients();
-        assert!(std::ptr::eq(client, &clients.h1));
+        assert!(std::ptr::eq(client, clients.h1.as_ref().unwrap()));
     }
 
     #[test]
     fn test_client_selection_auto() {
-        let client = get_client_for_version(UpstreamHttpVersion::Auto);
+        let client = get_client_for_version(UpstreamHttpVersion::Auto).unwrap();
         let clients = get_proxy_clients();
-        assert!(std::ptr::eq(client, &clients.auto_client));
+        assert!(std::ptr::eq(client, clients.auto_client.as_ref().unwrap()));
     }
 
     #[test]
     fn test_client_selection_h2() {
-        let client = get_client_for_version(UpstreamHttpVersion::H2);
+        let client = get_client_for_version(UpstreamHttpVersion::H2).unwrap();
         let clients = get_proxy_clients();
-        assert!(std::ptr::eq(client, &clients.h2));
+        assert!(std::ptr::eq(client, clients.h2.as_ref().unwrap()));
     }
 
     #[test]
     fn test_default_proxy_client_is_h1() {
         // get_proxy_client() should return h1 for backward compatibility
-        let client = get_proxy_client();
+        let client = get_proxy_client().unwrap();
         let clients = get_proxy_clients();
-        assert!(std::ptr::eq(client, &clients.h1));
+        assert!(std::ptr::eq(client, clients.h1.as_ref().unwrap()));
     }
 
     #[test]

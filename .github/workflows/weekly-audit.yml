@@ -44,7 +44,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install pip-audit
-        run: pip install pip-audit
+        run: pip install --require-hashes -r .github/workflows/requirements/weekly-audit.txt
 
       - name: Run pip-audit
         id: audit

@@ -39,3 +39,26 @@ a concurrency, TLS, slow-consumer, policy, production-deployment or CI result.
 The sibling streaming regression proves first-fragment relay separately; these
 measurements impose no statistical flatness threshold. Repeat on the deployment
 architecture and with its actual policies before claiming production equivalence.
+
+## Rust companion image build profile
+
+The light companion profile reuses the Rust gateway binary with all optional
+Cargo features disabled (`wasm`, `pingora`, `kafka`, `k8s`, `pcap`, and `phases`).
+From the repository root, build it locally with:
+
+```bash
+python3 -B scripts/ci/release_legal.py --dest stoa-gateway
+docker build --build-arg FEATURES= --build-arg NO_DEFAULT_FEATURES=true stoa-gateway
+```
+
+Both dependency preparation and binary compilation use `--no-default-features`.
+Without these arguments, the Dockerfile keeps its existing Cargo defaults and
+feature selection; the publishing workflow still selects `kafka,pingora`.
+The separate companion image CI job builds without registry login or push.
+No companion image is published by this profile.
+
+Select `STOA_GATEWAY_MODE=sidecar` at runtime. Feature selection alone does not
+select the runtime mode or establish same-pod deployment. The routing and
+co-location requirements remain in `specs/gateway-sidecar-contract.md`.
+This build profile makes no claim about RSS or image size; measure those on the
+target architecture separately from the Envoy POC above.

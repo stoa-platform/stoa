@@ -1,0 +1,8 @@
+[
+  {
+    "name": "order-created",
+    "reference": "reference.json",
+    "candidate": "candidate.json",
+    "headers": ["content-type"]
+  }
+]

@@ -37,6 +37,9 @@ on:
         description: 'Build job result (success/failure)'
         value: ${{ jobs.build.outputs.result }}
 
+permissions:
+  contents: read
+
 jobs:
   build:
     name: Build and Test (${{ inputs.component }})

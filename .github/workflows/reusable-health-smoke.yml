@@ -52,6 +52,7 @@ jobs:
       SMOKE_ENV: ${{ inputs.environment }}
       SMOKE_COMPONENT: ${{ inputs.component }}
       SMOKE_INPUT_DOMAIN: ${{ inputs.base-domain }}
+      SMOKE_PROD_DOMAIN: ${{ vars.SMOKE_BASE_DOMAIN_PROD }}
       SMOKE_VAR_DOMAIN: >-
         ${{ (inputs.environment == 'prod' && vars.SMOKE_BASE_DOMAIN_PROD)
         || (inputs.environment == 'dev' && vars.SMOKE_BASE_DOMAIN_DEV)

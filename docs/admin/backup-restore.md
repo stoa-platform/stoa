@@ -1,5 +1,9 @@
 # Backup & Restore
 
+> Start with the [site recovery runbook](../runbooks/site-backup-restore.md) for
+> current scope, offline key custody, format caveats and restore acceptance gates.
+> The examples below include legacy deployment assumptions; validate them for your site.
+
 ## Backup Targets
 
 | Component | Data | Method | Frequency |

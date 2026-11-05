@@ -5,7 +5,7 @@
 # Account theme: parent=keycloak.v2 (current)
 # Mode: production (start --optimized) with PostgreSQL backend (CAB-1955)
 
-FROM quay.io/keycloak/keycloak:26.5.3 AS builder
+FROM quay.io/keycloak/keycloak:26.5.3@sha256:5a236ae4dd8ece77490115bace15a11a4d15e9cbcf58a490b95a7da2cd71d32a AS builder
 
 # Copy STOA theme (invalidate cache on theme changes)
 COPY themes/stoa /opt/keycloak/themes/stoa
@@ -20,7 +20,7 @@ ENV KC_FEATURES=token-exchange,dpop,par
 RUN /opt/keycloak/bin/kc.sh build
 
 # Production image
-FROM quay.io/keycloak/keycloak:26.5.3
+FROM quay.io/keycloak/keycloak:26.5.3@sha256:5a236ae4dd8ece77490115bace15a11a4d15e9cbcf58a490b95a7da2cd71d32a
 
 # Preserve the project distribution notices in the runtime image.
 COPY LICENSE NOTICE /usr/share/licenses/stoa/

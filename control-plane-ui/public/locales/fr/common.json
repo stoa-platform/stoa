@@ -165,6 +165,7 @@
     "blocked": "Bloqué"
   },
   "login": {
+    "invitationOnly": "Access is by invitation only. Ask an administrator for access.",
     "title": "STOA Control Plane",
     "subtitle": "Gestion d'API multi-tenant",
     "button": "Se connecter avec Keycloak",

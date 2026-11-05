@@ -1,0 +1,46 @@
+#!/bin/sh
+# Optional, offline provenance suggestions. Failure must never stop Git.
+case "${2-}" in
+    ''|message|template) ;;
+    *) exit 0 ;;
+esac
+[ -n "${STOA_AI_TOOL-}${STOA_HUMAN_VERIFIED_BY-}" ] || exit 0
+python3 -I - "${1-}" 2>/dev/null <<'PY' || :
+import os
+from pathlib import Path
+import re
+import sys
+
+path = Path(sys.argv[1])
+if not path.is_file() or path.is_symlink():
+    sys.exit(0)
+text = path.read_bytes().decode("utf-8")
+# Leave Git's default comment section (including scissors/diffs) intact.
+match = re.search(r"(?m)^#", text)
+body, comments = (text[:match.start()], text[match.start():]) if match else (text, "")
+if not body.strip():
+    sys.exit(0)
+trailers = []
+for key, variable in (
+    ("AI-Generated-By", "STOA_AI_TOOL"),
+    ("Human-Verified-By", "STOA_HUMAN_VERIFIED_BY"),
+):
+    value = os.environ.get(variable, "").strip()
+    if not value or any(ord(char) < 32 or ord(char) == 127 for char in value):
+        continue
+    if not re.search(r"(?im)^" + re.escape(key) + r":", body):
+        trailers.append(f"{key}: {value}")
+if trailers:
+    body = body.rstrip()
+    # Extend an existing trailer block, including DCO, without splitting it.
+    last_block = body.rsplit("\n\n", 1)[-1]
+    existing = "\n\n" in body and all(
+        re.match(r"^[A-Za-z0-9-]+: .+|^[ \t]+.+", line)
+        for line in last_block.splitlines()
+    )
+    updated = body + ("\n" if existing else "\n\n") + "\n".join(trailers) + "\n"
+    if comments:
+        updated += "\n" + comments
+    path.write_bytes(updated.encode("utf-8"))
+PY
+exit 0

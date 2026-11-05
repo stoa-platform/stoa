@@ -1,0 +1,10 @@
+{
+  "input": {"order_id": "order-1"},
+  "response": {
+    "status": 202,
+    "headers": {"content-type": "application/json"},
+    "body": {"accepted": true}
+  },
+  "messages": [{"destination": "orders", "body": {"id": "order-1"}}],
+  "files": {"orders/order-1.txt": "accepted\n"}
+}

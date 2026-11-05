@@ -1,5 +1,5 @@
 import { RouteMetadata } from './components/RouteMetadata';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -281,10 +281,17 @@ function ConnectedFloatingChat() {
 }
 
 function ProtectedRoutes() {
+  const location = useLocation();
   const { isAuthenticated, isLoading } = useAuth();
 
   if (!isAuthenticated && !isLoading) {
-    return <Navigate to="/login" replace />;
+    return (
+      <Navigate
+        to="/login"
+        replace
+        state={location.pathname === '/signup' ? { invitationOnly: true } : undefined}
+      />
+    );
   }
 
   return (
@@ -423,6 +430,7 @@ function ProtectedRoutes() {
 }
 
 function Login() {
+  const location = useLocation();
   const { login, isLoading } = useAuth();
   const { t } = useTranslation();
 
@@ -467,6 +475,11 @@ function Login() {
           <p className="text-white/80 mt-1">{t('login.subtitle')}</p>
         </div>
         <div className="px-8 py-8">
+          {location.state?.invitationOnly === true && (
+            <p data-testid="login-invitation-message" className="mb-6 text-sm text-white/80">
+              {t('login.invitationOnly')}
+            </p>
+          )}
           <button
             onClick={login}
             disabled={isLoading}

@@ -48,6 +48,9 @@ on:
       TEST_API_KEY:
         required: false
 
+permissions:
+  contents: read
+
 jobs:
   smoke-test:
     name: Smoke Test (${{ inputs.component }})

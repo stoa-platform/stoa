@@ -949,10 +949,11 @@ pub(crate) mod tests {
         let server = MockServer::start().await;
         serve_policy_once(&server, ok_tool_policy()).await;
         let mut svc = authenticated_service(&server, Duration::from_millis(1)).await;
-        svc.max_policy_age = Duration::from_millis(1);
 
         assert_eq!(svc.load_policy("tenant1").await, Ok(()));
         assert_eq!(svc.policy_readiness_failure(), None);
+        // Tighten after the freshness assertion to avoid a 1 ms race after loading.
+        svc.max_policy_age = Duration::from_millis(1);
         tokio::time::sleep(Duration::from_millis(20)).await;
 
         // Past the cap and no longer served: readiness fails and the call is denied as stale.

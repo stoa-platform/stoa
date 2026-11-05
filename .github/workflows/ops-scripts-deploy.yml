@@ -45,13 +45,13 @@ jobs:
 
       - name: Checkout
         if: matrix.worker != ''
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           sparse-checkout: scripts/ai-ops
 
       - name: Fetch SSH key from Vault
         if: matrix.worker != ''
-        uses: hashicorp/vault-action@v3
+        uses: hashicorp/vault-action@4c06c5ccf5c0761b6029f56cfb1dcf5565918a3b # v3.4.0
         with:
           url: https://hcvault.gostoa.dev
           method: jwt

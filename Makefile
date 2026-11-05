@@ -2,7 +2,7 @@
 # Usage: make <target>
 
 .PHONY: setup test test-all lint lint-all run-api run-ui run-portal run-gateway \
-	test-api test-ui test-portal test-gateway test-cli \
+	test-api test-ui test-portal test-gateway test-gateway-all-features check-cmake test-cli \
 	lint-api lint-ui lint-portal lint-gateway lint-cli \
 	check-docs \
 	seed-dev seed-staging seed-prod seed-check seed-local \
@@ -59,6 +59,16 @@ test-portal: ## Run portal tests
 
 test-gateway: ## Run gateway tests
 	cd stoa-gateway && cargo test
+
+check-cmake: ## Check the prerequisite for gateway tests with all features
+	@command -v cmake >/dev/null 2>&1 || { \
+		echo "Error: cmake is required for cargo test --all-features (Kafka dependency)." >&2; \
+		echo "Install it with: brew install cmake (macOS), or your Linux package manager (e.g. sudo apt-get install cmake)." >&2; \
+		exit 1; \
+	}
+
+test-gateway-all-features: check-cmake ## Run gateway tests including Kafka
+	cd stoa-gateway && cargo test --all-features
 
 test-cli: ## Run CLI tests
 	cd cli && pytest tests/ -q

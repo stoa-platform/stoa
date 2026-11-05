@@ -23,8 +23,8 @@ def run(args, **kwargs):
 
 def main():
     name = "stoa-memory-" + uuid.uuid4().hex[:12]
-    evidence = {"status": "results pending", "image": IMAGE, "directory": str(OUT),
-                "host": platform.platform(), "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+    evidence = dict({"status": "results pending", "directory": str(OUT),
+                     "host": platform.platform(), "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}, image=IMAGE)
     try:
         info = json.loads(run(["docker", "image", "inspect", IMAGE], capture_output=True).stdout)[0]
         evidence.update(image_id=info["Id"], platform="linux/" + info["Architecture"])

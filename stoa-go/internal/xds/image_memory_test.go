@@ -99,7 +99,7 @@ func measureImage(t *testing.T, size int64, direction string) memoryResult {
 				w.WriteHeader(400)
 				return
 			}
-			fmt.Fprint(w, n)
+			_, _ = fmt.Fprint(w, n)
 			return
 		}
 		w.Header().Set("Content-Length", strconv.FormatInt(size, 10))
@@ -176,7 +176,7 @@ func measureImage(t *testing.T, size int64, direction string) memoryResult {
 	}
 	res, err := client.Do(req)
 	memoryCheck(t, err)
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != 200 {
 		t.Fatalf("HTTP %d", res.StatusCode)
 	}

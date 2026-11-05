@@ -46,6 +46,17 @@ type Status struct {
 	Gateways      []GatewayStatus `json:"gateways"`
 }
 
+// leastProtection keeps an open contract visible regardless of publication order.
+func leastProtection(a, b string) string {
+	if a == "unprotected" || b == "unprotected" {
+		return "unprotected"
+	}
+	if a != "" {
+		return a
+	}
+	return b
+}
+
 func same(a, b []string) bool { return strings.Join(a, "\n") == strings.Join(b, "\n") }
 
 // Run probes only desired contracts. Removed contracts are never resurrected.
@@ -74,6 +85,14 @@ func Run(ctx context.Context, targets []Target, clients map[string]Gateway, prev
 				}
 				if missing || previous.ContentDigest != contentDigest || previous.TargetsDigest != targetsDigest {
 					repairs = append(repairs, pending{t.Name, c})
+				} else {
+					// Unchanged contracts are not probed again for protection. Keep
+					// their prior aggregate conservatively during partial repairs.
+					for _, old := range previous.Gateways {
+						if old.Name == t.Name {
+							gs.Protection = leastProtection(gs.Protection, old.Protection)
+						}
+					}
 				}
 			}
 		}
@@ -103,7 +122,7 @@ func Run(ctx context.Context, targets []Target, clients map[string]Gateway, prev
 		for i := range s.Gateways {
 			if s.Gateways[i].Name == p.target {
 				if protection != "" {
-					s.Gateways[i].Protection = protection
+					s.Gateways[i].Protection = leastProtection(s.Gateways[i].Protection, protection)
 				}
 				if err != nil {
 					s.Gateways[i].Error = err.Error()
@@ -129,11 +148,6 @@ func Run(ctx context.Context, targets []Target, clients map[string]Gateway, prev
 	if s.Result == "ok" {
 		s.Missing = nil
 		for i := range s.Gateways {
-			for _, old := range previous.Gateways {
-				if old.Name == s.Gateways[i].Name && s.Gateways[i].Protection == "" && previous.ContentDigest == contentDigest && previous.TargetsDigest == targetsDigest {
-					s.Gateways[i].Protection = old.Protection
-				}
-			}
 			if s.Gateways[i].Protection == "unprotected" {
 				s.Result = "degraded"
 			}

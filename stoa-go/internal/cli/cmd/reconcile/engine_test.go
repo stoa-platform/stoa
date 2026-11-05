@@ -65,3 +65,58 @@ func TestCollisionAndDegraded(t *testing.T) {
 		t.Fatalf("expected degraded: %+v", s)
 	}
 }
+
+// mixedGateway models independently missing contracts and their publication protection.
+type mixedGateway struct {
+	missing    map[string]bool
+	protection map[string]string
+	posts      int
+}
+
+func (f *mixedGateway) Missing(_ context.Context, c stoagateway.Contract) (bool, error) {
+	return f.missing[c.String("name")], nil
+}
+func (f *mixedGateway) ForeignObjects(context.Context, stoagateway.Contract) (bool, error) {
+	return false, nil
+}
+func (f *mixedGateway) Publish(_ context.Context, c stoagateway.Contract) (string, error) {
+	f.posts++
+	f.missing[c.String("name")] = false
+	return f.protection[c.String("name")], nil
+}
+
+func TestLeastProtectiveContractStatus(t *testing.T) {
+	for _, names := range [][]string{{"open", "secured"}, {"secured", "open"}} {
+		t.Run(names[0]+"-first", func(t *testing.T) {
+			f := &mixedGateway{missing: map[string]bool{}, protection: map[string]string{"open": "unprotected", "secured": "enforced"}}
+			target := Target{Name: "edge"}
+			for _, name := range names {
+				target.Contracts = append(target.Contracts, stoagateway.Contract{"name": name, "tenant_id": "sandbox", "version": "1"})
+			}
+			run := func(previous Status) Status {
+				t.Helper()
+				s := Run(context.Background(), []Target{target}, map[string]Gateway{"edge": f}, previous, "content", "targets")
+				if s.Result != "degraded" || s.Gateways[0].Protection != "unprotected" {
+					t.Fatalf("open contract hidden: %+v", s)
+				}
+				return s
+			}
+			s := run(Status{})
+			if f.posts != 2 {
+				t.Fatalf("initial publications: %d", f.posts)
+			}
+			s = run(s)
+			if f.posts != 2 {
+				t.Fatalf("converged pass republished: %d", f.posts)
+			}
+			for _, name := range []string{"secured", "open"} {
+				f.missing[name] = true
+				s = run(s)
+				s = run(s)
+			}
+			if f.posts != 4 {
+				t.Fatalf("partial repair publications: %d", f.posts)
+			}
+		})
+	}
+}

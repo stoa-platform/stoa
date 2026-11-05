@@ -96,7 +96,8 @@ Issues that don't meet the Marchemalo Standard will be labeled `needs-triage` an
 3. Add tests if applicable
 4. Ensure the test suite passes
 5. Update documentation as needed
-6. Submit your pull request!
+6. Add a line under **Unreleased** in [CHANGELOG.md](CHANGELOG.md) if the change is visible to users
+7. Submit your pull request!
 
 ## Development Setup
 
@@ -329,6 +330,7 @@ make help
 - Write in English (see [Language](#language)), using clear, concise wording
 - Include code examples where helpful
 - Keep the README up to date
+- Record user-visible changes under **Unreleased** in [CHANGELOG.md](CHANGELOG.md); releases are cut per milestone as described in [RELEASING.md](RELEASING.md)
 
 ## Community
 

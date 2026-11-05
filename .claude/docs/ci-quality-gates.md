@@ -201,7 +201,7 @@ Runs on all PRs. Detects `fix()` PRs (via title prefix or body keywords) and **b
 |---------|-------|
 | Platform | `linux/amd64` (K3s Hetzner target) |
 | Monorepo context | `control-plane-ui`, `portal` (for `shared/` deps) |
-| Registry | `ghcr.io/stoa-platform` |
+| Registry | Host: `ghcr.io`; namespace: `stoa-platform` |
 
 ## Security Pipeline (security-scan.yml)
 
@@ -211,9 +211,10 @@ Runs on all PRs. Detects `fix()` PRs (via title prefix or body keywords) and **b
 | Bandit | control-plane-api, MEDIUM+ severity+confidence | Yes |
 | ESLint security plugin | control-plane-ui, portal (7 rules) | 2 critical rules blocking (`detect-eval-with-expression`, `detect-unsafe-regex`) |
 | Clippy SAST | stoa-gateway (strict rules above) | Yes (`-D` rules) |
-| Trivy | Container images, CRITICAL+HIGH, ignore-unfixed | Yes |
-| Cargo audit | stoa-gateway | Non-blocking (`continue-on-error: true`) |
-| pip-audit / npm audit | All components | Non-blocking |
+| Trivy | Container images, CRITICAL+HIGH, including unfixed findings | Yes |
+| Cargo audit | stoa-gateway, all advisories | Yes |
+| pip-audit | control-plane-api, all advisories except the documented CVE-2024-23342 exception | Yes |
+| npm audit | control-plane-ui and portal, production dependencies, HIGH+ | Yes |
 
 ## GitOps Deploy Pipeline
 

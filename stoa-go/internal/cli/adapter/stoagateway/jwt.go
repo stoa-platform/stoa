@@ -2,6 +2,7 @@ package stoagateway
 
 import (
 	"errors"
+	"maps"
 	"net/url"
 	"strings"
 )
@@ -69,10 +70,7 @@ func (a *Adapter) authenticatedContract(c Contract) (Contract, error) {
 		return nil, errors.New("generic inboundAuth audience refused before publish")
 	}
 	// Copy the map so callers retain their original desired document.
-	out := make(Contract, len(c)+2)
-	for k, v := range c {
-		out[k] = v
-	}
+	out := maps.Clone(c)
 	delete(out, "inbound_auth")
 	delete(out, "inbound_auth_audience")
 	delete(out, "inboundAuth")

@@ -24,6 +24,7 @@ import (
 	initcmd "github.com/stoa-platform/stoa-go/internal/cli/cmd/init"
 	"github.com/stoa-platform/stoa-go/internal/cli/cmd/logs"
 	mcpcmd "github.com/stoa-platform/stoa-go/internal/cli/cmd/mcp"
+	"github.com/stoa-platform/stoa-go/internal/cli/cmd/reconcile"
 	"github.com/stoa-platform/stoa-go/internal/cli/cmd/subscription"
 	"github.com/stoa-platform/stoa-go/internal/cli/cmd/tenant"
 	"github.com/stoa-platform/stoa-go/internal/cli/cmd/token_usage"
@@ -125,6 +126,7 @@ func init() {
 	rootCmd.AddCommand(connectcmd.NewConnectCmd())
 	rootCmd.AddCommand(mcpcmd.NewMCPCmd())
 	rootCmd.AddCommand(completion.NewCompletionCmd())
+	rootCmd.AddCommand(reconcile.NewReconcileCmd())
 	rootCmd.AddCommand(versionCmd)
 }
 

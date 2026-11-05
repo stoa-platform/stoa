@@ -3,7 +3,7 @@
 Refusal must happen before any Promotion or GatewayDeployment write and be audited.
 """
 
-# regression for CAB-1917
+# Regression coverage for the lifecycle production Git guard.
 
 from __future__ import annotations
 

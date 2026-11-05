@@ -19,8 +19,8 @@ Usage:
     python scripts/demo/scenario-manager.py list
 
 Environment variables:
-    CONTROL_PLANE_URL  - CP API base URL (default: https://api.gostoa.dev)
-    KEYCLOAK_URL       - Keycloak base URL (default: https://auth.gostoa.dev)
+    CONTROL_PLANE_URL  - CP API base URL (default: http://localhost:8000)
+    KEYCLOAK_URL       - Keycloak base URL (default: http://localhost:8080)
     KEYCLOAK_REALM     - Keycloak realm (default: stoa)
     ADMIN_USERNAME     - Keycloak admin username (default: admin)
     ADMIN_PASSWORD     - Keycloak admin password (required for persona creation)
@@ -52,8 +52,8 @@ except ImportError:
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 SCENARIOS_DIR = Path(__file__).resolve().parent / "scenarios"
 
-API_URL = os.getenv("CONTROL_PLANE_URL", "https://api.gostoa.dev")
-KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "https://auth.gostoa.dev")
+API_URL = os.getenv("CONTROL_PLANE_URL", "http://localhost:8000")
+KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "http://localhost:8080")
 KEYCLOAK_REALM = os.getenv("KEYCLOAK_REALM", "stoa")
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
@@ -145,7 +145,7 @@ def get_keycloak_admin_token() -> str | None:
 
 
 def create_keycloak_user(token: str, persona: dict, tenant_id: str) -> bool:
-    """Create a user in Keycloak with tenant attributes."""
+    """Create a demo user with tenant attributes and mandatory password change."""
     url = f"{KEYCLOAK_URL}/admin/realms/{KEYCLOAK_REALM}/users"
     payload = {
         "username": persona["username"],
@@ -154,12 +154,13 @@ def create_keycloak_user(token: str, persona: dict, tenant_id: str) -> bool:
         "lastName": persona.get("last_name", "Demo"),
         "enabled": True,
         "emailVerified": True,
+        "requiredActions": ["UPDATE_PASSWORD"],
         "attributes": {"tenant_id": [tenant_id]},
         "credentials": [
             {
                 "type": "password",
                 "value": persona.get("password", f"{persona['username'].capitalize()}2026!"),
-                "temporary": False,
+                "temporary": True,
             }
         ],
     }

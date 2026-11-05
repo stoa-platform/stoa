@@ -251,7 +251,7 @@ async def delete_consumer(
 async def suspend_consumer(
     tenant_id: str,
     consumer_id: UUID,
-    user: User = Depends(require_role(["cpi-admin", "tenant-admin", "devops"])),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Suspend an active consumer."""
@@ -283,7 +283,7 @@ async def suspend_consumer(
 async def activate_consumer(
     tenant_id: str,
     consumer_id: UUID,
-    user: User = Depends(require_role(["cpi-admin", "tenant-admin", "devops"])),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Reactivate a suspended consumer."""
@@ -335,7 +335,7 @@ async def activate_consumer(
 async def block_consumer(
     tenant_id: str,
     consumer_id: UUID,
-    user: User = Depends(require_role(["cpi-admin", "tenant-admin", "devops"])),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Block a consumer (permanent until unblocked)."""
@@ -558,7 +558,7 @@ REQUIRED_CSV_FIELDS = {"external_id", "name", "email"}
 async def bulk_create_consumers(
     tenant_id: str,
     file: UploadFile,
-    user: User = Depends(require_role(["cpi-admin", "tenant-admin", "devops"])),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -752,7 +752,7 @@ async def bind_certificate(
     tenant_id: str,
     consumer_id: UUID,
     request: CertificateBindRequest,
-    user: User = Depends(require_role(["cpi-admin", "tenant-admin", "devops"])),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -843,7 +843,7 @@ async def bind_certificate(
 async def revoke_certificate(
     tenant_id: str,
     consumer_id: UUID,
-    user: User = Depends(require_role(["cpi-admin", "tenant-admin", "devops"])),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -893,7 +893,7 @@ async def rotate_certificate(
     tenant_id: str,
     consumer_id: UUID,
     request: CertificateRotateRequest,
-    user: User = Depends(require_role(["cpi-admin", "tenant-admin", "devops"])),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -1021,7 +1021,7 @@ async def list_expiring_certificates(
 async def bulk_revoke_certificates(
     tenant_id: str,
     request: BulkRevokeRequest,
-    user: User = Depends(require_role(["cpi-admin", "tenant-admin", "devops"])),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """

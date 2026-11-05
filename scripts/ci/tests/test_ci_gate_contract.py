@@ -298,6 +298,8 @@ def test_tenant_claim_inputs_select_helm_contracts(tmp_path: Path, rel: str) -> 
     ("rel", "selected"),
     (
         ("scripts/ci/tests/test_regression_gateway_chart_capabilities.py", ("helm",)),
+        ("stoa-gateway/Dockerfile", ("stoa-gateway", "helm")),
+        (".github/workflows/reusable-docker-ghcr.yml", ("helm", "gate-contract")),
         (".github/workflows/stoa-gateway-ci.yml", ("stoa-gateway", "helm", "gate-contract")),
     ),
 )

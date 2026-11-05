@@ -8,6 +8,8 @@ This directory contains operational procedures for incident management on the ST
 
 ## Runbook Index
 
+- [Site Backup, Restore and Verification](site-backup-restore.md): recovery inventory, offline key custody and acceptance gates for site operators.
+
 ### Critical (Immediate action required)
 
 | Runbook | Description | Impact |

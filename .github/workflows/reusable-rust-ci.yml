@@ -30,6 +30,9 @@ on:
         description: 'Line coverage percentage'
         value: ${{ jobs.ci.outputs.coverage_pct }}
 
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -Dwarnings

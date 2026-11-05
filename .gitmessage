@@ -1,0 +1,17 @@
+# <type>(<scope>): <short description>
+#
+# Explain what changed and why. Replace this guidance with your message.
+#
+# Copy applicable trailers below into the final paragraph, without '#'.
+# Keep them in the same block as Signed-off-by, with no blank line in between,
+# so that git interpret-trailers sees both.
+# Replace placeholders; never claim human verification before it happens.
+# AI-Generated-By: <tool>
+# Human-Verified-By: <name>
+#
+# Repeat AI-Generated-By for each tool that produced submitted content.
+# If human review is pending, omit Human-Verified-By and say so in the PR.
+# Record completed human verification in the final merge commit message.
+# Preserve applicable AI trailers when squashing; do not rewrite old history.
+# See CONTRIBUTING.md for the 2026-11-05 traceability start marker and policy.
+# Use git commit -S -s to sign the commit and add DCO Signed-off-by.

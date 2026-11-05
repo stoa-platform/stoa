@@ -154,6 +154,20 @@ Gateway resolution:
 - If more than one gateway matches, the request is ambiguous and must include
   `gateway_instance_id`.
 
+Production guard:
+
+- A gateway whose environment is `production` (or `prod`) requires a
+  Git-backed desired state: `APICatalog.git_commit_sha` must be set. The check
+  is shared with the direct deployment path
+  (`GatewayDeploymentService.require_git_backed_desired_state`).
+- Without a commit SHA the request returns `409`, no `GatewayDeployment` is
+  created or updated, and an `api_lifecycle.deploy_failed` audit event records
+  code `production_requires_git_backed_desired_state`.
+- `dev` and `staging` targets without a commit SHA stay accepted and are
+  stamped `desired_source=db_shortcut`.
+- Lifecycle drafts are not written to Git yet, so they cannot reach
+  `production` until a Git writer sets `git_commit_sha` on the catalog row.
+
 Idempotence:
 
 - Same API, same environment, same gateway, same desired state returns the
@@ -291,6 +305,11 @@ Rules:
   publication endpoint.
 - The target gateway is resolved with the same tenant/environment rules as
   deployment and publication.
+- A `production` target applies the deployment production guard before any
+  write: without `APICatalog.git_commit_sha` the request returns `409`, no
+  `Promotion` row is created or updated (even with `force=true`), no target
+  `GatewayDeployment` is requested, and an `api_lifecycle.promotion_failed`
+  audit event records code `production_requires_git_backed_desired_state`.
 - Promotion creates or reuses one `Promotion` row and creates or reuses one
   target `GatewayDeployment`.
 - Promotion never creates a legacy `Deployment` and never mutates

@@ -1,0 +1,6 @@
+<FLOW NAME="syntheticEmpty">
+  <SEQUENCE><MAP>
+    <MAPSET FIELD="body" VALUE="" />
+    <MAPSET FIELD="header.X-Synthetic" VALUE="ready" />
+  </MAP></SEQUENCE>
+</FLOW>

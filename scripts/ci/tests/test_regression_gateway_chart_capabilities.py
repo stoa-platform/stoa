@@ -23,6 +23,43 @@ def image_features(workflow):
     return set(filter(None, re.split(r"[,\s]+", matches[0].strip().strip("\"'"))))
 
 
+def assert_image_build_contract(workflow, dockerfile):
+    """Check the local build manifest; never pull or execute an image.
+
+    This deliberately follows the current multi-stage Dockerfile contract.
+    A build-layout change must update the assertions rather than silently skip them.
+    """
+    steps = workflow["jobs"]["docker"]["steps"]
+    builds = [step for step in steps if step.get("id") == "build"]
+    assert len(builds) == 1, "Expected one image build step"
+    build = builds[0]
+    assert build["uses"].startswith("docker/build-push-action@")
+    assert "${{ inputs.build-args }}" in build["with"]["build-args"], "Image features not forwarded"
+    assert build["with"]["file"] == "${{ format('{0}/Dockerfile', inputs.component) }}"
+
+    # Ignore comments and join continuations so comments cannot satisfy the contract.
+    source = "\n".join(
+        line for line in dockerfile.splitlines() if not line.lstrip().startswith("#")
+    )
+    source = source.replace("\\\n", " ")
+    stages = re.split(r"(?im)^FROM .+ AS (\w+)\s*$", source)
+    by_name = dict(zip(stages[1::2], stages[2::2], strict=True))
+    builder = by_name["builder"]
+    runtime = by_name["runtime"]
+    assert re.search(r"(?m)^ARG FEATURES=", builder), "Builder does not accept image features"
+    assert re.search(r'cargo build --locked --release --features "\$\{FEATURES\}"', builder), (
+        "Release binary ignores image features"
+    )
+    assert re.search(r"(?m)^COPY policies ./policies$", builder), "Embedded policy sources missing"
+    assert re.search(r"(?m)^COPY src ./src$", builder), "Gateway sources missing"
+    assert re.search(
+        r"(?m)^COPY --from=builder /app/target/release/stoa-gateway /app/stoa-gateway$", runtime
+    ), "Runtime does not ship the checked release binary"
+    assert re.search(r'(?m)^ENTRYPOINT \["/app/stoa-gateway"\]$', runtime)
+    users = re.findall(r"(?m)^USER (.+)$", runtime)
+    assert users and users[-1] == "1000", "Runtime must retain the non-root user"
+
+
 def missing_features(documents, features):
     missing = set()
     for document in documents:
@@ -58,6 +95,30 @@ class GatewayChartCapabilitiesTest(unittest.TestCase):
                     missing_features(yaml.safe_load_all(result.stdout), self.features),
                     "Chart enables capabilities missing from published image FEATURES",
                 )
+
+    def test_regression_image_build_preserves_policy_capabilities(self):
+        workflow = yaml.safe_load((ROOT / ".github/workflows/reusable-docker-ghcr.yml").read_text())
+        dockerfile = (ROOT / "stoa-gateway/Dockerfile").read_text()
+        assert_image_build_contract(workflow, dockerfile)
+
+    def test_broken_image_build_contract_is_rejected(self):
+        workflow = yaml.safe_load((ROOT / ".github/workflows/reusable-docker-ghcr.yml").read_text())
+        dockerfile = (ROOT / "stoa-gateway/Dockerfile").read_text()
+        mutations = {
+            "features ignored": ('--features "${FEATURES}"', ""),
+            "policy omitted": ("COPY policies ./policies", "# COPY policies ./policies"),
+            "wrong binary": ("/app/target/release/stoa-gateway", "/app/target/debug/stoa-gateway"),
+            "root runtime": ("USER 1000", "USER 0"),
+        }
+        for name, (before, after) in mutations.items():
+            with self.subTest(regression=name), self.assertRaises(AssertionError):
+                assert_image_build_contract(workflow, dockerfile.replace(before, after))
+        build = next(
+            step for step in workflow["jobs"]["docker"]["steps"] if step.get("id") == "build"
+        )
+        build["with"]["build-args"] = "CACHEBUST=${{ github.sha }}"
+        with self.assertRaisesRegex(AssertionError, "features not forwarded"):
+            assert_image_build_contract(workflow, dockerfile)
 
     def test_rust_ci_covers_published_features(self):
         flags = shlex.split(self.workflow["jobs"]["ci"]["with"]["cargo-features"])

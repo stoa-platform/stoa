@@ -607,3 +607,32 @@ staging:
     targetRevision: main
     chartPath: 'charts/stoa-platform'
     project: 'default'
+
+# Opt-in isolation for workloads deployed by this chart (gateway and companion).
+# All unlisted ingress/egress is denied. Requires a NetworkPolicy-capable CNI.
+# Match these selectors and destination POD ports to your deployment before enabling.
+# Control plane, UI, portal and identity workloads are managed by separate charts.
+networkPolicy:
+  enabled: false
+  ingressNamespace: ingress-nginx
+  ingressPodLabels:
+    app.kubernetes.io/component: controller
+  monitoringNamespace: stoa-monitoring
+  prometheusPodLabels:
+    app.kubernetes.io/name: prometheus
+  controlPlaneNamespace: stoa-system
+  controlPlanePodLabels:
+    app: stoa-control-plane-api
+  controlPlanePort: 8000
+  otelPodLabels:
+    app.kubernetes.io/name: alloy
+  otelPort: 4317
+  # Explicit NetworkPolicy egress rules for upstream APIs, OIDC, Kafka, the K8s
+  # API watcher and secret providers when configured. Supply destination peers
+  # (podSelector + namespaceSelector, or ipBlock CIDRs) AND ports; no broad allow.
+  # These rules also cover custom controlPlaneUrl/otelEndpoint destinations.
+  # Example: [{to: [{ipBlock: {cidr: 192.0.2.10/32}}], ports: [{port: 443}]}]
+  gatewayEgress: []
+  sidecarEgress: []
+  # The companion's localhost:8081 authorization endpoint needs no network allow;
+  # only the main gateway port is exposed. Its upstream APIs need sidecarEgress.

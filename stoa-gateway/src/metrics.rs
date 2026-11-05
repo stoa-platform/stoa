@@ -1974,9 +1974,9 @@ mod tests {
         let mut tenant = prometheus::proto::LabelPair::default();
         tenant.set_name("tenant".to_string());
         tenant.set_value("tenant-a".to_string());
-        legacy.set_label(vec![tenant].into());
+        legacy.set_label(vec![tenant]);
         let mut family = prometheus::proto::MetricFamily::default();
-        family.set_metric(vec![legacy, prometheus::proto::Metric::default()].into());
+        family.set_metric(vec![legacy, prometheus::proto::Metric::default()]);
         let mut families = vec![family];
         canonicalize_tenant_labels(&mut families);
         canonicalize_tenant_labels(&mut families);

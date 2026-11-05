@@ -20,6 +20,9 @@ on:
       - "scripts/ai_context_lint.py"
       - ".github/workflows/ai-context-lint.yml"
 
+permissions:
+  contents: read
+
 jobs:
   ai-context-lint:
     name: AI Context Lint

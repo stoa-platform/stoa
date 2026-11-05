@@ -6,7 +6,7 @@ Helm 3 chart for deploying STOA Platform to Kubernetes.
 
 - Kubernetes 1.28+
 - Helm 3.12+
-- Container images pushed to `ghcr.io/stoa-platform/`
+- Container images pushed to [the STOA container registry](https://github.com/orgs/stoa-platform/packages)
 
 ## Quick Start
 
@@ -45,8 +45,8 @@ kubectl apply -f charts/stoa-platform/crds/
 |-----|---------|-------------|
 | `stoaGateway.enabled` | `true` | Deploy the Rust gateway |
 | `stoaGateway.replicas` | `2` | Pod replica count |
-| `stoaGateway.image.repository` | `ghcr.io/stoa-platform/stoa-gateway` | Container image |
-| `stoaGateway.image.tag` | `latest` | Image tag |
+| `stoaGateway.image.repository` | [STOA Gateway](https://github.com/stoa-platform/stoa/pkgs/container/stoa-gateway) | Container image |
+| `stoaGateway.image.digest` | See `values.yaml` | Immutable image digest |
 | `stoaGateway.controlPlaneUrl` | `http://control-plane-api:8000` | API sync endpoint |
 | `stoaGateway.keycloakUrl` | `http://keycloak:8080` | OIDC provider |
 | `stoaGateway.mode` | `edge-mcp` | Gateway mode (edge-mcp, sidecar, proxy, shadow) |
@@ -120,17 +120,24 @@ read-only Secret mount are rendered only when the example is enabled.
 See [sidecar usage and limits](../../docs/integrations/sidecar-usage-patterns.md)
 for the existing decision contract and runtime limitations.
 
+Image references use immutable registry digests. Set both `repository` and
+`digest` when overriding gateway or companion images; tag-only overrides do not
+change the selected image. The retired Python gateway image and the
+registry-restricted webMethods image have no default reference. Supply your own
+immutable image before enabling a webMethods companion. The OpenResty example
+includes its own pin. Companion and Nginx example defaults remain disabled.
+
 ## CRDs
 
 Custom Resource Definitions in `crds/` (applied separately, not managed by Helm lifecycle):
 
 | CRD | API Group | Description |
 |-----|-----------|-------------|
-| `tools.gostoa.dev` | `gostoa.dev/v1alpha1` | MCP Tool definitions |
-| `toolsets.gostoa.dev` | `gostoa.dev/v1alpha1` | Tool groupings |
-| `gatewayinstances.gostoa.dev` | `gostoa.dev/v1alpha1` | Gateway instance registration |
-| `skills.gostoa.dev` | `gostoa.dev/v1alpha1` | MCP Skill definitions |
-| `gatewaybindings.gostoa.dev` | `gostoa.dev/v1alpha1` | Gateway-to-tool bindings |
+| `tools.gostoa.dev` | gostoa.dev/v1alpha1 | MCP Tool definitions |
+| `toolsets.gostoa.dev` | gostoa.dev/v1alpha1 | Tool groupings |
+| `gatewayinstances.gostoa.dev` | gostoa.dev/v1alpha1 | Gateway instance registration |
+| `skills.gostoa.dev` | gostoa.dev/v1alpha1 | MCP Skill definitions |
+| `gatewaybindings.gostoa.dev` | gostoa.dev/v1alpha1 | Gateway-to-tool bindings |
 
 ## Architecture
 

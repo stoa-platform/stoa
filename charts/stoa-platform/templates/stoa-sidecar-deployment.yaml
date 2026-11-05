@@ -62,8 +62,8 @@ spec:
         # --- Main Gateway Container (third-party: WebMethods, Kong, etc.) ---
         {{- if .Values.stoaSidecar.mainGateway.enabled }}
         - name: {{ .Values.stoaSidecar.targetGateway | default "gateway" }}
-          image: "{{ .Values.stoaSidecar.mainGateway.image.repository }}:{{ .Values.stoaSidecar.mainGateway.image.tag }}"
-          imagePullPolicy: {{ .Values.stoaSidecar.mainGateway.image.pullPolicy | default "Always" }}
+          {{- include "stoa-platform.pinnedImage" .Values.stoaSidecar.mainGateway.image | nindent 10 }}
+          imagePullPolicy: {{ .Values.stoaSidecar.mainGateway.image.pullPolicy | default "IfNotPresent" }}
           {{- if .Values.stoaSidecar.nginxExample.enabled }}
           command: ["openresty", "-c", "/etc/nginx/conf.d/default.conf", "-g", "daemon off;"]
           volumeMounts:
@@ -105,8 +105,8 @@ spec:
 
         # --- STOA Sidecar Container ---
         - name: stoa-sidecar
-          image: "{{ .Values.stoaSidecar.image.repository }}:{{ .Values.stoaSidecar.image.tag }}"
-          imagePullPolicy: {{ .Values.stoaSidecar.image.pullPolicy | default "Always" }}
+          {{- include "stoa-platform.pinnedImage" .Values.stoaSidecar.image | nindent 10 }}
+          imagePullPolicy: {{ .Values.stoaSidecar.image.pullPolicy | default "IfNotPresent" }}
           ports:
             - name: authz
               containerPort: 8081

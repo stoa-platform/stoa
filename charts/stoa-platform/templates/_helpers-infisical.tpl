@@ -14,7 +14,7 @@ Usage in a deployment:
 
 {{- define "stoa-platform.infisical-init-container" -}}
 - name: infisical-secret-sync
-  image: "{{ .Values.infisical.image.repository }}:{{ .Values.infisical.image.tag }}"
+  {{- include "stoa-platform.pinnedImage" .Values.infisical.image | nindent 2 }}
   imagePullPolicy: IfNotPresent
   command: ["sh", "-c"]
   args:

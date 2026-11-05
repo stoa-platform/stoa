@@ -49,6 +49,23 @@ class CompanionRenderTests(unittest.TestCase):
         self.assertFalse(any(o["kind"] == "Secret" and
                              o["metadata"]["name"] == "companion-basic-auth" for o in objects))
 
+    def test_images_are_pinned(self):
+        for arguments in ((), ("-f", str(EXAMPLE))):
+            objects = self.manifests(*arguments)
+            for obj in objects:
+                if obj["kind"] != "Deployment":
+                    continue
+                for container in obj["spec"]["template"]["spec"]["containers"]:
+                    self.assertRegex(container["image"], r"@sha256:[0-9a-f]{64}$")
+                    self.assertEqual(container["imagePullPolicy"], "IfNotPresent")
+
+    def test_companion_requires_valid_image_digests(self):
+        for image in ("stoaSidecar.image", "stoaSidecar.mainGateway.image"):
+            for digest in ("", "sha256:invalid"):
+                result = render("-f", str(EXAMPLE), "--set", f"{image}.digest={digest}")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("digest", result.stderr)
+
     def test_example_requires_auth_secret_and_tenant(self):
         for setting in ("authSecret", "tenantId"):
             result = render("-f", str(EXAMPLE), "--set", f"stoaSidecar.nginxExample.{setting}=")

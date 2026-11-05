@@ -80,14 +80,15 @@ RUN if [ "${NO_DEFAULT_FEATURES}" = true ]; then set -- --no-default-features; e
     cargo build --locked --release --features "${FEATURES}" "$@" && strip target/release/stoa-gateway
 
 # --- Stage 3: Runtime (minimal) -----------------------------------------------
-FROM debian:bookworm-slim@sha256:734a72b3d6142a71993b4bc580ca01d8ca687f77a2c422d96a961d3376b179bc AS runtime
+# The Bookworm-built binary uses compatible glibc/OpenSSL ABIs on Trixie.
+FROM debian:trixie-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2 AS runtime
 
 # Preserve the project distribution notices in the runtime image.
 COPY LICENSE NOTICE /usr/share/licenses/stoa/
 
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
       ca-certificates \
-      libssl3 \
+      libssl3t64 \
       curl \
     && rm -rf /var/lib/apt/lists/*
 

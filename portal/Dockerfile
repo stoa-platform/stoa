@@ -1,7 +1,7 @@
 # Build stage
 # NOTE: Build context must be repo root (not portal/)
 # Use: docker build -f portal/Dockerfile .
-FROM node:20-alpine AS builder
+FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS builder
 
 WORKDIR /app
 
@@ -86,7 +86,7 @@ ARG CACHEBUST=unknown
 RUN npm run build
 
 # Production stage - Use nginx-unprivileged for Kubernetes compatibility
-FROM nginxinc/nginx-unprivileged:alpine
+FROM nginxinc/nginx-unprivileged:alpine@sha256:b5047b9b76845eac124358373c6852377c52e4b05834a47647e955dd91cb8f1e
 
 # Preserve the project distribution notices in the runtime image.
 COPY LICENSE NOTICE /usr/share/licenses/stoa/

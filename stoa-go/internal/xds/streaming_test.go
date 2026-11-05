@@ -186,8 +186,8 @@ func TestEnvoyStreamingRelay(t *testing.T) {
 	client := &http.Client{Timeout: 5 * time.Second}
 	defer client.CloseIdleConnections()
 	reader, writer := io.Pipe()
-	defer reader.Close()
-	defer writer.Close()
+	defer func() { _ = reader.Close() }()
+	defer func() { _ = writer.Close() }()
 	upload := make(chan error, 1)
 	go func() {
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, reader)
@@ -197,7 +197,7 @@ func TestEnvoyStreamingRelay(t *testing.T) {
 		}
 		res, err := client.Do(req)
 		if err == nil {
-			defer res.Body.Close()
+			defer func() { _ = res.Body.Close() }()
 			body, readErr := io.ReadAll(res.Body)
 			err = readErr
 			if string(body) != "uploaded" {
@@ -229,7 +229,7 @@ func TestEnvoyStreamingRelay(t *testing.T) {
 	if err != nil {
 		t.Fatalf("response buffered before headers/first fragment: %v", err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	first := make([]byte, 5)
 	if _, err = io.ReadFull(res.Body, first); err != nil || string(first) != "first" {
 		t.Fatalf("first response fragment: %q, %v", first, err)

@@ -88,10 +88,14 @@ make demo-federation-live   # Run 2-min federation demo
 | `OPENSEARCH_AUTH` | `admin:$OPENSEARCH_ADMIN_PASSWORD` | OpenSearch credentials (prod: from Infisical) |
 | `GRAFANA_URL` | `http://localhost:3001` | Grafana endpoint |
 | `CONTROL_PLANE_URL` | `http://localhost:8000` | Control Plane API |
-| `KEYCLOAK_URL` | `http://localhost:8080` | Keycloak endpoint |
+| `KEYCLOAK_URL` | `http://localhost:8080` (`seed-all.sh` only; no default for `setup-rpo-keycloak-users.sh`) | Keycloak endpoint |
 | `ANORAK_PASSWORD` | _(required)_ | Admin password for API seeding |
 | `ERROR_COUNT` | `50` | Number of error snapshots to seed |
 | `TRAFFIC_DURATION` | `60` | Traffic generator duration (seconds) |
+
+## Keycloak Demo Users (`setup-rpo-keycloak-users.sh`)
+
+Creates the three Ready Player One demo users with their realm roles. The script has **no default target**: `KEYCLOAK_URL` must be set explicitly to a development Keycloak base URL, otherwise it exits with an error before any network call. It also requires `KEYCLOAK_BOOTSTRAP_ENV=dev`, a dedicated `KEYCLOAK_REALM`, `KC_ADMIN_PASSWORD` and the three user passwords (`PARZIVAL_PASSWORD`, `SORRENTO_PASSWORD`, `HALLIDAY_PASSWORD`). Every user is created with a temporary password and must set a new one at first login.
 
 ## Known Issues
 

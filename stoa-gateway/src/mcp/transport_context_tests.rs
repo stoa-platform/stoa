@@ -2545,6 +2545,99 @@ async fn call_tool_everywhere(
     (rest_status, a2a_status)
 }
 
+// Discovery currently projects tenant ownership, not CP execution permissions.
+async fn assert_permission_catalog(fixture: &Fixture, token: &str, name: &str, listed: bool) {
+    let (status, rest) = fixture
+        .post("/mcp/tools/list", Some(token), json!({}))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, rpc) = fixture
+        .post(
+            "/mcp",
+            Some(token),
+            json!({
+                "jsonrpc": "2.0", "id": 8, "method": "tools/list"
+            }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    for tools in [&rest["tools"], &rpc["result"]["tools"]] {
+        assert_eq!(
+            tools
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|tool| tool["name"] == name),
+            listed,
+            "catalog visibility for {name}: {tools}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn regression_permission_same_name_across_servers_denies_in_either_order() {
+    for reverse in [false, true] {
+        let fixture = Fixture::new(|config| config.a2a_enabled = true).await;
+        let mut items = vec![
+            json!({"mcp_server_id": "server-a", "tool_name": "echo_tool", "allowed": true}),
+            json!({"mcp_server_id": "server-b", "tool_name": "echo_tool", "allowed": false}),
+        ];
+        if reverse {
+            items.reverse();
+        }
+        override_permissions(&fixture, items).await;
+        let token = fixture.token(json!({}));
+        assert_permission_catalog(&fixture, &token, "echo_tool", true).await;
+        assert_eq!(
+            call_tool_everywhere(&fixture, &token, "echo_tool").await,
+            (StatusCode::FORBIDDEN, StatusCode::FORBIDDEN)
+        );
+    }
+}
+
+#[tokio::test]
+async fn regression_permission_case_variants_do_not_inherit_an_allow() {
+    let fixture = Fixture::new(|config| config.a2a_enabled = true).await;
+    override_permissions(
+        &fixture,
+        vec![
+            permission("echo_tool", true),
+            permission("Echo_Tool", false),
+        ],
+    )
+    .await;
+    for name in ["Echo_Tool", "ECHO_TOOL"] {
+        let tool = DynamicTool::new(
+            name,
+            "Case probe",
+            format!("{}/case-probe", fixture.server.uri()),
+            "GET",
+            empty_schema(),
+            "tenant-a",
+        );
+        fixture.state.tool_registry.register(Arc::new(tool));
+    }
+    let token = fixture.token(json!({}));
+    for name in ["Echo_Tool", "ECHO_TOOL"] {
+        assert_permission_catalog(&fixture, &token, name, true).await;
+        assert_eq!(
+            call_tool_everywhere(&fixture, &token, name).await,
+            (StatusCode::FORBIDDEN, StatusCode::FORBIDDEN)
+        );
+    }
+    assert_eq!(
+        call_tool_everywhere(&fixture, &token, "echo_tool").await,
+        (StatusCode::OK, StatusCode::OK)
+    );
+    assert!(fixture
+        .server
+        .received_requests()
+        .await
+        .unwrap()
+        .iter()
+        .all(|request| request.url.path() != "/case-probe"));
+}
+
 #[tokio::test]
 async fn regression_alias_allow_does_not_widen_canonical_tool_access() {
     // A deprecated alias that is allowed must not execute a canonical tool
@@ -2559,6 +2652,8 @@ async fn regression_alias_allow_does_not_widen_canonical_tool_access() {
         items.extend(canonical);
         override_permissions(&fixture, items).await;
         let token = fixture.token(json!({}));
+        assert_permission_catalog(&fixture, &token, "echo_tool", true).await;
+        assert_permission_catalog(&fixture, &token, "legacy_echo", false).await;
         assert_eq!(
             call_tool_everywhere(&fixture, &token, "legacy_echo").await,
             (StatusCode::FORBIDDEN, StatusCode::FORBIDDEN)
@@ -2623,6 +2718,18 @@ async fn regression_fallback_targets_require_tenant_tool_permission() {
             .tool_registry
             .register_alias("fallback_alias", "fallback_tool");
         let token = fixture.token(json!({}));
+        assert_permission_catalog(&fixture, &token, "fallback_tool", true).await;
+        assert_permission_catalog(&fixture, &token, "fallback_alias", false).await;
+        if !allowed {
+            let (status, _) = fixture
+                .post(
+                    "/mcp/tools/call",
+                    Some(&token),
+                    json!({"name": "fallback_tool", "arguments": {}}),
+                )
+                .await;
+            assert_eq!(status, StatusCode::FORBIDDEN);
+        }
         let call = json!({"name": "echo_tool", "arguments": {}});
         let (status, response) = fixture.post("/mcp/tools/call", Some(&token), call).await;
         let requests = fixture.server.received_requests().await.unwrap();

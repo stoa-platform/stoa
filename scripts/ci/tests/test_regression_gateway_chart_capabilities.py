@@ -45,7 +45,7 @@ class GatewayChartCapabilitiesTest(unittest.TestCase):
         cls.workflow = yaml.safe_load(WORKFLOW.read_text())
         cls.features = image_features(cls.workflow)
 
-    def test_chart_profiles_match_published_image(self):
+    def test_regression_chart_profiles_match_published_image(self):
         for values in sorted(CHART.glob("values*.yaml")):
             with self.subTest(profile=values.name):
                 result = subprocess.run(

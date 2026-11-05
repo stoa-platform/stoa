@@ -297,7 +297,7 @@ def test_tenant_claim_inputs_select_helm_contracts(tmp_path: Path, rel: str) -> 
 @pytest.mark.parametrize(
     ("rel", "selected"),
     (
-        ("scripts/ci/tests/test_gateway_chart_capabilities.py", ("helm",)),
+        ("scripts/ci/tests/test_regression_gateway_chart_capabilities.py", ("helm",)),
         (".github/workflows/stoa-gateway-ci.yml", ("stoa-gateway", "helm", "gate-contract")),
     ),
 )

@@ -294,6 +294,22 @@ def test_tenant_claim_inputs_select_helm_contracts(tmp_path: Path, rel: str) -> 
     _assert_selected(_detect(repo, base, head), "helm")
 
 
+@pytest.mark.parametrize(
+    ("rel", "selected"),
+    (
+        ("scripts/ci/tests/test_regression_gateway_chart_capabilities.py", ("helm",)),
+        (".github/workflows/stoa-gateway-ci.yml", ("stoa-gateway", "helm", "gate-contract")),
+    ),
+)
+def test_gateway_capability_inputs_select_helm(tmp_path: Path, rel: str, selected: tuple) -> None:
+    repo, base = _repo(tmp_path)
+    path = repo / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("capability input\n", encoding="utf-8")
+    head = _commit(repo, "change capability input")
+    _assert_selected(_detect(repo, base, head), *selected)
+
+
 @pytest.mark.parametrize("code", (2, 3))
 def test_grep_status_other_than_zero_or_one_fails(tmp_path: Path, code: int) -> None:
     repo, base = _repo(tmp_path)

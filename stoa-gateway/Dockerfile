@@ -18,7 +18,7 @@
 # ==============================================================================
 
 # --- Stage 1: Plan dependencies -----------------------------------------------
-FROM rust:1.99-bookworm@sha256:9181b56c2a21ab1d5e73cffe04fc762426d30aa7fac3c91141dd033f49a7fc8b AS planner
+FROM rust:1.99-bookworm@sha256:cfcbed05398d0f6f81b7c3a24579475c567f97007ae7837ab421f9ca3e66333d AS planner
 RUN cargo install cargo-chef --locked
 WORKDIR /app
 COPY Cargo.toml Cargo.lock* ./
@@ -30,7 +30,7 @@ COPY proto ./proto
 RUN cargo chef prepare --recipe-path recipe.json
 
 # --- Stage 2: Build -----------------------------------------------------------
-FROM rust:1.99-bookworm@sha256:9181b56c2a21ab1d5e73cffe04fc762426d30aa7fac3c91141dd033f49a7fc8b AS builder
+FROM rust:1.99-bookworm@sha256:cfcbed05398d0f6f81b7c3a24579475c567f97007ae7837ab421f9ca3e66333d AS builder
 
 # Feature flags for community/enterprise image split (ADR-041 Phase 3)
 #   empty   = community (default — lean image, no optional deps)
@@ -80,16 +80,15 @@ RUN if [ "${NO_DEFAULT_FEATURES}" = true ]; then set -- --no-default-features; e
     cargo build --locked --release --features "${FEATURES}" "$@" && strip target/release/stoa-gateway
 
 # --- Stage 3: Runtime (minimal) -----------------------------------------------
-FROM debian:bookworm-slim@sha256:99c0b25c46d0214d5a2091092e7908907dcaecd6a962cde0ac700acee222b6f3 AS runtime
+FROM debian:bookworm-slim@sha256:734a72b3d6142a71993b4bc580ca01d8ca687f77a2c422d96a961d3376b179bc AS runtime
 
 # Preserve the project distribution notices in the runtime image.
 COPY LICENSE NOTICE /usr/share/licenses/stoa/
 
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
       ca-certificates \
       libssl3 \
       curl \
-    && apt-get install --only-upgrade -y --no-install-recommends apt libapt-pkg6.0 \
     && rm -rf /var/lib/apt/lists/*
 
 # UID 1000 for k8s runAsNonRoot compatibility

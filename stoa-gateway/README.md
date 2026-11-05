@@ -69,6 +69,11 @@ tests/
 
 Default features: **none** (lean community build).
 
+The published gateway image enables `kafka,pingora,k8s` to support the Helm
+environment profiles. Policy evaluation is always compiled in; it does not
+require a `tenant-policy` Cargo feature. Helm CI checks rendered capability
+switches against the image build arguments and verifies Rust CI coverage.
+
 ```bash
 cargo build --release                          # Community
 cargo build --release --features "kafka,k8s"   # Enterprise

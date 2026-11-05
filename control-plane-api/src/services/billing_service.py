@@ -81,24 +81,13 @@ class BillingService:
         self,
         budget_id: uuid.UUID,
         data: DepartmentBudgetUpdate,
+        *,
+        tenant_id: str,
     ) -> DepartmentBudgetResponse:
-        """Update a budget's configuration."""
-        budget = await self.repo.get_by_id(budget_id)
+        """Update a budget's configuration within its tenant."""
+        budget = await self.repo.update_configuration(budget_id, tenant_id, data.model_dump(exclude_none=True))
         if not budget:
             raise ValueError(f"Budget not found: {budget_id}")
-
-        if data.department_name is not None:
-            budget.department_name = data.department_name
-        if data.budget_limit_microcents is not None:
-            budget.budget_limit_microcents = data.budget_limit_microcents
-        if data.warning_threshold_pct is not None:
-            budget.warning_threshold_pct = data.warning_threshold_pct
-        if data.critical_threshold_pct is not None:
-            budget.critical_threshold_pct = data.critical_threshold_pct
-        if data.enforcement is not None:
-            budget.enforcement = data.enforcement
-
-        budget = await self.repo.update(budget)
         logger.info("Updated department budget: id=%s dept=%s", budget.id, budget.department_id)
         return DepartmentBudgetResponse.model_validate(budget)
 

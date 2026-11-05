@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import User, get_current_user
-from ..auth.rbac import decide_tenant_access
+from ..auth.rbac import decide_tenant_access, require_role
 from ..database import get_db
 from ..models.plan import Plan, PlanStatus
 from ..repositories.plan import PlanRepository
@@ -38,7 +38,7 @@ def _has_tenant_access(user: User, tenant_id: str) -> bool:
 async def create_plan(
     tenant_id: str,
     request: PlanCreate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_role(["cpi-admin", "tenant-admin", "devops"])),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new subscription plan for a tenant."""
@@ -162,7 +162,7 @@ async def update_plan(
     tenant_id: str,
     plan_id: UUID,
     request: PlanUpdate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_role(["cpi-admin", "tenant-admin", "devops"])),
     db: AsyncSession = Depends(get_db),
 ):
     """Update plan details."""
@@ -196,7 +196,7 @@ async def update_plan(
 async def delete_plan(
     tenant_id: str,
     plan_id: UUID,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_role(["cpi-admin", "tenant-admin", "devops"])),
     db: AsyncSession = Depends(get_db),
 ):
     """Delete a plan."""

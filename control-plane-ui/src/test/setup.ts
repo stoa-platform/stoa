@@ -173,6 +173,7 @@ i18n.use(initReactI18next).init({
           blocked: 'Blocked',
         },
         login: {
+          invitationOnly: 'Access is by invitation only. Ask an administrator for access.',
           title: 'STOA Control Plane',
           subtitle: 'Multi-tenant API Management',
           button: 'Login with Keycloak',

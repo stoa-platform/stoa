@@ -231,7 +231,9 @@ SARIF includes CRITICAL/HIGH with or without a fix (`exit-code: 0`), and its
 upload is best effort. Both failure gates run independently after earlier
 failures unless cancelled. Neither the scan job nor either failure gate uses
 `continue-on-error`. A missing Dockerfile fails the job. Dependency Scan remains
-blocking. No Trivy ignore file, VEX, or CVE allowlist is introduced.
+blocking. All three Trivy invocations set `TRIVY_IGNOREFILE=/dev/null`, so
+repository ignore files cannot suppress findings in reports or blocking gates.
+No Trivy ignore file, VEX, or CVE allowlist is introduced.
 
 ## GitOps Deploy Pipeline
 

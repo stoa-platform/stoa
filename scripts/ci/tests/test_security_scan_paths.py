@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import runpy
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -282,6 +283,47 @@ def test_regression_trivy_high_critical_findings_are_blocking() -> None:
         assert gate["with"]["ignore-unfixed"] is ignore_unfixed
         assert gate["with"]["exit-code"] == "1"
         assert gate["if"] == "${{ !cancelled() && steps.check.outputs.exists == 'true' }}"
+
+
+@pytest.mark.parametrize("name", (
+    "Run Trivy (SARIF)",
+    "Run Trivy (fail on fixable HIGH+)",
+    "Run Trivy (fail on any CRITICAL)",
+))
+def test_regression_trivy_cannot_load_repository_ignorefiles(name: str) -> None:
+    job = yaml.safe_load((ROOT / ".github/workflows/security-scan.yml").read_text())["jobs"]["container-scan"]
+    step = next(step for step in job["steps"] if step["name"] == name)
+    # An empty action input alone still lets Trivy load .trivyignore by default.
+    assert step["env"]["TRIVY_IGNOREFILE"] == "/dev/null"
+    assert Path(step["env"]["TRIVY_IGNOREFILE"]).read_bytes() == b""
+    # A nonempty action input would override the explicit environment variable.
+    assert not step["with"].get("trivyignores")
+
+
+@pytest.mark.skipif(shutil.which("trivy") is None, reason="requires the Trivy executable")
+@pytest.mark.parametrize("fixed_version", ("", "1.1"))
+def test_regression_trivy_critical_ignorefile_bypass(tmp_path: Path, fixed_version: str) -> None:
+    job = yaml.safe_load((ROOT / ".github/workflows/security-scan.yml").read_text())["jobs"]["container-scan"]
+    gate = next(step for step in job["steps"] if step["name"] == "Run Trivy (fail on any CRITICAL)")
+    finding = {"VulnerabilityID": "TEST-CRITICAL", "PkgName": "fixture",
+               "InstalledVersion": "1.0", "FixedVersion": fixed_version, "Severity": "CRITICAL"}
+    report = tmp_path / "report.json"
+    report.write_text(json.dumps({"SchemaVersion": 2, "ArtifactName": "fixture",
+                                 "ArtifactType": "container_image", "Results": [
+                                     {"Target": "fixture", "Class": "lang-pkgs", "Type": "npm",
+                                      "Vulnerabilities": [finding]}]}))
+    (tmp_path / ".trivyignore").write_text("TEST-CRITICAL\n")
+    command = ["trivy", "convert", "--format", "json", "--severity", gate["with"]["severity"],
+               "--exit-code", gate["with"]["exit-code"], str(report)]
+    env = {key: value for key, value in os.environ.items() if not key.startswith("TRIVY_")}
+    # Replay the same finding without a database or container runtime.
+    baseline = subprocess.run(command, cwd=tmp_path, env=env, capture_output=True, text=True)
+    assert baseline.returncode == 0, baseline.stderr
+    assert not json.loads(baseline.stdout)["Results"][0].get("Vulnerabilities")
+    protected = subprocess.run(command, cwd=tmp_path, env={**env, **gate["env"]},
+                               capture_output=True, text=True)
+    assert protected.returncode == 1, protected.stderr
+    assert json.loads(protected.stdout)["Results"][0]["Vulnerabilities"][0]["VulnerabilityID"] == "TEST-CRITICAL"
 
 
 @pytest.mark.parametrize("exists", (False, True))

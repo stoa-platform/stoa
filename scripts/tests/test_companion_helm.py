@@ -66,6 +66,73 @@ class CompanionRenderTests(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("digest", result.stderr)
 
+    @staticmethod
+    def containers(objects):
+        containers = []
+        for obj in objects:
+            if obj["kind"] not in {"Deployment", "Job", "CronJob", "Pod"}:
+                continue
+            spec = obj["spec"]
+            if obj["kind"] == "CronJob":
+                spec = spec["jobTemplate"]["spec"]
+            if obj["kind"] != "Pod":
+                spec = spec["template"]["spec"]
+            containers.extend(spec.get("initContainers", []) + spec["containers"])
+        return containers
+
+    def test_all_chart_workloads_default_to_pinned_images_and_cached_pulls(self):
+        objects = self.manifests(
+            "-f", str(EXAMPLE),
+            "--set", "stoaGateway.enabled=true",
+            "--set", "gatewaySync.enabled=true",
+            "--set", "stoa.bootstrap.enabled=true",
+            "--set", "stoa.bootstrap.keycloak.existingSecret=existing-bootstrap",
+            "--set", "stoa.bootstrap.firstAdmin.enabled=true",
+            "--set", "stoa.bootstrap.firstAdmin.existingSecret=existing-request",
+            "--set", "vault.credentialsCheck.enabled=true",
+            "--set", "infisical.enabled=true",
+        )
+        containers = self.containers(objects)
+        self.assertTrue({"stoa-gateway", "stoa-sidecar", "bootstrap", "sync", "test"}
+                        <= {c["name"] for c in containers})
+        for container in containers:
+            with self.subTest(container=container["name"]):
+                self.assertRegex(container["image"], r"@sha256:[0-9a-f]{64}$")
+                self.assertEqual(container.get("imagePullPolicy"), "IfNotPresent")
+
+    def test_release_values_restore_previous_images(self):
+        # Synthetic digests exercise rendering only; no image is pulled.
+        def release(digit):
+            arguments = ["-f", str(EXAMPLE)]
+            expected = {}
+            for key, name in (("stoaGateway", "stoa-gateway"),
+                              ("stoaSidecar", "stoa-sidecar"),
+                              ("stoaSidecar.mainGateway", "nginx")):
+                repository = "registry.example.test/" + name
+                digest = "sha256:" + digit * 64
+                arguments += ["--set-string", f"{key}.image.repository={repository}",
+                              "--set-string", f"{key}.image.digest={digest}"]
+                expected[name] = f"{repository}@{digest}"
+            rendered = {c["name"]: c["image"] for c in
+                        self.containers(self.manifests(*arguments))}
+            self.assertEqual({name: rendered[name] for name in expected}, expected)
+            return rendered
+
+        previous = release("a")
+        upgraded = release("b")
+        self.assertNotEqual(previous, upgraded)
+        self.assertEqual(release("a"), previous)
+
+    def test_pull_policy_overrides_are_preserved(self):
+        arguments = ["-f", str(EXAMPLE), "--set", "stoa.bootstrap.enabled=true",
+                     "--set", "stoa.bootstrap.keycloak.existingSecret=existing-bootstrap"]
+        for key in ("stoaGateway.image", "stoaSidecar.image",
+                    "stoaSidecar.mainGateway.image", "gatewaySync", "stoa.bootstrap",
+                    "testConnection"):
+            arguments += ["--set", f"{key}.pullPolicy=Always"]
+        for container in self.containers(self.manifests(*arguments)):
+            self.assertEqual(container["imagePullPolicy"], "Always")
+
     def test_example_requires_auth_secret_and_tenant(self):
         for setting in ("authSecret", "tenantId"):
             result = render("-f", str(EXAMPLE), "--set", f"stoaSidecar.nginxExample.{setting}=")

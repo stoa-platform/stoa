@@ -28,4 +28,4 @@ Thumbs.db
 
 # Test fixtures
 examples/
-tests/
+/tests/

@@ -29,7 +29,7 @@ spec:
           containers:
           - name: sync
             {{- include "stoa-platform.pinnedImageReference" .Values.gatewaySync.image | nindent 12 }}
-            imagePullPolicy: IfNotPresent
+            imagePullPolicy: {{ .Values.gatewaySync.pullPolicy | default "IfNotPresent" }}
             command:
             - /bin/sh
             - -c
@@ -161,6 +161,7 @@ spec:
       containers:
       - name: sync
         {{- include "stoa-platform.pinnedImageReference" .Values.gatewaySync.image | nindent 8 }}
+        imagePullPolicy: {{ .Values.gatewaySync.pullPolicy | default "IfNotPresent" }}
         command:
         - /bin/sh
         - -c

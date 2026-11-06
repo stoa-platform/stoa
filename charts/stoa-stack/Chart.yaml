@@ -1,0 +1,18 @@
+apiVersion: v2
+name: stoa-stack
+description: STOA umbrella chart - installs the platform and observability charts from one set of shared parameters
+type: application
+version: 0.1.0
+appVersion: "2.0.0"
+maintainers:
+  - name: CAB Ingénierie
+    email: support@gostoa.dev
+dependencies:
+  # Versions must match the sibling charts (enforced by tests/test_shared_parameters.py).
+  - name: stoa-platform
+    version: "0.1.0"
+    repository: file://../stoa-platform
+  - name: stoa-observability
+    version: "0.1.0"
+    repository: file://../stoa-observability
+    condition: global.observability.enabled

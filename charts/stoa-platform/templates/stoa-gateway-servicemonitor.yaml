@@ -22,9 +22,9 @@ spec:
       scrapeTimeout: {{ .Values.stoaGateway.serviceMonitor.scrapeTimeout | default "10s" }}
       metricRelabelings:
         - targetLabel: cluster
-          replacement: {{ .Values.stoaGateway.clusterName | default "default" }}
+          replacement: {{ include "stoa-platform.clusterName" (dict "root" $ "value" .Values.stoaGateway.clusterName) }}
         - targetLabel: environment
-          replacement: {{ .Values.stoaGateway.environment | default "dev" }}
+          replacement: {{ include "stoa-platform.environment" (dict "root" $ "value" .Values.stoaGateway.environment) }}
   namespaceSelector:
     matchNames:
       - {{ .Release.Namespace }}

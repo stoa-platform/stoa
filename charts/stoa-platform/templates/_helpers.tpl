@@ -49,3 +49,54 @@ app.kubernetes.io/part-of: stoa-platform
 {{- end -}}
 {{- printf "image: %s" ($image | quote) -}}
 {{- end -}}
+
+{{/*
+Shared parameters.
+When this chart is installed through the stoa-stack umbrella chart, `global`
+is the single source for values shared with sibling charts and takes
+precedence over component-local values. Standalone installs keep using the
+component-local values, which remain the fallback.
+Usage: include "stoa-platform.environment" (dict "root" $ "value" .Values.x.environment)
+*/}}
+{{- define "stoa-platform.environment" -}}
+{{- $global := .root.Values.global | default dict -}}
+{{- $global.environment | default .value | default "dev" -}}
+{{- end -}}
+
+{{- define "stoa-platform.clusterName" -}}
+{{- $global := .root.Values.global | default dict -}}
+{{- $global.clusterName | default .value | default "default" -}}
+{{- end -}}
+
+{{/*
+Namespace that hosts the OTLP collector. With `global.observability` set, an
+empty namespace means the collector is co-installed in the release namespace.
+*/}}
+{{- define "stoa-platform.observabilityNamespace" -}}
+{{- $global := .Values.global | default dict -}}
+{{- $observability := $global.observability | default dict -}}
+{{- if hasKey $observability "enabled" -}}
+{{- $observability.namespace | default .Release.Namespace -}}
+{{- else -}}
+{{- .Values.networkPolicy.monitoringNamespace -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+OTLP gRPC endpoint for a component; an empty result disables trace export.
+With `global.observability` set, the endpoint targets the stoa-alloy-otlp
+Service rendered by the stoa-observability chart, and is empty when
+observability is disabled. Otherwise the component-local value is used.
+Usage: include "stoa-platform.otelEndpoint" (dict "root" $ "value" .Values.x.otelEndpoint)
+*/}}
+{{- define "stoa-platform.otelEndpoint" -}}
+{{- $global := .root.Values.global | default dict -}}
+{{- $observability := $global.observability | default dict -}}
+{{- if hasKey $observability "enabled" -}}
+{{- if $observability.enabled -}}
+{{- printf "http://stoa-alloy-otlp.%s:4317" (include "stoa-platform.observabilityNamespace" .root) -}}
+{{- end -}}
+{{- else -}}
+{{- .value | default "" -}}
+{{- end -}}
+{{- end -}}

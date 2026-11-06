@@ -22,9 +22,9 @@ spec:
       scrapeTimeout: {{ .Values.controlPlaneApi.serviceMonitor.scrapeTimeout | default "10s" }}
       metricRelabelings:
         - targetLabel: cluster
-          replacement: {{ .Values.controlPlaneApi.clusterName | default "default" }}
+          replacement: {{ include "stoa-platform.clusterName" (dict "root" $ "value" .Values.controlPlaneApi.clusterName) }}
         - targetLabel: environment
-          replacement: {{ .Values.controlPlaneApi.environment | default "dev" }}
+          replacement: {{ include "stoa-platform.environment" (dict "root" $ "value" .Values.controlPlaneApi.environment) }}
   namespaceSelector:
     matchNames:
       - {{ .Release.Namespace }}

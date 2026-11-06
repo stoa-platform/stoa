@@ -31,6 +31,13 @@ on:
         required: false
         type: string
         default: ''
+    secrets:
+      cf-access-client-id:
+        description: 'Cloudflare Access service token id (console is behind Access)'
+        required: false
+      cf-access-client-secret:
+        description: 'Cloudflare Access service token secret'
+        required: false
 
 permissions: {}
 
@@ -45,6 +52,7 @@ jobs:
       SMOKE_ENV: ${{ inputs.environment }}
       SMOKE_COMPONENT: ${{ inputs.component }}
       SMOKE_INPUT_DOMAIN: ${{ inputs.base-domain }}
+      SMOKE_PROD_DOMAIN: ${{ vars.SMOKE_BASE_DOMAIN_PROD }}
       SMOKE_VAR_DOMAIN: >-
         ${{ (inputs.environment == 'prod' && vars.SMOKE_BASE_DOMAIN_PROD)
         || (inputs.environment == 'dev' && vars.SMOKE_BASE_DOMAIN_DEV)
@@ -101,13 +109,25 @@ jobs:
         if: steps.resolve.outputs.skip != 'true'
         env:
           SMOKE_DOMAIN: ${{ steps.resolve.outputs.domain }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.cf-access-client-id }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.cf-access-client-secret }}
         run: |
           set -euo pipefail
           PASS=0; FAIL=0
 
           check() {
-            local name="$1" url="$2" expected="${3:-200}"
-            status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 --retry 2 --retry-delay 5 "$url") || status="000"
+            local name="$1" url="$2" expected="${3:-200}" access="${4:-}"
+            if [ -n "$access" ]; then
+              if [ -z "${CF_ACCESS_CLIENT_ID:-}" ] || [ -z "${CF_ACCESS_CLIENT_SECRET:-}" ]; then
+                echo "  $name: missing Cloudflare Access service token secrets"
+                FAIL=$((FAIL+1)); return
+              fi
+              # Headers go through stdin (-H @-) so the token never shows in argv.
+              status=$(printf 'CF-Access-Client-Id: %s\nCF-Access-Client-Secret: %s\n' "$CF_ACCESS_CLIENT_ID" "$CF_ACCESS_CLIENT_SECRET" \
+                | curl -s -o /dev/null -w "%{http_code}" --max-time 10 --retry 2 --retry-delay 5 -H @- "$url") || status="000"
+            else
+              status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 --retry 2 --retry-delay 5 "$url") || status="000"
+            fi
             if [ "$status" = "$expected" ]; then
               echo "  $name: $status"
               PASS=$((PASS+1))
@@ -123,7 +143,7 @@ jobs:
           check "API Health"      "https://api.${SMOKE_DOMAIN}/health"
           check "Gateway Health"  "https://mcp.${SMOKE_DOMAIN}/health/ready"
           check "Portal"          "https://portal.${SMOKE_DOMAIN}"
-          check "Console"         "https://console.${SMOKE_DOMAIN}"
+          check "Console"         "https://console.${SMOKE_DOMAIN}" 200 access
           check "Keycloak OIDC"   "https://auth.${SMOKE_DOMAIN}/realms/stoa/.well-known/openid-configuration"
 
           echo "---"

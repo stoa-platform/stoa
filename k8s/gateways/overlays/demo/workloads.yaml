@@ -1,0 +1,114 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: demo-gateway}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: demo-gateway}}
+  template:
+    metadata: {labels: {app: demo-gateway}}
+    spec:
+      automountServiceAccountToken: false
+      securityContext: &pod {runAsNonRoot: true, runAsUser: 101, runAsGroup: 101, fsGroup: 101, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: gateway
+          image: ghcr.io/stoa-platform/stoa-gateway@sha256:06fd4289ef6ad5d0ff59ceb7e3bbdc7d43c1f64bb299bd36f76f079157791b69
+          securityContext: &container {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          env:
+            - {name: STOA_ADMIN_API_TOKEN, valueFrom: {secretKeyRef: {name: demo-admin, key: token}}}
+            - {name: STOA_ADMIN_REQUIRE_STRONG_AUTH, value: "false"}
+            - {name: STOA_AUTO_REGISTER, value: "false"}
+          resources: {requests: {cpu: 100m, memory: 128Mi}, limits: {cpu: "1", memory: 512Mi}}
+          livenessProbe: {httpGet: {path: /health, port: 8080}, initialDelaySeconds: 20, periodSeconds: 10}
+          volumeMounts:
+            - {name: spool, mountPath: /var/lib/stoa-gateway}
+        - name: edge
+          image: nginxinc/nginx-unprivileged@sha256:7377697a821c131a924a7105fafbe7414db4e9fcc77a6f08f776f33f141ec3f8
+          command: [nginx, -c, /runtime/nginx.conf, -g, "daemon off;"]
+          securityContext: *container
+          resources: {requests: {cpu: 50m, memory: 32Mi}, limits: {cpu: 500m, memory: 128Mi}}
+          readinessProbe: {tcpSocket: {port: 8081}, periodSeconds: 5}
+          volumeMounts:
+            - {name: runtime, mountPath: /runtime, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+        - name: bootstrap
+          image: python@sha256:a4fc589b32e824f3f02ed9d7e7be19518aa47e105b80416336af9f202275a489
+          command: [python, -B, /runtime/bootstrap.py]
+          securityContext: *container
+          env: &adminEnv
+            - {name: ADMIN_URL, value: "http://localhost:8080"}
+            - {name: STOA_ADMIN_API_TOKEN, valueFrom: {secretKeyRef: {name: demo-admin, key: token}}}
+          resources: &pythonResources {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 250m, memory: 64Mi}}
+          readinessProbe: {exec: {command: [python, -B, /runtime/bootstrap.py, --check]}, periodSeconds: 15, timeoutSeconds: 10, failureThreshold: 3}
+          volumeMounts: &runtimeMounts [{name: runtime, mountPath: /runtime, readOnly: true}]
+      volumes:
+        - &runtimeVolume {name: runtime, configMap: {name: demo-runtime}}
+        - {name: tmp, emptyDir: {sizeLimit: 16Mi}}
+        - {name: spool, emptyDir: {sizeLimit: 128Mi}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: demo-echo}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: demo-echo}}
+  template:
+    metadata: {labels: {app: demo-echo}}
+    spec:
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 101, runAsGroup: 101, fsGroup: 101, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: echo
+          image: python@sha256:a4fc589b32e824f3f02ed9d7e7be19518aa47e105b80416336af9f202275a489
+          command: [python, -B, /runtime/echo.py]
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 64Mi}}
+          readinessProbe: {tcpSocket: {port: 8080}, periodSeconds: 5}
+          volumeMounts: [{name: runtime, mountPath: /runtime, readOnly: true}]
+      volumes: [{name: runtime, configMap: {name: demo-runtime}}]
+---
+apiVersion: batch/v1
+kind: Job
+metadata: {name: demo-bootstrap}
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 180
+  template:
+    metadata: {labels: {app: demo-bootstrap}}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 101, runAsGroup: 101, fsGroup: 101, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: bootstrap
+          image: python@sha256:a4fc589b32e824f3f02ed9d7e7be19518aa47e105b80416336af9f202275a489
+          command: [python, -B, /runtime/bootstrap.py, --once]
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 64Mi}}
+          env:
+            - {name: ADMIN_URL, value: "http://demo-admin:8080"}
+            - {name: STOA_ADMIN_API_TOKEN, valueFrom: {secretKeyRef: {name: demo-admin, key: token}}}
+          volumeMounts: [{name: runtime, mountPath: /runtime, readOnly: true}]
+      volumes: [{name: runtime, configMap: {name: demo-runtime}}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: demo-gateway}
+spec:
+  selector: {app: demo-gateway}
+  ports: [{name: http, port: 8081, targetPort: 8081}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: demo-admin}
+spec:
+  publishNotReadyAddresses: true
+  selector: {app: demo-gateway}
+  ports: [{name: admin, port: 8080, targetPort: 8080}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: demo-echo}
+spec:
+  selector: {app: demo-echo}
+  ports: [{name: http, port: 8080, targetPort: 8080}]

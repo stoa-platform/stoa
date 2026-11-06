@@ -7,6 +7,7 @@
 //! Only an explicit allow in a complete fresh policy permits a tool call.
 //! After boot nothing is allowed, and readiness stays down, until a fresh policy loads (ADR-070).
 
+use super::policy_trust::PolicyTrustStore;
 use super::ToolProxyClient;
 use moka::sync::Cache;
 use reqwest::Client;
@@ -57,6 +58,8 @@ pub enum PermissionDenyReason {
     PermissionCacheExpired,
     CpUnreachable,
     CpUnauthorized,
+    /// The pinned signer trust set is missing or was refused.
+    TrustSetNotLoaded,
 }
 
 impl PermissionDenyReason {
@@ -66,6 +69,7 @@ impl PermissionDenyReason {
             Self::PermissionCacheExpired => "permission_cache_expired",
             Self::CpUnreachable => "cp_unreachable",
             Self::CpUnauthorized => "cp_unauthorized",
+            Self::TrustSetNotLoaded => "trust_set_not_loaded",
         }
     }
 }
@@ -111,6 +115,7 @@ pub struct ToolPermissionService {
     client: Client,
     base_url: String,
     auth: Option<Arc<ToolProxyClient>>,
+    trust: Option<Arc<PolicyTrustStore>>,
     cache_ttl: Duration,
     cache: Arc<Cache<String, CachedPermissions>>,
     last_failure: Arc<RwLock<Option<PermissionDenyReason>>>,
@@ -133,6 +138,7 @@ impl ToolPermissionService {
             client,
             base_url: base_url.trim_end_matches('/').to_string(),
             auth: None,
+            trust: None,
             cache_ttl: cache_ttl.min(MAX_POLICY_AGE),
             cache: Arc::new(Cache::builder().max_capacity(10_000).build()),
             last_failure: Arc::new(RwLock::new(None)),
@@ -145,6 +151,18 @@ impl ToolPermissionService {
     pub fn with_auth(mut self, auth: Arc<ToolProxyClient>) -> Self {
         self.auth = Some(auth);
         self
+    }
+
+    /// While the pinned signer trust set is not loaded, every call is denied
+    /// without contacting the Control Plane.
+    pub fn with_trust_store(mut self, trust: Option<Arc<PolicyTrustStore>>) -> Self {
+        self.trust = trust;
+        self
+    }
+
+    /// A configured signer trust set is missing or was refused: deny everything.
+    pub fn trust_set_not_loaded(&self) -> bool {
+        self.trust.as_ref().is_some_and(|t| t.current().is_none())
     }
 
     /// Check if a tool is allowed for a tenant.
@@ -168,8 +186,15 @@ impl ToolPermissionService {
         requested_name: &str,
         canonical_name: &str,
     ) -> bool {
-        let state = self.get_permission_state(tenant_id).await;
-        self.record_state(&state);
+        let state = if self.trust.as_ref().is_some_and(|t| t.current().is_none()) {
+            PermissionState::Unavailable {
+                reason: PermissionDenyReason::TrustSetNotLoaded,
+            }
+        } else {
+            let state = self.get_permission_state(tenant_id).await;
+            self.record_state(&state);
+            state
+        };
 
         match state.deny_reason(requested_name, canonical_name) {
             None => true,
@@ -188,6 +213,9 @@ impl ToolPermissionService {
     }
 
     pub fn readiness_failure_reason(&self) -> Option<&'static str> {
+        if self.trust.as_ref().is_some_and(|t| t.current().is_none()) {
+            return Some(PermissionDenyReason::TrustSetNotLoaded.as_str());
+        }
         self.last_failure
             .read()
             .ok()
@@ -196,7 +224,11 @@ impl ToolPermissionService {
 
     /// Why `/ready` must fail: no policy loaded since boot, or the last load is
     /// older than the hard cap (ADR-070 §4). Per-tenant denials never trip it.
+    /// A configured signer trust set that is not loaded fails it as well.
     pub fn policy_readiness_failure(&self) -> Option<&'static str> {
+        if self.trust.as_ref().is_some_and(|t| t.current().is_none()) {
+            return Some(PermissionDenyReason::TrustSetNotLoaded.as_str());
+        }
         match self.policy_loaded_at.read().ok().and_then(|at| *at) {
             None => Some("policy_not_loaded"),
             Some(at) if at.elapsed() > self.max_policy_age => Some("policy_stale"),
@@ -758,6 +790,33 @@ pub(crate) mod tests {
             .all(|r| r.headers.contains_key("Authorization")));
     }
 
+    /// One-key trust set built from the published RFC 8032 §7.1 public key.
+    pub(crate) const VALID_JWKS: &str = r#"{"keys":[{"kty":"OKP","crv":"Ed25519","alg":"EdDSA","kid":"k0","x":"11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo"}]}"#;
+
+    #[tokio::test]
+    async fn trust_set_not_loaded_denies_before_contacting_cp() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(permissions_response(serde_json::json!([
+                {"mcp_server_id": "srv1", "tool_name": "ok_tool", "allowed": true}
+            ])))
+            .mount(&server)
+            .await;
+        let dir = tempfile::tempdir().unwrap();
+        let trust = PolicyTrustStore::open(dir.path().join("trust.json"));
+        let svc = authenticated_service(&server, Duration::from_secs(60))
+            .await
+            .with_trust_store(Some(trust.clone()));
+        assert_eq!(svc.readiness_failure_reason(), Some("trust_set_not_loaded"));
+        assert!(!svc.is_tool_allowed("tenant1", "ok_tool").await);
+        assert!(server.received_requests().await.unwrap().is_empty());
+
+        std::fs::write(dir.path().join("trust.json"), VALID_JWKS).unwrap();
+        assert_eq!(trust.reload(), Ok(1));
+        assert_eq!(svc.readiness_failure_reason(), None);
+        assert!(svc.is_tool_allowed("tenant1", "ok_tool").await);
+    }
+
     #[tokio::test]
     async fn permissions_403_is_final() {
         let server = MockServer::start().await;
@@ -890,10 +949,11 @@ pub(crate) mod tests {
         let server = MockServer::start().await;
         serve_policy_once(&server, ok_tool_policy()).await;
         let mut svc = authenticated_service(&server, Duration::from_millis(1)).await;
-        svc.max_policy_age = Duration::from_millis(1);
 
         assert_eq!(svc.load_policy("tenant1").await, Ok(()));
         assert_eq!(svc.policy_readiness_failure(), None);
+        // Tighten after the freshness assertion to avoid a 1 ms race after loading.
+        svc.max_policy_age = Duration::from_millis(1);
         tokio::time::sleep(Duration::from_millis(20)).await;
 
         // Past the cap and no longer served: readiness fails and the call is denied as stale.

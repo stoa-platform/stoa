@@ -19,29 +19,46 @@ v{MAJOR}.{MINOR}.{PATCH}[-{PRERELEASE}]
 
 ## Release Process
 
-### Automated (via release-please)
+A platform release is cut once per milestone, and at most once a month. Pull
+requests are never released individually.
 
-1. **Merge PRs** with conventional commits to `main`
-2. **release-please** automatically creates/updates a Release PR
-3. **Review** the Release PR (CHANGELOG, version bump)
-4. **Merge** the Release PR
-5. **Automatic**:
-   - Git tag created (e.g., `v2.3.0`)
-   - GitHub Release created with notes
-   - Docker images built, signed, pushed to GHCR
-   - Helm chart updated
+### Between releases
 
-### Manual (emergency)
+- Every pull request that changes user-facing behaviour adds a line to the
+  **Unreleased** section of [CHANGELOG.md](CHANGELOG.md), under `Added`,
+  `Fixed`, `Security` or `Breaking changes`. Internal changes (CI, tests,
+  refactoring) need no entry.
+- release-please is configured to open per-component release pull requests
+  from conventional commits. Merging one bumps that component's version, tag
+  and `CHANGELOG.md` only; it is not a platform release.
 
-```bash
-# 1. Create tag
-git tag -s v2.3.1 -m "v2.3.1: Emergency hotfix for CVE-XXXX"
-git push origin v2.3.1
+### Cutting a platform release
 
-# 2. GitHub Actions triggers automatically
-# - docker-publish.yml builds and pushes images
-# - release.yml creates GitHub Release
-```
+1. Open a release pull request that renames `## [Unreleased]` to
+   `## [X.Y.0] - YYYY-MM-DD`, adds an empty `## [Unreleased]` section above
+   it, and sets the same version in `version.txt`. Choose the version with the
+   Versioning table above.
+2. Merge it, then tag the merge commit with a signed tag and push the tag:
+
+   ```bash
+   git tag -s vX.Y.0 -m "vX.Y.0"
+   git push origin vX.Y.0
+   ```
+
+3. The `v*` tag triggers the Release workflow, which creates the GitHub
+   Release, and the Docker publish workflow, which builds, signs and pushes
+   the images for every service.
+4. Replace the generated release notes with the new CHANGELOG section, copied
+   verbatim into a file:
+
+   ```bash
+   gh release edit vX.Y.0 --notes-file release-notes.md
+   ```
+
+### Out-of-band patch
+
+A security or data-loss fix that cannot wait for the next milestone follows
+the same steps with a PATCH version (`vX.Y.Z`).
 
 ## Artifacts
 
@@ -83,11 +100,11 @@ cosign verify-attestation \
 ## Release Checklist
 
 - [ ] All tests passing on `main`
-- [ ] CHANGELOG.md accurate
+- [ ] `Unreleased` moved to the new version section in CHANGELOG.md, `version.txt` updated
 - [ ] Documentation updated
 - [ ] Breaking changes documented
 - [ ] Migration guide (if needed)
-- [ ] Release notes reviewed
+- [ ] GitHub Release notes equal the CHANGELOG section
 
 ## Rollback
 
@@ -123,6 +140,5 @@ helm upgrade --install stoa-dev ./charts/stoa-platform \
 
 | Type | Frequency |
 |------|-----------|
-| Patch | As needed |
-| Minor | Bi-weekly |
-| Major | Quarterly (announced) |
+| Platform release (`vX.Y.0`) | One per milestone, at most one per month |
+| Out-of-band patch (`vX.Y.Z`) | Only for security or data-loss fixes that cannot wait |

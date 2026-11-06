@@ -32,15 +32,12 @@ on:
           - dev
           - prod
 
+permissions:
+  contents: read
+
 concurrency:
   group: stoa-gateway-ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
-permissions:
-  contents: read
-  id-token: write
-  checks: write
-  attestations: write
 
 jobs:
   # === CI: fmt + clippy + test + coverage (single job, sccache) ===
@@ -48,7 +45,7 @@ jobs:
     uses: ./.github/workflows/reusable-rust-ci.yml
     with:
       component: stoa-gateway
-      cargo-features: '--features kafka,pingora,phases'
+      cargo-features: '--features kafka,pingora,k8s,phases'
       # `ubuntu-latest` : le dépôt n'a AUCUN runner auto-hébergé enregistré
       # (0 au 2026-07-30), donc ce job restait en file indéfiniment — le CI
       # Rust de la gateway ne s'exécutait tout simplement plus.
@@ -70,6 +67,36 @@ jobs:
             && 'stoa-rust' || 'ubuntu-latest' }}
     permissions:
       contents: read
+
+  # Validate the companion image without registry credentials or publication.
+  companion-image:
+    name: Build companion image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Stage project license and notice
+        run: python3 -B scripts/ci/release_legal.py --dest stoa-gateway
+
+      - name: Build light companion image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: stoa-gateway
+          platforms: linux/amd64
+          push: false
+          build-args: |
+            FEATURES=
+            NO_DEFAULT_FEATURES=true
+            CACHEBUST=${{ github.sha }}
 
   # === Docker: build + push GHCR (AMD64 only) ===
   # Note: does NOT depend on ci — flaky integration tests must not block deploy.
@@ -94,7 +121,7 @@ jobs:
       platforms: linux/amd64
       build-args: |
         CACHEBUST=${{ github.sha }}
-        FEATURES=kafka,pingora
+        FEATURES=kafka,pingora,k8s
     permissions:
       contents: read
       id-token: write
@@ -122,11 +149,14 @@ jobs:
   # === Smoke Test: health checks after deploy (Tier 1) ===
   smoke-test:
     needs: deploy
-    if: needs.deploy.result == 'success' && vars.GITOPS_DEPLOY_ENABLED == 'true'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.deploy.result == 'success' && vars.GITOPS_DEPLOY_ENABLED == 'true'
     uses: ./.github/workflows/reusable-health-smoke.yml
     with:
       component: stoa-gateway
       environment: dev
+    secrets:
+      cf-access-client-id: ${{ secrets.CF_ACCESS_E2E_CLIENT_ID }}
+      cf-access-client-secret: ${{ secrets.CF_ACCESS_E2E_CLIENT_SECRET }}
     permissions:
       contents: read
 

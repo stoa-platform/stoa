@@ -30,6 +30,10 @@ metadata:
     {{- include "stoa-platform.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.stoaSidecar.replicas | default 2 }}
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 0
   selector:
     matchLabels:
       app.kubernetes.io/name: stoa-sidecar
@@ -44,6 +48,9 @@ spec:
         stoa.io/runtime-mode: sidecar
         {{- include "stoa-platform.labels" . | nindent 8 }}
       annotations:
+        {{- if .Values.stoaSidecar.nginxExample.enabled }}
+        checksum/companion-config: {{ include (print $.Template.BasePath "/companion-nginx-config.yaml") . | sha256sum }}
+        {{- end }}
         prometheus.io/scrape: "true"
         prometheus.io/port: "8081"
         prometheus.io/path: "/metrics"
@@ -55,8 +62,21 @@ spec:
         # --- Main Gateway Container (third-party: WebMethods, Kong, etc.) ---
         {{- if .Values.stoaSidecar.mainGateway.enabled }}
         - name: {{ .Values.stoaSidecar.targetGateway | default "gateway" }}
-          image: "{{ .Values.stoaSidecar.mainGateway.image.repository }}:{{ .Values.stoaSidecar.mainGateway.image.tag }}"
-          imagePullPolicy: {{ .Values.stoaSidecar.mainGateway.image.pullPolicy | default "Always" }}
+          {{- include "stoa-platform.pinnedImage" .Values.stoaSidecar.mainGateway.image | nindent 10 }}
+          imagePullPolicy: {{ .Values.stoaSidecar.mainGateway.image.pullPolicy | default "IfNotPresent" }}
+          {{- if .Values.stoaSidecar.nginxExample.enabled }}
+          command: ["openresty", "-c", "/etc/nginx/conf.d/default.conf", "-g", "daemon off;"]
+          volumeMounts:
+            - name: companion-config
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: default.conf
+              readOnly: true
+            - name: companion-auth
+              mountPath: /etc/companion-auth
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          {{- end }}
           ports:
             - name: http
               containerPort: {{ .Values.stoaSidecar.mainGateway.port | default 8080 }}
@@ -71,14 +91,22 @@ spec:
           securityContext:
             privileged: false
             allowPrivilegeEscalation: false
+            {{- if .Values.stoaSidecar.nginxExample.enabled }}
+            runAsNonRoot: true
+            runAsUser: 101
+            capabilities:
+              drop: [ALL]
+            seccompProfile:
+              type: RuntimeDefault
+            {{- end }}
           resources:
             {{- toYaml .Values.stoaSidecar.mainGateway.resources | nindent 12 }}
         {{- end }}
 
         # --- STOA Sidecar Container ---
         - name: stoa-sidecar
-          image: "{{ .Values.stoaSidecar.image.repository }}:{{ .Values.stoaSidecar.image.tag }}"
-          imagePullPolicy: {{ .Values.stoaSidecar.image.pullPolicy | default "Always" }}
+          {{- include "stoa-platform.pinnedImage" .Values.stoaSidecar.image | nindent 10 }}
+          imagePullPolicy: {{ .Values.stoaSidecar.image.pullPolicy | default "IfNotPresent" }}
           ports:
             - name: authz
               containerPort: 8081
@@ -174,6 +202,9 @@ spec:
           securityContext:
             privileged: false
             runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
             capabilities:
               drop:
@@ -186,6 +217,14 @@ spec:
             - name: tmp
               mountPath: /tmp
       volumes:
+        {{- if .Values.stoaSidecar.nginxExample.enabled }}
+        - name: companion-config
+          configMap:
+            name: nginx-companion-config
+        - name: companion-auth
+          secret:
+            secretName: {{ .Values.stoaSidecar.nginxExample.authSecret | quote }}
+        {{- end }}
         - name: tmp
           emptyDir: {}
       {{- with .Values.stoaSidecar.nodeSelector }}

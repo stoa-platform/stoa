@@ -44,5 +44,5 @@ check portal "^portal/|^shared/|^\.github/workflows/(stoa-portal-ci|reusable-nod
 check stoa-go "^stoa-go/|^\.github/workflows/stoa-go-ci\.yml$|^\.github/workflows/ci-gate\.yml$"
 check stoa-operator "^stoa-operator/|^\.github/workflows/(stoa-operator-ci|reusable-python-ci)\.yml$|^\.github/workflows/ci-gate\.yml$|^\.github/actions/"
 tenant_claim_inputs='^deploy/keycloak/tenant-id-mapper\.json$|^deploy/docker-compose/init/keycloak-realm\.json$|^deploy/platform-bootstrap/scopes/stoa-scopes\.yaml$|^scripts/security/(test_regression_cab_2262_tenant_claim|helm_contract_support|keycloak_audit_lib/common)\.py$'
-check helm "^charts/|^\.github/workflows/helm-lint\.yml$|^\.github/workflows/ci-gate\.yml$|${tenant_claim_inputs}"
+check helm "^stoa-gateway/Dockerfile$|^charts/|^scripts/ci/tests/test_regression_gateway_chart_capabilities\.py$|^\.github/workflows/(stoa-gateway-ci|reusable-docker-ghcr)\.yml$|^\.github/workflows/helm-lint\.yml$|^\.github/workflows/ci-gate\.yml$|${tenant_claim_inputs}"
 check gate-contract '^\.github/scripts/ci-gate-.*\.sh$|^scripts/ci/tests/test_ci_gate_contract\.py$|^\.github/workflows/|^\.github/scripts/security-scan-changes\.py$|^scripts/ci/tests/test_security_scan_paths\.py$'

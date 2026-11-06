@@ -998,6 +998,129 @@ mod tests {
         assert_eq!(mcp.status(), StatusCode::NOT_FOUND);
     }
 
+    #[tokio::test]
+    async fn sidecar_route_surface_preserves_operational_routes_and_method_gates() {
+        let app = sidecar_app();
+        for (method, path, expected) in [
+            ("GET", "/health", StatusCode::OK),
+            ("HEAD", "/health", StatusCode::OK),
+            ("GET", "/health/live", StatusCode::OK),
+            ("GET", "/ready", StatusCode::SERVICE_UNAVAILABLE),
+            ("GET", "/health/ready", StatusCode::SERVICE_UNAVAILABLE),
+            ("GET", "/metrics", StatusCode::OK),
+            ("GET", "/admin/health", StatusCode::SERVICE_UNAVAILABLE),
+            ("GET", "/authz", StatusCode::METHOD_NOT_ALLOWED),
+            ("POST", "/health", StatusCode::METHOD_NOT_ALLOWED),
+            ("POST", "/authz", StatusCode::UNSUPPORTED_MEDIA_TYPE),
+            ("GET", "/mcp", StatusCode::NOT_FOUND),
+            ("POST", "/mcp", StatusCode::NOT_FOUND),
+            ("POST", "/mcp/tools/call", StatusCode::NOT_FOUND),
+            ("GET", "/mcp/sse", StatusCode::NOT_FOUND),
+            ("GET", "/oauth/authorize", StatusCode::NOT_FOUND),
+            ("GET", "/v1/messages", StatusCode::NOT_FOUND),
+            ("GET", "/unknown", StatusCode::NOT_FOUND),
+        ] {
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method(method)
+                        .uri(path)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), expected, "{method} {path}");
+        }
+    }
+
+    async fn sidecar_authz(app: Router, body: serde_json::Value) -> axum::response::Response {
+        app.oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/authz")
+                .header("content-type", "application/json")
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn sidecar_router_authorization_decisions() {
+        // The upstream gateway supplies pre-validated identity; no JWT service is used here.
+        let cases = [
+            (
+                serde_json::json!({"id": "proof-user"}),
+                serde_json::json!("proof-tenant"),
+                StatusCode::OK,
+            ),
+            (
+                serde_json::json!({"id": "proof-user"}),
+                serde_json::Value::Null,
+                StatusCode::FORBIDDEN,
+            ),
+            (
+                serde_json::Value::Null,
+                serde_json::json!("proof-tenant"),
+                StatusCode::UNAUTHORIZED,
+            ),
+        ];
+        let app = sidecar_app();
+        for (user, tenant_id, expected) in cases {
+            let response = sidecar_authz(
+                app.clone(),
+                serde_json::json!({
+                    "method": "GET", "path": "/proof", "user": user, "tenant_id": tenant_id
+                }),
+            )
+            .await;
+            assert_eq!(response.status(), expected);
+            // The production router currently selects StatusCode, so it returns no JSON.
+            let body = axum::body::to_bytes(response.into_body(), 1024)
+                .await
+                .unwrap();
+            assert!(body.is_empty());
+        }
+    }
+
+    #[tokio::test]
+    async fn sidecar_router_enforces_optional_consumer_quota() {
+        for enabled in [false, true] {
+            let state = AppState::new(config::Config {
+                gateway_mode: mode::GatewayMode::Sidecar,
+                quota_enforcement_enabled: enabled,
+                ..config::Config::default()
+            });
+            state.consumer_rate_limiter.set_plan_quota(
+                "proof-tenant:proof-user",
+                quota::PlanQuota {
+                    rate_limit_per_minute: 1,
+                    ..quota::PlanQuota::default()
+                },
+            );
+            let app = build_router(state);
+            let body = serde_json::json!({
+                "method": "GET", "path": "/proof", "tenant_id": "proof-tenant",
+                "user": {"id": "proof-user"}
+            });
+            assert_eq!(
+                sidecar_authz(app.clone(), body.clone()).await.status(),
+                StatusCode::OK
+            );
+            assert_eq!(
+                sidecar_authz(app, body).await.status(),
+                if enabled {
+                    StatusCode::TOO_MANY_REQUESTS
+                } else {
+                    StatusCode::OK
+                }
+            );
+        }
+    }
+
     // regression for CAB-2227
     #[tokio::test]
     async fn regression_gateway_readiness_fails_when_policy_not_loaded_in_regulated_profile() {
@@ -1053,6 +1176,50 @@ mod tests {
         state.config.policy_boot_tenants.clear();
         let response = ready(axum::extract::State(state)).await;
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    // Missing or refused signer trust keeps readiness failed even after the startup policy loads.
+    #[tokio::test]
+    async fn regression_gateway_readiness_fails_while_trust_set_not_loaded() {
+        use control_plane::tool_permissions::tests::{
+            authenticated_service, ok_tool_policy, serve_policy_once, VALID_JWKS,
+        };
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/health"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&server)
+            .await;
+        serve_policy_once(&server, ok_tool_policy()).await;
+        let dir = tempfile::tempdir().unwrap();
+        let trust_path = dir.path().join("trust.json");
+        let trust = control_plane::policy_trust::PolicyTrustStore::open(&trust_path);
+        let mut state = AppState::new(config::Config {
+            control_plane_url: Some(server.uri()),
+            policy_boot_tenants: vec!["tenant1".into()],
+            quota_enforcement_enabled: false,
+            ..config::Config::default()
+        });
+        let permissions = authenticated_service(&server, std::time::Duration::from_secs(60))
+            .await
+            .with_trust_store(Some(trust.clone()));
+        state.tool_permissions = Some(std::sync::Arc::new(permissions.clone()));
+        let readiness = || ready(axum::extract::State(state.clone()));
+
+        // The startup policy loads, yet missing and then refused trust keep readiness down.
+        assert_eq!(permissions.load_policy("tenant1").await, Ok(()));
+        assert_eq!(readiness().await.status(), StatusCode::SERVICE_UNAVAILABLE);
+        std::fs::write(&trust_path, "not json").unwrap();
+        assert!(trust.reload().is_err());
+        assert_eq!(readiness().await.status(), StatusCode::SERVICE_UNAVAILABLE);
+
+        // A valid set recovers; refusing it again fails readiness despite the cached policy.
+        std::fs::write(&trust_path, VALID_JWKS).unwrap();
+        assert_eq!(trust.reload(), Ok(1));
+        assert_eq!(readiness().await.status(), StatusCode::OK);
+        std::fs::write(&trust_path, r#"{"keys":[]}"#).unwrap();
+        assert!(trust.reload().is_err());
+        assert_eq!(readiness().await.status(), StatusCode::SERVICE_UNAVAILABLE);
     }
 
     // Unset, empty, whitespace-only or empty-array tenants, or no Control Plane URL: never ready.

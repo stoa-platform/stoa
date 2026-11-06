@@ -5,9 +5,15 @@
 # Creates the 3 RPO demo users in Keycloak with their roles.
 #
 # Usage:
+#   KEYCLOAK_BOOTSTRAP_ENV=dev KEYCLOAK_URL=<dev-keycloak-base-url> KEYCLOAK_REALM=<dev-realm> \
 #   KC_ADMIN_PASSWORD=<password> ./scripts/demo/setup-rpo-keycloak-users.sh
 #
-# Or get password from K8s secret:
+# KEYCLOAK_URL has no default: the target must be an explicit development
+# Keycloak base URL. PARZIVAL_PASSWORD, SORRENTO_PASSWORD and HALLIDAY_PASSWORD
+# are required as well. Every demo user is created with a temporary password
+# and must set a new one at first login.
+#
+# Or get the admin password from the K8s secret:
 #   KC_ADMIN_PASSWORD=$(kubectl get secret keycloak-admin-secret -n stoa-system -o jsonpath='{.data.admin-password}' | base64 -d)
 #   ./scripts/demo/setup-rpo-keycloak-users.sh
 # =============================================================================
@@ -20,15 +26,18 @@ if [ "${KEYCLOAK_BOOTSTRAP_ENV:-prod}" != "dev" ]; then
   echo "This account seeder requires KEYCLOAK_BOOTSTRAP_ENV=dev." >&2
   exit 1
 fi
-: "${KEYCLOAK_URL:?Set an explicit development Keycloak URL}"
+# No default target: the URL must always be passed explicitly.
+if [ -z "${KEYCLOAK_URL:-}" ]; then
+  echo "KEYCLOAK_URL is required: set the explicit development Keycloak base URL (this script has no default target)." >&2
+  exit 1
+fi
 : "${KEYCLOAK_REALM:?Set a dedicated development realm}"
 case "$KEYCLOAK_REALM" in
   stoa|master) echo "A dedicated development realm is required." >&2; exit 1 ;;
 esac
 
-# Configuration
-KEYCLOAK_URL="${KEYCLOAK_URL:-https://auth.gostoa.dev}"
-REALM="${KEYCLOAK_REALM:-stoa}"
+# Configuration (target URL and realm are validated above and have no defaults)
+REALM="${KEYCLOAK_REALM}"
 ADMIN_USER="${KC_ADMIN_USER:-admin}"
 ADMIN_PASSWORD="${KC_ADMIN_PASSWORD:-}"
 
@@ -100,10 +109,11 @@ create_user() {
             \"attributes\": {
                 \"tenant_id\": [\"${tenant}\"]
             },
+            \"requiredActions\": [\"UPDATE_PASSWORD\"],
             \"credentials\": [{
                 \"type\": \"password\",
                 \"value\": \"${password}\",
-                \"temporary\": false
+                \"temporary\": true
             }]
         }")
 
@@ -207,4 +217,5 @@ echo "=============================================="
 echo "Ready Player One Demo - Setup Complete"
 echo "=============================================="
 echo ""
+echo "Each demo user was created with a temporary password and must set a new one at first login."
 echo "Credentials were supplied by the operator; retain them in the on-site secret store."

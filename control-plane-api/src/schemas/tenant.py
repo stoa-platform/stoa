@@ -47,16 +47,3 @@ class TenantUsageResponse(BaseModel):
     max_apis: int = 10
     application_count: int = 0
     max_applications: int = 20
-
-
-class TenantProvisionRequest(BaseModel):
-    name: str
-    display_name: str
-    description: str = ""
-    owner_email: str
-
-
-class TenantProvisionResponse(BaseModel):
-    tenant_id: str
-    realm_name: str
-    provisioning_status: str = "provisioning"

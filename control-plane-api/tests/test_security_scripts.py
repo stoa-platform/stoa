@@ -27,9 +27,30 @@ SUITES = [
 @pytest.mark.parametrize("case", list(cases(SUITES)), ids=lambda case: case.id())
 def test_offline_security_contract(case):
     result = unittest.TestResult()
-    case.run(result)
+    unittest.TestSuite([case]).run(result)
     assert not result.skipped, "Security contracts must run without skips"
     assert result.wasSuccessful(), result.errors + result.failures
+
+
+def test_regression_cab_2598_security_bridge_runs_class_fixtures() -> None:
+    events = []
+
+    class ClassFixtureContract(unittest.TestCase):
+        @classmethod
+        def setUpClass(cls) -> None:
+            events.append("setUpClass")
+
+        def test_contract(self) -> None:
+            self.assertEqual(events, ["setUpClass"])
+            events.append("test")
+
+        @classmethod
+        def tearDownClass(cls) -> None:
+            events.append("tearDownClass")
+
+    test_offline_security_contract(ClassFixtureContract("test_contract"))
+
+    assert events == ["setUpClass", "test", "tearDownClass"]
 
 
 def test_security_suites_keep_conftest_mocks():

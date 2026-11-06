@@ -1,0 +1,4 @@
+# CI invokes nextest from this crate without an explicit profile (including coverage).
+# Cap each runner at four concurrent tests to limit contention on shared runners.
+[profile.default]
+test-threads = 4

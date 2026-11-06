@@ -15,7 +15,7 @@ from pydantic_settings import BaseSettings
 
 # Base domain — derived URLs (KEYCLOAK_URL, GATEWAY_URL, …, VAULT_ADDR,
 # CORS_ORIGINS) are filled in from this value by the
-# `_derive_urls_from_base_domain` model_validator below. CAB-2199 removed
+# `_derive_urls_from_base_domain` model_validator below. This replaced
 # the load-time `os.getenv("BASE_DOMAIN", …)` freeze: BASE_DOMAIN is now a
 # normal Pydantic field, and the derivation happens at instantiation time
 # so `Settings(BASE_DOMAIN="other.tld")` correctly recomputes every
@@ -25,7 +25,7 @@ from pydantic_settings import BaseSettings
 
 _logger = logging.getLogger(__name__)
 
-# CAB-2145: flags that emit credential-grade data (raw JWT tokens, decoded
+# Flags that emit credential-grade data (raw JWT tokens, decoded
 # JWT payload, Authorization/Cookie headers, raw request bodies). They must
 # never be `True` in production. Adding a new flag to this list is enough to
 # make the startup validator enforce the gate.
@@ -37,7 +37,7 @@ SENSITIVE_DEBUG_FLAGS_IN_PROD: tuple[str, ...] = (
     "LOG_DEBUG_HTTP_HEADERS",
 )
 
-# CAB-2199 / INFRA-1a Phase 3-A — fail-closed ENVIRONMENT alias map.
+# Fail-closed ENVIRONMENT alias map.
 # `ENVIRONMENT` drives four security-relevant gates (sensitive debug flags,
 # auth bypass, git provider validation, CORS localhost stripping) which
 # all literal-check `== "production"`. Phase 2 S5 surgically mapped only
@@ -57,7 +57,7 @@ _ENVIRONMENT_ALIASES: Final[dict[str, str]] = {
 
 
 def _is_valid_http_url(url: str) -> bool:
-    """CAB-1889 CP-2 E-1: accept http(s) with non-empty netloc.
+    """Accept http(s) with non-empty netloc.
 
     Permissive on path/query/fragment so self-hosted GitLab under a
     sub-path (``https://gitlab.corp/path/subpath/``) remains valid.
@@ -74,7 +74,7 @@ def _is_valid_http_url(url: str) -> bool:
 class GitHubConfig(BaseModel):
     """GitHub provider config — hydrated from flat env vars by Settings validator."""
 
-    # CAB-1889 CP-2 I-1: reject unknown kwargs so fixture typos (e.g. the
+    # Reject unknown kwargs so fixture typos (e.g. the
     # dropped ``catalog_project_id=`` kwarg in the CP-1 token-leak suite)
     # raise loudly instead of being silently ignored.
     model_config = ConfigDict(extra="forbid")
@@ -114,7 +114,7 @@ _Pwd = SecretStr
 
 
 class OpenSearchAuditConfig(BaseModel):
-    """Audit/search OpenSearch endpoint configuration (CAB-2199 / INFRA-1a S3).
+    """Audit/search OpenSearch endpoint configuration.
 
     Consolidates the former standalone ``OpenSearchSettings`` (was in
     ``opensearch/opensearch_integration.py``) into the main ``Settings`` as a
@@ -130,11 +130,11 @@ class OpenSearchAuditConfig(BaseModel):
 
     host: str = "https://opensearch.gostoa.dev"
     user: str = "admin"
-    # CAB-2199 §3.1 nuance: SecretStr so repr(Settings(...)) cannot leak the
+    # SecretStr so repr(Settings(...)) cannot leak the
     # password. Consumer code unwraps with .get_secret_value() at the boundary.
     password: SecretStr = Field(default=SecretStr(""))
-    verify_certs: bool = True  # CAB-838: SSL verification by default
-    ca_certs: str | None = None  # CAB-838: custom CA certificate path
+    verify_certs: bool = True  # SSL verification by default
+    ca_certs: str | None = None  # custom CA certificate path
     timeout: int = 30
 
     # Audit subsystem
@@ -180,6 +180,9 @@ class Settings(BaseSettings):
     TOOL_PERMISSION_POLICY_TTL_SECONDS: int = Field(default=900, gt=0, le=900)
     STOA_POLICY_SIGNING_KEY_FILE: str = Field(default="", repr=False)
     STOA_POLICY_SIGNING_KID: str = ""
+    # Each issued policy names this control plane and the gateways allowed to consume it.
+    STOA_POLICY_ISSUER: str = "stoa-control-plane"
+    STOA_POLICY_AUDIENCE: str = "stoa-gateway"
 
     # Base domain for URL construction. Drives the derived URL fields below
     # (KEYCLOAK_URL, GATEWAY_URL, …, VAULT_ADDR, CORS_ORIGINS) via the
@@ -192,7 +195,7 @@ class Settings(BaseSettings):
     # KEYCLOAK_URL is the PUBLIC URL Keycloak embeds in token `iss` claims
     # (e.g. https://auth.gostoa.dev). Must match what clients see — used for
     # issuer validation and for the `token_endpoint` returned to external
-    # consumers. CAB-2094: previously set to the in-cluster svc URL in prod,
+    # consumers. Previously set to the in-cluster svc URL in prod,
     # which broke issuer validation for every user token.
     # KEYCLOAK_INTERNAL_URL is the in-cluster service URL used for backend-to-KC
     # calls (admin API, token exchange, JWKS fetch). Avoids hairpin NAT on
@@ -233,12 +236,12 @@ class Settings(BaseSettings):
         os.getenv("KEYCLOAK_ADMIN_PASSWORD", ""),
     )
 
-    # Slack Notifications (CAB-1413 — deployment event fanout)
+    # Slack Notifications (deployment event fanout)
     SLACK_WEBHOOK_URL: str = ""  # Incoming webhook URL (fallback)
     SLACK_BOT_TOKEN: str = ""  # Bot API token (preferred, supports threading)
     SLACK_CHANNEL_ID: str = ""  # Target channel ID for Bot API
 
-    # ── Git Provider — legacy flat ingress (CAB-1889 CP-2) ───────────────
+    # ── Git Provider — legacy flat ingress ───────────────────────────────
     # These 10 fields exist only so Pydantic Settings can hydrate them from
     # env vars, .env and K8s ConfigMap. They are `exclude=True` so they
     # never appear in model_dump() or JSON schema.
@@ -246,7 +249,7 @@ class Settings(BaseSettings):
     # Consumers MUST read `settings.git.*` instead. A grep gate in CI
     # enforces this (see scripts/check_git_config_access.sh).
     #
-    # CAB-1889 CP-2 B-1: the four credential fields are `SecretStr` so
+    # The four credential fields are `SecretStr` so
     # `repr(Settings(...))` can't leak them. They are unwrapped, stripped
     # and re-wrapped at the hydration boundary in `_hydrate_and_validate_git`.
     GIT_PROVIDER: Literal["github", "gitlab"] = Field(default="github", exclude=True)
@@ -264,7 +267,7 @@ class Settings(BaseSettings):
     # ── Git Provider — single source of truth for consumers ──────────────
     git: GitProviderConfig = Field(default_factory=GitProviderConfig)
 
-    # ── OpenSearch (audit/search endpoint) — flat env ingress (CAB-2199 / S3) ─
+    # ── OpenSearch (audit/search endpoint) — flat env ingress ─────────────────
     # Hydrated to ``settings.opensearch_audit`` by the
     # ``_hydrate_opensearch_audit`` validator below. ``exclude=True`` keeps
     # them out of ``model_dump()`` / JSON schema; consumers read the
@@ -293,7 +296,7 @@ class Settings(BaseSettings):
     @field_validator("BASE_DOMAIN")
     @classmethod
     def _base_domain_must_not_be_empty(cls, v: str) -> str:
-        """CAB-2199 Phase 3-A — reject explicit empty BASE_DOMAIN.
+        """Reject explicit empty BASE_DOMAIN.
 
         The BASE_DOMAIN derivation validator (``_derive_urls_from_base_domain``)
         falls back to ``"gostoa.dev"`` when ``data.get("BASE_DOMAIN")`` is
@@ -311,7 +314,7 @@ class Settings(BaseSettings):
     @field_validator("GIT_PROVIDER", mode="before")
     @classmethod
     def _normalize_git_provider(cls, v: object) -> object:
-        """CAB-1889 CP-2 C-1: restore case-insensitive GIT_PROVIDER for
+        """Restore case-insensitive GIT_PROVIDER for
         backward compat with deployments that pre-date the ``Literal``
         narrowing (which removed the consumer-side ``.lower()`` shim).
 
@@ -325,7 +328,7 @@ class Settings(BaseSettings):
     @field_validator("ENVIRONMENT", mode="before")
     @classmethod
     def _normalize_environment(cls, v: object) -> object:
-        """CAB-2199 Phase 3-A — fail-closed ENVIRONMENT alias map.
+        """Fail-closed ENVIRONMENT alias map.
 
         Replaces the Phase 2 S5 surgical ``prod → production`` mapping,
         which left every other spelling (``PROD``, ``Prod``, typo
@@ -385,7 +388,7 @@ class Settings(BaseSettings):
     # Default to internal K8s service, can be overridden for external access
     MCP_GATEWAY_URL: str = "http://stoa-gateway.stoa-system.svc.cluster.local:80"
 
-    # ArgoCD (GitOps Observability - CAB-654)
+    # ArgoCD (GitOps Observability)
     # Uses static API token (stoa-api service account) for platform status
     ARGOCD_URL: str = ""  # absent → derived from BASE_DOMAIN by validator
     ARGOCD_EXTERNAL_URL: str = ""  # absent → derived from BASE_DOMAIN by validator
@@ -393,33 +396,33 @@ class Settings(BaseSettings):
     ARGOCD_VERIFY_SSL: bool = True
     ARGOCD_PLATFORM_APPS: str = "stoa-gateway,control-plane-api,control-plane-ui,stoa-portal"
 
-    # External Observability URLs (CAB-654)
+    # External Observability URLs
     GRAFANA_URL: str = ""  # absent → derived from BASE_DOMAIN by validator
     PROMETHEUS_URL: str = ""  # absent → derived from BASE_DOMAIN by validator
     LOGS_URL: str = ""  # absent → derived from BASE_DOMAIN by validator
 
-    # Prometheus Internal API (CAB-840) - for direct PromQL queries
+    # Prometheus Internal API - for direct PromQL queries
     PROMETHEUS_INTERNAL_URL: str = "http://prometheus:9090"
     PROMETHEUS_TIMEOUT_SECONDS: int = 30
     PROMETHEUS_ENABLED: bool = True
 
-    # Loki Internal API (CAB-840) - for direct LogQL queries
+    # Loki Internal API - for direct LogQL queries
     LOKI_INTERNAL_URL: str = "http://loki:3100"
     LOKI_TIMEOUT_SECONDS: int = 30
     LOKI_ENABLED: bool = True
 
-    # Tempo Internal API (CAB-1984) - for distributed trace queries
+    # Tempo Internal API - for distributed trace queries
     TEMPO_INTERNAL_URL: str = "http://tempo:3200"
     TEMPO_TIMEOUT_SECONDS: int = 30
     TEMPO_ENABLED: bool = True
 
-    # OpenSearch Traces (CAB-1997) - query otel-v1-apm-span-* from Data Prepper
+    # OpenSearch Traces - query otel-v1-apm-span-* from Data Prepper
     OPENSEARCH_TRACES_ENABLED: bool = True
 
-    # Git Sync Worker (CAB-2012) — async Git commits on API CRUD
+    # Git Sync Worker — async Git commits on API CRUD
     GIT_SYNC_ON_WRITE: bool = True  # Kill-switch: set False to disable Git sync
 
-    # GitOps create-API rewrite (CAB-2185 B-FLOW)
+    # GitOps create-API rewrite
     # Spec ref: specs/api-creation-gitops-rewrite.md §6.13
     # Default OFF: existing POST /v1/tenants/{tid}/apis path is unchanged.
     # When True (Phase 4+), the new GitOps writer commits to stoa-catalog first,
@@ -455,7 +458,7 @@ class Settings(BaseSettings):
     SYNC_ENGINE_RETRY_MAX: int = 3
     SYNC_ENGINE_PENDING_TIMEOUT_SECONDS: int = 3600
 
-    # Drift auto-repair mode (CAB-2016)
+    # Drift auto-repair mode
     # none: log + Kafka event only (default)
     # commit: auto-commit actual state to Git
     # pr: create a PR with the drift changes
@@ -491,26 +494,26 @@ class Settings(BaseSettings):
     GATEWAY_HEARTBEAT_TIMEOUT_SECONDS: int = 90
     # Health check interval in seconds (how often to check for stale gateways)
     GATEWAY_HEALTH_CHECK_INTERVAL_SECONDS: int = 30
-    # Auto-purge stale gateways after N days without heartbeat (CAB-1897)
+    # Auto-purge stale gateways after N days without heartbeat
     GATEWAY_PURGE_AFTER_DAYS: int = 7
     # ArgoCD reconciler interval (how often to sync ArgoCD apps → gateway_instances)
     GATEWAY_RECONCILER_INTERVAL_SECONDS: int = 60
 
-    # Docs Search — Algolia integration (CAB-1327)
+    # Docs Search — Algolia integration
     ALGOLIA_APP_ID: str = "GIWP67WK7V"
     ALGOLIA_SEARCH_API_KEY: str = "6f5bb332c047a35c99fd3a151c44cc7f"  # Public search-only key
     ALGOLIA_INDEX_NAME: str = "Stoa Blog"
     DOCS_SEARCH_ENABLED: bool = True
     LLMS_FULL_TXT_URL: str = "https://gostoa.dev/llms-full.txt"
 
-    # Chat Agent — Anthropic integration (CAB-286)
+    # Chat Agent — Anthropic integration
     CHAT_ENABLED: bool = False
     CHAT_PROVIDER_API_KEY: str = ""  # Anthropic key — via Infisical
-    # Gateway routing (CAB-1822) — when set, chat routes through Stoa Gateway LLM proxy
+    # Gateway routing — when set, chat routes through Stoa Gateway LLM proxy
     CHAT_GATEWAY_URL: str = ""  # e.g. http://stoa-gateway.stoa-system.svc.cluster.local:80
     CHAT_GATEWAY_API_KEY: str = ""  # STOA consumer API key for gateway auth
 
-    # Docs Search — Semantic / Embedding (CAB-1327 Phase 2)
+    # Docs Search — Semantic / Embedding
     EMBEDDING_PROVIDER: str = "openai"  # openai | none
     EMBEDDING_MODEL: str = "text-embedding-3-small"
     EMBEDDING_API_KEY: str = ""  # via Infisical
@@ -520,16 +523,16 @@ class Settings(BaseSettings):
     OPENSEARCH_URL: str = "http://opensearch.stoa-system.svc.cluster.local:9200"
     OPENSEARCH_DOCS_INDEX: str = "docs-embeddings"
 
-    # Chat Token Budget (CAB-288) — 0 = unlimited
+    # Chat Token Budget — 0 = unlimited
     CHAT_TOKEN_BUDGET_DAILY: int = 0
 
-    # Chat Rate Limiting + Kill Switch (CAB-1655)
+    # Chat Rate Limiting + Kill Switch
     CHAT_KILL_SWITCH: bool = False  # Global kill switch — disables all chat endpoints
     CHAT_RATE_LIMIT_USER_MESSAGES: int = 20  # Max messages per user per minute
     CHAT_RATE_LIMIT_USER_TOOL_CALLS: int = 5  # Max tool calls per user per minute
     CHAT_RATE_LIMIT_TENANT_MESSAGES: int = 100  # Max messages per tenant per minute
 
-    # Multi-environment registry (CAB-1659)
+    # Multi-environment registry
     # JSON array of environment configs. If empty, defaults are generated from BASE_DOMAIN.
     STOA_ENVIRONMENTS: str = ""
 
@@ -543,10 +546,10 @@ class Settings(BaseSettings):
     RATE_LIMIT_REQUESTS: int = 100
     RATE_LIMIT_WINDOW_SECONDS: int = 60
 
-    # Tenant provisioning defaults (CAB-1315)
+    # Tenant provisioning defaults
     TENANT_DEFAULT_RATE_LIMIT_RPM: int = 100
 
-    # Self-service signup (CAB-1541)
+    # Self-service signup
     SIGNUP_BLOCKED_EMAIL_DOMAINS: str = ""  # Comma-separated override (empty = use built-in blocklist)
     SIGNUP_MODE: Literal["invite", "open"] = "invite"
     SIGNUP_INVITE_CODES: str = ""  # Comma-separated valid invite codes; empty disables invited signup
@@ -560,7 +563,7 @@ class Settings(BaseSettings):
 
     # Logging - Basic Configuration
     LOG_LEVEL: str = "INFO"
-    # CAB-2199 §2.5 / S5 — Literal narrowing. Was `str` (accepted any value);
+    # Literal narrowing. Was `str` (accepted any value);
     # now strict so a typo like `LOG_FORMAT=jsno` fails fast at boot.
     LOG_FORMAT: Literal["json", "text"] = "json"
     LOG_COMPONENTS: str = "{}"  # JSON dict of component:level overrides
@@ -588,7 +591,7 @@ class Settings(BaseSettings):
     LOG_DEBUG_SQL_RESULTS: bool = False
     LOG_DEBUG_SQL_TRANSACTIONS: bool = False
 
-    # Sender-Constrained Tokens (CAB-438 — RFC 8705 mTLS + RFC 9449 DPoP)
+    # Sender-Constrained Tokens (RFC 8705 mTLS + RFC 9449 DPoP)
     SENDER_CONSTRAINED_ENABLED: bool = False  # Enable in staging/prod after migration
     SENDER_CONSTRAINED_STRATEGY: str = "auto"  # auto | require-any | mtls-only | dpop-only
     SENDER_CONSTRAINED_DPOP_MAX_CLOCK_SKEW: int = 60  # seconds
@@ -635,7 +638,7 @@ class Settings(BaseSettings):
         ),
     )
 
-    # Backend API encryption (Fernet key for BYOK credential storage — CAB-1188)
+    # Backend API encryption (Fernet key for BYOK credential storage)
     BACKEND_ENCRYPTION_KEY: str = ""
 
     # Database (PostgreSQL)
@@ -659,7 +662,7 @@ class Settings(BaseSettings):
     def cors_origins_list(self) -> list[str]:
         """Return CORS origins as a list.
 
-        CAB-2142: strip `localhost` and `*.stoa.local` origins when
+        Strip `localhost` and `*.stoa.local` origins when
         `ENVIRONMENT=production`. These are dev-only entries that historically
         leaked into the prod default via the monolithic CORS_ORIGINS string,
         widening the cross-origin attack surface on `api.gostoa.dev`.
@@ -712,7 +715,7 @@ class Settings(BaseSettings):
     @model_validator(mode="before")
     @classmethod
     def _derive_urls_from_base_domain(cls, data: object) -> object:
-        """CAB-2199 / INFRA-1a S2 — fill in BASE_DOMAIN-derived URL defaults.
+        """Fill in BASE_DOMAIN-derived URL defaults.
 
         Replaces the prior load-time ``_BASE_DOMAIN = os.getenv(...)`` freeze
         which made ``Settings(BASE_DOMAIN="other.tld")`` silently keep the
@@ -758,7 +761,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _hydrate_opensearch_audit(self) -> "Settings":
-        """CAB-2199 / INFRA-1a S3 + Phase 3-C — hydrate ``settings.opensearch_audit``.
+        """Hydrate ``settings.opensearch_audit``.
 
         Mirrors the ``_hydrate_and_validate_git`` pattern. Precedence rule:
         if the caller explicitly passed ``opensearch_audit=...`` to
@@ -766,7 +769,7 @@ class Settings(BaseSettings):
         default-factory shape — the explicit sub-model wins. Otherwise
         the flat env fields hydrate the sub-model.
 
-        Phase 3-C detection (CAB-2199 BH-INFRA1a-002): use
+        Explicit-value detection: use
         ``model_fields_set`` instead of comparing ``model_dump()`` outputs.
         ``model_fields_set`` lists the field names supplied at construction
         time, including a default-factory instance passed explicitly:
@@ -800,7 +803,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _hydrate_and_validate_git(self) -> "Settings":
-        """CAB-1889 CP-2: hydrate ``settings.git`` from legacy flat env vars,
+        """Hydrate ``settings.git`` from legacy flat env vars,
         then fail fast in production if the selected provider is
         misconfigured (warn in dev/staging).
 
@@ -884,7 +887,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _gate_sensitive_debug_flags_in_prod(self) -> "Settings":
-        """CAB-2145: fail fast if a credential-leaking debug flag is enabled in prod.
+        """Fail fast if a credential-leaking debug flag is enabled in prod.
 
         Raises on `ENVIRONMENT=production`; logs a warning in any other env so
         developers still see the foot-gun during local debugging.

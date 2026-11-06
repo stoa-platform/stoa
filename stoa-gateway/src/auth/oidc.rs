@@ -348,7 +348,16 @@ impl OidcProvider {
     /// Fetch JWKS (with caching).
     #[instrument(name = "auth.oidc.jwks_fetch", skip_all, fields(otel.kind = "client", cache_hit))]
     pub async fn get_jwks(&self) -> Result<Arc<Jwks>, OidcError> {
-        // First, get the OIDC config to find JWKS URI
+        // Consult issuer-scoped keys before discovery: metadata may expire first.
+        // Moka enforces the original TTL; an outage never extends key validity.
+        let cache_key = self.config.issuer_url.clone();
+        if let Some(jwks) = self.jwks_cache.get(&cache_key).await {
+            tracing::Span::current().record("cache_hit", true);
+            debug!("JWKS cache hit");
+            return Ok(jwks);
+        }
+        tracing::Span::current().record("cache_hit", false);
+
         let oidc_config = self.get_config().await?;
         // Rewrite JWKS URI host to internal URL when configured.
         // The discovery doc from internal Keycloak returns the external host in jwks_uri;
@@ -357,14 +366,6 @@ impl OidcProvider {
             Some(internal) => rewrite_base(&oidc_config.jwks_uri, internal),
             None => oidc_config.jwks_uri.clone(),
         };
-
-        // Try cache first
-        if let Some(jwks) = self.jwks_cache.get(&jwks_uri).await {
-            tracing::Span::current().record("cache_hit", true);
-            debug!("JWKS cache hit");
-            return Ok(jwks);
-        }
-        tracing::Span::current().record("cache_hit", false);
 
         info!(url = %jwks_uri, "Fetching JWKS");
 
@@ -393,7 +394,7 @@ impl OidcProvider {
         info!(key_count = jwks.keys.len(), "JWKS fetched and cached");
 
         let jwks = Arc::new(jwks);
-        self.jwks_cache.insert(jwks_uri.clone(), jwks.clone()).await;
+        self.jwks_cache.insert(cache_key, jwks.clone()).await;
 
         Ok(jwks)
     }
@@ -437,6 +438,129 @@ impl OidcProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    include!("../../tests/fixtures/signing.rs");
+
+    async fn degraded_mode_fixture(
+        ttl: Duration,
+    ) -> (Arc<OidcProvider>, wiremock::MockServer, String) {
+        let server = wiremock::MockServer::start().await;
+        let provider = Arc::new(OidcProvider::new(OidcProviderConfig {
+            issuer_url: server.uri(),
+            jwks_cache_ttl: ttl,
+            http_timeout: Duration::from_secs(1),
+            ..OidcProviderConfig::default()
+        }));
+        serve_identity(&server).await;
+        let mut header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::RS256);
+        header.kid = Some("test-key".into());
+        let token = jsonwebtoken::encode(
+            &header,
+            &serde_json::json!({
+                "sub": "user", "tenant_id": "tenant-a", "iss": server.uri(),
+                "aud": "stoa-mcp", "iat": chrono::Utc::now().timestamp(),
+                "exp": chrono::Utc::now().timestamp() + 300
+            }),
+            &jsonwebtoken::EncodingKey::from_rsa_pem(TEST_PEM.as_bytes()).unwrap(),
+        )
+        .unwrap();
+        (provider, server, token)
+    }
+
+    async fn serve_identity(server: &wiremock::MockServer) {
+        use wiremock::{matchers::path, Mock, ResponseTemplate};
+        Mock::given(path("/.well-known/openid-configuration"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "issuer": server.uri(), "authorization_endpoint": server.uri(),
+                "token_endpoint": server.uri(), "jwks_uri": format!("{}/jwks", server.uri())
+            })))
+            .mount(server)
+            .await;
+        Mock::given(path("/jwks"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "keys": [{"kty":"RSA", "kid":"test-key", "use":"sig", "alg":"RS256",
+                          "n":TEST_N, "e":"AQAB"}]
+            })))
+            .mount(server)
+            .await;
+    }
+
+    async fn identity_down(server: &wiremock::MockServer) {
+        server.reset().await;
+        wiremock::Mock::given(wiremock::matchers::method("GET"))
+            .respond_with(wiremock::ResponseTemplate::new(503))
+            .mount(server)
+            .await;
+    }
+
+    #[tokio::test]
+    async fn regression_degraded_mode_valid_keys_survive_discovery_outage() {
+        let (provider, server, token) = degraded_mode_fixture(Duration::from_secs(300)).await;
+        let validator = super::super::jwt::JwtValidator::new(provider.clone());
+        validator
+            .validate(&token)
+            .await
+            .expect("valid signed token");
+        identity_down(&server).await;
+        // Discovery can expire before JWKS because it was fetched first.
+        provider.oidc_config_cache.invalidate_all();
+        validator
+            .validate(&token)
+            .await
+            .expect("valid signed token");
+        assert!(server.received_requests().await.unwrap().is_empty());
+
+        let (signed, signature) = token.rsplit_once('.').unwrap();
+        let replacement = if signature.starts_with('A') { "B" } else { "A" };
+        let invalid = format!("{signed}.{replacement}{}", &signature[1..]);
+        assert!(matches!(
+            validator.validate(&invalid).await,
+            Err(super::super::jwt::JwtError::InvalidSignature)
+        ));
+        assert!(matches!(
+            provider.get_key("unknown").await,
+            Err(OidcError::KeyNotFound { .. })
+        ));
+    }
+
+    #[tokio::test]
+    async fn regression_degraded_mode_expired_keys_deny_during_outage() {
+        let (provider, server, token) = degraded_mode_fixture(Duration::from_secs(1)).await;
+        let validator = super::super::jwt::JwtValidator::new(provider);
+        validator
+            .validate(&token)
+            .await
+            .expect("valid signed token");
+        identity_down(&server).await;
+        tokio::time::sleep(Duration::from_millis(1100)).await;
+        for _ in 0..2 {
+            assert!(matches!(
+                validator.validate(&token).await,
+                Err(super::super::jwt::JwtError::OidcError(_))
+            ));
+        }
+        assert!(!server.received_requests().await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn regression_degraded_mode_recovers_after_provider_returns() {
+        let (provider, server, token) = degraded_mode_fixture(Duration::from_secs(1)).await;
+        let validator = super::super::jwt::JwtValidator::new(provider);
+        validator
+            .validate(&token)
+            .await
+            .expect("valid signed token");
+        identity_down(&server).await;
+        tokio::time::sleep(Duration::from_millis(1100)).await;
+        assert!(validator.validate(&token).await.is_err());
+        server.reset().await;
+        serve_identity(&server).await;
+        validator
+            .validate(&token)
+            .await
+            .expect("valid signed token");
+        assert_eq!(server.received_requests().await.unwrap().len(), 2);
+    }
 
     #[test]
     fn test_jwk_is_rsa() {

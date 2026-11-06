@@ -119,7 +119,9 @@ pub(crate) async fn request_tool_context(
     // Resolve aliases before deciding so the canonical tool is what gets
     // authorized. An unknown name is still checked under the requested name
     // first, so the catalogue is not disclosed to callers without permission.
-    let tool = state.tool_registry.get(tool_name);
+    let tool = state
+        .tool_registry
+        .get_for_tenant(tool_name, &auth.tenant_id);
     let canonical_name = tool.as_ref().map_or(tool_name, |tool| tool.name());
     check_tool_permission(state, &auth.tenant_id, tool_name, canonical_name)
         .await
@@ -198,6 +200,23 @@ impl FallbackAuthorizer for FallbackRequestAuthorizer<'_> {
         tool: &dyn Tool,
         ctx: &ToolContext,
     ) -> Result<(), String> {
+        if let (true, Some(sub_id), Some(master_id)) = (
+            self.state.config.federation_enabled,
+            self.auth.sub_account_id.as_deref(),
+            self.auth.master_account_id.as_deref(),
+        ) {
+            let allowed_tools = self
+                .state
+                .federation_cache
+                .get_allowed_tools(sub_id, &ctx.tenant_id, master_id)
+                .await;
+            if !allowed_tools
+                .is_some_and(|tools| tools.contains(requested) && tools.contains(tool.name()))
+            {
+                metrics::record_federation_request(sub_id, master_id, "denied");
+                return Err(format!("'{requested}' is not allowed for this sub-account"));
+            }
+        }
         // The requested name and the canonical name must both be allowed.
         for name in [requested, tool.name()] {
             if !self
@@ -270,7 +289,7 @@ pub(super) async fn extract_auth_context(
     })
 }
 
-fn auth_failure((status, message): AuthError) -> Response {
+fn auth_failure((status, message): (StatusCode, impl std::fmt::Display)) -> Response {
     let mut response = (
         status,
         Json(ToolsCallResponse {
@@ -610,6 +629,20 @@ async fn mcp_tools_call_inner(
         "Executing MCP tool"
     );
 
+    // A configured signer trust set that is not loaded denies before any Control Plane request.
+    if matches!(&state.tool_permissions, Some(p) if p.trust_set_not_loaded()) {
+        record_tool_denial(
+            &auth,
+            &request.name,
+            &request_id,
+            StatusCode::FORBIDDEN,
+            "permission_denied",
+            "trust_set_not_loaded",
+        );
+        let message = format!("Tool '{}' is not allowed for this tenant", request.name);
+        return auth_failure((StatusCode::FORBIDDEN, message));
+    }
+
     // Get tool from registry (CAB-1558: skip sync refresh if cache was ever loaded)
     let tool = match state
         .tool_registry
@@ -731,7 +764,7 @@ async fn mcp_tools_call_inner(
             .get_allowed_tools(sub_id, &auth.tenant_id, master_id)
             .await;
         if let Some(ref tools) = allowed_tools {
-            if !tools.contains(&request.name) {
+            if !tools.contains(&request.name) || !tools.contains(tool.name()) {
                 warn!(
                     tool = %request.name,
                     sub_account_id = %sub_id,
@@ -830,10 +863,12 @@ async fn mcp_tools_call_inner(
     );
 
     // CAB-1337 Phase 3: Tool allowlist check (per-tenant GuardrailPolicy)
-    if !state
-        .guardrail_policy_store
-        .is_tool_allowed(&auth.tenant_id, &request.name)
-    {
+    // Both the requested alias and the resolved tool must be permitted.
+    if [request.name.as_str(), tool.name()].iter().any(|name| {
+        !state
+            .guardrail_policy_store
+            .is_tool_allowed(&auth.tenant_id, name)
+    }) {
         warn!(
             tenant = %auth.tenant_id,
             tool = %request.name,

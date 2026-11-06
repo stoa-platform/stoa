@@ -201,7 +201,7 @@ Runs on all PRs. Detects `fix()` PRs (via title prefix or body keywords) and **b
 |---------|-------|
 | Platform | `linux/amd64` (K3s Hetzner target) |
 | Monorepo context | `control-plane-ui`, `portal` (for `shared/` deps) |
-| Registry | `ghcr.io/stoa-platform` |
+| Registry | Host: `ghcr.io`; namespace: `stoa-platform` |
 
 ## Security Pipeline (security-scan.yml)
 
@@ -211,9 +211,29 @@ Runs on all PRs. Detects `fix()` PRs (via title prefix or body keywords) and **b
 | Bandit | control-plane-api, MEDIUM+ severity+confidence | Yes |
 | ESLint security plugin | control-plane-ui, portal (7 rules) | 2 critical rules blocking (`detect-eval-with-expression`, `detect-unsafe-regex`) |
 | Clippy SAST | stoa-gateway (strict rules above) | Yes (`-D` rules) |
-| Trivy | Container images, CRITICAL+HIGH, ignore-unfixed | Yes |
-| Cargo audit | stoa-gateway | Non-blocking (`continue-on-error: true`) |
-| pip-audit / npm audit | All components | Non-blocking |
+| Trivy | Container images: fixable CRITICAL/HIGH and any CRITICAL | Yes; unfixed HIGH is SARIF-only |
+| Cargo audit | stoa-gateway, all advisories | Yes |
+| pip-audit | control-plane-api, all advisories except the documented CVE-2024-23342 exception | Yes |
+| npm audit | control-plane-ui and portal, production dependencies, HIGH+ | Yes |
+
+### Container vulnerability policy
+
+Container Scan blocks on fixable CRITICAL/HIGH and on any CRITICAL finding.
+Unfixed HIGH findings remain visible in GitHub Security (SARIF) only.
+
+| Gate | Severity | Upstream fix | Effect |
+|------|----------|--------------|--------|
+| Blocking | CRITICAL,HIGH | Available | Fail (`ignore-unfixed: true`, `exit-code: 1`) |
+| Blocking | CRITICAL | With or without | Fail (`ignore-unfixed: false`, `exit-code: 1`) |
+| Reporting | HIGH | Unavailable | GitHub Security (SARIF) only |
+
+SARIF includes CRITICAL/HIGH with or without a fix (`exit-code: 0`), and its
+upload is best effort. Both failure gates run independently after earlier
+failures unless cancelled. Neither the scan job nor either failure gate uses
+`continue-on-error`. A missing Dockerfile fails the job. Dependency Scan remains
+blocking. All three Trivy invocations set `TRIVY_IGNOREFILE=/dev/null`, so
+repository ignore files cannot suppress findings in reports or blocking gates.
+No Trivy ignore file, VEX, or CVE allowlist is introduced.
 
 ## GitOps Deploy Pipeline
 

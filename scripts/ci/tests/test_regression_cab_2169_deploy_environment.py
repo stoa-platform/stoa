@@ -102,7 +102,8 @@ def test_control_plane_api_environment_safety_boundary_is_unchanged() -> None:
         == "github.event_name == 'push' || github.event_name == 'workflow_dispatch'"
     )
     assert caller["smoke-test"]["if"] == (
-        "needs.deploy.result == 'success' && vars.GITOPS_DEPLOY_ENABLED == 'true' "
+        "(github.event_name == 'push' || github.event_name == 'workflow_dispatch') "
+        "&& needs.deploy.result == 'success' && vars.GITOPS_DEPLOY_ENABLED == 'true' "
         "&& github.event.inputs.environment == 'prod'"
     )
     assert caller["deploy"]["with"]["image-tag"] == "${{ needs.docker.outputs.image-tag }}"

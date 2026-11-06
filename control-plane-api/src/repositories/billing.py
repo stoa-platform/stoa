@@ -83,6 +83,21 @@ class BillingRepository:
         await self.session.refresh(budget)
         return budget
 
+    async def update_configuration(
+        self,
+        budget_id: uuid.UUID,
+        tenant_id: str,
+        values: dict,
+    ) -> DepartmentBudget | None:
+        """Update configuration only within the requested tenant."""
+        result = await self.session.execute(
+            update(DepartmentBudget)
+            .where(DepartmentBudget.id == budget_id, DepartmentBudget.tenant_id == tenant_id)
+            .values(**values, updated_at=datetime.utcnow())
+            .returning(DepartmentBudget)
+        )
+        return result.scalar_one_or_none()
+
     async def increment_spend(
         self,
         budget_id: uuid.UUID,

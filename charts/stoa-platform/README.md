@@ -6,7 +6,7 @@ Helm 3 chart for deploying STOA Platform to Kubernetes.
 
 - Kubernetes 1.28+
 - Helm 3.12+
-- Container images pushed to `ghcr.io/stoa-platform/`
+- Container images pushed to [the STOA container registry](https://github.com/orgs/stoa-platform/packages)
 
 ## Quick Start
 
@@ -45,8 +45,8 @@ kubectl apply -f charts/stoa-platform/crds/
 |-----|---------|-------------|
 | `stoaGateway.enabled` | `true` | Deploy the Rust gateway |
 | `stoaGateway.replicas` | `2` | Pod replica count |
-| `stoaGateway.image.repository` | `ghcr.io/stoa-platform/stoa-gateway` | Container image |
-| `stoaGateway.image.tag` | `latest` | Image tag |
+| `stoaGateway.image.repository` | [STOA Gateway](https://github.com/stoa-platform/stoa/pkgs/container/stoa-gateway) | Container image |
+| `stoaGateway.image.digest` | See `values.yaml` | Immutable image digest |
 | `stoaGateway.controlPlaneUrl` | `http://stoa-control-plane-api.stoa-system.svc.cluster.local:8000` | Control Plane API URL (in-cluster Service, port 8000) |
 | `stoaGateway.policyBootTenants` | `[]` | Tenants whose tool policy is loaded at startup. Rendered as comma-separated `STOA_POLICY_BOOT_TENANTS` when non-empty; `/ready` fails closed until their policy has loaded (ADR-070) |
 | `stoaGateway.keycloakUrl` | `http://keycloak:8080` | OIDC provider |
@@ -104,17 +104,43 @@ authz service rather than a Kubernetes sidecar. Standalone remote links are kept
 under `k8s/gateways/base/stoa-link-wm` and are labelled
 `stoa.io/deployment-kind=standalone-link`.
 
+For a wired Nginx/OpenResty example, render with:
+
+```sh
+helm template companion charts/stoa-platform -f charts/stoa-platform/examples/companion-nginx.yaml
+python3 -m unittest discover -s scripts/tests -p test_companion_helm.py
+```
+
+`stoaSidecar.nginxExample` is off by default. Set `authSecret` to an existing
+Secret containing an `htpasswd` key, `tenantId` to the tenant assigned to those
+users, and `backendUrl` to an HTTP backend origin. Use a TLS ingress for Basic
+authentication; the example Service is ClusterIP. Nginx authenticates first,
+then sends the authenticated username and configured tenant to the existing
+`POST /authz` decision endpoint. Client-supplied identity headers are not trusted.
+Only a 200 decision permits proxying; denial, timeout and connection failure
+stop the request. This example grants no roles or scopes. The ConfigMap and
+read-only Secret mount are rendered only when the example is enabled.
+See [sidecar usage and limits](../../docs/integrations/sidecar-usage-patterns.md)
+for the existing decision contract and runtime limitations.
+
+Image references use immutable registry digests. Set both `repository` and
+`digest` when overriding gateway or companion images; tag-only overrides do not
+change the selected image. The retired Python gateway image and the
+registry-restricted webMethods image have no default reference. Supply your own
+immutable image before enabling a webMethods companion. The OpenResty example
+includes its own pin. Companion and Nginx example defaults remain disabled.
+
 ## CRDs
 
 Custom Resource Definitions in `crds/` (applied separately, not managed by Helm lifecycle):
 
 | CRD | API Group | Description |
 |-----|-----------|-------------|
-| `tools.gostoa.dev` | `gostoa.dev/v1alpha1` | MCP Tool definitions |
-| `toolsets.gostoa.dev` | `gostoa.dev/v1alpha1` | Tool groupings |
-| `gatewayinstances.gostoa.dev` | `gostoa.dev/v1alpha1` | Gateway instance registration |
-| `skills.gostoa.dev` | `gostoa.dev/v1alpha1` | MCP Skill definitions |
-| `gatewaybindings.gostoa.dev` | `gostoa.dev/v1alpha1` | Gateway-to-tool bindings |
+| `tools.gostoa.dev` | gostoa.dev/v1alpha1 | MCP Tool definitions |
+| `toolsets.gostoa.dev` | gostoa.dev/v1alpha1 | Tool groupings |
+| `gatewayinstances.gostoa.dev` | gostoa.dev/v1alpha1 | Gateway instance registration |
+| `skills.gostoa.dev` | gostoa.dev/v1alpha1 | MCP Skill definitions |
+| `gatewaybindings.gostoa.dev` | gostoa.dev/v1alpha1 | Gateway-to-tool bindings |
 
 ## Architecture
 

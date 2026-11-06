@@ -88,10 +88,36 @@ make demo-federation-live   # Run 2-min federation demo
 | `OPENSEARCH_AUTH` | `admin:$OPENSEARCH_ADMIN_PASSWORD` | OpenSearch credentials (prod: from Infisical) |
 | `GRAFANA_URL` | `http://localhost:3001` | Grafana endpoint |
 | `CONTROL_PLANE_URL` | `http://localhost:8000` | Control Plane API |
-| `KEYCLOAK_URL` | `http://localhost:8080` | Keycloak endpoint |
+| `KEYCLOAK_URL` | `http://localhost:8080` (`seed-all.sh` and Python seeders; no default for `setup-rpo-keycloak-users.sh`) | Keycloak endpoint |
 | `ANORAK_PASSWORD` | _(required)_ | Admin password for API seeding |
 | `ERROR_COUNT` | `50` | Number of error snapshots to seed |
 | `TRAFFIC_DURATION` | `60` | Traffic generator duration (seconds) |
+
+## Keycloak Demo Users (`setup-rpo-keycloak-users.sh`)
+
+Creates the three Ready Player One demo users with their realm roles. The script has **no default target**: `KEYCLOAK_URL` must be set explicitly to a development Keycloak base URL, otherwise it exits with an error before any network call. It also requires `KEYCLOAK_BOOTSTRAP_ENV=dev`, a dedicated `KEYCLOAK_REALM`, `KC_ADMIN_PASSWORD` and the three user passwords (`PARZIVAL_PASSWORD`, `SORRENTO_PASSWORD`, `HALLIDAY_PASSWORD`). Every user is created with a temporary password and must set a new one at first login.
+
+## Python Demo Seeders
+
+`seed-rpo-demo.py` and `scenario-manager.py` default to the local development
+stack: `CONTROL_PLANE_URL=http://localhost:8000` and
+`KEYCLOAK_URL=http://localhost:8080`. Set both variables explicitly to use another
+development stack. `ADMIN_PASSWORD` enables Keycloak user creation;
+`ADMIN_USERNAME` defaults to `admin` and `KEYCLOAK_REALM` defaults to `stoa`.
+
+```bash
+# Seed the local Ready Player One demo
+python3 scripts/demo/seed-rpo-demo.py
+
+# Preview or provision a local scenario (requires httpx and pyyaml)
+python3 scripts/demo/scenario-manager.py setup --scenario=citadelle --dry-run
+python3 scripts/demo/scenario-manager.py setup --scenario=citadelle
+```
+
+Both Python seeders create users with temporary passwords and the
+`UPDATE_PASSWORD` required action, matching the shell seeder. Each newly created
+user must choose a new password at first login. Existing users are not updated
+or assigned a new password by these changes.
 
 ## Known Issues
 

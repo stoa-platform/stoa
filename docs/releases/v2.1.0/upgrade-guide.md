@@ -32,7 +32,6 @@ _None._
 
 | Component | Change | Migration |
 |-----------|--------|-----------|
-| API | New `POST /v1/tenants/provision` requires `stoa:admin` role | Ensure admin role configured in Keycloak |
 | API | Tenant usage limits table added | Run `alembic upgrade head` |
 | Gateway | Skills system requires admin endpoints enabled | Set `ADMIN_ENABLED=true` in gateway config |
 | Helm | `stoaGateway.llmProxy` values section added | Add to values if using LLM proxy feature |

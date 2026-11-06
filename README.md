@@ -1,6 +1,6 @@
 <p align="center">
   <strong>STOA</strong><br>
-  <span>The open-source Agent Gateway for governed AI-to-API traffic</span><br>
+  <span>Sovereign iPaaS — API &amp; integration platform</span><br>
   <em>Keep your gateway. Add MCP. Govern every agent call.</em>
 </p>
 
@@ -29,7 +29,7 @@ The hard part is not only making an API callable by an agent. The hard part is a
 
 > Which agent called which API, under which identity, through which policy, with which quota, and with what audit trail?
 
-**STOA** is an open-source **Agent Gateway** that sits next to your existing API gateway and exposes enterprise APIs as governed **Model Context Protocol (MCP)** tools.
+**STOA** is an open-source **Sovereign iPaaS — API & integration platform** that sits next to your existing API gateway and exposes enterprise APIs as governed **Model Context Protocol (MCP)** tools.
 
 No gateway replacement. No duplicated API catalog. No untracked agent traffic.
 
@@ -169,7 +169,7 @@ STOA is designed for teams that care about sovereignty, auditability, data resid
              │                                     │
              ▼                                     ▼
 ┌──────────────────────────┐        ┌─────────────────────────────┐
-│ STOA Agent Gateway       │        │ Existing API Gateway         │
+│ STOA Gateway             │        │ Existing API Gateway         │
 │ Rust · MCP · REST bridge │        │ Kong · Gravitee · Apigee     │
 │ OAuth · mTLS · quotas    │        │ Azure APIM · AWS · webMethods│
 │ Tool discovery · audit   │        │ Existing REST clients stay   │

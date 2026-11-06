@@ -52,6 +52,9 @@ on:
         description: 'Test job result (success/failure)'
         value: ${{ inputs.test-shards == 1 && jobs.test.outputs.result || jobs.coverage.outputs.result }}
 
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Lint and Test (${{ inputs.component }})${{ inputs.test-shards == 2 && format(' ({0}/2)', matrix.shard) || '' }}
@@ -86,20 +89,20 @@ jobs:
       - name: Run linter (ruff)
         working-directory: ${{ inputs.component }}
         run: |
-          pip install ruff
+          pip install --require-hashes -r "$GITHUB_WORKSPACE/.github/workflows/requirements/ruff.txt"
           ruff check src/
 
       - name: Run type checker (mypy)
         working-directory: ${{ inputs.component }}
         continue-on-error: ${{ !inputs.mypy-enforce }}
         run: |
-          pip install mypy
+          pip install --require-hashes -r "$GITHUB_WORKSPACE/.github/workflows/requirements/mypy.txt"
           mypy src/ --ignore-missing-imports
 
       - name: Run tests
         working-directory: ${{ inputs.component }}
         run: |
-          pip install pytest pytest-asyncio pytest-cov pytest-xdist ${{ inputs.test-shards == 2 && 'pytest-split==0.11.0 coverage==7.17.0' || '' }}
+          pip install --require-hashes -r "$GITHUB_WORKSPACE/.github/workflows/requirements/${{ inputs.test-shards == 2 && 'python-shards' || 'python-tests' }}.txt"
           pytest tests/ -v --tb=short \
             ${{ inputs.parallel-tests && '-n auto --dist loadgroup' || '' }} \
             ${{ inputs.test-shards == 2 && format('--splits 2 --group {0} --splitting-algorithm least_duration', matrix.shard) || '' }} \
@@ -223,7 +226,7 @@ jobs:
           test "${#files[@]}" -eq 2
           test -f coverage-shards/1/.coverage.shard-1
           test -f coverage-shards/2/.coverage.shard-2
-          python -m pip install 'coverage==7.17.0'
+          python -m pip install --require-hashes -r "$GITHUB_WORKSPACE/.github/workflows/requirements/coverage.txt"
           # Combine can skip unusable inputs, so validate every shard independently.
           python - <<'PY'
           from coverage import CoverageData

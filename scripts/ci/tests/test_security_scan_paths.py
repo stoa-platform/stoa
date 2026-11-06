@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import runpy
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -218,3 +219,127 @@ def test_web_scans_keep_check_names_and_full_non_pr_runs() -> None:
         assert next(step for step in scan["steps"] if step["name"] == name)["if"] == (
             "steps.check.outputs.exists == 'true'"
         )
+
+
+@pytest.mark.parametrize(("name", "directory", "command"), (
+    ("Cargo audit", "stoa-gateway", "cargo audit"),
+    ("Pip audit — control-plane-api", None, None),
+    ("NPM audit — control-plane-ui", "control-plane-ui", "npm audit --audit-level=high --omit=dev"),
+    ("NPM audit — portal", "portal", "npm audit --audit-level=high --omit=dev"),
+))
+def test_regression_dependency_findings_are_blocking(
+    name: str, directory: str | None, command: str | None,
+) -> None:
+    job = yaml.safe_load((ROOT / ".github/workflows/security-scan.yml").read_text())["jobs"]["dependency-scan"]
+    step = next(step for step in job["steps"] if step["name"] == name)
+    assert not job.get("continue-on-error", False)
+    assert not step.get("continue-on-error", False)
+    assert step.get("working-directory") == directory
+    assert "||" not in step["run"]
+    assert "if [" not in step["run"]
+    if command:
+        assert step["run"].strip() == command
+    else:
+        assert "pip-audit -r control-plane-api/requirements.txt --desc" in step["run"]
+        assert "--ignore-vuln CVE-2024-23342" in step["run"]
+
+
+def test_regression_selected_dependency_audits_run_after_earlier_failure() -> None:
+    job = yaml.safe_load((ROOT / ".github/workflows/security-scan.yml").read_text())["jobs"]["dependency-scan"]
+    for step in job["steps"]:
+        if step["name"] != "Checkout repository":
+            assert step["if"].startswith("${{ !cancelled() && ")
+            assert "needs.scan-changes.outputs." in step["if"]
+    node = next(step for step in job["steps"] if step["name"] == "Set up Node.js")
+    assert node["if"] == (
+        "${{ !cancelled() && (needs.scan-changes.outputs.control-plane-ui == 'true' || "
+        "needs.scan-changes.outputs.portal == 'true') }}"
+    )
+
+
+def test_regression_trivy_high_critical_findings_are_blocking() -> None:
+    job = yaml.safe_load((ROOT / ".github/workflows/security-scan.yml").read_text())["jobs"]["container-scan"]
+    assert not job.get("continue-on-error", False)
+    scans = [step for step in job["steps"] if step.get("uses", "").startswith("aquasecurity/trivy-action@")]
+    assert len(scans) == 3
+    for step in scans:
+        assert not step.get("continue-on-error", False)
+        assert step["with"]["vuln-type"] == "os,library"
+    report = next(step for step in scans if step["name"] == "Run Trivy (SARIF)")
+    assert report["with"]["format"] == "sarif"
+    assert report["with"]["severity"] == "CRITICAL,HIGH"
+    assert report["with"]["ignore-unfixed"] is False
+    assert report["with"]["exit-code"] == "0"
+    upload = next(step for step in job["steps"] if step["name"] == "Upload to GitHub Security")
+    assert upload["continue-on-error"] is True
+    assert upload["with"]["sarif_file"] == report["with"]["output"]
+    gates = (
+        ("Run Trivy (fail on fixable HIGH+)", "CRITICAL,HIGH", True),
+        ("Run Trivy (fail on any CRITICAL)", "CRITICAL", False),
+    )
+    for name, severity, ignore_unfixed in gates:
+        gate = next(step for step in scans if step["name"] == name)
+        assert gate["with"]["severity"] == severity
+        assert gate["with"]["ignore-unfixed"] is ignore_unfixed
+        assert gate["with"]["exit-code"] == "1"
+        assert gate["if"] == "${{ !cancelled() && steps.check.outputs.exists == 'true' }}"
+
+
+@pytest.mark.parametrize("name", (
+    "Run Trivy (SARIF)",
+    "Run Trivy (fail on fixable HIGH+)",
+    "Run Trivy (fail on any CRITICAL)",
+))
+def test_regression_trivy_cannot_load_repository_ignorefiles(name: str) -> None:
+    job = yaml.safe_load((ROOT / ".github/workflows/security-scan.yml").read_text())["jobs"]["container-scan"]
+    step = next(step for step in job["steps"] if step["name"] == name)
+    # An empty action input alone still lets Trivy load .trivyignore by default.
+    assert step["env"]["TRIVY_IGNOREFILE"] == "/dev/null"
+    assert Path(step["env"]["TRIVY_IGNOREFILE"]).read_bytes() == b""
+    # A nonempty action input would override the explicit environment variable.
+    assert not step["with"].get("trivyignores")
+
+
+@pytest.mark.skipif(shutil.which("trivy") is None, reason="requires the Trivy executable")
+@pytest.mark.parametrize("fixed_version", ("", "1.1"))
+def test_regression_trivy_critical_ignorefile_bypass(tmp_path: Path, fixed_version: str) -> None:
+    job = yaml.safe_load((ROOT / ".github/workflows/security-scan.yml").read_text())["jobs"]["container-scan"]
+    gate = next(step for step in job["steps"] if step["name"] == "Run Trivy (fail on any CRITICAL)")
+    finding = {"VulnerabilityID": "TEST-CRITICAL", "PkgName": "fixture",
+               "InstalledVersion": "1.0", "FixedVersion": fixed_version, "Severity": "CRITICAL"}
+    report = tmp_path / "report.json"
+    report.write_text(json.dumps({"SchemaVersion": 2, "ArtifactName": "fixture",
+                                 "ArtifactType": "container_image", "Results": [
+                                     {"Target": "fixture", "Class": "lang-pkgs", "Type": "npm",
+                                      "Vulnerabilities": [finding]}]}))
+    (tmp_path / ".trivyignore").write_text("TEST-CRITICAL\n")
+    command = ["trivy", "convert", "--format", "json", "--severity", gate["with"]["severity"],
+               "--exit-code", gate["with"]["exit-code"], str(report)]
+    env = {key: value for key, value in os.environ.items() if not key.startswith("TRIVY_")}
+    # Replay the same finding without a database or container runtime.
+    baseline = subprocess.run(command, cwd=tmp_path, env=env, capture_output=True, text=True)
+    assert baseline.returncode == 0, baseline.stderr
+    assert not json.loads(baseline.stdout)["Results"][0].get("Vulnerabilities")
+    protected = subprocess.run(command, cwd=tmp_path, env={**env, **gate["env"]},
+                               capture_output=True, text=True)
+    assert protected.returncode == 1, protected.stderr
+    assert json.loads(protected.stdout)["Results"][0]["Vulnerabilities"][0]["VulnerabilityID"] == "TEST-CRITICAL"
+
+
+@pytest.mark.parametrize("exists", (False, True))
+def test_regression_container_requires_dockerfile(tmp_path: Path, exists: bool) -> None:
+    job = yaml.safe_load((ROOT / ".github/workflows/security-scan.yml").read_text())["jobs"]["container-scan"]
+    check = next(step for step in job["steps"] if step.get("id") == "check")
+    if exists:
+        (tmp_path / "fixture").mkdir()
+        (tmp_path / "fixture/Dockerfile").write_text("FROM scratch\n")
+    output = tmp_path / "output"
+    script = check["run"].replace("${{ matrix.component.path }}", "fixture").replace(
+        "${{ matrix.component.name }}", "fixture")
+    proc = subprocess.run(["bash", "-e", "-o", "pipefail", "-c", script], cwd=tmp_path,
+                          env=dict(os.environ, GITHUB_OUTPUT=str(output)), capture_output=True, text=True)
+    assert (proc.returncode == 0) is exists
+    if exists:
+        assert output.read_text().strip() == "exists=true"
+    else:
+        assert "::error::" in proc.stdout

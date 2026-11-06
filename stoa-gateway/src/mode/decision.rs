@@ -402,6 +402,33 @@ mod tests {
     }
 
     #[test]
+    fn decide_allows_any_required_scope_and_records_policy_order() {
+        let engine =
+            DecisionEngine::new().with_required_scopes(vec!["read".into(), "write".into()]);
+        let decision = engine.decide(input(Some(principal(vec!["write"])), Some("acme")));
+        assert!(decision.allowed);
+        assert_eq!(
+            decision.metadata.unwrap().policies_evaluated,
+            ["identity", "tenant", "scope_enforcement"]
+        );
+    }
+
+    #[test]
+    fn decide_denies_before_enriching_untrusted_requests() {
+        let engine = DecisionEngine::new().with_required_scopes(vec!["write".into()]);
+        for request in [
+            input(None, Some("acme")),
+            input(Some(principal(vec!["write"])), None),
+            input(Some(principal(vec!["read"])), Some("acme")),
+        ] {
+            let decision = engine.decide(request);
+            assert!(!decision.allowed);
+            assert!(decision.headers_to_add.is_empty());
+            assert!(decision.metadata.is_none());
+        }
+    }
+
+    #[test]
     fn decide_enforces_consumer_rate_limit() {
         let limiter = Arc::new(ConsumerRateLimiter::new(RateLimiterConfig {
             default_rate_per_minute: 1,

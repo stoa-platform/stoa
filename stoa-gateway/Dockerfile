@@ -18,7 +18,7 @@
 # ==============================================================================
 
 # --- Stage 1: Plan dependencies -----------------------------------------------
-FROM rust:1.99-bookworm@sha256:9181b56c2a21ab1d5e73cffe04fc762426d30aa7fac3c91141dd033f49a7fc8b AS planner
+FROM rust:1.99-bookworm@sha256:cfcbed05398d0f6f81b7c3a24579475c567f97007ae7837ab421f9ca3e66333d AS planner
 RUN cargo install cargo-chef --locked
 WORKDIR /app
 COPY Cargo.toml Cargo.lock* ./
@@ -30,7 +30,7 @@ COPY proto ./proto
 RUN cargo chef prepare --recipe-path recipe.json
 
 # --- Stage 2: Build -----------------------------------------------------------
-FROM rust:1.99-bookworm@sha256:9181b56c2a21ab1d5e73cffe04fc762426d30aa7fac3c91141dd033f49a7fc8b AS builder
+FROM rust:1.99-bookworm@sha256:cfcbed05398d0f6f81b7c3a24579475c567f97007ae7837ab421f9ca3e66333d AS builder
 
 # Feature flags for community/enterprise image split (ADR-041 Phase 3)
 #   empty   = community (default — lean image, no optional deps)
@@ -39,6 +39,8 @@ FROM rust:1.99-bookworm@sha256:9181b56c2a21ab1d5e73cffe04fc762426d30aa7fac3c9114
 #   pingora = Pingora connection pool (pingora-core, needs cmake)
 # Example: docker build --build-arg FEATURES="kafka,pingora" .
 ARG FEATURES=""
+# Companion profile: disable Cargo defaults explicitly, including future defaults.
+ARG NO_DEFAULT_FEATURES=false
 
 # Install cargo-chef and build deps
 RUN cargo install cargo-chef --locked && \
@@ -59,7 +61,8 @@ WORKDIR /app
 
 # Cook dependencies (cached unless Cargo.toml/Cargo.lock change)
 COPY --from=planner /app/recipe.json recipe.json
-RUN cargo chef cook --locked --release --features "${FEATURES}" --recipe-path recipe.json
+RUN if [ "${NO_DEFAULT_FEATURES}" = true ]; then set -- --no-default-features; else set --; fi && \
+    cargo chef cook --locked --release --features "${FEATURES}" "$@" --recipe-path recipe.json
 
 # Cache-bust: ensures source changes always trigger recompilation
 # (GHA Docker layer cache can otherwise serve stale compiled artifacts)
@@ -73,17 +76,19 @@ COPY policies ./policies
 COPY benches ./benches
 COPY build.rs ./
 COPY proto ./proto
-RUN cargo build --locked --release --features "${FEATURES}" && strip target/release/stoa-gateway
+RUN if [ "${NO_DEFAULT_FEATURES}" = true ]; then set -- --no-default-features; else set --; fi && \
+    cargo build --locked --release --features "${FEATURES}" "$@" && strip target/release/stoa-gateway
 
 # --- Stage 3: Runtime (minimal) -----------------------------------------------
-FROM debian:bookworm-slim@sha256:99c0b25c46d0214d5a2091092e7908907dcaecd6a962cde0ac700acee222b6f3 AS runtime
+# The Bookworm-built binary uses compatible glibc/OpenSSL ABIs on Trixie.
+FROM debian:trixie-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2 AS runtime
 
 # Preserve the project distribution notices in the runtime image.
 COPY LICENSE NOTICE /usr/share/licenses/stoa/
 
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
       ca-certificates \
-      libssl3 \
+      libssl3t64 \
       curl \
     && rm -rf /var/lib/apt/lists/*
 

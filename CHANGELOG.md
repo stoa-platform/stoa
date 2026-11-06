@@ -1,10 +1,68 @@
 # Changelog
 
+All notable changes to STOA Platform are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
+and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+Each pull request that changes user-facing behaviour adds a line under
+**Unreleased**. A version section is cut at release time; see
+[RELEASING.md](RELEASING.md) for the procedure.
+
 ## [Unreleased]
 
-### Features
+Changes merged to `main` since the component releases of 2026-05-13. Earlier
+changes are covered by the version sections below and by the per-component
+`CHANGELOG.md` files.
 
-* **quickstart:** add a Docker Compose stack that starts the control plane and STOA Gateway, declares an API through the gateway admin contract API, and checks access control (401 without a token, 401 with an invalid token, 200 with a token)
+### Added
+
+- Signed tool-policy artifacts: the control plane publishes per-tenant tool policy snapshots with a monotonic version, a compact signature, validated policy bounds, and the issuer, audience and tenant identity bound into the artifact (#3026, #3030, #3031, #3036, #3038, #3040).
+- The gateway loads pinned policy-signer trust sets, verifies tool-policy artifacts against them, and refuses tool calls and readiness when the signer is not trusted (#3032, #3033, #3037).
+- Durable audit spool in the gateway and an audit ingest endpoint in the control plane, so audit events survive a control-plane outage (#2792, #2793).
+- Audit trail integrity chain and pseudonymising erasure of personal data in audit records, initial implementation (#2780, #2781).
+- Envoy data-plane support: an ext_authz adapter in the gateway, with denial reasons recorded in the decision trace (#2893, #2941).
+- stoa-connect exposes an xDS server and an Envoy adapter that enforce the policy contract; API lifecycle changes propagate to Envoy over SSE and xDS (#2883, #2884, #2902).
+- Opt-in isolated public demo deployment for Kubernetes, with a single TLS termination point and per-client rate limiting that answers HTTP 429 (#3042, #3044, #3046, #3047).
+- Quickstart: a Docker Compose stack that starts the control plane and the gateway, declares an API through the gateway admin contract API, and proves access control: rejected without a token or with an invalid one, accepted with a valid token (#2858).
+- Console Live Calls view: success-first layout, clearer status semantics and a traffic heatmap (#2770, #2772, #2775).
+- Accessibility improvements across the Console and the Developer Portal, including form labels bound to their controls (#2870, #2895).
+
+### Fixed
+
+- Webhooks are emitted when a subscription is suspended or reactivated (#2784).
+- Gateway deprovisioning retries transient failures and records a distinct `DEPROVISIONING_FAILED` state, so revoked subscriptions no longer keep live gateway routes indefinitely (#2782).
+- Subscription TTL extensions are committed to the database instead of only flushed (#2778).
+- Tenant provisioning recovers when the identity provider realm already exists (#2940).
+- Gateway adapters wait for required credential reads; health and import operations return a consistent service-unavailable response when a read cannot complete, and failed subscription provisioning is recorded with a sanitised error (#3002).
+- Database migrations select the installed psycopg2 driver (#2973).
+- Server-sent event listeners are closed when streams end (#2881).
+- Helm-created realms declare a single-valued `tenant_id` attribute with the same token mapper as the Console and Portal clients (#2997).
+- The GatewayInstance custom resource definition schema can be applied again (#2811).
+- Install guides match what the Helm chart actually ships (#2981).
+- npm package manifests declare the Apache-2.0 license (#2889).
+
+### Security
+
+- Tenant access decisions are centralised in the control plane and applied to resources, policies, subscriptions, federation, tenant certificate authorities, billing and quota, MCP servers and tool permissions (#2878, #2918, #2921, #2936, #3009, #3018, #3021, #3022, #3024, #3025, #3029).
+- Tenant claims are validated, and tenant administrators without a tenant are rejected before repository access (#2917, #3014).
+- The gateway ignores client-supplied tenant headers in MCP transports and ext-authz input, and derives the SOAP tenant and A2A ownership from verified claims (#3010, #3011, #3013, #3016).
+- A2A task ownership is bound to the validated tenant and subject across token renewal; unverified bindings are rejected and federated owners are kept separate (#2929, #2930, #2931).
+- Proxy hardening: identity is validated before edge policies, protected-route and MCP REST policies run after JWT validation, backend access requirements are explicit and enforced, and path segment boundaries are enforced (#2922, #2923, #2924, #2925, #2926, #2932, #2933).
+- A2A and protected API proxy routes require a JWT, and published REST routes enforce JWT validation when the contract requires it (#2856, #2864, #2879).
+- Internal gateway reads are protected, the internal gateway key is forwarded, and operator and gateway keys are compared with timing-safe digest comparisons (#2910, #2911, #2912, #2920).
+- Audit records minimise network identifiers, bound metadata size and tenant attribution, and distinguish operator calls (#2913, #2914, #2915, #2916).
+- Sender-constrained proof verification is stricter (#3003).
+- The control plane verifies JWTs with PyJWT instead of python-jose; the related advisory exemption was dropped and the verification contract is locked by tests (#3019, #3028, #3039).
+- Vulnerable dependencies were updated, including kafka-python, python-multipart, wasmtime, and pip and setuptools in the Python image; error responses no longer expose stack traces (#2812, #2863, #2898, #2982, #2983, #2995, #2998).
+- Landing API invite, event, metrics and API key routes require an API key, an allowed role and the caller's tenant; API keys are returned once and stored hashed (#2990).
+- Demo documentation no longer publishes a default password (#3027).
+
+### Breaking changes
+
+- The unused `POST /v1/tenants/provision` endpoint was removed without a compatibility handler; use the standard tenant creation workflow (#3045).
+- Tool calls require an explicit permission and are denied otherwise. Permission checks use the canonical tool name and also cover fallback targets and sub-account allowlists (#3012, #3015, #3017, #3041).
+- The gateway fails closed: tool permission lookups deny when the control plane is unreachable, policy boot fails in regulated profiles when the policy cannot be loaded, and readiness is reported only after the startup tool-policy load succeeds (#2787, #2789, #2796, #3020).
+- Continuous-integration container images are published only under full commit SHA tags and auxiliary floating tags were dropped; Kubernetes manifests, the Helm chart, runbooks and templates pin images by digest.
 
 ## [2.3.0](https://github.com/stoa-platform/stoa/compare/v2.2.0...v2.3.0) (2026-03-06)
 
@@ -145,7 +203,6 @@
 * **api:** add dynamic MCP tool generation from UAC contracts (CAB-605) ([#937](https://github.com/stoa-platform/stoa/issues/937)) ([ff3134f](https://github.com/stoa-platform/stoa/commit/ff3134fcadf10b77683357c88c15a9bbef8df6ea))
 * **api:** add LLM budget service + provider config API (CAB-1491) ([#1126](https://github.com/stoa-platform/stoa/issues/1126)) ([c81700e](https://github.com/stoa-platform/stoa/commit/c81700e0ac8e009a0099a660d7cf3daeebdc0fce))
 * **api:** add PII masking middleware + admin endpoints (CAB-430) ([#1024](https://github.com/stoa-platform/stoa/issues/1024)) ([be8063f](https://github.com/stoa-platform/stoa/commit/be8063fa0b14256049a8027e2d58b822e13c0633))
-* **api:** add POST /v1/tenants/provision endpoint (CAB-1547) ([#1204](https://github.com/stoa-platform/stoa/issues/1204)) ([1256162](https://github.com/stoa-platform/stoa/commit/12561629eb58c35f4646ef6a5cbffe970bb7299a))
 * **api:** add SCIM↔Gateway reconciliation service (CAB-1484) ([#1131](https://github.com/stoa-platform/stoa/issues/1131)) ([384e42a](https://github.com/stoa-platform/stoa/commit/384e42ac8c2e1cee8972331148cfe0d967f3eb6c))
 * **api:** add security posture scanner service (CAB-1461 P1) ([#1093](https://github.com/stoa-platform/stoa/issues/1093)) ([cd769e0](https://github.com/stoa-platform/stoa/commit/cd769e0b0dfcf98c4e81ecb34e68a99b449c0b02))
 * **api:** add self-service signup service (CAB-1541) ([#1190](https://github.com/stoa-platform/stoa/issues/1190)) ([2827a69](https://github.com/stoa-platform/stoa/commit/2827a695a2b8258b0959368554a17e3b1bb84204))

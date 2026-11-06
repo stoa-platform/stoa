@@ -614,16 +614,7 @@ mod tests {
         assert_eq!(stats.reduction_pct, 0);
     }
 
-    #[test]
-    fn test_optimization_performance() {
-        use std::time::Instant;
-
-        let optimizer = TokenOptimizer::new(OptimizationSettings {
-            level: OptimizationLevel::Aggressive,
-            max_response_tokens: Some(4096),
-            ..Default::default()
-        });
-
+    fn large_optimization_input() -> Value {
         // Generate a ~10KB payload
         let mut items = Vec::new();
         for i in 0..100 {
@@ -639,19 +630,51 @@ mod tests {
                 }
             }));
         }
-        let input = json!({ "items": items });
-        let input_str = input.to_string();
-        assert!(input_str.len() > 10000, "Input should be > 10KB");
+        json!({ "items": items })
+    }
 
-        let start = Instant::now();
-        let (_result, _stats) = optimizer.optimize(&input);
-        let elapsed = start.elapsed();
+    fn large_payload_optimizer() -> TokenOptimizer {
+        TokenOptimizer::new(OptimizationSettings {
+            level: OptimizationLevel::Aggressive,
+            max_response_tokens: Some(4096),
+            ..Default::default()
+        })
+    }
 
-        assert!(
-            elapsed.as_millis() < 50,
-            "Optimization should complete in < 50ms, took {:?}",
-            elapsed
-        );
+    #[test]
+    fn test_optimization_large_payload() {
+        let input = large_optimization_input();
+        assert!(input.to_string().len() > 10000, "Input should be > 10KB");
+
+        let (result, stats) = large_payload_optimizer().optimize(&input);
+
+        assert_eq!(stats.input_bytes, input.to_string().len());
+        assert_eq!(stats.output_bytes, result.to_string().len());
+        assert!(stats.output_bytes < stats.input_bytes);
+        assert!(stats.reduction_pct > 0);
+        let items = result["items"].as_array().unwrap();
+        assert_eq!(items.len(), 41); // 40 retained items plus pagination metadata.
+        for (i, item) in items[..40].iter().enumerate() {
+            assert_eq!(item["id"], format!("item-{}", i));
+            assert_eq!(item["value"], i);
+            assert!(item["metadata"].get("updated").is_none());
+            assert!(item.get("description").is_none());
+            assert!(item.get("desc").is_none());
+        }
+        assert_eq!(items[40], "...and 60 more. Use pagination to see all.");
+    }
+
+    // Manual timing observation only: shared CI runners have variable scheduling delays.
+    // Run with: cargo test test_optimization_performance -- --ignored --nocapture
+    #[test]
+    #[ignore = "manual timing observation; no wall-clock pass/fail threshold"]
+    fn test_optimization_performance() {
+        let input = large_optimization_input();
+        let optimizer = large_payload_optimizer();
+        let start = std::time::Instant::now();
+        let (result, stats) = optimizer.optimize(&input);
+        eprintln!("Large payload optimization took {:?}", start.elapsed());
+        assert_eq!(stats.output_bytes, result.to_string().len());
     }
 
     #[test]

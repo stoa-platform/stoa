@@ -71,7 +71,9 @@ def test_regression_cab_2361_dpop_hs256_public_key_rejected(rsa_key: rsa.RSAPriv
     assert result.error == "DPoP proof algorithm is not supported"
 
 
-@pytest.mark.parametrize("algorithm", ["none", "HS256", "HS384", "HS512", "ES384", "RS384", "PS512", "unknown", None])
+@pytest.mark.parametrize(
+    "algorithm", ["none", "HS256", "HS384", "HS512", "ES384", "RS384", "PS512", "PS256", "EdDSA", "unknown", None]
+)
 def test_regression_cab_2361_dpop_algorithm_rejected_before_jwk(algorithm: str | None) -> None:
     header = {"typ": "dpop+jwt", "alg": algorithm, "jwk": {"kty": "EC"}}
     if algorithm is None:
@@ -83,9 +85,7 @@ def test_regression_cab_2361_dpop_algorithm_rejected_before_jwk(algorithm: str |
     assert result.error == "DPoP proof algorithm is not supported"
 
 
-@pytest.mark.parametrize(
-    ("algorithm", "key_type"), [("ES256", "RSA"), ("ES256", "oct"), ("PS256", "EC"), ("RS256", "EC"), ("EdDSA", "EC")]
-)
+@pytest.mark.parametrize(("algorithm", "key_type"), [("ES256", "RSA"), ("ES256", "oct"), ("RS256", "EC")])
 def test_regression_cab_2361_dpop_key_type_must_match_algorithm(algorithm: str, key_type: str) -> None:
     header = {"typ": "dpop+jwt", "alg": algorithm, "jwk": {"kty": key_type}}
 
@@ -95,7 +95,7 @@ def test_regression_cab_2361_dpop_key_type_must_match_algorithm(algorithm: str, 
     assert result.error == "DPoP proof algorithm does not match JWK key type"
 
 
-@pytest.mark.parametrize("member", ["d", "p", "q", "dp", "dq", "qi"])
+@pytest.mark.parametrize("member", ["d", "p", "q", "dp", "dq", "qi", "k"])
 def test_regression_cab_2361_dpop_private_member_rejected_before_thumbprint(
     member: str, rsa_key: rsa.RSAPrivateKey
 ) -> None:

@@ -130,10 +130,11 @@ jobs:
           python-version: '3.11'
 
       - name: Install pytest
-        run: python -m pip install 'pytest==8.4.2' 'PyYAML==6.0.3'
+        # gate.txt preserves pytest==8.4.2 and PyYAML==6.0.3 with transitive hashes.
+        run: python -m pip install --require-hashes -r .github/workflows/requirements/gate.txt
 
       - name: Run ci-gate contract tests
-        run: pytest scripts/ci/tests/test_ci_gate_contract.py scripts/ci/tests/test_security_scan_paths.py -v --tb=short
+        run: pytest scripts/ci/tests/test_ci_gate_contract.py scripts/ci/tests/test_security_scan_paths.py scripts/ci/tests/test_regression_publish_image_digest.py -v --tb=short
 
   security:
     uses: ./.github/workflows/security-scan.yml

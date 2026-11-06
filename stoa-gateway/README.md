@@ -13,7 +13,9 @@ Rust implementation of the unified STOA gateway. Implements the 4-mode architect
 
 - Rust stable toolchain
 - Optional: `librdkafka` (`brew install librdkafka`) for Kafka feature
-- Optional: `cmake` (`brew install cmake`) for `cargo test --all-features`
+- `cmake` is required for `cargo test --all-features` (the Kafka dependency builds native code).
+  Install with `brew install cmake` on macOS, or your Linux package manager
+  (for example, `sudo apt-get install cmake` on Debian/Ubuntu).
 
 ## Quick Start
 
@@ -32,6 +34,10 @@ cargo clippy             # Lint
 cargo fmt --check        # Format check
 cargo run                # Run server
 ```
+
+From the repository root, run `make test-gateway-all-features` to check that
+`cmake` is installed before running `cargo test --all-features`.
+Use `make test-gateway` for default-feature tests, which do not require `cmake`.
 
 ## Project Structure
 
@@ -62,6 +68,11 @@ tests/
 | `k8s` | kube, k8s-openapi | K8s CRD watcher | None |
 
 Default features: **none** (lean community build).
+
+The published gateway image enables `kafka,pingora,k8s` to support the Helm
+environment profiles. Policy evaluation is always compiled in; it does not
+require a `tenant-policy` Cargo feature. Helm CI checks rendered capability
+switches against the image build arguments and verifies Rust CI coverage.
 
 ```bash
 cargo build --release                          # Community

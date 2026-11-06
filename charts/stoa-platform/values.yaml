@@ -98,6 +98,24 @@ stoaGateway:
   #   - tenant-b
   policyBootTenants: []
 
+  # Periodic route refresh from the Control Plane (gateway runtime defaults).
+  routing:
+    reloadEnabled: false
+    reloadIntervalSecs: 30
+
+  # Upstream definitions, including any auth_token, come from an existing Secret.
+  federation:
+    enabled: false
+    cacheTtlSecs: 300
+    cacheMaxEntries: 10000
+    upstreamsSecretRef: {} # name and key of a JSON array of upstream definitions
+
+  # Backend fields use the gateway's snake_case names. No credentials here.
+  apiProxy:
+    enabled: false
+    requireAuth: true
+    backends: {}
+
   # Keycloak OIDC
   keycloakUrl: ''
   keycloakRealm: stoa

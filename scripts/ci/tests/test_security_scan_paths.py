@@ -193,7 +193,7 @@ def test_web_scans_keep_check_names_and_full_non_pr_runs() -> None:
     jobs = yaml.safe_load((ROOT / ".github/workflows/security-scan.yml").read_text())["jobs"]
     detector = jobs["scan-changes"]
     web = next(step for step in detector["steps"] if step.get("id") == "web")
-    assert web["uses"] == "dorny/paths-filter@15192bc058cc28a13dbf6cde61f19e18988b7af6"
+    assert web["uses"] == "dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad"
     assert web["if"] == "github.event_name == 'pull_request'"
     assert web["with"]["token"] == ""
     assert web["with"]["predicate-quantifier"] == "every"

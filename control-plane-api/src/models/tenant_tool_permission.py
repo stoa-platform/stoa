@@ -18,7 +18,7 @@ class TenantToolPermission(Base):
     """Per-tenant, per-tool permission override.
 
     When a row exists with allowed=False, the tool is denied for that tenant.
-    Absence of a row means the tool is allowed (default-allow).
+    Only an explicit allowed=True row grants access; absence means deny.
     """
 
     __tablename__ = "tenant_tool_permissions"

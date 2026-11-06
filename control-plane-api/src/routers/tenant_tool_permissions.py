@@ -78,19 +78,20 @@ async def check_tool_allowed(
 ) -> bool:
     """Check if a tool is allowed for a tenant. Returns True if allowed.
 
-    Uses in-memory cache with 60s TTL. Default-allow: if no permission
-    row exists, the tool is allowed.
+    Uses in-memory cache with 60s TTL. Deny-by-default: a matching
+    explicit allow row is required.
 
     If mcp_server_id is provided, checks the specific (server, tool) pair.
-    If not, checks if ANY server has this tool denied for the tenant.
+    If not, requires at least one matching allow and no matching deny.
     """
     permission_map = await _load_permission_cache(tenant_id, db)
 
     if mcp_server_id:
-        return permission_map.get((str(mcp_server_id), tool_name), True)
+        return permission_map.get((str(mcp_server_id), tool_name), False)
 
-    # No server_id — check all servers for this tool_name
-    return all(allowed or tname != tool_name for (_sid, tname), allowed in permission_map.items())
+    # Without a server ID, any matching deny takes precedence over allows.
+    matches = [allowed for (_sid, name), allowed in permission_map.items() if name == tool_name]
+    return bool(matches) and all(matches)
 
 
 def _ensure_tenant_access(user: User, tenant_id: str) -> None:
@@ -267,7 +268,7 @@ async def delete_permission(
     user: User = Depends(require_role(["cpi-admin", "tenant-admin"])),
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    """Delete a tool permission (reverts to default-allow). Requires stoa:write."""
+    """Delete a tool permission (reverts to default-deny). Requires stoa:write."""
     _ensure_tenant_access(user, tenant_id)
 
     result = await db.execute(

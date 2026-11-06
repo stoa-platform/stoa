@@ -140,15 +140,20 @@ S3_BUCKET=stoa-backups AWS_REGION=eu-west-1 \
 BACKUP_PATH="postgres/2026-01-23/stoa_backup_20260123_020003.sql.gz"
 aws s3 cp "s3://stoa-backups/$BACKUP_PATH" /tmp/backup.sql.gz
 
-# 2. Verify integrity
+# 2. Verify integrity (valid gzip AND complete dump) BEFORE touching the database
 gunzip -t /tmp/backup.sql.gz
+gunzip -c /tmp/backup.sql.gz | tail -n 20 | grep "PostgreSQL database dump complete"
 
 # 3. Copy to PostgreSQL pod
 kubectl cp /tmp/backup.sql.gz stoa-system/control-plane-db-0:/tmp/backup.sql.gz
 
-# 4. Restore database
+# 4. Recreate the database, then restore in one transaction.
+#    ON_ERROR_STOP makes any SQL error fail the restore instead of being ignored.
+kubectl exec -n stoa-system control-plane-db-0 -- psql -U stoa -d postgres -v ON_ERROR_STOP=1 \
+  -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'stoa' AND pid <> pg_backend_pid();" \
+  -c "DROP DATABASE IF EXISTS stoa;" -c "CREATE DATABASE stoa OWNER stoa;"
 kubectl exec -n stoa-system control-plane-db-0 -- bash -c \
-  "gunzip -c /tmp/backup.sql.gz | psql -U stoa -d stoa"
+  "gunzip -c /tmp/backup.sql.gz | psql -U stoa -d stoa -v ON_ERROR_STOP=1 --single-transaction"
 
 # 5. Cleanup
 kubectl exec -n stoa-system control-plane-db-0 -- rm -f /tmp/backup.sql.gz
@@ -289,6 +294,13 @@ S3_BUCKET=stoa-backups AWS_REGION=eu-west-1 \
 - Database connection pool metrics
 
 ### Regular Testing
+- Automated: the `Backup Restore CI` workflow runs one backup -> damage -> restore
+  cycle of `backup-postgres.sh` on a disposable PostgreSQL container for every change
+  under `scripts/backup/`. Run it locally against any throwaway server:
+  ```bash
+  BACKUP_RESTORE_TEST_DISPOSABLE=1 PGHOST=localhost PGPORT=5432 \
+    PGUSER=postgres PGPASSWORD=postgres tests/backup/test-postgres-backup-restore.sh
+  ```
 - Monthly restore test in dev environment
 - Quarterly DR drill
 

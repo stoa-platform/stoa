@@ -7,6 +7,8 @@
 # =============================================================================
 
 set -euo pipefail
+# Keep errexit inside $(...) so a failing step aborts helpers whose output is captured
+shopt -s inherit_errexit
 
 # -----------------------------------------------------------------------------
 # Configuration
@@ -27,6 +29,9 @@ NC='\033[0m' # No Color
 # Logging Functions
 # -----------------------------------------------------------------------------
 
+# All log output goes to stderr: helpers return values on stdout and are
+# called through $(...), so logging on stdout would corrupt those values.
+# log() always returns 0 so a skipped DEBUG line never trips `set -e`.
 log() {
     local level=$1
     shift
@@ -35,10 +40,12 @@ log() {
 
     case $level in
         DEBUG)
-            [[ "$LOG_LEVEL" == "DEBUG" ]] && echo -e "${BLUE}[$timestamp] [DEBUG]${NC} $message"
+            if [[ "$LOG_LEVEL" == "DEBUG" ]]; then
+                echo -e "${BLUE}[$timestamp] [DEBUG]${NC} $message" >&2
+            fi
             ;;
         INFO)
-            echo -e "${GREEN}[$timestamp] [INFO]${NC} $message"
+            echo -e "${GREEN}[$timestamp] [INFO]${NC} $message" >&2
             ;;
         WARN)
             echo -e "${YELLOW}[$timestamp] [WARN]${NC} $message" >&2
@@ -47,6 +54,7 @@ log() {
             echo -e "${RED}[$timestamp] [ERROR]${NC} $message" >&2
             ;;
     esac
+    return 0
 }
 
 log_info() { log INFO "$@"; }

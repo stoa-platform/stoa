@@ -15,6 +15,7 @@ stoa:
   # Bootstrap job (CAB-1864) — runs once on helm install
   bootstrap:
     enabled: false
+    pullPolicy: IfNotPresent
     # Keycloak admin credentials (required when enabled)
     keycloak:
       adminUser: 'admin'
@@ -345,6 +346,8 @@ gatewaySync:
 
   # CronJob schedule (default: every 6 hours)
   schedule: '0 */6 * * *'
+
+  pullPolicy: IfNotPresent
 
   # Image for the sync job
   image: curlimages/curl:8.5.0@sha256:08e466006f0860e54fc299378de998935333e0e130a15f6f98482e9f8dab3058
@@ -678,3 +681,7 @@ networkPolicy:
   sidecarEgress: []
   # The companion's localhost:8081 authorization endpoint needs no network allow;
   # only the main gateway port is exposed. Its upstream APIs need sidecarEgress.
+
+# Pull policy for the Helm connection-test Pod.
+testConnection:
+  pullPolicy: IfNotPresent

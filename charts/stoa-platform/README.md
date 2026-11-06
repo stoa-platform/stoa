@@ -176,6 +176,19 @@ registry-restricted webMethods image have no default reference. Supply your own
 immutable image before enabling a webMethods companion. The OpenResty example
 includes its own pin. Companion and Nginx example defaults remain disabled.
 
+### Rollback-safe image policy
+
+Gateway and companion images render as `repository@sha256:...` and default to
+`image.pullPolicy: IfNotPresent`. Set the digest for each release and retain
+previous digests in the registry so Helm can restore the exact previous image.
+`IfNotPresent` alone cannot make a mutable tag such as `latest` reproducible.
+Control-plane deployments are managed by standalone manifests, outside this chart.
+
+Sync Jobs, the bootstrap Job and the Helm connection-test Pod also default to
+`IfNotPresent`. Override `gatewaySync.pullPolicy`, `stoa.bootstrap.pullPolicy`
+or `testConnection.pullPolicy` when needed. Deployment pull policies remain
+configurable under each component's `image.pullPolicy`.
+
 ## CRDs
 
 Custom Resource Definitions in `crds/` (applied separately, not managed by Helm lifecycle):

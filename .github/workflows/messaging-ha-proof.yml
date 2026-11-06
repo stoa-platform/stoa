@@ -1,0 +1,60 @@
+# Messaging HA failover proof (docs/runbooks/messaging-failover-proof.md).
+#
+# Starts the three-broker Redpanda cluster of deploy/redpanda/ha-proof on the
+# runner, stops the broker leading a partition and proves writes and reads keep
+# working. Local to the runner: no secret, read-only token, no published port,
+# no remote cluster. Not a required check; runs on messaging changes or on demand.
+name: Messaging HA Failover Proof
+
+on:
+  pull_request:
+    paths:
+      - 'deploy/redpanda/**'
+      - 'k8s/redpanda/**'
+      - 'docs/runbooks/kafka-topics.md'
+      - 'docs/runbooks/event-backbone-ops.md'
+      - 'docs/runbooks/messaging-failover-proof.md'
+      - '.github/workflows/messaging-ha-proof.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: messaging-ha-proof-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static:
+    name: Static checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: '3.11'
+      - name: Install hash-locked YAML parser
+        run: python -m pip install --require-hashes -r .github/workflows/requirements/pyyaml.txt
+      - name: Sizing, topology and parser tests
+        run: python -B -m unittest discover -s deploy/redpanda/ha-proof -p 'test_*.py' -v
+      - name: Shellcheck the proof script
+        run: shellcheck deploy/redpanda/ha-proof/failover-proof.sh
+      - name: Validate the compose file
+        run: docker compose -f deploy/redpanda/ha-proof/docker-compose.yml config --quiet
+
+  failover:
+    name: Broker loss failover
+    needs: static
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Pull the pinned Redpanda image
+        run: docker compose -f deploy/redpanda/ha-proof/docker-compose.yml pull --quiet
+      - name: Stop one of three brokers and prove messaging stays available
+        run: deploy/redpanda/ha-proof/failover-proof.sh

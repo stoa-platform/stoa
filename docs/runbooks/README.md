@@ -9,6 +9,7 @@ This directory contains operational procedures for incident management on the ST
 ## Runbook Index
 
 - [Site Backup, Restore and Verification](site-backup-restore.md): recovery inventory, offline key custody and acceptance gates for site operators.
+- [Messaging HA Failover Proof](messaging-failover-proof.md): reproducible local proof that the retained three-broker sizing survives the loss of one broker.
 
 ### Critical (Immediate action required)
 

@@ -339,4 +339,5 @@ gunzip -c audit-backup-20260220.jsonl.gz | \
 - [Event Backbone README](../kafka/README.md)
 - [ADR-043: Kafka Event-Driven Architecture](https://docs.gostoa.dev/architecture/adr/adr-043-kafka-mcp-event-bridge)
 - [Kafka Lag Runbook](./high/kafka-lag.md)
+- [Messaging HA Failover Proof](./messaging-failover-proof.md)
 - [Redpanda Documentation](https://docs.redpanda.com/)

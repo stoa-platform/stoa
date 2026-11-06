@@ -1,6 +1,8 @@
 """Local Helm render contracts for the opt-in companion example."""
 
+import copy
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -101,27 +103,105 @@ class CompanionRenderTests(unittest.TestCase):
                 self.assertEqual(container.get("imagePullPolicy"), "IfNotPresent")
 
     def test_release_values_restore_previous_images(self):
-        # Synthetic digests exercise rendering only; no image is pulled.
-        def release(digit):
-            arguments = ["-f", str(EXAMPLE)]
-            expected = {}
-            for key, name in (("stoaGateway", "stoa-gateway"),
-                              ("stoaSidecar", "stoa-sidecar"),
-                              ("stoaSidecar.mainGateway", "nginx")):
-                repository = "registry.example.test/" + name
-                digest = "sha256:" + digit * 64
-                arguments += ["--set-string", f"{key}.image.repository={repository}",
-                              "--set-string", f"{key}.image.digest={digest}"]
-                expected[name] = f"{repository}@{digest}"
-            rendered = {c["name"]: c["image"] for c in
-                        self.containers(self.manifests(*arguments))}
-            self.assertEqual({name: rendered[name] for name in expected}, expected)
-            return rendered
+        # Synthetic references exercise local rendering; nothing is pulled or applied.
+        release_a = {
+            "stoa": {"bootstrap": {
+                "enabled": True,
+                "keycloak": {"existingSecret": "existing-bootstrap"},
+                "defaultTenant": {"name": "example-tenant"},
+            }},
+            "stoaGateway": {
+                "replicas": 2,
+                "controlPlaneUrl": "http://control-plane.example.test:8000",
+                "policyBootTenants": ["example-tenant"],
+                "routing": {"reloadEnabled": True, "reloadIntervalSecs": 30},
+                "federation": {"enabled": True, "upstreamsSecretRef": {
+                    "name": "existing-upstreams", "key": "upstreams",
+                }},
+                "policies": {"enabled": True},
+                "secretName": "existing-gateway",
+            },
+            "stoaSidecar": {
+                "policyBootTenants": ["example-tenant"],
+                "secretName": "existing-sidecar",
+                "mainGateway": {},
+            },
+            "gatewaySync": {"enabled": True, "schedule": "*/30 * * * *"},
+        }
+        image_keys = (("stoaGateway", "stoa-gateway"),
+                      ("stoaSidecar", "stoa-sidecar"),
+                      ("mainGateway", "nginx"))
+        release_b = copy.deepcopy(release_a)
+        release_b["stoaGateway"].update({
+            "replicas": 3,
+            "routing": {"reloadEnabled": True, "reloadIntervalSecs": 60},
+        })
+        release_b["gatewaySync"]["schedule"] = "*/15 * * * *"
+        for values, digit in ((release_a, "a"), (release_b, "b")):
+            for key, name in image_keys:
+                target = (values["stoaSidecar"][key] if key == "mainGateway"
+                          else values[key])
+                target["image"] = {
+                    "repository": "registry.example.test/" + name,
+                    "digest": "sha256:" + digit * 64,
+                    "pullPolicy": "IfNotPresent",
+                }
 
-        previous = release("a")
-        upgraded = release("b")
-        self.assertNotEqual(previous, upgraded)
-        self.assertEqual(release("a"), previous)
+        def snapshot(values, upgrade):
+            with tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "release.yaml"
+                path.write_text(yaml.safe_dump(values))
+                objects = self.manifests(
+                    "-f", str(EXAMPLE), "-f", str(path),
+                    *(["--is-upgrade"] if upgrade else []),
+                )
+            containers = {c["name"]: c for c in self.containers(objects)}
+            for _, name in image_keys:
+                expected = "registry.example.test/" + name + "@sha256:"
+                expected += "b" * 64 if values is release_b else "a" * 64
+                self.assertEqual(containers[name]["image"], expected)
+            for container in containers.values():
+                self.assertEqual(container["imagePullPolicy"], "IfNotPresent")
+
+            deployment = next(o for o in objects if o["kind"] == "Deployment"
+                              and o["metadata"]["name"] == "stoa-gateway")
+            self.assertEqual(deployment["spec"]["replicas"], values["stoaGateway"]["replicas"])
+            sync = next(o for o in objects if o["kind"] == "CronJob"
+                        and "sync" in o["metadata"]["name"])
+            self.assertEqual(sync["spec"]["schedule"], values["gatewaySync"]["schedule"])
+            gateway = containers["stoa-gateway"]
+            env = {entry["name"]: entry for entry in gateway["env"]}
+            self.assertEqual(env["STOA_ROUTE_RELOAD_INTERVAL_SECS"]["value"],
+                             str(values["stoaGateway"]["routing"]["reloadIntervalSecs"]))
+            # Data remains external: every phase points at the same catalog,
+            # tenant and upstream/credential Secrets, with no bootstrap replay.
+            self.assertEqual(env["STOA_CONTROL_PLANE_URL"]["value"],
+                             release_a["stoaGateway"]["controlPlaneUrl"])
+            self.assertEqual(env["STOA_POLICY_BOOT_TENANTS"]["value"], "example-tenant")
+            self.assertEqual(env["STOA_FEDERATION_UPSTREAMS"]["valueFrom"]["secretKeyRef"],
+                             {"name": "existing-upstreams", "key": "upstreams"})
+            self.assertEqual(env["STOA_CONTROL_PLANE_API_KEY"]["valueFrom"]["secretKeyRef"]["name"],
+                             "existing-gateway")
+            hooks = [o["metadata"].get("annotations", {}).get("helm.sh/hook", "")
+                     for o in objects if "bootstrap" in o["metadata"]["name"]]
+            self.assertTrue(hooks)
+            self.assertEqual(set(hooks), {"post-install"})
+            self.assertFalse(any(o["kind"] in {"PersistentVolume", "PersistentVolumeClaim",
+                                               "StatefulSet"} for o in objects))
+            # Offline Helm lookup cannot read existing Secrets and generates
+            # random bytes. Compare their identity/key shape, never their values;
+            # this proof does not establish live Secret or database preservation.
+            for obj in objects:
+                if obj["kind"] == "Secret":
+                    obj["data"] = sorted(obj.get("data", {}))
+            return objects
+
+        previous = snapshot(release_a, upgrade=False)
+        for cycle in range(2):
+            with self.subTest(cycle=cycle):
+                upgraded = snapshot(release_b, upgrade=True)
+                self.assertNotEqual(previous, upgraded)
+                self.assertEqual(snapshot(release_a, upgrade=True), previous)
 
     def test_pull_policy_overrides_are_preserved(self):
         arguments = ["-f", str(EXAMPLE), "--set", "stoa.bootstrap.enabled=true",

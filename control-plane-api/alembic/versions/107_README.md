@@ -89,8 +89,8 @@ preservation and application dependency review.
 
 ```bash
 cd control-plane-api
-# Bring up a disposable Postgres
-docker run -d --name stoa-audit-test -e POSTGRES_PASSWORD=test -p 5433:5432 postgres:16
+# Start a digest-pinned disposable Postgres 16 instance named stoa-audit-test.
+# Use local password test and map host port 5433 to container port 5432.
 # Apply existing migrations to head
 DATABASE_URL=postgresql+asyncpg://postgres:test@localhost:5433/postgres \
   alembic upgrade 106_drop_api_catalog_full_unique

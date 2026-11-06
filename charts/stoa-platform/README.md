@@ -25,6 +25,29 @@ helm upgrade --install stoa-platform ./charts/stoa-platform \
 kubectl apply -f charts/stoa-platform/crds/
 ```
 
+## Offline upgrade and rollback proof
+
+With Helm and Python 3 + PyYAML installed, run from the repository root:
+
+```bash
+python3 -B -m unittest discover -s scripts/tests -p test_regression_rollback_safe_image_pull_policies.py -v
+```
+
+The regression renders synthetic release values A, B, A twice using the real
+chart and companion example. B and the restored A use `helm template --is-upgrade`.
+It checks pinned images, `IfNotPresent`, replica count, route refresh interval,
+sync schedule, and equality of the restored manifests. Control Plane catalog,
+tenant, upstream Secret references and install-only bootstrap hooks remain stable.
+No images are pulled, credentials supplied, or cluster resources applied.
+
+This is a chart-level configuration and data-reference proof. The chart delegates
+persistent application data to external services; this does not exercise database
+rows, schema downgrade compatibility, live Helm release history, or Secret reuse
+through `lookup`. Offline `lookup` cannot see existing Secrets, so generated Secret
+bytes are excluded from equality; Secret identity and key names are still checked.
+Retain the original complete values and immutable image digests for each release.
+Database upgrade/downgrade verification is a separate prerequisite for live rollback.
+
 ## Key Values
 
 ### Global

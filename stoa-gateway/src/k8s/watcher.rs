@@ -695,6 +695,95 @@ mod tests {
         assert_eq!(to_snake_case("weatherApi"), "weather_api");
         assert_eq!(to_snake_case("simple"), "simple");
     }
+
+    #[tokio::test]
+    async fn regression_tenant_policies_load_with_published_features() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        use crate::guardrails::{GuardrailsConfig, PromptGuardAction};
+
+        // Exercise the real watcher/store boundary without Kubernetes credentials or I/O.
+        let requests = Arc::new(AtomicUsize::new(0));
+        let observed_requests = requests.clone();
+        let service = tower::service_fn(move |_: axum::http::Request<kube::client::Body>| {
+            observed_requests.fetch_add(1, Ordering::SeqCst);
+            std::future::ready(Err::<axum::http::Response<kube::client::Body>, _>(
+                std::io::Error::other("network requests are forbidden in this test"),
+            ))
+        });
+        let store = Arc::new(GuardrailPolicyStore::new());
+        let watcher = CrdWatcher::new(
+            Client::new(service, "unused"),
+            Arc::new(ToolRegistry::new()),
+            Arc::new(SkillResolver::new(300)),
+            Arc::new(SessionManager::default()),
+            store.clone(),
+        );
+        let global = GuardrailsConfig {
+            pii_enabled: false,
+            pii_redact: false,
+            injection_enabled: false,
+            content_filter_enabled: false,
+            prompt_guard_enabled: false,
+            prompt_guard_action: PromptGuardAction::Block,
+        };
+        let mut policy = GuardrailPolicy::new(
+            "fixture-policy",
+            super::super::crds::GuardrailPolicySpec {
+                pii_enabled: Some(true),
+                pii_redact: None,
+                injection_enabled: None,
+                content_filter_enabled: None,
+                token_budget_limit: Some(10),
+                extra_blocked_patterns: vec![],
+                allowed_tools: Some(vec!["allowed_tool".into()]),
+            },
+        );
+        policy.metadata.namespace = Some("fixture-tenant".into());
+
+        assert_eq!(store.count(), 0);
+        watcher
+            .watch_guardrail_policies(futures::stream::iter([
+                Ok(Event::Init),
+                Ok(Event::InitApply(policy.clone())),
+                Ok(Event::InitDone),
+            ]))
+            .await
+            .expect("initial policy synchronization succeeds");
+        assert_eq!(store.count(), 1);
+        assert!(store.resolve("fixture-tenant", &global).pii_enabled);
+        assert!(!store.resolve("other-fixture", &global).pii_enabled);
+        assert_eq!(store.token_budget_limit("fixture-tenant", 100), 10);
+        assert!(store.is_tool_allowed("fixture-tenant", "allowed_tool"));
+        assert!(!store.is_tool_allowed("fixture-tenant", "blocked_tool"));
+        assert!(store.is_tool_allowed("other-fixture", "blocked_tool"));
+
+        policy.spec.pii_enabled = Some(false);
+        policy.spec.token_budget_limit = Some(20);
+        watcher
+            .watch_guardrail_policies(futures::stream::iter([Ok(Event::Apply(policy.clone()))]))
+            .await
+            .expect("policy update succeeds");
+        assert_eq!(store.count(), 1);
+        assert!(!store.resolve("fixture-tenant", &global).pii_enabled);
+        assert_eq!(store.token_budget_limit("fixture-tenant", 100), 20);
+
+        watcher
+            .watch_guardrail_policies(futures::stream::iter([Ok(Event::Delete(policy.clone()))]))
+            .await
+            .expect("policy deletion succeeds");
+        assert_eq!(store.count(), 0);
+        assert_eq!(store.token_budget_limit("fixture-tenant", 100), 100);
+        assert!(store.is_tool_allowed("fixture-tenant", "blocked_tool"));
+
+        policy.metadata.namespace = None;
+        watcher
+            .watch_guardrail_policies(futures::stream::iter([Ok(Event::Apply(policy))]))
+            .await
+            .expect("unscoped policy event is handled");
+        assert_eq!(store.count(), 0);
+        assert_eq!(requests.load(Ordering::SeqCst), 0);
+    }
 }
 
 #[cfg(test)]

@@ -228,19 +228,13 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Break-glass downgrade — drops triggers, view, helper, and aux tables.
+    """Remove immutability enforcement without discarding audit privacy state.
 
-    The `row_hash` column on `audit_events` is INTENTIONALLY preserved
-    so that any computed chain data survives. Operator must explicitly
-    drop the column under a separate procedure if truly needed.
+    Keep the erasure table, indexes, redacted view and helper available to
+    deployed readers/writers. Preserve chain heads and row_hash together so
+    a subsequent upgrade can resume the chain. See 107_README.md for the
+    break-glass procedure and the intentionally retained schema.
     """
-    op.execute("DROP VIEW IF EXISTS audit_events_redacted")
-    op.execute("DROP FUNCTION IF EXISTS _audit_is_redacted(VARCHAR, VARCHAR)")
     op.execute("DROP TRIGGER IF EXISTS audit_events_no_delete ON audit_events")
     op.execute("DROP TRIGGER IF EXISTS audit_events_no_update ON audit_events")
     op.execute("DROP FUNCTION IF EXISTS audit_events_immutable()")
-    op.execute("DROP INDEX IF EXISTS idx_pseudo_erasures_event_ids")
-    op.execute("DROP INDEX IF EXISTS idx_pseudo_erasures_actor_ids")
-    op.execute("DROP TABLE IF EXISTS pseudonymized_audit_erasures")
-    op.execute("DROP TABLE IF EXISTS audit_chain_heads")
-    # NOTE: row_hash column on audit_events is intentionally preserved.

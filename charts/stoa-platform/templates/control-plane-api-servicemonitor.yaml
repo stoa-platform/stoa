@@ -24,7 +24,7 @@ spec:
         - targetLabel: cluster
           replacement: {{ .Values.controlPlaneApi.clusterName | default "default" }}
         - targetLabel: environment
-          replacement: {{ .Values.controlPlaneApi.environment | default "dev" }}
+          replacement: {{ include "stoa-platform.environment" (dict "root" $ "value" .Values.controlPlaneApi.environment) }}
   namespaceSelector:
     matchNames:
       - {{ .Release.Namespace }}

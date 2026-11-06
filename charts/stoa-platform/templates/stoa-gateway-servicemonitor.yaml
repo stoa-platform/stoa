@@ -24,7 +24,7 @@ spec:
         - targetLabel: cluster
           replacement: {{ .Values.stoaGateway.clusterName | default "default" }}
         - targetLabel: environment
-          replacement: {{ .Values.stoaGateway.environment | default "dev" }}
+          replacement: {{ include "stoa-platform.environment" (dict "root" $ "value" .Values.stoaGateway.environment) }}
   namespaceSelector:
     matchNames:
       - {{ .Release.Namespace }}

@@ -40,7 +40,6 @@ stoaGateway:
   enabled: true
   replicas: 2
   mode: edge-mcp
-  environment: staging
   keycloakUrl: "https://staging-auth.gostoa.dev"
   logLevel: info
   policies:

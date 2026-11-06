@@ -1,8 +1,14 @@
 # STOA Platform Helm Values
 # =========================
 
+# Shared parameters. Component keys left empty inherit these values;
+# a non-empty component key overrides them for that component only.
+global:
+  # Environment label for workloads and ServiceMonitors: dev | staging | prod
+  environment: dev
+
 # ==============================================================================
-# Global STOA settings (CAB-1863: Zero-Config Bootstrap)
+# Global STOA settings (zero-config bootstrap)
 # ==============================================================================
 stoa:
   # Base domain — used to derive service URLs
@@ -119,7 +125,7 @@ stoaGateway:
 
   # Keycloak OIDC
   keycloakUrl: ''
-  keycloakRealm: stoa
+  keycloakRealm: '' # empty inherits keycloak.realm
   keycloakClientId: stoa-mcp-gateway
 
   # Secret containing CONTROL_PLANE_API_KEY, JWT_SECRET, KEYCLOAK_CLIENT_SECRET, ADMIN_API_TOKEN
@@ -160,12 +166,12 @@ stoaGateway:
   mode: edge-mcp
   # Auto-register with Control Plane (ADR-028)
   autoRegister: true
-  # Environment identifier
-  environment: dev
-  # Cluster name for multi-cluster observability labels (CAB-1426)
+  # Environment identifier; empty inherits global.environment
+  environment: ''
+  # Cluster name for multi-cluster observability labels
   clusterName: default
 
-  # OPA Policy Engine (Phase 1: CAB-1109)
+  # OPA Policy Engine (phase 1)
   policies:
     enabled: true
     path: '/etc/stoa/policies/default.rego'
@@ -254,7 +260,7 @@ stoaSidecar:
 
   replicas: 2
   serviceAccount: default
-  environment: dev # dev | staging | prod
+  environment: '' # empty inherits global.environment
 
   # Control Plane connection (for auto-registration). The in-cluster Service listens on port 8000.
   controlPlaneUrl: 'http://stoa-control-plane-api.stoa-system.svc.cluster.local:8000'
@@ -265,7 +271,7 @@ stoaSidecar:
 
   # Keycloak OIDC (for token validation)
   keycloakUrl: ''
-  keycloakRealm: stoa
+  keycloakRealm: '' # empty inherits keycloak.realm
   keycloakClientId: stoa-sidecar
 
   # Secret containing credentials
@@ -408,7 +414,13 @@ vault:
 # Clustering (JGroups DNS_PING) is configured in stoa-infra when replicas > 1.
 keycloak:
   namespace: stoa-system
-  # Keycloak Operator realm management (CAB-1958)
+  # Realm provisioned by the bootstrap jobs and validated by the gateway/sidecar.
+  realm: stoa
+  # In-cluster admin endpoint for the bootstrap jobs. Empty: the in-namespace
+  # identity service over HTTP. stoa.bootstrap.firstAdmin.keycloakUrl overrides
+  # it for the first-admin job only.
+  internalUrl: ''
+  # Keycloak Operator realm management
   # When enabled, bootstrap-job is skipped — realm is managed by
   # KeycloakRealmImport CR in stoa-infra charts/keycloak/.
   operator:
@@ -477,9 +489,9 @@ controlPlaneApi:
     enabled: true
     interval: 15s
     scrapeTimeout: 10s
-  # Cluster name for multi-cluster observability labels (CAB-1426)
+  # Cluster name for multi-cluster observability labels
   clusterName: default
-  environment: dev
+  environment: '' # empty inherits global.environment
   # HPA — target: stoa-control-plane-api Deployment (standalone k8s manifest)
   autoscaling:
     enabled: false

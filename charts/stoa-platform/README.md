@@ -65,6 +65,52 @@ kubectl apply -f charts/stoa-platform/crds/
 | `autoscaling.enabled` | `false` | Enable HPA |
 | `podDisruptionBudget.enabled` | `false` | Enable PDB |
 
+### Gateway routing, federation and API proxy
+
+These settings use the existing gateway runtime contracts and defaults:
+
+| Value under `stoaGateway` | Default | Environment variable |
+|---|---|---|
+| `routing.reloadEnabled` / `reloadIntervalSecs` | `false` / `30` | `STOA_ROUTE_RELOAD_ENABLED` / `STOA_ROUTE_RELOAD_INTERVAL_SECS` |
+| `federation.enabled` | `false` | `STOA_FEDERATION_ENABLED` |
+| `federation.cacheTtlSecs` / `cacheMaxEntries` | `300` / `10000` | `STOA_FEDERATION_CACHE_TTL_SECS` / `STOA_FEDERATION_CACHE_MAX_ENTRIES` |
+| `apiProxy.enabled` / `requireAuth` | `false` / `true` | `STOA_API_PROXY__ENABLED` / `STOA_API_PROXY__REQUIRE_AUTH` |
+
+Route reload refreshes routes from `controlPlaneUrl`. Federation requires
+`federation.upstreamsSecretRef: {name: existing-secret, key: upstreams}` pointing
+to an existing Secret containing the non-empty JSON upstream array consumed by
+`STOA_FEDERATION_UPSTREAMS`. Upstream entries accept `url`, `transport`,
+`timeout_secs`, and optional `auth_token`. Tokens must only come from that Secret;
+never put token values in Helm values. This chart does not create the Secret.
+
+`apiProxy.backends` maps lowercase backend identifiers to gateway snake_case
+fields, rendered as `STOA_API_PROXY__BACKENDS__<NAME>__<FIELD>`:
+
+```yaml
+stoaGateway:
+  apiProxy:
+    enabled: true
+    backends:
+      catalog:
+        enabled: true
+        base_url: https://catalog.example.test
+        auth_type: none
+        required_scopes: [catalog:read]
+        allowed_paths: [/items]
+```
+
+Other supported fields are `auth_header`, `rate_limit_rpm`, `timeout_secs`,
+`circuit_breaker_enabled`, `fallback_direct`, `required_roles`, and `public`.
+Omitted backend fields retain runtime defaults (disabled, bearer authentication,
+30-second timeout, circuit breaker enabled, no direct fallback). Keep
+`requireAuth: true` outside development. Non-public backends need scopes or roles;
+public backends require `auth_type: none` and no scopes or roles. Backend service
+credentials remain in the existing gateway credential store, never in values.
+When NetworkPolicy is enabled, explicitly allow the intended upstream egress.
+
+Run offline render tests with
+`python3 -B -m unittest discover -s charts/stoa-platform/tests -v`.
+
 ### Environment overrides
 
 | File | Environment | Usage |

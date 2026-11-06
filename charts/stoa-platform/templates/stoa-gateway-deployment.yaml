@@ -60,6 +60,44 @@ spec:
             - name: STOA_POLICY_BOOT_TENANTS
               value: {{ join "," . | quote }}
             {{- end }}
+            - name: STOA_ROUTE_RELOAD_ENABLED
+              value: {{ .Values.stoaGateway.routing.reloadEnabled | quote }}
+            - name: STOA_ROUTE_RELOAD_INTERVAL_SECS
+              value: {{ .Values.stoaGateway.routing.reloadIntervalSecs | quote }}
+            - name: STOA_FEDERATION_ENABLED
+              value: {{ .Values.stoaGateway.federation.enabled | quote }}
+            - name: STOA_FEDERATION_CACHE_TTL_SECS
+              value: {{ .Values.stoaGateway.federation.cacheTtlSecs | quote }}
+            - name: STOA_FEDERATION_CACHE_MAX_ENTRIES
+              value: {{ .Values.stoaGateway.federation.cacheMaxEntries | quote }}
+            {{- $upstreams := .Values.stoaGateway.federation.upstreamsSecretRef }}
+            {{- if or .Values.stoaGateway.federation.enabled $upstreams }}
+            - name: STOA_FEDERATION_UPSTREAMS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "federation.upstreamsSecretRef.name is required" $upstreams.name | quote }}
+                  key: {{ required "federation.upstreamsSecretRef.key is required" $upstreams.key | quote }}
+            {{- end }}
+            - name: STOA_API_PROXY__ENABLED
+              value: {{ .Values.stoaGateway.apiProxy.enabled | quote }}
+            - name: STOA_API_PROXY__REQUIRE_AUTH
+              value: {{ .Values.stoaGateway.apiProxy.requireAuth | quote }}
+            {{- range $backend, $fields := .Values.stoaGateway.apiProxy.backends }}
+            {{- if not (regexMatch "^[a-z][a-z0-9]*(_[a-z0-9]+)*$" $backend) }}
+            {{- fail "apiProxy backend names must be lowercase identifiers" }}
+            {{- end }}
+            {{- range $field, $value := $fields }}
+            {{- if not (has $field (list "enabled" "base_url" "auth_type" "auth_header" "rate_limit_rpm" "timeout_secs" "circuit_breaker_enabled" "fallback_direct" "required_scopes" "required_roles" "public" "allowed_paths")) }}
+            {{- fail "apiProxy backend contains an unsupported field; credentials must use the existing credential store" }}
+            {{- end }}
+            - name: {{ printf "STOA_API_PROXY__BACKENDS__%s__%s" ($backend | upper) ($field | upper) }}
+              {{- if kindIs "slice" $value }}
+              value: {{ $value | toJson | quote }}
+              {{- else }}
+              value: {{ $value | quote }}
+              {{- end }}
+            {{- end }}
+            {{- end }}
             - name: STOA_KEYCLOAK_URL
               value: {{ .Values.stoaGateway.keycloakUrl | default "" | quote }}
             - name: STOA_KEYCLOAK_REALM

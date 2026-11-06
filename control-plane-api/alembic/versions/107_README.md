@@ -60,6 +60,31 @@ When sign-off is complete, deployment must follow this order:
 
 PR A must be MERGED and DEPLOYED to a given environment before PR B is applied there. Otherwise the trigger will reject in-flight erasure UPDATEs and break tenant-facing functionality.
 
+## Break-glass rollback and re-upgrade
+
+Downgrade to revision 106 removes only the two immutability triggers and their
+trigger function. It intentionally retains `pseudonymized_audit_erasures`, both
+GIN indexes, `_audit_is_redacted`, `audit_events_redacted`, `pgcrypto`,
+`audit_chain_heads`, and `audit_events.row_hash`. Erasure evidence, redacted reads,
+and chain heads must survive together; rollback is not a schema cleanup.
+The Alembic revision changes, but these objects remain available to deployed
+readers and writers. Re-upgrade reuses retained tables and indexes, replaces the
+view/helper, and restores both triggers without deleting stored records.
+
+Before an authorized rollback, pause audit writes, take a verified backup, record
+the operator and reason, and capture erasure counts and chain heads. Downgrade
+through later revisions in their normal dependency order. Verify retained erasure
+records and redacted reads before resuming service. Immutability is disabled while
+rolled back: do not update/delete source audit rows or use this interval for a
+retention purge. Re-upgrade under the same write pause, verify both triggers reject
+UPDATE/DELETE and chain heads are unchanged, then resume writes. Record the result
+outside the affected audit tables. This does not relax the production sign-off
+requirements above.
+
+Never drop retained privacy or chain objects as part of rollback. Any eventual
+cleanup needs a separate DPO/Compliance-approved procedure with verified data
+preservation and application dependency review.
+
 ## How to test this migration locally (after sign-off, NOT before)
 
 ```bash

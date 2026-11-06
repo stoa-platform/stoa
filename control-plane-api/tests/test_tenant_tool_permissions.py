@@ -352,8 +352,8 @@ class TestPermissionCache:
         mock_db.execute.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_default_allow_when_no_permission(self):
-        """Tools are allowed by default when no permission row exists."""
+    async def test_default_deny_when_no_permission(self):
+        """Tools are denied by default when no permission row exists."""
         from src.routers.tenant_tool_permissions import check_tool_allowed
 
         mock_db = AsyncMock()
@@ -362,7 +362,7 @@ class TestPermissionCache:
         mock_db.execute = AsyncMock(return_value=result)
 
         allowed = await check_tool_allowed("acme", "any_tool", mock_db)
-        assert allowed is True
+        assert allowed is False
 
     @pytest.mark.asyncio
     async def test_cache_invalidation_on_create(self):

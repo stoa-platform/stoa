@@ -12,11 +12,21 @@ Auth: get_current_user + HTTPBearer (all endpoints).
 Delegates to proxy_to_mcp which proxies to MCP Gateway.
 """
 
+import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+
+
+@pytest.fixture(autouse=True)
+async def clear_tool_permissions():
+    from src.routers.tenant_tool_permissions import _permission_cache
+
+    await _permission_cache.clear()
+    yield
+    await _permission_cache.clear()
 
 
 class TestMCPProxyRouter:
@@ -148,8 +158,21 @@ class TestMCPProxyRouter:
 
     # ============== POST /{tool_name}/invoke ==============
 
-    def test_invoke_tool_success(self, client_as_tenant_admin: TestClient):
-        """POST /{name}/invoke invokes tool via MCP Gateway."""
+    def test_invoke_tool_success(self, client_as_tenant_admin: TestClient, mock_db_session):
+        """POST /{name}/invoke requires an explicit allow before proxying."""
+        from src.models.tenant_tool_permission import TenantToolPermission
+
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = [
+            TenantToolPermission(
+                tenant_id="acme",
+                mcp_server_id=uuid.uuid4(),
+                tool_name="Linear:create_issue",
+                allowed=True,
+                created_by="test",
+            )
+        ]
+        mock_db_session.execute.return_value = result
         mock_response = {
             "content": [{"type": "text", "text": "Issue created"}],
             "isError": False,

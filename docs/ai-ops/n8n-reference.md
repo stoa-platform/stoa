@@ -5,9 +5,7 @@
 ## Authentication
 
 ```bash
-eval $(infisical-token)
-N8N_API_KEY=$(curl -s "https://vault.gostoa.dev/api/v3/secrets/raw/N8N_API_KEY?workspaceId=$INFISICAL_PROJECT_ID&environment=prod&secretPath=/n8n" \
-  -H "Authorization: Bearer $INFISICAL_TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)['secret']['secretValue'])")
+N8N_API_KEY=$(scripts/lib/stoa-secret.sh n8n N8N_API_KEY)
 ```
 
 ## Workflow CRUD
@@ -52,14 +50,16 @@ cd ~/n8n && docker compose down n8n && docker compose up -d n8n
 
 | Variable | Purpose | Source |
 |----------|---------|--------|
-| `GITHUB_PAT` | GitHub API | Infisical `/n8n/GITHUB_PAT` |
-| `APPROVE_HMAC_SECRET` | Slack button signature | Infisical |
-| `SLACK_WEBHOOK_URL` | Slack incoming webhook | Infisical |
-| `SLACK_SIGNING_SECRET` | Slack request verification | Infisical |
-| `SLACK_BOT_TOKEN` | Slack Bot API | Infisical |
-| `SLACK_CHANNEL_ID` | Target channel | Infisical |
-| `SLACK_ALLOWED_USERS` | Tier 2 users | Infisical |
-| `SLACK_ADMIN_USERS` | Tier 1 users | Infisical |
+| `GITHUB_PAT` | GitHub API | OpenBao `n8n` |
+| `APPROVE_HMAC_SECRET` | Slack button signature | OpenBao `n8n` |
+| `SLACK_WEBHOOK_URL` | Slack incoming webhook | OpenBao `n8n` |
+| `SLACK_SIGNING_SECRET` | Slack request verification | OpenBao `n8n` |
+| `SLACK_BOT_TOKEN` | Slack Bot API | OpenBao `n8n` |
+| `SLACK_CHANNEL_ID` | Target channel | OpenBao `n8n` |
+| `SLACK_ALLOWED_USERS` | Tier 2 users | OpenBao `n8n` |
+| `SLACK_ADMIN_USERS` | Tier 1 users | OpenBao `n8n` |
+
+OpenBao paths are under `secret/stoa/tooling/` (Infisical was retired by ADR-075).
 
 ## Workflow JSON Convention
 

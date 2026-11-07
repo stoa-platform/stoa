@@ -20,8 +20,8 @@ below (or delete the existing job + `helm upgrade` to re-trigger the hook).
 ## Prerequisites
 
 - Shell access to a pod or workstation with `curl` + `jq`
-- Keycloak admin credentials (Infisical: `prod/keycloak/ADMIN_PASSWORD`)
-- Infisical write access (to push the generated secret)
+- Keycloak admin credentials (OpenBao: `scripts/lib/stoa-secret.sh keycloak ADMIN_PASSWORD`)
+- OpenBao write access through the owner's put-secret tool (to push the generated secret)
 
 **Before you start**, prevent secrets from hitting your shell history:
 
@@ -40,8 +40,8 @@ command line:
 export KC=https://auth.gostoa.dev
 export REALM=stoa
 export ADMIN_USER=admin
-# Fetch via infisical (uses cached session creds, not on argv):
-ADMIN_PASS=$(infisical secrets get ADMIN_PASSWORD --env prod --path /keycloak --plain)
+# Fetch from OpenBao (the token goes to curl on stdin, never on argv):
+ADMIN_PASS=$(scripts/lib/stoa-secret.sh keycloak ADMIN_PASSWORD)
 ```
 
 ## Steps
@@ -96,11 +96,11 @@ SECRET=$(curl -sf -H "Authorization: Bearer $TOKEN" \
 [ -n "$SECRET" ] || { echo "ERR: failed to retrieve secret" >&2; exit 1; }
 ```
 
-### 5. Push secret to Infisical
+### 5. Push secret to OpenBao
 
 ```bash
-infisical secrets set STOACTL_ADMIN_CLIENT_SECRET="$SECRET" \
-  --env prod --path /gateway --type shared
+# Store $SECRET with put-secret: secret/stoa/tooling/gateway,
+# field STOACTL_ADMIN_CLIENT_SECRET (tooling tokens are read-only).
 unset SECRET   # clear from shell history / environment
 ```
 
@@ -147,9 +147,8 @@ unset JWT
   # Regenerate in Keycloak (invalidates the old value)
   NEW=$(curl -sf -X POST -H "Authorization: Bearer $TOKEN" \
     "$KC/admin/realms/$REALM/clients/$CLIENT_UUID/client-secret" | jq -r .value)
-  # Update Infisical (consumers pick up on next read — no restart)
-  infisical secrets set STOACTL_ADMIN_CLIENT_SECRET="$NEW" \
-    --env prod --path /gateway --type shared
+  # Update OpenBao with put-secret: secret/stoa/tooling/gateway, field
+  # STOACTL_ADMIN_CLIENT_SECRET (consumers pick up on next read — no restart)
   unset NEW
   ```
 

@@ -10,13 +10,15 @@
 #
 # Prerequisites:
 #   - KC_ADMIN_PASSWORD set (Keycloak admin password)
-#   - INFISICAL_TOKEN set: eval $(infisical-token)
 #   - curl, jq installed
 #   - Keycloak reachable at KEYCLOAK_URL
 #
 # Options:
 #   --dry-run       Show what would be created without making changes
-#   --no-infisical  Skip Infisical storage (useful for testing)
+#   --no-infisical  Accepted and ignored (Infisical retired, ADR-075)
+#
+# Client secrets are not stored by this script: tooling tokens are read-only.
+# Step 3 names the OpenBao paths to fill with put-secret.
 # =============================================================================
 set -euo pipefail
 set +x
@@ -28,8 +30,6 @@ KEYCLOAK_URL="${KEYCLOAK_URL:-https://auth.gostoa.dev}"
 KC_REALM="${KEYCLOAK_REALM:-stoa}"
 KC_ADMIN_USER="${KC_ADMIN_USER:-admin}"
 KC_ADMIN_PASSWORD="${KC_ADMIN_PASSWORD:-}"
-INFISICAL_PROJECT_ID="${INFISICAL_PROJECT_ID:-97972ffc-990b-4d28-9c4d-0664d217f03b}"
-INFISICAL_URL="${INFISICAL_URL:-https://vault.gostoa.dev}"
 TOKEN_TTL_SECONDS=300  # 5 minutes
 
 # Cloudflare Access headers (empty = no CF Access)
@@ -37,7 +37,6 @@ CF_ACCESS_CLIENT_ID="${CF_ACCESS_CLIENT_ID:-}"
 CF_ACCESS_CLIENT_SECRET="${CF_ACCESS_CLIENT_SECRET:-}"
 
 DRY_RUN=false
-NO_INFISICAL=false
 
 # Workers definition: client_id worker_name worker_roles
 WORKERS=(
@@ -59,7 +58,7 @@ NC='\033[0m'
 for arg in "$@"; do
   case $arg in
     --dry-run)      DRY_RUN=true ;;
-    --no-infisical) NO_INFISICAL=true ;;
+    --no-infisical) ;;
     --help|-h)
       sed -n '2,/^set -/p' "$0" | grep '^#' | sed 's/^# \?//'
       exit 0 ;;
@@ -71,12 +70,6 @@ done
 if [ -z "$KC_ADMIN_PASSWORD" ]; then
   echo -e "${RED}ERROR: KC_ADMIN_PASSWORD is not set${NC}"
   echo "Get it from: kubectl get secret keycloak -n stoa-system -o jsonpath='{.data.admin-password}' | base64 -d"
-  exit 1
-fi
-
-if [ "$NO_INFISICAL" = false ] && [ -z "${INFISICAL_TOKEN:-}" ]; then
-  echo -e "${RED}ERROR: INFISICAL_TOKEN is not set (use --no-infisical to skip)${NC}"
-  echo "Run: eval \$(infisical-token)"
   exit 1
 fi
 
@@ -194,35 +187,16 @@ for entry in "${WORKERS[@]}"; do
   add_claim_mapper "$CLIENT_UUID" "worker_roles" "$worker_roles"
 done
 
-# --- Step 3: Store secrets in Infisical ---
+# --- Step 3: OpenBao paths for the client secrets (filled by an operator) ---
 echo ""
-echo -e "${CYAN}[3/4] Storing secrets in Infisical...${NC}"
-
-if [ "$DRY_RUN" = true ]; then
-  echo -e "  ${CYAN}[dry-run] Would store 5 secrets under /hegemon/workers/${NC}"
-elif [ "$NO_INFISICAL" = true ]; then
-  echo -e "  ${YELLOW}Skipped (--no-infisical)${NC}"
-else
-  # Upsert a secret in Infisical (POST, fallback to PATCH for existing)
-  infisical_upsert() {
-    local secret_name="$1" secret_path="$2" secret_value="$3"
-    local body="{\"workspaceId\":\"${INFISICAL_PROJECT_ID}\",\"environment\":\"prod\",\"secretPath\":\"${secret_path}\",\"secretValue\":\"${secret_value}\",\"type\":\"shared\"}"
-    kc_curl -X POST -H "Authorization: Bearer $INFISICAL_TOKEN" -H "Content-Type: application/json" \
-      "${INFISICAL_URL}/api/v3/secrets/raw/${secret_name}" -d "$body" > /dev/null 2>&1 || \
-    kc_curl -X PATCH -H "Authorization: Bearer $INFISICAL_TOKEN" -H "Content-Type: application/json" \
-      "${INFISICAL_URL}/api/v3/secrets/raw/${secret_name}" -d "$body" > /dev/null 2>&1 || true
-  }
-
-  worker_num=0
-  for entry in "${WORKERS[@]}"; do
-    IFS=: read -r client_id _ _ <<< "$entry"
-    worker_num=$((worker_num + 1))
-    secret_path="/hegemon/worker-${worker_num}"
-    infisical_upsert "KC_CLIENT_SECRET" "$secret_path" "${CLIENT_SECRETS[$client_id]}"
-    infisical_upsert "KC_CLIENT_ID" "$secret_path" "$client_id"
-    echo -e "  ${GREEN}${secret_path}/KC_CLIENT_SECRET + KC_CLIENT_ID${NC}"
-  done
-fi
+echo -e "${CYAN}[3/4] Client secrets to store in OpenBao with put-secret...${NC}"
+# Values are not printed: read each secret in Keycloak (client > Credentials).
+worker_num=0
+for entry in "${WORKERS[@]}"; do
+  IFS=: read -r client_id _ _ <<< "$entry"
+  worker_num=$((worker_num + 1))
+  echo -e "  ${YELLOW}secret/stoa/tooling/hegemon/worker-${worker_num}${NC}: KC_CLIENT_ID=${client_id}, KC_CLIENT_SECRET"
+done
 
 # --- Step 4: Verification ---
 echo ""
@@ -281,6 +255,6 @@ echo -e "${CYAN}Summary:${NC}"
 echo "  Workers: ${#WORKERS[@]}"
 echo "  Token TTL: ${TOKEN_TTL_SECONDS}s (5 min)"
 echo "  Claims: worker_name, worker_roles"
-echo "  Secrets: Infisical /hegemon/worker-{1-5}/KC_CLIENT_SECRET"
+echo "  Secrets: OpenBao secret/stoa/tooling/hegemon/worker-{1-5} (KC_CLIENT_ID, KC_CLIENT_SECRET), via put-secret"
 
 echo "See docs/runbooks/first-admin-bootstrap.md for stdin-based secret storage and cookie rotation."

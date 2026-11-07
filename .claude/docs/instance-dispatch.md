@@ -90,7 +90,7 @@ Every instance: ticket start → In Progress, PR merge → Done + comment, block
 
 ## Billing Split
 
-All panes on API key (`ANTHROPIC_API_KEY`). `CLAUDE_CONFIG_DIR=/tmp/claude-api-config-clean` for API panes — no `.credentials.json` so Max credentials are invisible. Pre-populated `.claude.json` skips setup wizard. API key resolution: explicit flag → env var → Infisical → all-Max fallback.
+All panes on API key (`ANTHROPIC_API_KEY`). `CLAUDE_CONFIG_DIR=/tmp/claude-api-config-clean` for API panes — no `.credentials.json` so Max credentials are invisible. Pre-populated `.claude.json` skips setup wizard. API key resolution: explicit flag → env var → OpenBao (`stoa/tooling/anthropic`) → all-Max fallback.
 
 ### Billing Gotchas
 

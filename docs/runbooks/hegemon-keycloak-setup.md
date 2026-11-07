@@ -8,7 +8,7 @@ This runbook documents the setup of 5 worker clients + 1 realm role.
 ## Prerequisites
 
 - Keycloak admin access on `auth.gostoa.dev` (realm: `stoa`)
-- Infisical CLI configured (`infisical login`)
+- OpenBao write access through the owner's put-secret tool (tooling tokens are read-only)
 - `curl` + `jq` installed
 
 ## Architecture
@@ -102,7 +102,7 @@ for i in $(seq 1 5); do
 done
 ```
 
-## Step 4: Extract Client Secrets and Store in Infisical
+## Step 4: Extract Client Secrets and Store in OpenBao
 
 ```bash
 for i in $(seq 1 5); do
@@ -116,11 +116,9 @@ for i in $(seq 1 5); do
   SECRET=$(curl -s "${KC_URL}/admin/realms/stoa/clients/${CLIENT_UUID}/client-secret" \
     -H "Authorization: Bearer ${KC_TOKEN}" | jq -r '.value')
 
-  # Store in Infisical
-  infisical secrets set "CLIENT_SECRET=${SECRET}" \
-    --env=prod --path="/hegemon/worker-${i}"
-
-  echo "Stored secret for ${CLIENT_ID} in Infisical prod/hegemon/worker-${i}/CLIENT_SECRET"
+  # Store $SECRET with put-secret: secret/stoa/tooling/hegemon/worker-${i},
+  # field CLIENT_SECRET. Never echo it.
+  echo "Store the secret of ${CLIENT_ID} in OpenBao hegemon/worker-${i} (CLIENT_SECRET)"
 done
 ```
 
@@ -132,8 +130,8 @@ Test that each worker can obtain a JWT via `client_credentials` grant:
 for i in $(seq 1 5); do
   CLIENT_ID="hegemon-worker-${i}"
 
-  # Retrieve secret from Infisical
-  SECRET=$(infisical secrets get CLIENT_SECRET --env=prod --path="/hegemon/worker-${i}" --plain)
+  # Retrieve secret from OpenBao
+  SECRET=$(scripts/lib/stoa-secret.sh "hegemon/worker-${i}" CLIENT_SECRET)
 
   # Request token
   RESPONSE=$(curl -s -X POST "${KC_URL}/realms/stoa/protocol/openid-connect/token" \
@@ -163,13 +161,13 @@ done
 - [ ] 5 clients created in Keycloak realm `stoa`
 - [ ] Each client obtains a JWT via `client_credentials`
 - [ ] JWT contains `realm_access.roles: ["hegemon-worker"]`
-- [ ] Secrets stored in Infisical `prod/hegemon/worker-{N}/CLIENT_SECRET`
+- [ ] Secrets stored in OpenBao `secret/stoa/tooling/hegemon/worker-{N}` (`CLIENT_SECRET`)
 
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| `invalid_client` | Wrong client secret | Re-extract from KC and update Infisical |
+| `invalid_client` | Wrong client secret | Re-extract from KC and update OpenBao (put-secret) |
 | `unauthorized_client` | `serviceAccountsEnabled` is false | Edit client in KC admin UI |
 | Missing `hegemon-worker` role in JWT | Role not assigned to service account | Re-run Step 3 |
 | `invalid_scope` | Client scopes not configured | Add `stoa:read`/`stoa:write` to client scopes in KC |
@@ -185,8 +183,8 @@ CLIENT_UUID=$(curl -s "${KC_URL}/admin/realms/stoa/clients?clientId=hegemon-work
 NEW_SECRET=$(curl -s -X POST "${KC_URL}/admin/realms/stoa/clients/${CLIENT_UUID}/client-secret" \
   -H "Authorization: Bearer ${KC_TOKEN}" | jq -r '.value')
 
-# Update in Infisical
-infisical secrets set "CLIENT_SECRET=${NEW_SECRET}" --env=prod --path="/hegemon/worker-${N}"
+# Update OpenBao with put-secret: secret/stoa/tooling/hegemon/worker-${N},
+# field CLIENT_SECRET (value from $NEW_SECRET; never echo it)
 
 # Restart the worker's hegemon-agent service
 ssh hegemon@worker-${N} "sudo systemctl restart hegemon-agent"

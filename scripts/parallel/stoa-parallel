@@ -34,7 +34,7 @@
 # API key resolution (in order):
 #   1. --api-key=sk-ant-...              explicit
 #   2. ANTHROPIC_API_KEY env var         from .zshrc or shell
-#   3. Infisical vault (auto-fetched)    vault.gostoa.dev/prod/anthropic
+#   3. OpenBao (auto-fetched)            secret/stoa/tooling/anthropic (scripts/lib/stoa-secret.sh)
 #
 # Usage:
 #   stoa-parallel                          # auto-fetch key → 3 Max + 3 API
@@ -60,9 +60,6 @@ MAX_PANES="0,2"
 ALL_API=false
 ALL_MAX=false
 
-INFISICAL_API="${INFISICAL_API_URL:-https://vault.gostoa.dev/api}"
-INFISICAL_PROJECT="97972ffc-990b-4d28-9c4d-0664d217f03b"
-
 # Instance role context files (CLAUDE.local.md per role)
 INSTANCES_DIR="$STOA_DIR/.claude/instances"
 
@@ -72,40 +69,28 @@ ROLES=(ORCHESTRE MONITOR BACKEND FRONTEND AUTH MCP QA)
 # Worker roles that get their own worktree (lowercase)
 WORKER_ROLES=(backend frontend auth mcp qa)
 
-# Fetch API key from Infisical if not already set
+# Fetch API key from OpenBao if not already set
 fetch_api_key() {
   if [[ -n "$API_KEY" || "$ALL_MAX" == "true" ]]; then return 0; fi
 
-  echo "Fetching ANTHROPIC_API_KEY from Infisical..."
-  local token
-  token=$(infisical-token --raw 2>/dev/null) || {
-    echo "WARN: Infisical auth failed — falling back to all-Max mode" >&2
+  local helper="$STOA_DIR/scripts/lib/stoa-secret.sh"
+  if [[ ! -r "$helper" ]]; then
+    echo "WARN: $helper not found — falling back to all-Max mode" >&2
     ALL_MAX=true
     return 0
-  }
-
-  local response
-  response=$(curl -sf \
-    "${INFISICAL_API}/v3/secrets/raw/ANTHROPIC_API_KEY?workspaceId=${INFISICAL_PROJECT}&environment=prod&secretPath=/anthropic" \
-    -H "Authorization: Bearer ${token}" 2>/dev/null) || {
-    echo "WARN: Secret not found in Infisical (prod/anthropic/ANTHROPIC_API_KEY)" >&2
-    ALL_MAX=true
-    return 0
-  }
-
-  API_KEY=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin)['secret']['secretValue'])" 2>/dev/null) || {
-    echo "WARN: Could not parse Infisical response — falling back to all-Max mode" >&2
-    ALL_MAX=true
-    return 0
-  }
-
-  if [[ -z "$API_KEY" || "$API_KEY" == "null" ]]; then
-    echo "WARN: Empty API key from Infisical — falling back to all-Max mode" >&2
+  fi
+  echo "Fetching ANTHROPIC_API_KEY from OpenBao..."
+  # shellcheck source=scripts/lib/stoa-secret.sh
+  source "$helper"
+  # On failure the helper prints a one-line reason on stderr.
+  API_KEY=$(stoa_secret anthropic ANTHROPIC_API_KEY) || API_KEY=""
+  if [[ -z "$API_KEY" ]]; then
+    echo "WARN: no API key from OpenBao — falling back to all-Max mode" >&2
     ALL_MAX=true
     return 0
   fi
 
-  echo "OK: API key loaded from Infisical (${API_KEY:0:10}...)"
+  echo "OK: API key loaded from OpenBao (stoa/tooling/anthropic)"
 }
 
 # ── Worktree lifecycle (CAB-1676) ──
@@ -287,7 +272,7 @@ HELP
   esac
 done
 
-# Auto-fetch API key from Infisical if needed
+# Auto-fetch API key from OpenBao if needed
 fetch_api_key
 
 if tmux has-session -t "$SESSION" 2>/dev/null; then

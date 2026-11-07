@@ -113,9 +113,9 @@ is supplied by this repository.
    surviving copy. If any required dependency or key is missing, stop acceptance.
 2. Have custodians recover the secret/key-management trust boundary and verify
    decryption and key identity. [The runbook index](README.md#secrets-management)
-   identifies Infisical as the current platform secret manager, while
+   identifies OpenBao (ADR-075) as the platform team's secret manager, while
    [backup-vault.sh](../../scripts/backup/backup-vault.sh) targets HashiCorp Vault
-   Raft. That script is **not an Infisical restore procedure**. It uses forced
+   Raft. That script is **not a reviewed OpenBao restore procedure**. It uses forced
    snapshot restore and may continue after inconclusive inspection. Sites still
    using Vault must supply a reviewed provider-specific procedure, including
    seal/recovery dependencies; other backends need their own procedure.

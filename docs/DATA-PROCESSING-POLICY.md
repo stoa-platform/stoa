@@ -14,7 +14,7 @@
 | HEGEMON prompts & orchestration logic | Confidential — CAB | CAB-controlled infra | Layer separation enforced | Proprietary logic never sent to external models |
 | Client code & data | Confidential — Client | Client infra / EU-only | EU or on-prem only | Written agreement required before any processing |
 | STOA-bench datasets | Public | Open source | Anywhere | Synthetic tasks only, no real client data |
-| Credentials, tokens, secrets | Critical | Vault only (Infisical) | Never in prompts | Absolute, no exceptions |
+| Credentials, tokens, secrets | Critical | Secrets manager only (Vault, OpenBao) | Never in prompts | Absolute, no exceptions |
 
 ## 2. Sovereignty Routing Modes
 

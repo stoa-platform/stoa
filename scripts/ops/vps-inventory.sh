@@ -16,27 +16,16 @@ STOA_SSH_KEY="${STOA_SSH_KEY:-$HOME/.ssh/id_ed25519_stoa}"
 
 # --- VPS Fleet ---
 # IPs sourced from env vars — see stoa-infra/docs/carto/dns-inventory.md for values.
-# Set all VPS_*_IP variables before sourcing this file (e.g. from Infisical/Vault).
+# Set all VPS_*_IP variables before sourcing this file.
 # Format: NAME|IP|USER|PURPOSE
 VPS_FLEET=(
   "kong-vps|${VPS_KONG_IP:?Set VPS_KONG_IP}|debian|Kong + STOA gateway (Arena benchmark)"
   "gravitee-vps|${VPS_GRAVITEE_IP:?Set VPS_GRAVITEE_IP}|debian|Gravitee APIM v4 (Arena benchmark)"
   "n8n-vps|${VPS_N8N_IP:?Set VPS_N8N_IP}|debian|n8n + PocketBase + Healthchecks"
   "webmethods-vps|${VPS_WEBMETHODS_IP:?Set VPS_WEBMETHODS_IP}|debian|webMethods API Gateway trial (vps-wm.gostoa.dev)"
-  "infisical-vps|${VPS_INFISICAL_IP:?Set VPS_INFISICAL_IP}|debian|Infisical vault (vault.gostoa.dev) + Caddy TLS"
   "bench-vps|${VPS_BENCH_IP:?Set VPS_BENCH_IP}|debian|OpenSearch bench + Arena runner (STOA-bench)"
   # HEGEMON workers are dynamic — use hegemon/workers.txt
 )
-
-# --- Cloudflare Access (sourced from env or Infisical) ---
-# Set these in ~/.zprofile or export before running scripts.
-# Empty = no CF Access headers sent (backward compatible).
-CF_ACCESS_CLIENT_ID="${CF_ACCESS_CLIENT_ID:-}"
-CF_ACCESS_CLIENT_SECRET="${CF_ACCESS_CLIENT_SECRET:-}"
-
-# --- Infisical ---
-INFISICAL_URL="${INFISICAL_URL:-https://vault.gostoa.dev}"
-INFISICAL_PROJECT_ID="${INFISICAL_PROJECT_ID:-97972ffc-990b-4d28-9c4d-0664d217f03b}"
 
 # =============================================================================
 # Helper functions
@@ -88,34 +77,4 @@ for_each_vps() {
     ssh -i "$STOA_SSH_KEY" -o ConnectTimeout=10 "${user}@${ip}" "$cmd" 2>&1 || echo "[FAIL] $name unreachable"
     echo ""
   done
-}
-
-# Build curl headers for Infisical (CF Access + Bearer)
-# Usage: infisical_curl_headers "$INFISICAL_TOKEN" → array of -H flags
-infisical_curl_headers() {
-  local token="${1:-$INFISICAL_TOKEN}"
-  local headers=(-H "Authorization: Bearer ${token}" -H "Content-Type: application/json")
-  if [ -n "$CF_ACCESS_CLIENT_ID" ] && [ -n "$CF_ACCESS_CLIENT_SECRET" ]; then
-    headers+=(-H "CF-Access-Client-Id: ${CF_ACCESS_CLIENT_ID}")
-    headers+=(-H "CF-Access-Client-Secret: ${CF_ACCESS_CLIENT_SECRET}")
-  fi
-  echo "${headers[@]}"
-}
-
-# Curl wrapper for Infisical API with CF Access headers
-# Usage: infisical_curl GET "/api/v3/secrets/raw?..." "$INFISICAL_TOKEN"
-infisical_curl() {
-  local method="$1" path="$2" token="${3:-${INFISICAL_TOKEN:-}}"
-  local -a headers=(-H "Authorization: Bearer ${token}" -H "Content-Type: application/json")
-  if [ -n "$CF_ACCESS_CLIENT_ID" ] && [ -n "$CF_ACCESS_CLIENT_SECRET" ]; then
-    headers+=(-H "CF-Access-Client-Id: ${CF_ACCESS_CLIENT_ID}")
-    headers+=(-H "CF-Access-Client-Secret: ${CF_ACCESS_CLIENT_SECRET}")
-  fi
-
-  if [ "$#" -ge 4 ]; then
-    # Has body (4th arg)
-    curl -sf -X "$method" "${INFISICAL_URL}${path}" "${headers[@]}" -d "$4"
-  else
-    curl -sf -X "$method" "${INFISICAL_URL}${path}" "${headers[@]}"
-  fi
 }

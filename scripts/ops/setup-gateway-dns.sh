@@ -84,7 +84,7 @@ done
 
 [ -z "$CF_API_TOKEN" ] && {
   echo -e "${RED}CF_API_TOKEN or CLOUDFLARE_API_TOKEN must be set${NC}"
-  echo "Get it from: Infisical → prod/cloudflare/API_TOKEN"
+  echo "Get it from OpenBao: export CF_API_TOKEN=\$(scripts/lib/stoa-secret.sh cloudflare API_TOKEN)"
   exit 1
 }
 

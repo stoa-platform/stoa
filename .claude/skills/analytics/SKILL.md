@@ -12,7 +12,7 @@ Query STOA platform data across 5 sources. All queries are **read-only**.
 
 | # | Source | Access | Auth |
 |---|--------|--------|------|
-| 1 | **PostgreSQL** (OVH Managed) | `psql` direct | Infisical `/prod/database` |
+| 1 | **PostgreSQL** (OVH Managed) | `psql` direct | OpenBao `database` (`DATABASE_URL`) |
 | 2 | **Token Observatory** | Local files | None (filesystem) |
 | 3 | **Pushgateway / Prometheus** | HTTP API | None (IP-whitelisted) |
 | 4 | **GitHub CI** | `gh` CLI | GitHub token (ambient) |
@@ -23,8 +23,7 @@ Query STOA platform data across 5 sources. All queries are **read-only**.
 ### PostgreSQL
 
 ```bash
-eval $(infisical-token)
-DB_URL=$(infisical secrets get DATABASE_URL --env=prod --path=/database --plain 2>/dev/null)
+DB_URL=$(scripts/lib/stoa-secret.sh database DATABASE_URL)
 psql "$DB_URL" -c "<QUERY>"
 ```
 

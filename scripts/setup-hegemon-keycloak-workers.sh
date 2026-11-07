@@ -8,12 +8,13 @@
 #   - worker_roles: hardcoded mapper (value = JSON array of roles)
 #
 # Each client uses client_credentials flow with 5-min access token TTL.
-# Client secrets are stored in Infisical at /hegemon/worker-{role}/KC_CLIENT_SECRET.
+# Client secrets belong in OpenBao at secret/stoa/tooling/hegemon/worker-{role},
+# field KC_CLIENT_SECRET. Tooling tokens are read-only (ADR-075), so an operator
+# stores them with put-secret; this script never prints them.
 #
 # Prerequisites:
 #   - kubectl access to stoa-system namespace
 #   - Keycloak admin password (auto-retrieved from K8s secret)
-#   - INFISICAL_TOKEN env var (for secret storage)
 #
 # CAB-1712: HEGEMON Keycloak service accounts
 
@@ -133,25 +134,9 @@ for ROLE in "${WORKERS[@]}"; do
     continue
   fi
 
-  echo "  Client secret retrieved for direct storage."
-
-  # Store in Infisical if token is available.
-  if [[ -n "${INFISICAL_TOKEN:-}" ]]; then
-    echo "  Storing secret in Infisical at /hegemon/worker-${ROLE}/KC_CLIENT_SECRET..."
-    curl -s -X POST "https://vault.gostoa.dev/api/v3/secrets/raw/KC_CLIENT_SECRET" \
-      -H "Authorization: Bearer $INFISICAL_TOKEN" \
-      -H "Content-Type: application/json" \
-      -d "{
-        \"workspaceId\": \"${INFISICAL_PROJECT_ID:-}\",
-        \"environment\": \"prod\",
-        \"secretPath\": \"/hegemon/worker-${ROLE}\",
-        \"secretValue\": \"$CLIENT_SECRET\",
-        \"type\": \"shared\"
-      }" > /dev/null 2>&1 && echo "    Stored successfully" || echo "    WARN: Infisical storage failed (store manually)"
-  else
-    echo "  WARN: INFISICAL_TOKEN not set — secret not stored automatically"
-    echo "See docs/runbooks/first-admin-bootstrap.md for stdin-based secret storage."
-  fi
+  echo "  Client secret retrieved. Store it with put-secret in OpenBao at"
+  echo "  secret/stoa/tooling/hegemon/worker-${ROLE} (field KC_CLIENT_SECRET)."
+  echo "See docs/runbooks/first-admin-bootstrap.md for stdin-based secret storage."
 
   echo ""
 done

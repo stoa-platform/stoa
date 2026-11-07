@@ -98,7 +98,7 @@ Completed in PR #XXX (merged to main)
 
 - Zone: `gostoa.dev` (`<CF_ZONE_ID>`)
 - Proxy: OFF (DNS-only, TLS terminated at OVH/Hetzner)
-- Management: Cloudflare API token in Infisical
+- Management: Cloudflare API token in OpenBao (`scripts/lib/stoa-secret.sh cloudflare API_TOKEN`)
 
 **Note**: DNS record CRUD requires the Cloudflare API directly (no MCP tool for DNS records yet). Use Cloudflare MCP for docs, Workers, KV, R2, D1 operations.
 

@@ -10,10 +10,9 @@
 #   KC_ADMIN_PASSWORD=<password> ./scripts/ops/configure-keycloak-policy.sh
 #   KC_ADMIN_PASSWORD=<password> ./scripts/ops/configure-keycloak-policy.sh --dry-run
 #
-# Or get password from Infisical:
-#   eval $(infisical-token)
-#   KC_ADMIN_PASSWORD=$(infisical secrets get ADMIN_PASSWORD --env=prod --path=/keycloak --plain 2>/dev/null)
-#   ./scripts/ops/configure-keycloak-policy.sh
+# Or read the password from OpenBao (scripts/lib/stoa-secret.sh):
+#   KC_ADMIN_PASSWORD=$(scripts/lib/stoa-secret.sh keycloak ADMIN_PASSWORD) \
+#     ./scripts/ops/configure-keycloak-policy.sh
 #
 # Prerequisites:
 #   - Keycloak accessible at KEYCLOAK_URL
@@ -72,7 +71,7 @@ done
 if [ -z "$ADMIN_PASSWORD" ]; then
   echo -e "${RED}Error: KC_ADMIN_PASSWORD not set${NC}"
   echo "Set it with: export KC_ADMIN_PASSWORD=<password>"
-  echo "Or from Infisical: KC_ADMIN_PASSWORD=\$(infisical secrets get ADMIN_PASSWORD --env=prod --path=/keycloak --plain)"
+  echo "Or from OpenBao: KC_ADMIN_PASSWORD=\$(scripts/lib/stoa-secret.sh keycloak ADMIN_PASSWORD)"
   exit 1
 fi
 

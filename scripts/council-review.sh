@@ -91,49 +91,43 @@ now_ms() {
 }
 
 # =============================================================================
-# Secrets resolution (CAB-2046 follow-up)
+# Secrets resolution (CAB-2046 follow-up; CAB-1795: OpenBao replaces Infisical)
 # =============================================================================
 
-# Resolve ANTHROPIC_API_KEY from environment, with Infisical fallback via
-# the machine-identity helper `infisical-token` (pattern from
-# `scripts/demo/demo-dry-run.sh`). Called once at main() startup and
-# exports the resolved key into the environment for anthropic_call().
+# Resolve ANTHROPIC_API_KEY from the environment, with an OpenBao fallback
+# through scripts/lib/stoa-secret.sh (secret/stoa/tooling/anthropic, field
+# ANTHROPIC_API_KEY). Called once at main() startup; exports the resolved key
+# for anthropic_call().
 #
 # Resolution order:
 #   1. ANTHROPIC_API_KEY already set in env  → no-op
 #   2. MOCK_API=1                            → no-op (mock fixtures, no real key)
-#   3. COUNCIL_NO_INFISICAL=1                → skip fallback entirely
-#   4. `infisical` + `infisical-token` CLIs  → fetch from /anthropic in Infisical
-#   5. None of the above                     → silent return (anthropic_call
-#      later reports the existing "ANTHROPIC_API_KEY not set" error)
+#   3. COUNCIL_NO_SECRET_BACKEND=1           → skip the fallback entirely
+#      (COUNCIL_NO_INFISICAL=1 is still honoured as an alias)
+#   4. OpenBao via stoa_secret               → export the key
+#   5. Otherwise the helper's one-line reason goes to stderr and anthropic_call
+#      later reports the existing "ANTHROPIC_API_KEY not set" error.
 #
 # The key value is NEVER logged. Only the resolution source is logged.
 resolve_api_key() {
     [ -n "${ANTHROPIC_API_KEY:-}" ] && return 0
     [ "${MOCK_API:-0}" = "1" ] && return 0
+    [ "${COUNCIL_NO_SECRET_BACKEND:-0}" = "1" ] && return 0
     [ "${COUNCIL_NO_INFISICAL:-0}" = "1" ] && return 0
 
-    command -v infisical       >/dev/null 2>&1 || return 0
-    command -v infisical-token >/dev/null 2>&1 || return 0
-
-    local token
-    token=$(infisical-token --raw 2>/dev/null) || return 0
-    [ -z "$token" ] && return 0
-
-    local project_id="${INFISICAL_PROJECT_ID:-97972ffc-990b-4d28-9c4d-0664d217f03b}"
-    local infisical_env="${INFISICAL_ENV:-prod}"
-    local infisical_path="${INFISICAL_ANTHROPIC_PATH:-/anthropic}"
-
-    local resolved
-    resolved=$(INFISICAL_TOKEN="$token" infisical secrets get ANTHROPIC_API_KEY \
-        --env="$infisical_env" \
-        --path="$infisical_path" \
-        --projectId="$project_id" \
-        --plain 2>/dev/null) || return 0
+    local helper resolved
+    helper="$(dirname "${BASH_SOURCE[0]}")/lib/stoa-secret.sh"
+    if [ ! -r "$helper" ]; then
+        log_warn "OpenBao helper not found: ${helper}"
+        return 0
+    fi
+    # shellcheck source=scripts/lib/stoa-secret.sh
+    . "$helper"
+    resolved=$(stoa_secret anthropic ANTHROPIC_API_KEY) || resolved=""
     [ -z "$resolved" ] && return 0
 
     export ANTHROPIC_API_KEY="$resolved"
-    log_info "ANTHROPIC_API_KEY resolved via Infisical (${infisical_path} env=${infisical_env})"
+    log_info "ANTHROPIC_API_KEY resolved via OpenBao (stoa/tooling/anthropic)"
     return 0
 }
 
@@ -158,13 +152,12 @@ OPTIONS:
 ENVIRONMENT:
   ANTHROPIC_API_KEY     Required for API calls. Resolution order:
                         1. Env var (set in GitHub secrets or .env)
-                        2. Infisical fallback via infisical-token helper
-                           (path /anthropic, env prod, project 97972ffc...).
-                           Skipped when COUNCIL_NO_INFISICAL=1 or MOCK_API=1.
-  COUNCIL_NO_INFISICAL  Set to "1" to skip Infisical fallback (CI-only behavior)
-  INFISICAL_ENV         Infisical environment slug (default: prod)
-  INFISICAL_ANTHROPIC_PATH  Infisical folder path (default: /anthropic)
-  INFISICAL_PROJECT_ID  Infisical project/workspace ID (default: repo convention)
+                        2. OpenBao fallback via scripts/lib/stoa-secret.sh
+                           (secret/stoa/tooling/anthropic, field ANTHROPIC_API_KEY;
+                           STOA_OPENBAO_* variables are documented there).
+                           Skipped when COUNCIL_NO_SECRET_BACKEND=1 or MOCK_API=1.
+  COUNCIL_NO_SECRET_BACKEND  Set to "1" to skip the OpenBao fallback (CI-only
+                        behavior). COUNCIL_NO_INFISICAL=1 is an alias.
   LINEAR_API_KEY        Optional — enables --ticket context fetching (read-only
                         token from Vault: stoa/shared/linear_token)
   LINEAR_TIMEOUT_S      Linear API timeout in seconds (default: 10)
@@ -1108,8 +1101,8 @@ main() {
     check_dependencies
     log_ok "Dependencies: jq curl git awk sed gitleaks ${TIMEOUT_CMD}"
 
-    # --- 1b. Resolve ANTHROPIC_API_KEY from env or Infisical fallback -------
-    # No-op when already set, under MOCK_API, or when COUNCIL_NO_INFISICAL=1.
+    # --- 1b. Resolve ANTHROPIC_API_KEY from env or OpenBao fallback ---------
+    # No-op when already set, under MOCK_API, or when COUNCIL_NO_SECRET_BACKEND=1.
     resolve_api_key
 
     # --- 2. Diff lines + empty diff fast-path -------------------------------

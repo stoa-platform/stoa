@@ -149,7 +149,7 @@ ENVEOF"
   # bench-vps uses centralized OpenSearch. Identity comes from VPS_BENCH_IP.
   if [ "${UNIQUE_VPS[$VPS_IP]}" = "bench-vps" ]; then
     ssh -i "$SSH_KEY" "${VPS_SSH_USER[$VPS_IP]}@${VPS_IP}" "sed -i 's|OPENSEARCH_ENABLED=.*|OPENSEARCH_ENABLED=true|; s|OPENSEARCH_URL=.*|OPENSEARCH_URL=https://opensearch-api.gostoa.dev|' ${REMOTE_DIR}/.env"
-    echo "    (OpenSearch credentials must be set manually from Infisical: prod/opensearch/ADMIN_PASSWORD)"
+    echo "    (OpenSearch credentials must be set manually: scripts/lib/stoa-secret.sh opensearch ADMIN_PASSWORD)"
   fi
 
   echo "  [4/7] Creating .env.enterprise file (L1, instance=$INSTANCE_LABEL)..."

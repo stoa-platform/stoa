@@ -1,82 +1,63 @@
 # Secrets Management — Full Reference
 
 > Extracted from `.claude/rules/secrets-management.md` (rules diet). Essential rules remain in the rule file.
+> Infisical was retired by ADR-075 (2026-11-07): tooling secrets now live in OpenBao.
 
 ## Secret Inventory
 
-| Env | Path | Secret | Purpose |
-|-----|------|--------|---------|
-| `prod` | `/cloudflare` | `API_TOKEN` | Cloudflare DNS API (DNS Edit scope) |
-| `prod` | `/cloudflare` | `CF_ACCESS_CLIENT_ID` | Cloudflare Access Service Token ID |
-| `prod` | `/cloudflare` | `CF_ACCESS_CLIENT_SECRET` | Cloudflare Access Service Token Secret |
-| `prod` | `/contabo` | `VPS_ROOT_PASSWORD` | Root password for 5 HEGEMON VPS |
-| `prod` | `/hetzner` | `HCLOUD_TOKEN` | Hetzner Cloud API (decommissioned 2026-03, remove after cleanup) |
-| `prod` | `/ovh` | `OVH_APPLICATION_KEY` | OVH API key |
-| `prod` | `/ovh` | `OVH_APPLICATION_SECRET` | OVH API secret |
-| `prod` | `/ovh` | `OVH_CONSUMER_KEY` | OVH consumer key |
-| `prod` | `/ovh` | `OVH_CLOUD_PROJECT_ID` | OVH project ID |
-| `prod` | `/ovh` | `OVH_OPENSTACK_PASSWORD` | OVH OpenStack password |
-| `prod` | `/ovh` | `VPS_STOA_PASSWORD` | Root password for OVH VPS fleet |
+Former Infisical folders map to OpenBao paths of the same name under
+`secret/stoa/tooling/` (ADR-075). The owner decides which ones to populate (put-secret).
 
-## Authentication
+| OpenBao path | Field | Purpose |
+|--------------|-------|---------|
+| `cloudflare` | `API_TOKEN` | Cloudflare DNS API (DNS Edit scope) |
+| `cloudflare` | `CF_ACCESS_CLIENT_ID` | Cloudflare Access Service Token ID |
+| `cloudflare` | `CF_ACCESS_CLIENT_SECRET` | Cloudflare Access Service Token Secret |
+| `contabo` | `VPS_ROOT_PASSWORD` | Root password for 5 HEGEMON VPS |
+| `hetzner` | `HCLOUD_TOKEN` | Hetzner Cloud API (decommissioned 2026-03, remove after cleanup) |
+| `ovh` | `OVH_APPLICATION_KEY` | OVH API key |
+| `ovh` | `OVH_APPLICATION_SECRET` | OVH API secret |
+| `ovh` | `OVH_CONSUMER_KEY` | OVH consumer key |
+| `ovh` | `OVH_CLOUD_PROJECT_ID` | OVH project ID |
+| `ovh` | `OVH_OPENSTACK_PASSWORD` | OVH OpenStack password |
+| `ovh` | `VPS_STOA_PASSWORD` | Root password for OVH VPS fleet |
 
-### Machine Identity (Universal Auth)
+## Tooling Access (OpenBao)
 
 | Component | Value |
 |-----------|-------|
-| Identity | `stoa-cli-local` |
-| Client ID | In `~/.zprofile` |
-| Client Secret | macOS Keychain (`infisical-client-secret`) |
-| Access Token TTL | 24h (auto-renewable, max 30 days) |
+| Address | `https://127.0.0.1:18200` through the SSH tunnel (`STOA_OPENBAO_ADDR`) |
+| CA | `~/.config/stoa/openbao-ca.pem` (`STOA_OPENBAO_CACERT`) |
+| Token | Read-only, periodic (768h): macOS Keychain service `stoa-openbao`, account `tooling`; Linux `~/.config/stoa/openbao-tooling-token`; or `STOA_OPENBAO_TOKEN` |
+| Policy | read `secret/data/stoa/tooling/*`, read/list `secret/metadata/stoa/tooling/*` |
+| Renewal | `renew-self` at most once a day, done by the helper |
 
 ```bash
-# Quick — sets INFISICAL_TOKEN in current shell
-eval $(infisical-token)
+# In a script: an env var already set always wins
+source scripts/lib/stoa-secret.sh
+[ -n "${CF_API_TOKEN:-}" ] || CF_API_TOKEN=$(stoa_secret cloudflare API_TOKEN) || CF_API_TOKEN=""
 
-# Raw token for scripts
-export INFISICAL_TOKEN=$(infisical-token --raw)
+# From a shell
+scripts/lib/stoa-secret.sh cloudflare API_TOKEN
 ```
 
-### Browser Login (Fallback)
-
-```bash
-infisical login --domain=https://vault.gostoa.dev/api
-```
-
-## CLI Setup
-
-```bash
-brew install infisical
-cd <repo-root> && infisical init --domain=https://vault.gostoa.dev/api
-
-# Retrieve
-eval $(infisical-token)
-infisical secrets get API_TOKEN --env=prod --path=/cloudflare
-infisical secrets --env=prod --path=/cloudflare
-infisical run --env=prod --path=/cloudflare -- <command>
-
-# Add
-infisical secrets set MY_SECRET=value --env=prod --path=/my-service
-```
+Writes go through the owner's put-secret tool only; tooling never writes to OpenBao.
 
 ## Rotation Procedures
 
 ### Application Secrets
 
 ```bash
-infisical secrets set API_TOKEN=new-value --env=prod --path=/cloudflare
+# Store the new value with put-secret (e.g. OpenBao cloudflare / API_TOKEN), then:
 kubectl rollout restart deployment/<name> -n stoa-system
 kubectl logs deployment/<name> -n stoa-system --tail=10
 ```
 
-### Machine Identity Client Secret
+### Tooling Token
 
-```bash
-infisical-rotate-secret           # Automated
-infisical-rotate-secret --dry-run # Preview
-```
-
-Cadence: every 90 days or after team member departure.
+The helper renews the periodic tooling token at most once a day. If it expires
+anyway (reads fail with HTTP 403), the owner issues a new one and stores it in
+the Keychain item or token file above.
 
 ## Vault KV v2 Paths (ESO-Synced)
 
@@ -96,17 +77,6 @@ Cadence: every 90 days or after team member departure.
 | `SONAR_TOKEN` | Quality gate jobs | SonarCloud analysis |
 | `CODECOV_TOKEN` | Coverage upload | Codecov reporting |
 
-## Cloudflare Access
-
-`vault.gostoa.dev` protected by Cloudflare Access (Zero Trust).
-
-| Variable | Where to Set |
-|----------|-------------|
-| `CF_ACCESS_CLIENT_ID` | `~/.zprofile` + VPS `~/.env.hegemon` |
-| `CF_ACCESS_CLIENT_SECRET` | `~/.zprofile` + VPS `~/.env.hegemon` |
-
-Setup: `./scripts/ops/setup-cloudflare-access.sh`
-
 ## Multi-Device Access
 
 See `docs/runbooks/multi-device-access.md` for the full runbook.
@@ -114,15 +84,10 @@ See `docs/runbooks/multi-device-access.md` for the full runbook.
 | Layer | Per-Device | Shared |
 |-------|-----------|--------|
 | SSH | Ed25519 key (`id_ed25519_stoa_<device>`) | — |
-| Infisical | Machine Identity (`stoa-cli-<device>`) | — |
-| CF Access | — | Service Token (`stoa-infisical-cli`) |
+| OpenBao | Read-only tooling token (Keychain or token file) | — |
 
 ## Infrastructure
 
-| Component | Detail |
-|-----------|--------|
-| Host | OVH infisical-vps (`<INFISICAL_VPS_IP>`) |
-| Path | `/opt/infisical/` |
-| Stack | `infisical:latest` + `postgres:15-alpine` + `redis:7-alpine` |
-| Ingress | Caddy (auto-TLS via Let's Encrypt) |
-| DNS | `vault.gostoa.dev` |
+OpenBao runs on a dedicated VM managed by the platform owner and is reachable only
+through an SSH tunnel. The Infisical host, its Caddy ingress and the Cloudflare
+Access application in front of it were retired with ADR-075.

@@ -78,7 +78,8 @@ All other axes are **always expected** — a missing or empty result file for `c
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `ANTHROPIC_API_KEY` | — | Required for real API calls (unset when `MOCK_API=1`) |
+| `ANTHROPIC_API_KEY` | — | Required for real API calls (unset when `MOCK_API=1`). When unset, read from OpenBao `secret/stoa/tooling/anthropic` (field `ANTHROPIC_API_KEY`) via `scripts/lib/stoa-secret.sh` |
+| `COUNCIL_NO_SECRET_BACKEND` | — | Set to `1` to skip the OpenBao fallback (`COUNCIL_NO_INFISICAL=1` is an alias) |
 | `ANTHROPIC_MODEL` | `claude-sonnet-4-5` | Model used for all 4 axes |
 | `ANTHROPIC_MAX_TOKENS` | `1024` | Per-call response cap |
 | `ANTHROPIC_TIMEOUT_S` | `30` | Per-call HTTP timeout |

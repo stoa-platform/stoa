@@ -11,7 +11,8 @@
 #   CP_API_URL=http://stoa-control-plane-api:80 \
 #   bash seed-proxy-backends.sh
 #
-# Credentials are read from Infisical (via env) or passed directly.
+# Credentials are read from environment variables (a Kubernetes Secret, or
+# OpenBao via scripts/lib/stoa-secret.sh on an operator host).
 # This script is idempotent — safe to run multiple times (upsert).
 
 set -euo pipefail

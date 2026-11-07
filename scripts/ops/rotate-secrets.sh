@@ -2,8 +2,9 @@
 # =============================================================================
 # STOA Platform — Secret Rotation Script
 # =============================================================================
-# Rotates production credentials and stores them in Vault (primary) and
-# Infisical (legacy, during transition). Idempotent — safe to re-run.
+# Rotates production credentials and stores them in Vault. Idempotent — safe
+# to re-run. Tooling copies in OpenBao (secret/stoa/tooling/*, ADR-075) are not
+# written here: the script names the copy to refresh with put-secret.
 # Old credentials remain valid until the service is actually updated.
 #
 # Usage:
@@ -22,14 +23,12 @@
 # Prerequisites:
 #   - KC_ADMIN_PASSWORD set (current admin password)
 #   - VAULT_TOKEN set (Vault admin token) — or VAULT_ADDR + auto-auth
-#   - INFISICAL_TOKEN set: eval $(infisical-token) — optional, for dual-write
 #   - curl, jq, openssl installed
 #   - For 'personas': gh CLI authenticated (to update GitHub Secrets)
 #   - For 'opensearch': kubectl access to the cluster
 #
 # Options:
 #   --dry-run       Show what would be changed without making changes
-#   --no-infisical  Skip Infisical storage
 #   --no-vault      Skip Vault storage
 # =============================================================================
 set -euo pipefail
@@ -39,8 +38,6 @@ KEYCLOAK_URL="${KEYCLOAK_URL:-https://auth.gostoa.dev}"
 KC_REALM="${KEYCLOAK_REALM:-stoa}"
 KC_ADMIN_USER="${KC_ADMIN_USER:-admin}"
 KC_ADMIN_PASSWORD="${KC_ADMIN_PASSWORD:-}"
-INFISICAL_PROJECT_ID="97972ffc-990b-4d28-9c4d-0664d217f03b"
-INFISICAL_URL="${INFISICAL_URL:-https://vault.gostoa.dev}"
 GH_REPO="stoa-platform/stoa"
 
 # Vault configuration (primary secrets backend)
@@ -57,11 +54,7 @@ VPS_KONG="${VPS_KONG_IP:?Set VPS_KONG_IP}"
 VPS_GRAVITEE="${VPS_GRAVITEE_IP:?Set VPS_GRAVITEE_IP}"
 VPS_WEBMETHODS="${VPS_WEBMETHODS_IP:?Set VPS_WEBMETHODS_IP}"
 
-# Cloudflare Access headers (empty = no CF Access, backward compatible)
-CF_ACCESS_CLIENT_ID="${CF_ACCESS_CLIENT_ID:-}"
-CF_ACCESS_CLIENT_SECRET="${CF_ACCESS_CLIENT_SECRET:-}"
 DRY_RUN=false
-NO_INFISICAL=false
 NO_VAULT=false
 
 # Colors
@@ -85,13 +78,12 @@ shift || true
 for arg in "$@"; do
   case $arg in
     --dry-run)      DRY_RUN=true ;;
-    --no-infisical) NO_INFISICAL=true ;;
     --no-vault)     NO_VAULT=true ;;
   esac
 done
 
 if [ -z "$COMMAND" ] || [ "$COMMAND" = "--help" ] || [ "$COMMAND" = "-h" ]; then
-  echo "Usage: $0 <command> [--dry-run] [--no-infisical] [--no-vault]"
+  echo "Usage: $0 <command> [--dry-run] [--no-vault]"
   echo ""
   echo "Commands (Keycloak + K8s):"
   echo "  keycloak-admin     Rotate Keycloak admin password"
@@ -113,7 +105,6 @@ if [ -z "$COMMAND" ] || [ "$COMMAND" = "--help" ] || [ "$COMMAND" = "-h" ]; then
   echo "  VAULT_TOKEN        (required unless --no-vault)"
   echo "  KEYCLOAK_URL       (default: https://auth.gostoa.dev)"
   echo "  KC_ADMIN_PASSWORD  (required for KC commands)"
-  echo "  INFISICAL_TOKEN    (optional, for dual-write to Infisical)"
   exit 0
 fi
 
@@ -165,81 +156,6 @@ get_kc_token() {
   echo "$token"
 }
 
-store_infisical() {
-  local path="$1" key="$2" value="$3"
-  if [ "$NO_INFISICAL" = true ] || [ "$DRY_RUN" = true ]; then
-    echo -e "    ${YELLOW}[skip] Infisical ${path}/${key}${NC}"
-    return
-  fi
-
-  if [ -z "${INFISICAL_TOKEN:-}" ]; then
-    echo -e "    ${YELLOW}[skip] INFISICAL_TOKEN not set${NC}"
-    return
-  fi
-
-  # Use Infisical CLI (handles encryption for self-hosted instances)
-  if command -v infisical &>/dev/null; then
-    if infisical secrets set "${key}=${value}" \
-      --env=prod \
-      --path="$path" \
-      --projectId="$INFISICAL_PROJECT_ID" \
-      --token="$INFISICAL_TOKEN" >/dev/null 2>&1; then
-      echo -e "    ${GREEN}[OK] Infisical ${path}/${key}${NC}"
-    else
-      echo -e "    ${RED}[FAIL] Infisical ${path}/${key}${NC}"
-    fi
-    return
-  fi
-
-  # Fallback: curl API (works with Infisical Cloud and self-hosted)
-  # Build CF Access headers if configured
-  local -a cf_headers=()
-  if [ -n "$CF_ACCESS_CLIENT_ID" ] && [ -n "$CF_ACCESS_CLIENT_SECRET" ]; then
-    cf_headers+=(-H "CF-Access-Client-Id: ${CF_ACCESS_CLIENT_ID}")
-    cf_headers+=(-H "CF-Access-Client-Secret: ${CF_ACCESS_CLIENT_SECRET}")
-  fi
-
-  local http_code
-  http_code=$(curl -sf -o /dev/null -w '%{http_code}' \
-    -X POST "${INFISICAL_URL}/api/v3/secrets/raw" \
-    -H "Authorization: Bearer ${INFISICAL_TOKEN}" \
-    -H "Content-Type: application/json" \
-    "${cf_headers[@]}" \
-    -d "$(jq -n \
-      --arg wid "$INFISICAL_PROJECT_ID" \
-      --arg env "prod" \
-      --arg path "$path" \
-      --arg key "$key" \
-      --arg val "$value" \
-      '{workspaceId: $wid, environment: $env, secretPath: $path, secretName: $key, secretValue: $val}')" \
-    2>/dev/null || echo "000")
-
-  if [ "$http_code" = "200" ] || [ "$http_code" = "201" ]; then
-    echo -e "    ${GREEN}[OK] Infisical ${path}/${key}${NC}"
-  elif [ "$http_code" = "400" ] || [ "$http_code" = "409" ]; then
-    # Secret exists, update it
-    http_code=$(curl -sf -o /dev/null -w '%{http_code}' \
-      -X PATCH "${INFISICAL_URL}/api/v3/secrets/raw/${key}" \
-      -H "Authorization: Bearer ${INFISICAL_TOKEN}" \
-      -H "Content-Type: application/json" \
-      "${cf_headers[@]}" \
-      -d "$(jq -n \
-        --arg wid "$INFISICAL_PROJECT_ID" \
-        --arg env "prod" \
-        --arg path "$path" \
-        --arg val "$value" \
-        '{workspaceId: $wid, environment: $env, secretPath: $path, secretValue: $val}')" \
-      2>/dev/null || echo "000")
-    if [ "$http_code" = "200" ]; then
-      echo -e "    ${GREEN}[OK] Infisical ${path}/${key} (updated)${NC}"
-    else
-      echo -e "    ${RED}[FAIL] Infisical update ${path}/${key} (HTTP ${http_code})${NC}"
-    fi
-  else
-    echo -e "    ${RED}[FAIL] Infisical ${path}/${key} (HTTP ${http_code})${NC}"
-  fi
-}
-
 store_vault() {
   local vault_path="$1" key="$2" value="$3"
   if [ "$NO_VAULT" = true ] || [ "$DRY_RUN" = true ]; then
@@ -279,10 +195,13 @@ store_vault() {
 }
 
 store_secret() {
-  # Convenience wrapper: writes to both Vault (primary) and Infisical (legacy)
-  local vault_path="$1" infisical_path="$2" key="$3" value="$4"
+  # Writes to Vault. The OpenBao tooling copy (secret/stoa/tooling/<path>) is
+  # read-only for scripts (ADR-075): name it so the operator can refresh it.
+  local vault_path="$1" tooling_path="$2" key="$3" value="$4"
   store_vault "$vault_path" "$key" "$value"
-  store_infisical "$infisical_path" "$key" "$value"
+  if [ "$DRY_RUN" != true ]; then
+    echo -e "    ${YELLOW}[todo] Refresh OpenBao secret/stoa/tooling/${tooling_path} (${key}) with put-secret if it is mirrored there${NC}"
+  fi
 }
 
 vps_ssh() {
@@ -323,7 +242,7 @@ rotate_keycloak_admin() {
 
   if [ "$DRY_RUN" = true ]; then
     echo -e "  ${YELLOW}[dry-run] Would reset password for user ${admin_id}${NC}"
-    echo -e "  ${YELLOW}[dry-run] Would store in Infisical prod/keycloak/ADMIN_PASSWORD${NC}"
+    echo -e "  ${YELLOW}[dry-run] Would store in Vault stoa/shared/keycloak (ADMIN_PASSWORD)${NC}"
     return 0
   fi
 
@@ -343,8 +262,8 @@ rotate_keycloak_admin() {
     return 1
   fi
 
-  # Store in Vault (primary) + Infisical (legacy)
-  store_secret "shared/keycloak" "/keycloak" "ADMIN_PASSWORD" "$new_password"
+  # Store in Vault (and name the OpenBao tooling copy)
+  store_secret "shared/keycloak" "keycloak" "ADMIN_PASSWORD" "$new_password"
 
   # Verify — get a new token with the new password
   echo -n "  Verifying new password... "
@@ -442,8 +361,8 @@ rotate_personas() {
 
     echo -n "KC "
 
-    # Store in Vault (primary) + Infisical (legacy)
-    store_secret "k8s/e2e-personas" "/e2e-personas" "${upper_persona}_PASSWORD" "$new_password"
+    # Store in Vault (and name the OpenBao tooling copy)
+    store_secret "k8s/e2e-personas" "e2e-personas" "${upper_persona}_PASSWORD" "$new_password"
 
     # Update GitHub Secret (pipe via stdin to avoid password in process list / error output)
     if command -v gh &>/dev/null; then
@@ -466,8 +385,8 @@ rotate_personas() {
   if [ -f "$e2e_env" ] && [ "$DRY_RUN" != true ]; then
     echo ""
     echo "  NOTE: e2e/.env still has old passwords."
-    echo "  Local E2E tests will need updated passwords from Infisical:"
-    echo "    infisical secrets --env=prod --path=/e2e-personas"
+    echo "  Local E2E tests will need the updated passwords from Vault:"
+    echo "    vault kv get stoa/k8s/e2e-personas"
   fi
 }
 
@@ -528,10 +447,10 @@ rotate_oidc_clients() {
 
     echo -e "    ${GREEN}[OK] Secret regenerated${NC}"
 
-    # Store in Vault (primary) + Infisical (legacy)
-    local infisical_key
-    infisical_key=$(echo "${client_id}" | tr '[:lower:]-' '[:upper:]_')_CLIENT_SECRET
-    store_secret "shared/keycloak/clients" "/keycloak/clients" "$infisical_key" "$new_secret"
+    # Store in Vault (and name the OpenBao tooling copy)
+    local secret_key
+    secret_key=$(echo "${client_id}" | tr '[:lower:]-' '[:upper:]_')_CLIENT_SECRET
+    store_secret "shared/keycloak/clients" "keycloak/clients" "$secret_key" "$new_secret"
 
     echo -e "    ${YELLOW}[TODO] Update K8s secret + restart pod for ${client_id}${NC}"
   done
@@ -558,26 +477,26 @@ rotate_opensearch() {
     return 0
   fi
 
-  # Store in Vault (primary) + Infisical (legacy)
-  store_secret "k8s/opensearch" "/opensearch" "ADMIN_PASSWORD" "$new_password"
+  # Store in Vault (and name the OpenBao tooling copy)
+  store_secret "k8s/opensearch" "opensearch" "ADMIN_PASSWORD" "$new_password"
 
   echo ""
   echo -e "  ${YELLOW}Manual steps required:${NC}"
   echo "  1. SSH to the OpenSearch node"
-  echo "  2. Generate bcrypt hash (reads password from Infisical, never shown in process list):"
-  echo '     NEW_PW=$(infisical secrets get ADMIN_PASSWORD --env=prod --path=/opensearch --plain)'
+  echo "  2. Generate bcrypt hash (reads password from Vault, never shown in process list):"
+  echo '     NEW_PW=$(vault kv get -field=ADMIN_PASSWORD stoa/k8s/opensearch)'
   echo '     python3 -c "import bcrypt,sys; print(bcrypt.hashpw(sys.stdin.buffer.read().rstrip(),bcrypt.gensalt()).decode())" <<< "$NEW_PW"'
   echo "  3. Update internal_users.yml with the new hash"
   echo "  4. Run: ./securityadmin.sh -cd ../config/ -icl -nhnv"
-  echo "  5. Update K8s secret (reads from Infisical):"
-  echo '     NEW_PW=$(infisical secrets get ADMIN_PASSWORD --env=prod --path=/opensearch --plain)'
+  echo "  5. Update K8s secret (reads from Vault):"
+  echo '     NEW_PW=$(vault kv get -field=ADMIN_PASSWORD stoa/k8s/opensearch)'
   echo '     kubectl create secret generic stoa-opensearch-secret \'
   echo '       --from-literal=admin-password="$NEW_PW" \'
   echo '       -n stoa-system --dry-run=client -o yaml | kubectl apply -f -'
   echo "  6. Restart control-plane-api:"
   echo "     kubectl rollout restart deployment/control-plane-api -n stoa-system"
   echo ""
-  echo "  Password stored in Infisical: prod/opensearch/ADMIN_PASSWORD"
+  echo "  Password stored in Vault: stoa/k8s/opensearch (ADMIN_PASSWORD)"
 }
 
 # =============================================================================
@@ -598,8 +517,8 @@ rotate_arena_token() {
     return 0
   fi
 
-  # Store in Vault (primary) + Infisical (legacy)
-  store_secret "vps/arena" "/gateway/arena" "ADMIN_API_TOKEN" "$new_token"
+  # Store in Vault (and name the OpenBao tooling copy)
+  store_secret "vps/arena" "gateway/arena" "ADMIN_API_TOKEN" "$new_token"
 
   echo ""
   echo -e "  ${YELLOW}Manual steps required:${NC}"
@@ -610,7 +529,7 @@ rotate_arena_token() {
   echo "  3. Restart: cd ~/stoa && docker compose up -d"
   echo "  4. Verify: curl -H 'Authorization: Bearer ${new_token:0:4}...' http://localhost:8080/admin/health"
   echo ""
-  echo "  Token stored in Infisical: prod/gateway/arena/ADMIN_API_TOKEN"
+  echo "  Token stored in Vault: stoa/vps/arena (ADMIN_API_TOKEN)"
 }
 
 # =============================================================================
@@ -633,8 +552,8 @@ rotate_webmethods_admin() {
     return 0
   fi
 
-  # Store in Vault + Infisical
-  store_secret "vps/webmethods" "/vps/webmethods" "ADMIN_PASSWORD" "$new_password"
+  # Store in Vault (and name the OpenBao tooling copy)
+  store_secret "vps/webmethods" "vps/webmethods" "ADMIN_PASSWORD" "$new_password"
 
   echo ""
   echo -e "  ${YELLOW}Vault Agent will auto-update /opt/secrets/webmethods.env within 5 min.${NC}"
@@ -671,8 +590,8 @@ rotate_kong_admin() {
     return 0
   fi
 
-  # Store in Vault + Infisical
-  store_secret "vps/kong" "/vps/kong" "KONG_ADMIN_TOKEN" "$new_token"
+  # Store in Vault (and name the OpenBao tooling copy)
+  store_secret "vps/kong" "vps/kong" "KONG_ADMIN_TOKEN" "$new_token"
 
   echo ""
   echo -e "  ${YELLOW}Vault Agent will auto-update /opt/secrets/kong.env within 5 min.${NC}"
@@ -709,8 +628,8 @@ rotate_gravitee_admin() {
     return 0
   fi
 
-  # Store in Vault + Infisical
-  store_secret "vps/gravitee" "/vps/gravitee" "ADMIN_PASSWORD" "$new_password"
+  # Store in Vault (and name the OpenBao tooling copy)
+  store_secret "vps/gravitee" "vps/gravitee" "ADMIN_PASSWORD" "$new_password"
 
   echo ""
   echo -e "  ${YELLOW}Vault Agent will auto-update /opt/secrets/gravitee.env within 5 min.${NC}"
@@ -749,8 +668,8 @@ rotate_n8n_db() {
     return 0
   fi
 
-  # Store in Vault + Infisical
-  store_secret "vps/n8n" "/vps/n8n" "POSTGRES_PASSWORD" "$new_password"
+  # Store in Vault (and name the OpenBao tooling copy)
+  store_secret "vps/n8n" "vps/n8n" "POSTGRES_PASSWORD" "$new_password"
 
   echo ""
   echo -e "  ${YELLOW}Vault Agent will auto-update /opt/secrets/n8n.env within 5 min.${NC}"
@@ -793,7 +712,7 @@ echo "=============================================="
 echo -e "  Command:    ${CYAN}${COMMAND}${NC}"
 echo -e "  Keycloak:   ${CYAN}${KEYCLOAK_URL}${NC}"
 echo -e "  Vault:      ${CYAN}$([ "$NO_VAULT" = true ] && echo "disabled" || echo "${VAULT_ADDR}")${NC}"
-echo -e "  Infisical:  ${CYAN}$([ "$NO_INFISICAL" = true ] && echo "disabled" || echo "enabled (legacy)")${NC}"
+echo -e "  OpenBao:    ${CYAN}not written (refresh tooling copies with put-secret)${NC}"
 echo -e "  Dry run:    ${CYAN}${DRY_RUN}${NC}"
 
 case "$COMMAND" in

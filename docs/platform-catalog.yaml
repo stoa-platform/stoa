@@ -3,7 +3,7 @@ kind: PlatformCatalog
 metadata:
   name: stoa-platform
   description: STOA Platform — service inventory and dependency map
-  lastUpdated: "2026-02-24"
+  lastUpdated: "2026-11-07"
 
 # ==============================================================================
 # CORE SERVICES — Control Plane
@@ -283,16 +283,21 @@ services:
       - viewer
     owner: platform-team
 
-  - name: infisical
-    displayName: Infisical (Secrets Vault)
+  # Infisical was retired by ADR-075 (2026-11-07). containerPort and health
+  # are the OpenBao server already defined in this repo (Vault API on 8200,
+  # /v1/sys/health). Production runs on a dedicated VM outside the clusters
+  # listed below. That VM's inventory name is not in this file, so
+  # deploy.prod.cluster stays null rather than naming an unconfirmed host.
+  - name: openbao
+    displayName: OpenBao (Secrets Vault)
     type: secrets
-    tech: Infisical (self-hosted)
+    tech: OpenBao 2.7.2 (self-hosted, Vault API)
     path: null
-    containerPort: 443
-    image: infisical/infisical
+    containerPort: 8200
+    image: openbao/openbao
     deploy:
       prod:
-        cluster: ovh-infisical-vps
+        cluster: null
         namespace: null
         replicas: 1
         k8sName: null
@@ -301,7 +306,7 @@ services:
     exposedTo:
       - control-plane-api
       - stoa-gateway
-    health: /api/status
+    health: /v1/sys/health
     metrics: null
     argocdApp: null
     ciWorkflow: null
@@ -637,16 +642,6 @@ clusters:
         purpose: webMethods trial gateway
       - name: n8n-vps
         purpose: n8n workflow engine
-
-  - name: ovh-infisical-vps
-    displayName: OVH VPS (Infisical)
-    provider: OVH
-    region: GRA
-    nodes: 1
-    nodeType: VPS
-    hosts:
-      - name: infisical-vps
-        purpose: Infisical secrets vault
 
 # ==============================================================================
 # RBAC ROLES

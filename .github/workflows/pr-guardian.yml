@@ -18,6 +18,9 @@ permissions:
   contents: read
   pull-requests: write
   issues: write
+  # CAB-2608: GitHub OIDC token, exchanged for a short-lived Claude API token
+  # (workload identity federation). Fork PRs never run this job (see `if`).
+  id-token: write
 
 jobs:
   guardian:
@@ -96,7 +99,17 @@ jobs:
         continue-on-error: true
         uses: anthropics/claude-code-action@c0949c50a78c1ec8ce2647db36629b870e715d0c # v1
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # CAB-2608: without this input the action swaps an OIDC token for a
+          # Claude GitHub App token; the workflow token is enough for comments.
+          github_token: ${{ github.token }}
+          # Workload identity federation: the IDs are identifiers, not secrets,
+          # kept in repository variables. A static key overrides federation, so
+          # it is passed only while ANTHROPIC_FEDERATION_RULE_ID is unset.
+          anthropic_federation_rule_id: ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }}
+          anthropic_organization_id: ${{ vars.ANTHROPIC_ORGANIZATION_ID }}
+          anthropic_service_account_id: ${{ vars.ANTHROPIC_SERVICE_ACCOUNT_ID }}
+          anthropic_workspace_id: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
+          anthropic_api_key: ${{ vars.ANTHROPIC_FEDERATION_RULE_ID == '' && secrets.ANTHROPIC_API_KEY || '' }}
           prompt: |
             IMPORTANT: You are running in CI. Skip session-startup protocol entirely.
             Do NOT read memory.md, plan.md, or operations.log for session state.

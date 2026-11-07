@@ -16,7 +16,11 @@
 # never touches any other database on the server.
 #
 # Requirements:
-#   - psql / pg_dump on PATH (major version >= server major version)
+#   - psql and pg_dump on PATH, same major version as the server.
+#     pg_dump 17+ writes SET transaction_timeout, which PostgreSQL 16 rejects
+#     during restore. A newer client on PATH is a broken environment, not a
+#     warning. Direct mode can also find postgresql-client-<major> under
+#     /usr/lib/postgresql, but kubectl mode runs the PATH binary.
 #   - libpq env pointing at a disposable server: PGHOST, PGPORT, PGUSER
 #     (+ PGPASSWORD if needed). PGUSER must be allowed to CREATE DATABASE.
 #   - BACKUP_RESTORE_TEST_DISPOSABLE=1 to confirm the server is disposable.
@@ -118,9 +122,15 @@ done
 
 server_major=$(sql postgres -c "SHOW server_version_num;") || { echo "Cannot reach PostgreSQL server" >&2; exit 2; }
 server_major=$((server_major / 10000))
-client_major=$(pg_dump --version | grep -oE '[0-9]+' | head -1)
-if (( client_major < server_major )); then
-    echo "pg_dump ${client_major} cannot dump a PostgreSQL ${server_major} server" >&2
+client_line=$(pg_dump --version)
+if [[ ! "$client_line" =~ ([0-9]+) ]]; then
+    echo "Cannot parse pg_dump version: ${client_line}" >&2
+    exit 2
+fi
+client_major=${BASH_REMATCH[1]}
+if (( client_major != server_major )); then
+    echo "pg_dump ${client_major} on PATH does not match PostgreSQL ${server_major}." >&2
+    echo "Install postgresql-client-${server_major}. pg_dump 17+ emits SET transaction_timeout, which this server rejects on restore." >&2
     exit 2
 fi
 echo "  server PostgreSQL ${server_major}, client tools ${client_major}, test database ${TEST_DB}"

@@ -56,10 +56,42 @@ jobs:
           bash -n scripts/backup/backup-postgres.sh
           bash -n tests/backup/test-postgres-backup-restore.sh
 
-      - name: Show PostgreSQL client version
+      - name: Regression — pg_dump major must match the server
+        run: python3 tests/backup/test_regression_cab_2518_pg_dump_matches_server.py
+
+      - name: Install PostgreSQL 16 client tools
         run: |
+          set -euo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+          # ubuntu-latest ships pg_dump 18 (seen as 18.6+pgdg). pg_dump 17+
+          # writes `SET transaction_timeout`, which the PostgreSQL 16 service
+          # container rejects, so the restore aborts after DROP DATABASE.
+          # Install the client that matches the server and put it first on PATH.
+          # Kubectl mode runs whatever `pg_dump`/`psql` name resolves on PATH
+          # (inside the pod, or via this job's local stand-in).
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-16
+          client_dir=/usr/lib/postgresql/16/bin
+          if [[ ! -x "${client_dir}/pg_dump" || ! -x "${client_dir}/psql" ]]; then
+            echo "postgresql-client-16 did not provide ${client_dir}/{pg_dump,psql}" >&2
+            exit 1
+          fi
+          echo "${client_dir}" >> "$GITHUB_PATH"
+
+      - name: Require PostgreSQL 16 client tools
+        run: |
+          set -euo pipefail
           psql --version
           pg_dump --version
+          version_line=$(pg_dump --version)
+          if [[ ! "$version_line" =~ ([0-9]+) ]]; then
+            echo "Cannot parse pg_dump version: ${version_line}" >&2
+            exit 1
+          fi
+          if [[ "${BASH_REMATCH[1]}" != "16" ]]; then
+            echo "pg_dump on PATH must be major 16 (same as the disposable server); got: ${version_line}" >&2
+            exit 1
+          fi
 
       - name: Run backup/restore cycle on disposable database
         env:

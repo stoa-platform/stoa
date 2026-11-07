@@ -40,6 +40,10 @@ PG_CONNECTION_MODE="${PG_CONNECTION_MODE:-kubectl}"
 # Where backups are stored: s3 (default) or local (BACKUP_LOCAL_DIR)
 BACKUP_DESTINATION="${BACKUP_DESTINATION:-s3}"
 BACKUP_LOCAL_DIR="${BACKUP_LOCAL_DIR:-}"
+# Debian/Ubuntu install versioned clients here (<major>/bin/pg_dump).
+# A fixture tree may replace the root; the binary is still used only when its
+# major version equals the server.
+PG_CLIENT_LIB_ROOT="${PG_CLIENT_LIB_ROOT:-/usr/lib/postgresql}"
 
 # Last lines of a complete plain-format pg_dump; a missing marker means truncation
 PG_DUMP_COMPLETE_MARKER="PostgreSQL database dump complete"
@@ -143,6 +147,105 @@ pg_psql() {
     pg_run psql --no-psqlrc -v ON_ERROR_STOP=1 -U "$PG_USER" -d "$database" "$@"
 }
 
+# First integer in a `pg_dump --version` line: "pg_dump (PostgreSQL) 16.15 ..." -> 16
+pg_client_major() {
+    local line=$1
+    if [[ "$line" =~ ([0-9]+) ]]; then
+        echo "${BASH_REMATCH[1]}"
+        return 0
+    fi
+    log_error "Cannot parse PostgreSQL client version: ${line}"
+    return 1
+}
+
+# Major version of the server we are connected to (160005 -> 16).
+pg_server_major() {
+    local version_num
+    version_num=$(pg_psql "$PG_DATABASE" -At -c "SHOW server_version_num;")
+    if [[ ! "$version_num" =~ ^([0-9]+)$ ]]; then
+        log_error "Cannot read PostgreSQL server version (got '${version_num}')"
+        return 1
+    fi
+    echo $((BASH_REMATCH[1] / 10000))
+}
+
+# pg_dump must be the same major as the server. pg_dump 17 and newer always
+# emit `SET transaction_timeout`, a parameter PostgreSQL 16 rejects, so the
+# restore aborts. Filtering that line out of the dump is not a fix: the next
+# client-only command would break the same way. Use the matching client.
+#
+# Direct mode may return a versioned host path. Kubectl mode returns the
+# literal name `pg_dump`: the command runs inside the database pod, and a host
+# path would not exist there.
+resolve_pg_dump() {
+    local server_major version_line client_major candidate
+    server_major=$(pg_server_major)
+
+    if [[ "$PG_CONNECTION_MODE" == "kubectl" ]]; then
+        version_line=$(pg_run pg_dump --version)
+        client_major=$(pg_client_major "$version_line")
+        if [[ "$client_major" != "$server_major" ]]; then
+            log_error "Refusing to dump: pg_dump ${client_major} does not match PostgreSQL server ${server_major}. pg_dump 17+ writes SET transaction_timeout, which this server rejects on restore. Use the pg_dump shipped with PostgreSQL ${server_major}."
+            return 1
+        fi
+        log_info "Using pg_dump ${client_major} from the database pod"
+        echo "pg_dump"
+        return 0
+    fi
+
+    local -a candidates=(
+        "${PG_CLIENT_LIB_ROOT}/${server_major}/bin/pg_dump"
+        "pg_dump-${server_major}"
+    )
+    if command -v pg_dump >/dev/null 2>&1; then
+        candidates+=("$(command -v pg_dump)")
+    fi
+
+    local seen="|"
+    for candidate in "${candidates[@]}"; do
+        [[ "$seen" == *"|${candidate}|"* ]] && continue
+        seen="${seen}${candidate}|"
+        if [[ "$candidate" == */* ]]; then
+            [[ -x "$candidate" ]] || continue
+        elif ! command -v "$candidate" >/dev/null 2>&1; then
+            continue
+        fi
+        version_line=$("$candidate" --version 2>/dev/null) || continue
+        client_major=$(pg_client_major "$version_line") || continue
+        if [[ "$client_major" == "$server_major" ]]; then
+            log_info "Using pg_dump ${client_major} (${candidate})"
+            echo "$candidate"
+            return 0
+        fi
+        log_info "Skipping ${candidate}: major ${client_major} != server ${server_major}"
+    done
+
+    log_error "Refusing to dump: no pg_dump ${server_major} found for PostgreSQL server ${server_major}. A newer pg_dump writes SET transaction_timeout, which this server rejects on restore. Install postgresql-client-${server_major}."
+    return 1
+}
+
+# Reject a dump that cannot be replayed, before any DROP DATABASE.
+# Only the session preamble is inspected; the dump itself is not rewritten.
+assert_dump_compatible_with_server() {
+    local backup_file=$1
+    local server_major preamble_file
+    server_major=$(pg_server_major)
+    # transaction_timeout exists from PostgreSQL 17. Older servers abort on it.
+    if (( server_major >= 17 )); then
+        return 0
+    fi
+
+    preamble_file=$(mktemp)
+    # head closes the pipe early; the SIGPIPE from gunzip is not a corrupt file.
+    gunzip -c "$backup_file" 2>/dev/null | head -n 40 >"$preamble_file" || true
+    if grep -qE '^SET transaction_timeout[[:space:]]*=' "$preamble_file"; then
+        rm -f "$preamble_file"
+        log_error "Refusing to restore: backup preamble sets transaction_timeout, which PostgreSQL ${server_major} does not support. The dump was produced by pg_dump 17 or newer. ${PG_DATABASE} was not modified. Take a new backup with pg_dump ${server_major}."
+        return 1
+    fi
+    rm -f "$preamble_file"
+}
+
 check_postgres_connectivity() {
     log_info "Checking PostgreSQL connectivity..."
 
@@ -223,9 +326,13 @@ perform_backup() {
     log_info "  Mode: $PG_CONNECTION_MODE"
     [[ "$PG_CONNECTION_MODE" == "kubectl" ]] && log_info "  Pod: $PG_POD_NAME"
 
-    # Create backup using pg_dump with compression; pg_dump errors stay visible on stderr
+    # Create backup using pg_dump with compression; pg_dump errors stay visible on stderr.
+    # Resolve the client before opening the dump so a major-version mismatch
+    # fails without writing an unrestorable archive.
+    local dump_bin
+    dump_bin=$(resolve_pg_dump)
     log_info "Running pg_dump..."
-    if pg_run pg_dump -U "$PG_USER" -d "$PG_DATABASE" \
+    if pg_run "$dump_bin" -U "$PG_USER" -d "$PG_DATABASE" \
         --no-owner \
         --no-privileges \
         --format=plain | gzip > "$local_backup"; then
@@ -379,6 +486,9 @@ restore_backup() {
     log_info "Validating backup..."
     validate_backup_file "$local_file"
     log_info "Backup is complete and readable"
+    # Version check stays before DROP DATABASE: an incompatible preamble must
+    # leave the live database untouched.
+    assert_dump_compatible_with_server "$local_file"
 
     # Drop and recreate database (if not the default postgres db)
     if [[ "$PG_DATABASE" != "postgres" ]]; then
@@ -559,4 +669,6 @@ main() {
     echo "$backup_location"
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi

@@ -1,8 +1,11 @@
 # =============================================================================
-# HashiCorp Vault Helm Chart — Local Dev Configuration
+# OpenBao Helm Chart — Local Dev Configuration
 # =============================================================================
+# OpenBao is the secrets backend STOA runs and ships (ADR-075). It serves the
+# Vault HTTP API, so clients that use VAULT_ADDR / VAULT_TOKEN keep working.
 # Mirrors production patterns (stoa-infra) on local K3s (Docker Desktop).
-# Deploy: helm upgrade --install vault hashicorp/vault -n vault -f values-local.yaml
+# Deploy (setup-vault-local.sh pins the chart version):
+#   helm upgrade --install vault openbao/openbao --version <pinned> -n vault -f values-local.yaml
 #
 # Architecture:
 #   K3s namespace "vault" — single-replica dev server
@@ -14,7 +17,21 @@
 global:
   enabled: true
 
+# Keep the service names of the former HashiCorp Vault release ("vault",
+# "vault-ui"): the addresses above stay valid for every local consumer.
+fullnameOverride: vault
+
 server:
+  image:
+    registry: docker.io
+    repository: openbao/openbao
+    # The chart renders registry/repository:tag and has no digest field, so the
+    # tag carries the digest. `digest` repeats it for the repository's image
+    # pinning guard (scripts/ci/check_image_pinning.py); the chart ignores it.
+    tag: "2.7.2@sha256:5046911075e137e154ce49ab051502f4ec7cf367d484ae4a4dce665d9b90561f"
+    digest: sha256:5046911075e137e154ce49ab051502f4ec7cf367d484ae4a4dce665d9b90561f
+    pullPolicy: IfNotPresent
+
   # Dev mode — auto-initialized, auto-unsealed, in-memory storage
   dev:
     enabled: true
@@ -22,6 +39,8 @@ server:
 
   standalone:
     enabled: true
+
+  logLevel: info
 
   resources:
     requests:
@@ -38,19 +57,45 @@ server:
   auditStorage:
     enabled: false
 
-  extraEnvironmentVars:
-    VAULT_LOG_LEVEL: info
+  # OpenBao refuses to create audit devices through the API (`bao audit
+  # enable`); they are declared in the server configuration. Dev mode loads
+  # this extra file, which writes the audit log to the pod log
+  # (kubectl logs -n vault vault-0).
+  extraArgs: "-config=/openbao/userconfig/local-audit/audit.hcl"
+  volumes:
+    - name: local-audit
+      configMap:
+        name: openbao-local-audit
+  volumeMounts:
+    - name: local-audit
+      mountPath: /openbao/userconfig/local-audit
+      readOnly: true
 
   service:
     type: ClusterIP
     port: 8200
 
-# Vault UI — accessible via port-forward or ingress
+# Installed with the release: the audit device declared for server.extraArgs.
+extraObjects:
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: openbao-local-audit
+    data:
+      audit.hcl: |
+        audit "file" "stdout" {
+          description = "Local dev audit log, written to the pod log"
+          options {
+            file_path = "stdout"
+          }
+        }
+
+# OpenBao UI — accessible via port-forward or ingress
 ui:
   enabled: true
   serviceType: ClusterIP
 
-# Vault Agent Injector — disabled initially, enable for Phase 6
+# Agent injector — disabled initially, enable for Phase 6
 injector:
   enabled: false
 

@@ -34,7 +34,7 @@ services:
   # Database
   # ==========================================================================
   postgres:
-    image: postgres:15-alpine
+    image: postgres:15-alpine@sha256:aae6554de426ae1990f1a939ff183a0299146cf7142a6f4c379c3357af9cc2d8
     container_name: stoa-postgres
     ports:
       - "${PORT_DB:-5432}:5432"
@@ -58,7 +58,7 @@ services:
   # Kafka-compatible Broker (Redpanda)
   # ==========================================================================
   redpanda:
-    image: docker.redpanda.com/redpandadata/redpanda:v24.1.1
+    image: docker.redpanda.com/redpandadata/redpanda:v24.1.1@sha256:3387a7ac6b2307129032562bf957653de13373a2748f82de7ab588a39d50b88d
     container_name: stoa-redpanda
     command:
       - redpanda
@@ -90,7 +90,7 @@ services:
 
   # Create Kafka topics (one-shot)
   redpanda-init:
-    image: docker.redpanda.com/redpandadata/redpanda:v24.1.1
+    image: docker.redpanda.com/redpandadata/redpanda:v24.1.1@sha256:3387a7ac6b2307129032562bf957653de13373a2748f82de7ab588a39d50b88d
     container_name: stoa-redpanda-init
     entrypoint: ["/bin/bash", "-c"]
     command:
@@ -111,7 +111,7 @@ services:
   # Authentication (Keycloak)
   # ==========================================================================
   keycloak:
-    image: quay.io/keycloak/keycloak:26.5.3
+    image: quay.io/keycloak/keycloak:26.5.3@sha256:5a236ae4dd8ece77490115bace15a11a4d15e9cbcf58a490b95a7da2cd71d32a
     container_name: stoa-keycloak
     command: start --import-realm --spi-theme-static-max-age=-1 --spi-theme-cache-themes=false
     ports:
@@ -189,7 +189,6 @@ services:
     build:
       context: ../../control-plane-api
       dockerfile: Dockerfile
-    image: stoa-quickstart-control-plane-api
     container_name: stoa-db-migrate
     entrypoint: ["alembic", "upgrade", "head"]
     environment:
@@ -208,7 +207,6 @@ services:
     build:
       context: ../../control-plane-api
       dockerfile: Dockerfile
-    image: stoa-quickstart-control-plane-api
     container_name: stoa-api
     ports:
       - "${PORT_API:-8000}:8000"
@@ -282,7 +280,6 @@ services:
     build:
       context: ../../
       dockerfile: control-plane-ui/Dockerfile
-    image: stoa-console:local
     container_name: stoa-console
     ports:
       - "${PORT_CONSOLE:-3000}:8080"
@@ -307,7 +304,16 @@ services:
   # Developer Portal
   # ==========================================================================
   portal:
-    image: ghcr.io/stoa-platform/portal:1.0.0
+    build:
+      context: ../../
+      dockerfile: portal/Dockerfile
+      args:
+        VITE_BASE_DOMAIN: localhost
+        VITE_ENVIRONMENT: development
+        VITE_API_URL: http://localhost:${PORT_API:-8000}
+        VITE_KEYCLOAK_URL: http://localhost:${PORT_KEYCLOAK:-8080}
+        VITE_CONSOLE_URL: http://localhost:${PORT_CONSOLE:-3000}
+        VITE_MCP_URL: http://localhost:${PORT_GATEWAY:-8081}
     container_name: stoa-portal
     ports:
       - "${PORT_PORTAL:-3002}:8080"
@@ -424,7 +430,7 @@ services:
   # Link Mock Backend — fake webMethods with 3 JSON endpoints
   # --------------------------------------------------------------------------
   link-backend:
-    image: nginx:1.25-alpine
+    image: nginx:1.25-alpine@sha256:516475cc129da42866742567714ddc681e5eed7b9ee0b9e9c015e464b4221a00
     container_name: stoa-link-backend
     volumes:
       - ./sidecar/webmethods-mock/nginx.conf:/etc/nginx/conf.d/default.conf:ro
@@ -441,7 +447,7 @@ services:
   # Link Proxy — nginx auth_request to STOA Gateway sidecar
   # --------------------------------------------------------------------------
   link-proxy:
-    image: nginx:1.25-alpine
+    image: nginx:1.25-alpine@sha256:516475cc129da42866742567714ddc681e5eed7b9ee0b9e9c015e464b4221a00
     container_name: stoa-link-proxy
     ports:
       - "${PORT_LINK_PROXY:-8082}:8080"
@@ -504,7 +510,7 @@ services:
   # Connect Proxy — reverse proxy simulating a third-party gateway
   # --------------------------------------------------------------------------
   connect-proxy:
-    image: nginx:1.25-alpine
+    image: nginx:1.25-alpine@sha256:516475cc129da42866742567714ddc681e5eed7b9ee0b9e9c015e464b4221a00
     container_name: stoa-connect-proxy
     ports:
       - "${PORT_CONNECT_PROXY:-8083}:8080"
@@ -528,7 +534,7 @@ services:
   # Demo Mock Backend — stable target for demo smoke AT-0/AT-4
   # ==========================================================================
   mock-backend:
-    image: nginx:1.25-alpine
+    image: nginx:1.25-alpine@sha256:516475cc129da42866742567714ddc681e5eed7b9ee0b9e9c015e464b4221a00
     container_name: stoa-mock-backend
     profiles:
       - demo
@@ -550,7 +556,7 @@ services:
   # Echo Backend — returns 200 JSON for any request (traffic seeder target)
   # ==========================================================================
   echo-backend:
-    image: nginx:1.25-alpine
+    image: nginx:1.25-alpine@sha256:516475cc129da42866742567714ddc681e5eed7b9ee0b9e9c015e464b4221a00
     container_name: stoa-echo-backend
     volumes:
       - ./config/echo/nginx.conf:/etc/nginx/conf.d/default.conf:ro
@@ -567,7 +573,7 @@ services:
   # Traffic Seeder — generates multi-auth API traffic for observability demos
   # ==========================================================================
   traffic-seeder:
-    image: python:3.11-slim
+    image: python:3.11-slim@sha256:65bd3d9f1d7fa268dd1909973ba7eb4bdf41f6dcf2cfbe76ba9528b170f3fd79
     container_name: stoa-traffic-seeder
     entrypoint: ["/bin/bash", "/app/docker-entrypoint.sh"]
     working_dir: /app
@@ -603,7 +609,7 @@ services:
   # Reverse Proxy (nginx) - CAB-1108 Phase 3 + CAB-1114
   # ==========================================================================
   nginx:
-    image: nginx:1.25-alpine
+    image: nginx:1.25-alpine@sha256:516475cc129da42866742567714ddc681e5eed7b9ee0b9e9c015e464b4221a00
     container_name: stoa-proxy
     ports:
       - "${PORT_PROXY:-80}:80"
@@ -631,7 +637,7 @@ services:
   # Generates bcrypt hashes from env vars so internal_users.yml has real creds.
   # ==========================================================================
   opensearch-security-init:
-    image: opensearchproject/opensearch:2.11.0
+    image: opensearchproject/opensearch:2.11.0@sha256:2f49c399988df5c9a3b25a05ec78ea75ac4b39ae76e1d2609f94a653224bb24b
     container_name: stoa-opensearch-security-init
     user: "0:0"
     entrypoint: ["sh", "/init/generate-opensearch-hashes.sh"]
@@ -650,7 +656,7 @@ services:
   # Phase 3: Security plugin enabled with TLS + OIDC via Keycloak
   # ==========================================================================
   opensearch:
-    image: opensearchproject/opensearch:2.11.0
+    image: opensearchproject/opensearch:2.11.0@sha256:2f49c399988df5c9a3b25a05ec78ea75ac4b39ae76e1d2609f94a653224bb24b
     container_name: stoa-opensearch
     ports:
       - "${PORT_OPENSEARCH:-9200}:9200"
@@ -694,7 +700,7 @@ services:
   # Phase 3: OIDC via Keycloak + multi-tenancy
   # ==========================================================================
   opensearch-dashboards:
-    image: opensearchproject/opensearch-dashboards:2.11.0
+    image: opensearchproject/opensearch-dashboards:2.11.0@sha256:71355fc2e4dd0b37107971ea632cd280a62364f5f81e6772986380b4acd3ccc6
     container_name: stoa-opensearch-dashboards
     ports:
       - "${PORT_OPENSEARCH_DASHBOARDS:-5601}:5601"
@@ -729,7 +735,7 @@ services:
   # Phase 3: Uses opensearch image for securityadmin.sh + authenticated curl
   # ==========================================================================
   opensearch-init:
-    image: opensearchproject/opensearch:2.11.0
+    image: opensearchproject/opensearch:2.11.0@sha256:2f49c399988df5c9a3b25a05ec78ea75ac4b39ae76e1d2609f94a653224bb24b
     container_name: stoa-opensearch-init
     entrypoint: ["sh", "/init/init-opensearch.sh"]
     environment:
@@ -753,7 +759,7 @@ services:
   # Prometheus (Metrics)
   # ==========================================================================
   prometheus:
-    image: prom/prometheus:v2.48.0
+    image: prom/prometheus:v2.48.0@sha256:b440bc0e8aa5bab44a782952c09516b6a50f9d7b2325c1ffafac7bc833298e2e
     container_name: stoa-prometheus
     ports:
       - "${PORT_PROMETHEUS:-9090}:9090"
@@ -781,7 +787,7 @@ services:
   # otel-v1-apm-span-* indices. Tempo receives spans via metrics-generator only.
   # ==========================================================================
   data-prepper:
-    image: opensearchproject/data-prepper:2.6.2
+    image: opensearchproject/data-prepper:2.6.2@sha256:863bdfe8afa1272bf9c15f1f6cd881a77edaecc9096ea776ac9fcc05be6997ae
     container_name: stoa-data-prepper
     ports:
       - "${PORT_DATA_PREPPER_GRPC:-4320}:4317"
@@ -811,7 +817,7 @@ services:
   # Receives OTLP spans via Data Prepper fan-out for metrics_generator only.
   # ==========================================================================
   tempo:
-    image: grafana/tempo:2.3.1
+    image: grafana/tempo:2.3.1@sha256:1c6fb7c74831474f82c9bde218c84b61e5269b676e6505e7dc3c1862dae9b5cc
     container_name: stoa-tempo
     ports:
       - "${PORT_TEMPO:-3200}:3200"    # Tempo API
@@ -839,7 +845,7 @@ services:
   # Grafana (Dashboards)
   # ==========================================================================
   grafana:
-    image: grafana/grafana:10.2.2
+    image: grafana/grafana:10.2.2@sha256:e3e9c2b5776fe3657f4954dfa91579224f98a0316f51d431989b15425e95530f
     container_name: stoa-grafana
     ports:
       - "${PORT_GRAFANA:-3001}:3000"
@@ -897,7 +903,7 @@ services:
   # Requires OIDC setup: deploy/scripts/setup-observability-oidc.sh
   # ==========================================================================
   oauth2-proxy:
-    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0@sha256:dcb6ff8dd21bf3058f6a22c6fa385fa5b897a9cd3914c88a2cc2bb0a85f8065d
     container_name: stoa-oauth2-proxy
     profiles: ["monitoring-oidc"]
     ports:
@@ -937,7 +943,7 @@ services:
   # AlertManager — CAB-1103 Phase 6B
   # ==========================================================================
   alertmanager:
-    image: prom/alertmanager:v0.27.0
+    image: prom/alertmanager:v0.27.0@sha256:e13b6ed5cb929eeaee733479dce55e10eb3bc2e9c4586c705a4e8da41e5eacf5
     container_name: stoa-alertmanager
     ports:
       - "${PORT_ALERTMANAGER:-9093}:9093"
@@ -961,7 +967,7 @@ services:
   # Loki (Log Aggregation)
   # ==========================================================================
   loki:
-    image: grafana/loki:2.9.3
+    image: grafana/loki:2.9.3@sha256:eb92f1a439171542fd718f929fad38c917b3cad15ec830ba4742e2ba5ab03313
     container_name: stoa-loki
     ports:
       - "${PORT_LOKI:-3100}:3100"
@@ -982,7 +988,7 @@ services:
   # Promtail (Log Shipping)
   # ==========================================================================
   promtail:
-    image: grafana/promtail:2.9.3
+    image: grafana/promtail:2.9.3@sha256:b338a29de45ef8ffa96f882f3a36306b1e61262b2a560ff523e0e2633cccbbc4
     container_name: stoa-promtail
     volumes:
       - ./config/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
@@ -1052,7 +1058,7 @@ services:
   # OpenLDAP - Identity source for gamma org (ADR-026 Federation)
   # ==========================================================================
   openldap:
-    image: osixia/openldap:1.5.0
+    image: osixia/openldap:1.5.0@sha256:18742e9c449c9c1afe129d3f2f3ee15fb34cc43e5f940a20f3399728f41d7c28
     container_name: stoa-federation-ldap
     profiles: ["federation"]
     ports:
@@ -1083,7 +1089,7 @@ services:
   # when accessing resources in realm B.
   # ==========================================================================
   federation-gateway:
-    image: python:3.11-slim
+    image: python:3.11-slim@sha256:65bd3d9f1d7fa268dd1909973ba7eb4bdf41f6dcf2cfbe76ba9528b170f3fd79
     container_name: stoa-federation-gateway
     profiles: ["federation"]
     ports:
@@ -1123,7 +1129,6 @@ services:
     build:
       context: ../../control-plane-api
       dockerfile: Dockerfile
-    image: stoa-quickstart-control-plane-api
     container_name: stoa-seeder
     entrypoint: ["python", "-m", "scripts.seeder"]
     command: ["--profile", "${SEED_PROFILE:-dev}"]

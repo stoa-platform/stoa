@@ -62,7 +62,7 @@ Installs Claude Code CLI, Node.js, git deploy key, environment template, memory 
 ```
 
 **What it does** (6 steps):
-1. Installs Claude Code CLI (native binary via `claude.ai/install.sh`)
+1. Installs Claude Code CLI (native binary via `https://claude.ai/install.sh`)
 2. Installs Node.js 20 (for MCP servers)
 3. Generates ed25519 deploy key — **pause: add to GitHub repo settings**
 4. Clones `stoa` repo to `~/stoa`

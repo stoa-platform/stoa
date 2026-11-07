@@ -41,6 +41,7 @@ done
 if [[ -z "$ADMIN_PASS" ]]; then
   echo "ERROR: KEYCLOAK_ADMIN_PASSWORD not set"
   echo "  export KEYCLOAK_ADMIN_PASSWORD=<password>"
+  echo "  Or use: KEYCLOAK_ADMIN_PASSWORD=\$(scripts/lib/stoa-secret.sh keycloak ADMIN_PASSWORD) $0"
   exit 1
 fi
 

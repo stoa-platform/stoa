@@ -1,26 +1,27 @@
 # =============================================================================
-# Chaos Experiment: Vault Pod Delete
+# Chaos Experiment: OpenBao Pod Delete
 # =============================================================================
 # STOA Platform - Phase 9.5 Production Readiness
-# Tests Vault auto-unseal and recovery when pods are killed
-# Expected: Vault auto-unseals via AWS KMS, services resume secret access
+# Tests OpenBao (Vault API, ADR-075) auto-unseal and recovery when pods are killed
+# Expected: OpenBao auto-unseals (static key or KMS seal), services resume secret access
+# Target: openbao/openbao chart, release "openbao" in namespace "openbao"
 # =============================================================================
 
 apiVersion: litmuschaos.io/v1alpha1
 kind: ChaosEngine
 metadata:
-  name: vault-pod-delete
-  namespace: vault
+  name: openbao-pod-delete
+  namespace: openbao
   labels:
     app.kubernetes.io/name: chaos-experiment
-    app.kubernetes.io/component: vault
+    app.kubernetes.io/component: openbao
     chaos-type: pod-delete
 spec:
   engineState: "active"
 
   appinfo:
-    appns: vault
-    applabel: "app.kubernetes.io/name=vault"
+    appns: openbao
+    applabel: "app.kubernetes.io/name=openbao"
     appkind: statefulset
 
   chaosServiceAccount: litmus-admin
@@ -30,7 +31,7 @@ spec:
       spec:
         components:
           env:
-            # Delete configuration - be careful with Vault!
+            # Delete configuration - be careful with OpenBao!
             - name: TOTAL_CHAOS_DURATION
               value: "30"
             - name: PODS_AFFECTED_PERC
@@ -51,11 +52,11 @@ spec:
               value: "/run/containerd/containerd.sock"
 
         probe:
-          # Check Vault remains accessible
-          - name: "vault-health-check"
+          # Check OpenBao remains accessible
+          - name: "openbao-health-check"
             type: "httpProbe"
             httpProbe/inputs:
-              url: "http://vault.vault.svc:8200/v1/sys/health"
+              url: "http://openbao.openbao.svc:8200/v1/sys/health"
               method:
                 get:
                   criteria: "oneOf"
@@ -68,10 +69,10 @@ spec:
               probePollingInterval: 3
 
           # Verify auto-unseal completes
-          - name: "vault-unsealed-check"
+          - name: "openbao-unsealed-check"
             type: "httpProbe"
             httpProbe/inputs:
-              url: "http://vault.vault.svc:8200/v1/sys/seal-status"
+              url: "http://openbao.openbao.svc:8200/v1/sys/seal-status"
               method:
                 get:
                   criteria: "=="
@@ -84,15 +85,14 @@ spec:
               probePollingInterval: 5
 
           # Verify secrets are still accessible
-          - name: "vault-secrets-accessible"
+          - name: "openbao-unsealed-cli"
             type: "cmdProbe"
             cmdProbe/inputs:
               command: |
-                # Try to read a known secret path
-                VAULT_ADDR=http://vault.vault.svc:8200
-                vault status -format=json | jq -e '.sealed == false'
+                # bao status exits 0 only when the server is unsealed
+                bao status -address=http://openbao.openbao.svc:8200 >/dev/null && echo true
               source:
-                image: hashicorp/vault@sha256:0450896c43b13879b19442b204ce29dd19b5a10fce43d5cf38af17da20f56f4d
+                image: openbao/openbao:2.7.2@sha256:5046911075e137e154ce49ab051502f4ec7cf367d484ae4a4dce665d9b90561f
               comparator:
                 type: "string"
                 criteria: "contains"
@@ -104,22 +104,22 @@ spec:
               retry: 3
 
 ---
-# Vault network partition test (advanced)
+# OpenBao network partition test (advanced)
 apiVersion: litmuschaos.io/v1alpha1
 kind: ChaosEngine
 metadata:
-  name: vault-network-partition
-  namespace: vault
+  name: openbao-network-partition
+  namespace: openbao
   labels:
     app.kubernetes.io/name: chaos-experiment
-    app.kubernetes.io/component: vault
+    app.kubernetes.io/component: openbao
     chaos-type: network-partition
 spec:
   engineState: "active"
 
   appinfo:
-    appns: vault
-    applabel: "app.kubernetes.io/name=vault"
+    appns: openbao
+    applabel: "app.kubernetes.io/name=openbao"
     appkind: statefulset
 
   chaosServiceAccount: litmus-admin
@@ -141,10 +141,10 @@ spec:
               value: "/run/containerd/containerd.sock"
 
         probe:
-          - name: "vault-cluster-healthy"
+          - name: "openbao-cluster-healthy"
             type: "httpProbe"
             httpProbe/inputs:
-              url: "http://vault.vault.svc:8200/v1/sys/health"
+              url: "http://openbao.openbao.svc:8200/v1/sys/health"
               method:
                 get:
                   criteria: "oneOf"
@@ -157,14 +157,15 @@ spec:
               probePollingInterval: 3
 
           # Check raft peers remain connected
-          - name: "vault-raft-peers"
+          - name: "openbao-raft-peers"
             type: "cmdProbe"
             cmdProbe/inputs:
               command: |
-                VAULT_ADDR=http://vault.vault.svc:8200
-                vault operator raft list-peers -format=json | jq '.data.config.servers | length >= 2'
+                # Needs BAO_TOKEN allowed to read sys/storage/raft/configuration
+                peers=$(bao operator raft list-peers -address=http://openbao.openbao.svc:8200 -format=json | grep -c '"node_id"')
+                [ "$peers" -ge 2 ] && echo true
               source:
-                image: hashicorp/vault@sha256:0450896c43b13879b19442b204ce29dd19b5a10fce43d5cf38af17da20f56f4d
+                image: openbao/openbao:2.7.2@sha256:5046911075e137e154ce49ab051502f4ec7cf367d484ae4a4dce665d9b90561f
               comparator:
                 type: "string"
                 criteria: "contains"

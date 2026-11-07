@@ -37,10 +37,6 @@ spec:
       {{- else }}
       serviceAccountName: {{ .Values.stoaGateway.serviceAccount | default "default" }}
       {{- end }}
-      {{- if and .Values.infisical .Values.infisical.enabled }}
-      initContainers:
-        {{- include "stoa-platform.infisical-init-container" (dict "Values" .Values "secretPath" (.Values.infisical.defaultSecretPath | default "/")) | nindent 8 }}
-      {{- end }}
       containers:
         - name: stoa-gateway
           {{- include "stoa-platform.pinnedImage" .Values.stoaGateway.image | nindent 10 }}
@@ -204,11 +200,6 @@ spec:
               mountPath: /etc/stoa/policies
               readOnly: true
             {{- end }}
-            {{- if and .Values.infisical .Values.infisical.enabled }}
-            - name: infisical-secrets
-              mountPath: /secrets
-              readOnly: true
-            {{- end }}
       securityContext:
         runAsNonRoot: true
         fsGroup: 1000
@@ -219,9 +210,6 @@ spec:
         - name: policies
           configMap:
             name: stoa-gateway-policies
-        {{- end }}
-        {{- if and .Values.infisical .Values.infisical.enabled }}
-        {{- include "stoa-platform.infisical-volumes" . | nindent 8 }}
         {{- end }}
       {{- with .Values.stoaGateway.nodeSelector }}
       nodeSelector:

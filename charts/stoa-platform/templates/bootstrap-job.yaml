@@ -286,11 +286,11 @@ data:
     #
     # Security posture:
     # - MFA does not apply to the client_credentials grant (machine auth).
-    #   Mitigation: the client secret lives in Infisical (RBAC-protected)
-    #   and is rotated every 90 days via the runbook.
+    #   Mitigation: the client secret lives in OpenBao (ADR-075, policy-
+    #   protected) and is rotated every 90 days via the runbook.
     # - The bootstrap job does NOT retrieve the auto-generated client_secret
-    #   — it lacks Infisical write credentials and running the job with them
-    #   would broaden the blast radius. Retrieval + Infisical write are a
+    #   — it lacks OpenBao write credentials and running the job with them
+    #   would broaden the blast radius. Retrieval + OpenBao write are a
     #   separate operator step: see runbook
     #   docs/runbooks/cab-2108-stoactl-admin-kc-client.md.
     # - Client + role names kept hardcoded to match the convention used
@@ -346,8 +346,8 @@ data:
     fi
 
     # Remind the operator that the client_secret still needs to be harvested
-    # and pushed to Infisical. The job intentionally does not do this itself.
-    log "NOTE: run docs/runbooks/cab-2108-stoactl-admin-kc-client.md step 4-5 to push STOACTL_ADMIN_CLIENT_SECRET to Infisical"
+    # and pushed to OpenBao. The job intentionally does not do this itself.
+    log "NOTE: run docs/runbooks/cab-2108-stoactl-admin-kc-client.md step 4-5 to push STOACTL_ADMIN_CLIENT_SECRET to OpenBao"
 
     # ---------------------------------------------------------------
     {{- end }}

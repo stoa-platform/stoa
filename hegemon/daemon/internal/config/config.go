@@ -35,7 +35,7 @@ type TraceConfig struct {
 type GatewayConfig struct {
 	URL          string `yaml:"url"`           // Gateway base URL (e.g. "https://mcp.gostoa.dev")
 	ClientID     string `yaml:"client_id"`     // Keycloak client ID (e.g. "hegemon-worker-backend")
-	ClientSecret string `yaml:"client_secret"` // Keycloak client secret (from Infisical or env)
+	ClientSecret string `yaml:"client_secret"` // Keycloak client secret (from the secrets backend or env)
 	KeycloakURL  string `yaml:"keycloak_url"`  // Token endpoint base (e.g. "https://auth.gostoa.dev")
 	DispatchMode string `yaml:"dispatch_mode"` // "ssh" (default) | "gateway" | "hybrid"
 }
@@ -52,13 +52,12 @@ type LinearConfig struct {
 }
 
 type WorkerConfig struct {
-	Name               string   `yaml:"name"`
-	Host               string   `yaml:"host"`
-	Port               int      `yaml:"port"`
-	User               string   `yaml:"user"`
-	SSHKey             string   `yaml:"ssh_key"`
-	Roles              []string `yaml:"roles"`
-	InfisicalSecretPath string  `yaml:"infisical_secret_path"` // Per-worker Infisical path (e.g. /hegemon/worker-1)
+	Name   string   `yaml:"name"`
+	Host   string   `yaml:"host"`
+	Port   int      `yaml:"port"`
+	User   string   `yaml:"user"`
+	SSHKey string   `yaml:"ssh_key"`
+	Roles  []string `yaml:"roles"`
 }
 
 type SlackConfig struct {

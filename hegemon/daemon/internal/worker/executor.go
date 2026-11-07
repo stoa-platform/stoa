@@ -58,7 +58,7 @@ func (e *Executor) Execute(ctx context.Context, w *config.WorkerConfig, ticketID
 	}
 
 	// Build the remote command.
-	// bash -l sources .profile which loads Infisical secrets (ANTHROPIC_API_KEY, GH_TOKEN).
+	// bash -l sources the login profile, which runs vault-loader.sh (ANTHROPIC_API_KEY, GH_TOKEN).
 	// --dangerously-skip-permissions: workers are sandboxed fleet, bypasses all permission checks
 	// including PreToolUse hooks (pre-instance-scope.sh blocks Bash otherwise).
 	// --model: route to Haiku for <=3pts, Opus for everything else (v2 routing).

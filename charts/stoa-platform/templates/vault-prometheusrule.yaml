@@ -6,7 +6,7 @@ metadata:
   name: vault-alerts
   namespace: {{ .Values.vault.namespace | default "vault" }}
   labels:
-    app.kubernetes.io/name: vault
+    app.kubernetes.io/name: {{ .Values.vault.monitoring.appName | default "openbao" }}
     app.kubernetes.io/component: secrets
     {{- include "stoa-platform.labels" . | nindent 4 }}
     prometheus: kube-prometheus-stack
@@ -34,12 +34,12 @@ spec:
             severity: critical
           annotations:
             summary: "Vault auto-unseal is failing"
-            description: "Vault auto-unseal has failed multiple times in the last 10 minutes. Check AWS KMS connectivity and IRSA configuration."
+            description: "Vault auto-unseal has failed multiple times in the last 10 minutes. Check the seal configuration (static key or KMS) and its connectivity."
             runbook_url: "https://docs.gostoa.dev/runbooks/vault-sealed"
 
         # Critical: Vault is completely down
         - alert: VaultDown
-          expr: up{job="vault"} == 0
+          expr: up{job="{{ .Values.vault.monitoring.appName | default "openbao" }}"} == 0
           for: 2m
           labels:
             severity: critical

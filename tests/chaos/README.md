@@ -52,7 +52,7 @@ kubectl get chaosworkflow -n litmus -w
 |------------|--------|----------|------------------|
 | `pod-delete-api.yaml` | Control-Plane API | 30s | Auto-recovery, no downtime |
 | `pod-delete-mcp.yaml` | MCP Gateway | 30s | Auto-recovery, AI tools resume |
-| `pod-delete-vault.yaml` | Vault | 30s | Auto-unseal via KMS |
+| `pod-delete-openbao.yaml` | OpenBao | 30s | Auto-unseal (static key or KMS seal) |
 | `pod-delete-awx.yaml` | AWX | 30s | Jobs resume after recovery |
 
 ### Network Experiments

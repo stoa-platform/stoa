@@ -63,13 +63,22 @@ jobs:
         run: |
           set -euo pipefail
           export DEBIAN_FRONTEND=noninteractive
-          # ubuntu-latest ships pg_dump 18 (seen as 18.6+pgdg). pg_dump 17+
-          # writes `SET transaction_timeout`, which the PostgreSQL 16 service
+          # ubuntu-latest (26.04) ships pg_dump 18 and its archive has no
+          # postgresql-client-16 (apt: Unable to locate package). pg_dump 17+
+          # writes SET transaction_timeout, which the PostgreSQL 16 service
           # container rejects, so the restore aborts after DROP DATABASE.
-          # Install the client that matches the server and put it first on PATH.
-          # Kubectl mode runs whatever `pg_dump`/`psql` name resolves on PATH
-          # (inside the pod, or via this job's local stand-in).
+          # PGDG publishes the matching 16 client (16.15-1.pgdg26.04). Kubectl
+          # mode runs whatever pg_dump/psql name resolves on PATH.
           sudo apt-get update
+          if ! apt-cache show postgresql-client-16 >/dev/null 2>&1; then
+            . /etc/os-release
+            sudo install -d /usr/share/postgresql-common/pgdg
+            sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+              https://www.postgresql.org/media/keys/ACCC4CF8.asc
+            echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
+              | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+            sudo apt-get update
+          fi
           sudo apt-get install -y postgresql-client-16
           client_dir=/usr/lib/postgresql/16/bin
           if [[ ! -x "${client_dir}/pg_dump" || ! -x "${client_dir}/psql" ]]; then

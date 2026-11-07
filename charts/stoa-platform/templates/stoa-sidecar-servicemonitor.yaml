@@ -50,7 +50,7 @@ spec:
         - targetLabel: cluster
           replacement: {{ .Values.stoaSidecar.serviceMonitor.clusterName | default "default" }}
         - targetLabel: environment
-          replacement: {{ .Values.stoaSidecar.environment | default "dev" }}
+          replacement: {{ include "stoa-platform.environment" (dict "root" $ "value" .Values.stoaSidecar.environment) }}
         - targetLabel: deployment_mode
           replacement: sidecar
   namespaceSelector:

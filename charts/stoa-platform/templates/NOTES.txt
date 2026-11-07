@@ -15,7 +15,7 @@ Domain: {{ .Values.stoa.domain | default "<not set>" }}
 --------------------------------------------------------------
 
 The bootstrap job will automatically provision:
-  - Keycloak realm "{{ .Values.stoaGateway.keycloakRealm | default "stoa" }}"
+  - Keycloak realm "{{ include "stoa-platform.keycloakRealm" . }}"
   - OIDC clients: control-plane-ui, stoa-portal, stoa-mcp-gateway
   - Realm roles: cpi-admin, tenant-admin, devops, viewer
   - Client scopes: stoa:read, stoa:write, stoa:admin
@@ -48,7 +48,7 @@ Or verify manually:
      curl -sf https://mcp.{{ .Values.stoa.domain | default "<YOUR_DOMAIN>" }}/health
 
   3. Auth (Keycloak):
-     curl -sf https://auth.{{ .Values.stoa.domain | default "<YOUR_DOMAIN>" }}/realms/stoa/.well-known/openid-configuration
+     curl -sf https://auth.{{ .Values.stoa.domain | default "<YOUR_DOMAIN>" }}/realms/{{ include "stoa-platform.keycloakRealm" . }}/.well-known/openid-configuration
 
   4. Console UI:
      curl -sf -o /dev/null -w '%{http_code}' https://console.{{ .Values.stoa.domain | default "<YOUR_DOMAIN>" }}

@@ -51,7 +51,6 @@ stoaGateway:
   enabled: true
   replicas: 3
   mode: edge-mcp
-  environment: prod
   keycloakUrl: "https://auth.gostoa.dev"
   logLevel: info
   otelEndpoint: "http://stoa-alloy-otlp.stoa-monitoring:4317"

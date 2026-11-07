@@ -3,10 +3,10 @@
   scopes, and default tenant on first install.
   Runs as a Helm post-install hook. Existing realms require a separate reviewed migration.
 
-  CAB-1958: Skipped when keycloak.operator.enabled=true — realm is managed
+  Skipped when keycloak.operator.enabled=true — realm is managed
   by the Keycloak Operator via KeycloakRealmImport CR in stoa-infra.
 */}}
-{{- if and .Values.stoa.bootstrap.enabled (not (dig "keycloak" "operator" "enabled" false .Values.AsMap)) }}
+{{- if include "stoa-platform.realmBootstrapEnabled" . }}
 {{- if .Values.stoa.bootstrap.keycloak.adminPassword }}
 {{- fail "Inline bootstrap admin passwords are unsupported; use keycloak.existingSecret" }}
 {{- end }}
@@ -32,8 +32,8 @@ data:
     set -eu
     . /scripts/curl-config.sh
 
-    KEYCLOAK_URL="http://keycloak-http.{{ .Release.Namespace }}.svc.cluster.local:80"
-    REALM="{{ .Values.stoaGateway.keycloakRealm | default "stoa" }}"
+    KEYCLOAK_URL="{{ include "stoa-platform.keycloakInternalUrl" . }}"
+    REALM="{{ include "stoa-platform.keycloakRealm" . }}"
     ADMIN_USER="${KC_ADMIN_USER}"
     ADMIN_PASS="${KC_ADMIN_PASSWORD}"
     DOMAIN="{{ .Values.stoa.domain }}"

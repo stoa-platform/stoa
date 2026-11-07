@@ -55,7 +55,7 @@ spec:
 
           # Keycloak (if accessible in-cluster)
           check "Keycloak health" \
-            "http://keycloak-http.{{ .Release.Namespace }}.svc.cluster.local:80/health/ready" || true
+            "{{ include "stoa-platform.keycloakInternalUrl" . }}/health/ready" || true
 
           echo ""
           echo "Results: ${PASS} passed, ${FAIL} failed"

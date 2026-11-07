@@ -123,7 +123,7 @@ spec:
             - name: STOA_AUTO_REGISTER
               value: {{ .Values.stoaGateway.autoRegister | default true | quote }}
             - name: STOA_ENVIRONMENT
-              value: {{ .Values.stoaGateway.environment | default "dev" | quote }}
+              value: {{ include "stoa-platform.environment" (dict "root" $ "value" .Values.stoaGateway.environment) | quote }}
             {{- if and .Values.stoaGateway.kafka .Values.stoaGateway.kafka.enabled }}
             - name: STOA_KAFKA_ENABLED
               value: "true"
@@ -138,9 +138,9 @@ spec:
               value: {{ .Values.stoaGateway.kafka.errorsTopic | quote }}
             {{- end }}
             {{- end }}
-            {{- if .Values.stoaGateway.otelEndpoint }}
+            {{- with include "stoa-platform.otelEndpoint" (dict "root" $ "value" .Values.stoaGateway.otelEndpoint) }}
             - name: STOA_OTEL_ENDPOINT
-              value: {{ .Values.stoaGateway.otelEndpoint | quote }}
+              value: {{ . | quote }}
             {{- end }}
             {{- if .Values.stoaGateway.secretName }}
             - name: STOA_CONTROL_PLANE_API_KEY

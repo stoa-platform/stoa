@@ -1,0 +1,9 @@
+dependencies:
+- name: stoa-platform
+  repository: file://../stoa-platform
+  version: 0.1.0
+- name: stoa-observability
+  repository: file://../stoa-observability
+  version: 0.1.0
+digest: sha256:d2dd4885a0ffb701c7848d46af077196c1aff935b7cc38a0d86831ecca220536
+generated: "2026-11-06T20:46:15.606197869+01:00"

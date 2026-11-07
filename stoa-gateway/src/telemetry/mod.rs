@@ -15,6 +15,10 @@ use tracing::info;
 /// Global flag indicating if OTel is initialized
 static OTEL_INITIALIZED: OnceLock<bool> = OnceLock::new();
 
+/// SDK provider kept so shutdown can flush the batch processor.
+/// `global::shutdown_tracer_provider` was removed in opentelemetry 0.32.
+static TRACER_PROVIDER: OnceLock<opentelemetry_sdk::trace::SdkTracerProvider> = OnceLock::new();
+
 /// Counter: total spans exported via OTLP (CAB-1831)
 static SPANS_EXPORTED: AtomicU64 = AtomicU64::new(0);
 
@@ -74,10 +78,7 @@ pub fn init_telemetry_tracer(config: &TelemetryConfig) -> Option<opentelemetry_s
     };
 
     use opentelemetry::global;
-    use opentelemetry::KeyValue;
     use opentelemetry_otlp::WithExportConfig;
-    use opentelemetry_sdk::trace::TracerProvider;
-    use opentelemetry_sdk::Resource;
 
     let exporter = match opentelemetry_otlp::SpanExporter::builder()
         .with_tonic()
@@ -92,34 +93,29 @@ pub fn init_telemetry_tracer(config: &TelemetryConfig) -> Option<opentelemetry_s
         }
     };
 
-    let resource = Resource::new([
-        KeyValue::new("service.name", config.service_name.clone()),
-        KeyValue::new("service.version", config.service_version.clone()),
-        KeyValue::new("stoa.deployment_mode", config.deployment_mode.clone()),
-    ]);
+    let resource = telemetry_resource(config);
 
     // Head-based sampling: ParentBased wrapping ensures child spans inherit parent decision
     use opentelemetry_sdk::trace::Sampler;
     let ratio_sampler = Sampler::TraceIdRatioBased(config.sample_rate);
     let sampler = Sampler::ParentBased(Box::new(ratio_sampler));
 
-    // Configure batch exporter with explicit settings and error logging
+    // The stable 0.32 batch processor exports on a background thread and no
+    // longer takes `runtime::Tokio`. `with_max_export_timeout` is cfg-gated
+    // behind the experimental async processor; the SDK default remains 30s
+    // and `OTEL_BSP_EXPORT_TIMEOUT` still overrides it.
     use opentelemetry_sdk::trace::BatchConfigBuilder;
     let batch_config = BatchConfigBuilder::default()
         .with_max_export_batch_size(512)
         .with_scheduled_delay(std::time::Duration::from_secs(5))
-        .with_max_export_timeout(std::time::Duration::from_secs(30))
         .with_max_queue_size(2048)
         .build();
 
-    let batch_processor = opentelemetry_sdk::trace::BatchSpanProcessor::builder(
-        exporter,
-        opentelemetry_sdk::runtime::Tokio,
-    )
-    .with_batch_config(batch_config)
-    .build();
+    let batch_processor = opentelemetry_sdk::trace::BatchSpanProcessor::builder(exporter)
+        .with_batch_config(batch_config)
+        .build();
 
-    let provider = TracerProvider::builder()
+    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
         .with_span_processor(batch_processor)
         .with_resource(resource)
         .with_sampler(sampler)
@@ -128,7 +124,8 @@ pub fn init_telemetry_tracer(config: &TelemetryConfig) -> Option<opentelemetry_s
     // Get SDK tracer BEFORE setting as global (returns concrete Tracer, not BoxedTracer)
     use opentelemetry::trace::TracerProvider as _;
     let tracer = provider.tracer("stoa-gateway");
-    global::set_tracer_provider(provider);
+    global::set_tracer_provider(provider.clone());
+    let _ = TRACER_PROVIDER.set(provider);
 
     let _ = OTEL_INITIALIZED.set(true);
     eprintln!(
@@ -185,11 +182,29 @@ pub fn extract_span_id() -> String {
     "-".to_string()
 }
 
+/// Resource attributes attached to every exported span.
+fn telemetry_resource(config: &TelemetryConfig) -> opentelemetry_sdk::Resource {
+    use opentelemetry::KeyValue;
+    opentelemetry_sdk::Resource::builder_empty()
+        .with_attributes([
+            KeyValue::new("service.name", config.service_name.clone()),
+            KeyValue::new("service.version", config.service_version.clone()),
+            KeyValue::new("stoa.deployment_mode", config.deployment_mode.clone()),
+        ])
+        .build()
+}
+
 /// Shutdown OpenTelemetry (flush pending spans)
 pub fn shutdown_telemetry() {
     if is_otel_active() {
-        opentelemetry::global::shutdown_tracer_provider();
-        info!("OpenTelemetry shutdown complete");
+        if let Some(provider) = TRACER_PROVIDER.get() {
+            match provider.shutdown() {
+                Ok(()) => info!("OpenTelemetry shutdown complete"),
+                Err(err) => {
+                    eprintln!("[otel-init] OpenTelemetry shutdown failed: {err}");
+                }
+            }
+        }
     }
 }
 
@@ -325,5 +340,38 @@ mod tests {
         let span_id = extract_span_id();
         // Either "-" (inactive) or a valid hex span ID
         assert!(!span_id.is_empty());
+    }
+
+    #[test]
+    fn telemetry_resource_keeps_service_identity_attributes() {
+        let config = TelemetryConfig {
+            otlp_endpoint: None,
+            service_name: "stoa-gateway".to_string(),
+            service_version: "9.9.9-test".to_string(),
+            console_export: false,
+            sample_rate: 1.0,
+            deployment_mode: "edge-mcp".to_string(),
+        };
+        let resource = telemetry_resource(&config);
+        assert_eq!(resource.len(), 3);
+        let name = resource
+            .get(&opentelemetry::Key::from_static_str("service.name"))
+            .expect("service.name");
+        let version = resource
+            .get(&opentelemetry::Key::from_static_str("service.version"))
+            .expect("service.version");
+        let mode = resource
+            .get(&opentelemetry::Key::from_static_str("stoa.deployment_mode"))
+            .expect("stoa.deployment_mode");
+        assert_eq!(name.as_str(), "stoa-gateway");
+        assert_eq!(version.as_str(), "9.9.9-test");
+        assert_eq!(mode.as_str(), "edge-mcp");
+    }
+
+    #[test]
+    fn shutdown_telemetry_is_noop_when_inactive() {
+        if !is_otel_active() {
+            shutdown_telemetry();
+        }
     }
 }

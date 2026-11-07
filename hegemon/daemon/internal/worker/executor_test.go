@@ -5,7 +5,7 @@ import (
 )
 
 func TestParseResultJSONArray(t *testing.T) {
-	raw := `[hegemon] Secrets loaded from Infisical (5 vars)
+	raw := `[hegemon] API key loaded from worker-specific path
 [{"type":"system","subtype":"init"},{"type":"assistant","message":"done"},{"type":"result","subtype":"success","is_error":false,"total_cost_usd":0.05,"num_turns":5,"result":"All done.\n{\"status\": \"done\", \"pr_number\": 42, \"branch\": \"feat/test\", \"files_changed\": 3, \"summary\": \"implemented feature\"}"}]`
 	r, err := parseResult(raw)
 	if err != nil {

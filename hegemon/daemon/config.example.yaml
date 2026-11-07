@@ -13,35 +13,30 @@ workers:
     user: hegemon
     ssh_key: "~/.ssh/id_ed25519"
     roles: [backend]
-    infisical_secret_path: "/hegemon/worker-1"  # Per-worker API key (fallback: /anthropic)
 
   - name: worker-2
     host: "<HEGEMON_W2_IP>"
     user: hegemon
     ssh_key: "~/.ssh/id_ed25519"
     roles: [frontend]
-    infisical_secret_path: "/hegemon/worker-2"
 
   - name: worker-3
     host: "<HEGEMON_W3_IP>"
     user: hegemon
     ssh_key: "~/.ssh/id_ed25519"
     roles: [mcp]
-    infisical_secret_path: "/hegemon/worker-3"
 
   - name: worker-4
     host: "<HEGEMON_W4_IP>"
     user: hegemon
     ssh_key: "~/.ssh/id_ed25519"
     roles: [auth]
-    infisical_secret_path: "/hegemon/worker-4"
 
   - name: worker-5
     host: "<HEGEMON_W5_IP>"
     user: hegemon
     ssh_key: "~/.ssh/id_ed25519"
     roles: [qa]
-    infisical_secret_path: "/hegemon/worker-5"
 
 slack:
   webhook_url: "${SLACK_WEBHOOK_URL}"
@@ -74,7 +69,7 @@ state:
 gateway:
   url: ""                                    # Gateway URL (e.g. "https://mcp.gostoa.dev"). Empty = disabled.
   client_id: "${HEGEMON_KC_CLIENT_ID}"       # Keycloak client ID (e.g. "hegemon-worker-backend")
-  client_secret: "${HEGEMON_KC_CLIENT_SECRET}" # Keycloak client secret (from Infisical)
+  client_secret: "${HEGEMON_KC_CLIENT_SECRET}" # Keycloak client secret (from the secrets backend)
   keycloak_url: "https://auth.gostoa.dev"    # Keycloak token endpoint base
   dispatch_mode: "ssh"                       # "ssh" (default) | "gateway" | "hybrid"
 

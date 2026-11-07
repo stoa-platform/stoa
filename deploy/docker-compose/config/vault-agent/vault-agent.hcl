@@ -1,17 +1,15 @@
 # =============================================================================
-# Agent — Docker Sidecar Configuration (run by OpenBao: `bao agent`)
+# Vault Agent — Docker Sidecar Configuration
 # =============================================================================
 # Runs alongside Docker Compose services (simulating VPS Vault Agent).
 # Auto-authenticates via AppRole, renders secret templates to shared volume.
-# Vault Agent configuration format and template syntax; OpenBao Agent reads
-# both unchanged (ADR-075). BAO_ADDR, when set, overrides vault.address.
 #
 # Prerequisites:
-#   - OpenBao running on K3s (kubectl port-forward -n vault svc/vault 8200:8200)
+#   - Vault running on K3s (kubectl port-forward -n vault svc/vault 8200:8200)
 #   - AppRole credentials at /vault/creds/role-id and /vault/creds/secret-id
 #
 # Architecture:
-#   Docker Compose → vault-agent → OpenBao (K3s via host.docker.internal:8200)
+#   Docker Compose → vault-agent → Vault (K3s via host.docker.internal:8200)
 #                  → renders api-secrets.env → shared volume → CP API
 # =============================================================================
 

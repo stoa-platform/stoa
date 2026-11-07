@@ -1001,36 +1001,18 @@ services:
     restart: unless-stopped
 
   # ==========================================================================
-  # OpenBao Agent — Secret Injection Sidecar (VPS simulation)
-  # Renders secrets from the K3s OpenBao server (Vault API, ADR-075) into a
-  # shared volume for CP API / Gateway. `bao agent` reads the Vault Agent
-  # configuration and templates in config/vault-agent/ unchanged.
-  # Prerequisites: OpenBao on K3s + port-forward (setup-vault-local.sh)
+  # Vault Agent — Secret Injection Sidecar (VPS simulation)
+  # Renders secrets from K3s Vault into shared volume for CP API / Gateway.
+  # Prerequisites: Vault on K3s + port-forward (setup-vault-local.sh)
   # ==========================================================================
-  # Named volumes start root-owned; the agent runs as the image's openbao user
-  # (uid 100, gid 1000) and writes its token and rendered files there.
-  vault-agent-init:
-    image: openbao/openbao:2.7.2@sha256:5046911075e137e154ce49ab051502f4ec7cf367d484ae4a4dce665d9b90561f
-    profiles: ["vault"]
-    user: "0:0"
-    entrypoint: ["chown", "100:1000", "/vault/rendered", "/vault/token"]
-    network_mode: none
-    volumes:
-      - vault-agent-rendered:/vault/rendered
-      - vault-agent-token:/vault/token
-    restart: "no"
-
   vault-agent:
-    image: openbao/openbao:2.7.2@sha256:5046911075e137e154ce49ab051502f4ec7cf367d484ae4a4dce665d9b90561f
+    image: hashicorp/vault:1.21.2
     container_name: stoa-vault-agent
     profiles: ["vault"]
-    command: ["bao", "agent", "-config=/vault/config/vault-agent.hcl"]
+    command: ["vault", "agent", "-config=/vault/config/vault-agent.hcl"]
     environment:
-      # Overrides the address in vault-agent.hcl (log level is set there too).
-      BAO_ADDR: "http://host.docker.internal:8200"
-    depends_on:
-      vault-agent-init:
-        condition: service_completed_successfully
+      VAULT_ADDR: "http://host.docker.internal:8200"
+      VAULT_LOG_LEVEL: info
     volumes:
       - ./config/vault-agent/vault-agent.hcl:/vault/config/vault-agent.hcl:ro
       - ./config/vault-agent/templates:/vault/templates:ro
@@ -1161,6 +1143,6 @@ volumes:
   alertmanager-data:
   ldap-data:
   ldap-config:
-  vault-agent-rendered:   # Agent-rendered secrets (api-secrets.env, gateway-vps-secrets.env)
+  vault-agent-rendered:   # Vault Agent rendered secrets (api-secrets.env, gateway-secrets.env)
   vault-agent-creds:      # AppRole role-id + secret-id (populated by setup script)
   vault-agent-token:      # Agent auto-auth token sink

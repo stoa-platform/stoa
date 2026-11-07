@@ -37,7 +37,7 @@ Developer experience: portal, CLI, docs, quickstart.
 
 Authentication, authorization, secrets, compliance.
 
-**Key deliverables**: mTLS (Stage 1-3), DPoP tokens, RBAC (4 roles), OPA policy engine, security scanner (Gitleaks/Bandit/Trivy), Infisical secrets management.
+**Key deliverables**: mTLS (Stage 1-3), DPoP tokens, RBAC (4 roles), OPA policy engine, security scanner (Gitleaks/Bandit/Trivy), OpenBao secrets backend (ADR-075).
 
 ## Theme: Community (`roadmap:community`)
 
@@ -72,7 +72,7 @@ See `velocity.json` for historical cycle data. Current rolling 3-cycle average:
 | 2 | GitOps + ArgoCD | **Done** | ArgoCD deployed on OVH MKS |
 | 2.5 | Validation E2E | **Done** | Playwright BDD framework |
 | 2.6 | Cilium Foundation | **Obsolete** | Cilium is AWS/EKS-specific; OVH K3s uses Calico |
-| 3 | Vault + Secrets | **Done differently** | Infisical replaces HashiCorp Vault |
+| 3 | Vault + Secrets | **Done differently** | OpenBao through the Vault API (ADR-075); Infisical retired |
 | 4 | OpenSearch + Monitoring | **Partially valid** | OpenSearch deployed but not fully integrated |
 | 4.5 | Jenkins Orchestration | **Obsolete** | GitHub Actions replaced Jenkins entirely |
 | 5 | Multi-environment | **Done differently** | Staging was on Hetzner K3s (decommissioned 2026-03) |

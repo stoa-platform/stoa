@@ -1,0 +1,72 @@
+name: Backup Restore CI
+
+# Proves scripts/backup/backup-postgres.sh can back up and restore a database:
+# one backup -> damage -> restore cycle against a disposable PostgreSQL
+# service container (no cluster, no S3, nothing persisted).
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/backup/**'
+      - 'tests/backup/**'
+      - '.github/workflows/backup-restore-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/backup/**'
+      - 'tests/backup/**'
+      - '.github/workflows/backup-restore-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup-restore-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  postgres-backup-restore:
+    name: PostgreSQL backup/restore cycle
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16@sha256:5db6dac2ef5dcff512f4f00a009c3c332b9f2f28f24277175bf3e4a3d02ef83a
+        env:
+          POSTGRES_USER: stoa
+          POSTGRES_PASSWORD: stoa
+          POSTGRES_DB: stoa
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U stoa"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Check shell syntax
+        run: |
+          bash -n scripts/backup/common.sh
+          bash -n scripts/backup/backup-postgres.sh
+          bash -n tests/backup/test-postgres-backup-restore.sh
+
+      - name: Show PostgreSQL client version
+        run: |
+          psql --version
+          pg_dump --version
+
+      - name: Run backup/restore cycle on disposable database
+        env:
+          BACKUP_RESTORE_TEST_DISPOSABLE: '1'
+          PGHOST: localhost
+          PGPORT: '5432'
+          PGUSER: stoa
+          # Throwaway credential of the service container above
+          PGPASSWORD: stoa
+        run: bash tests/backup/test-postgres-backup-restore.sh

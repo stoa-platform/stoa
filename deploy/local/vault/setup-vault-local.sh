@@ -2,7 +2,8 @@
 # =============================================================================
 # STOA Vault Local Setup — One-Command Bootstrap
 # =============================================================================
-# Deploys HashiCorp Vault on local K3s via Helm, then bootstraps all engines:
+# Deploys OpenBao (ADR-075: STOA's secrets backend, reached through the Vault
+# API) on local K3s via Helm, then bootstraps all engines:
 #   KV v2, PKI, Transit, Database, TOTP, AppRole auth
 #
 # Prerequisites:
@@ -12,18 +13,18 @@
 #
 # Usage:
 #   ./deploy/local/vault/setup-vault-local.sh          # Full setup
-#   ./deploy/local/vault/setup-vault-local.sh --teardown  # Remove Vault
+#   ./deploy/local/vault/setup-vault-local.sh --teardown  # Remove OpenBao
 #   ./deploy/local/vault/setup-vault-local.sh --status    # Check status
 #
 # Architecture:
-#   Vault server runs on K3s (namespace: vault)
-#   Vault Agent runs on Docker Compose (profile: vault)
+#   OpenBao server runs on K3s (namespace: vault, service: vault)
+#   OpenBao Agent (bao agent) runs on Docker Compose (profile: vault)
 #   Both managed via GitOps — all config in this directory
 # =============================================================================
 
 set -euo pipefail
 
-# ⚠️ LOCAL DEV ONLY — this script wires a dev-mode Vault with a well-known
+# ⚠️ LOCAL DEV ONLY — this script wires a dev-mode OpenBao with a well-known
 # root token. Never run against a non-local kube context.
 CURRENT_CONTEXT="$(kubectl config current-context 2>/dev/null || echo '')"
 case "$CURRENT_CONTEXT" in
@@ -38,7 +39,10 @@ esac
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VAULT_NAMESPACE="vault"
 VAULT_RELEASE="vault"
-# Dev root token, hardcoded intentionally — Vault runs in -dev mode locally.
+# openbao/openbao chart (https://openbao.github.io/openbao-helm); bump it with
+# the server image pinned in values-local.yaml.
+OPENBAO_CHART_VERSION="0.30.7"
+# Dev root token, hardcoded intentionally — OpenBao runs in -dev mode locally.
 VAULT_TOKEN="stoa-dev-root-token"
 
 # Colors
@@ -79,41 +83,51 @@ check_prerequisites() {
 }
 
 # ==========================================================================
-# Phase 1: Deploy Vault Helm Chart
+# Phase 1: Deploy OpenBao Helm Chart
 # ==========================================================================
 deploy_vault() {
-  log "=== Deploying Vault on K3s ==="
+  log "=== Deploying OpenBao on K3s ==="
 
   # Add Helm repo
-  helm repo add hashicorp https://helm.releases.hashicorp.com 2>/dev/null || true
+  helm repo add openbao https://openbao.github.io/openbao-helm 2>/dev/null || true
   helm repo update >/dev/null 2>&1
 
   # Create namespace
   kubectl create namespace "$VAULT_NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
 
-  # Deploy Vault
-  helm upgrade --install "$VAULT_RELEASE" hashicorp/vault \
+  # A release left by the former hashicorp/vault chart cannot be upgraded in
+  # place (immutable StatefulSet fields). Dev mode keeps no data: replace it.
+  local current_chart
+  current_chart="$(helm list -n "$VAULT_NAMESPACE" --filter "^${VAULT_RELEASE}\$" -o json | jq -r '.[0].chart // empty')"
+  if [ -n "$current_chart" ] && [ "${current_chart#openbao-}" = "$current_chart" ]; then
+    warn "Replacing release '$VAULT_RELEASE' (chart $current_chart) with the OpenBao chart"
+    helm uninstall "$VAULT_RELEASE" -n "$VAULT_NAMESPACE" --wait
+  fi
+
+  # Deploy OpenBao
+  helm upgrade --install "$VAULT_RELEASE" openbao/openbao \
+    --version "$OPENBAO_CHART_VERSION" \
     --namespace "$VAULT_NAMESPACE" \
     -f "${SCRIPT_DIR}/values-local.yaml" \
     --wait \
     --timeout 120s
 
-  log "Vault Helm chart deployed"
+  log "OpenBao Helm chart deployed"
 
   # Wait for pod ready
   kubectl wait --for=condition=ready pod \
-    -l app.kubernetes.io/name=vault \
+    -l "app.kubernetes.io/instance=${VAULT_RELEASE},component=server" \
     -n "$VAULT_NAMESPACE" \
     --timeout=120s
 
-  log "Vault pod ready"
+  log "OpenBao pod ready"
 }
 
 # ==========================================================================
 # Phase 2: Bootstrap via Init Job
 # ==========================================================================
 bootstrap_vault() {
-  log "=== Bootstrapping Vault ==="
+  log "=== Bootstrapping OpenBao ==="
 
   # Create ConfigMap from init script (source of truth is the .sh file)
   kubectl create configmap vault-init-script \
@@ -153,7 +167,7 @@ bootstrap_vault() {
 # Verification
 # ==========================================================================
 verify_vault() {
-  log "=== Verifying Vault ==="
+  log "=== Verifying OpenBao ==="
 
   # Port-forward in background
   kubectl port-forward -n "$VAULT_NAMESPACE" svc/vault 8200:8200 &
@@ -195,7 +209,7 @@ verify_vault() {
 
   log ""
   log "========================================"
-  log "  Vault local setup complete"
+  log "  OpenBao local setup complete"
   log "========================================"
   log ""
   log "Access:"
@@ -213,7 +227,7 @@ verify_vault() {
 # Teardown
 # ==========================================================================
 teardown_vault() {
-  warn "=== Tearing down Vault ==="
+  warn "=== Tearing down OpenBao ==="
 
   helm uninstall "$VAULT_RELEASE" -n "$VAULT_NAMESPACE" 2>/dev/null || true
   kubectl delete job vault-init -n "$VAULT_NAMESPACE" --ignore-not-found
@@ -233,7 +247,7 @@ teardown_vault() {
 # Status
 # ==========================================================================
 status_vault() {
-  log "=== Vault Status ==="
+  log "=== OpenBao Status ==="
 
   echo ""
   echo "Helm release:"

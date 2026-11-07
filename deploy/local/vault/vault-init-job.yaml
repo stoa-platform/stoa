@@ -13,7 +13,8 @@
 # the box. Prod clusters MUST use ExternalSecrets pointing at the real Vault
 # (hcvault.gostoa.dev) — see `deploy/external-secrets/`.
 #
-# Runs after Vault is ready. Idempotent — safe to re-run.
+# Runs after the OpenBao server (Vault API, ADR-075) is ready. Idempotent —
+# safe to re-run. Uses the OpenBao image and its `bao` CLI.
 # Depends on: vault pod ready, policies ConfigMap (optional).
 #
 # Usage:
@@ -43,7 +44,7 @@ spec:
       serviceAccountName: vault-init
       containers:
         - name: vault-init
-          image: hashicorp/vault@sha256:eb0ba6836e8d4699b7a1e8ca70d8433f7b87dcd067e6d82dff237d3ed2600ea0
+          image: openbao/openbao:2.7.2@sha256:5046911075e137e154ce49ab051502f4ec7cf367d484ae4a4dce665d9b90561f
           imagePullPolicy: IfNotPresent
           command: ["/bin/sh", "/vault/init/init-vault-local.sh"]
           # Credentials come from a K8s Secret populated BEFORE applying this Job.
@@ -51,7 +52,8 @@ spec:
           #   kubectl create secret generic vault-init-bootstrap -n vault \
           #     --from-literal=VAULT_TOKEN=stoa-dev-root-token \
           #     --from-literal=POSTGRES_PASSWORD=<local-pg-password> \
-          #     --from-literal=KEYCLOAK_ADMIN_PASSWORD=<local-kc-password>
+          #     --from-literal=KEYCLOAK_ADMIN_PASSWORD=<local-kc-password> \
+          #     --from-literal=PARZIVAL_PASSWORD=<local-e2e-password>
           envFrom:
             - secretRef:
                 name: vault-init-bootstrap
@@ -86,7 +88,10 @@ spec:
               memory: 128Mi
               cpu: 200m
           securityContext:
-            runAsNonRoot: false  # vault CLI needs root in init container
+            # The bao CLI needs no root: run as the image's openbao user.
+            runAsNonRoot: true
+            runAsUser: 100
+            runAsGroup: 1000
             allowPrivilegeEscalation: false
       volumes:
         - name: init-script

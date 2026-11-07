@@ -148,6 +148,63 @@ jobs:
             control-plane-api/junit-integration.xml
             control-plane-api/junit-operator-quota.xml
 
+  # === Vault API compatibility: hvac client against OpenBao (ADR-075) ===
+  # OpenBao is the secrets backend STOA ships; customers may still point the
+  # control plane at HashiCorp Vault, so the client stays on the plain Vault
+  # API. This job runs that client against the pinned OpenBao release that
+  # the reference deployments use.
+  # The service starts in dev mode (the image's default command): in-memory,
+  # unsealed, listening on every interface on port 8200, root token taken
+  # from BAO_DEV_ROOT_TOKEN_ID. The server only lives for this job, so its
+  # token is a fixed throwaway value.
+  openbao-compat:
+    name: OpenBao compatibility (hvac)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    services:
+      openbao:
+        image: openbao/openbao:2.7.2@sha256:5046911075e137e154ce49ab051502f4ec7cf367d484ae4a4dce665d9b90561f
+        env:
+          BAO_DEV_ROOT_TOKEN_ID: ci-openbao-dev-root
+        ports:
+          - 8200:8200
+        options: >-
+          --health-cmd "bao status -address=http://localhost:8200"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: ./.github/actions/setup-python-env
+        with:
+          python-version: '3.11'
+          working-directory: control-plane-api
+      - name: Run VaultClient against OpenBao
+        working-directory: control-plane-api
+        env:
+          VAULT_IT_ADDR: http://localhost:8200
+          VAULT_IT_TOKEN: ci-openbao-dev-root
+          STOA_ENABLE_KAFKA_CONSUMERS: 'false'  # CAB-2085
+          ENABLE_DEPLOYMENT_WORKER: 'false'
+          ENABLE_SNAPSHOT_CONSUMER: 'false'
+        run: |
+          pytest tests/test_int_vault_client_openbao.py -v --tb=short --junitxml=junit-openbao.xml
+          # Without VAULT_IT_ADDR the module skips; a green job must have run every test.
+          python - <<'PYXML'
+          import xml.etree.ElementTree as ET
+          root = ET.parse("junit-openbao.xml").getroot()
+          assert root.findall(".//testcase"), "no test collected"
+          assert not any(root.findall(f".//{tag}") for tag in ("skipped", "failure", "error"))
+          PYXML
+      - name: Upload OpenBao compatibility results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: openbao-compat-results
+          path: control-plane-api/junit-openbao.xml
+
   # === Docker: build + push GHCR ===
   docker:
     needs: ci

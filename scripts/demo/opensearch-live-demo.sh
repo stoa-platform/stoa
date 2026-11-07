@@ -32,7 +32,7 @@ for arg in "$@"; do
       GATEWAY_URL="https://mcp.gostoa.dev"
       if [ -z "${OPENSEARCH_ADMIN_PASSWORD:-}" ] && [ "${OPENSEARCH_AUTH}" = "admin:" ]; then
         echo -e "${RED}Error: OPENSEARCH_ADMIN_PASSWORD not set for --prod mode${NC}"
-        echo "Get it from Infisical: infisical secrets get ADMIN_PASSWORD --env=prod --path=/opensearch --plain"
+        echo "Get it from OpenBao: export OPENSEARCH_ADMIN_PASSWORD=\$(scripts/lib/stoa-secret.sh opensearch ADMIN_PASSWORD)"
         exit 1
       fi
       ;;

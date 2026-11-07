@@ -18,13 +18,14 @@ HashiCorp Vault (hcvault.gostoa.dev) — Source of Truth
        └─→ HEGEMON Workers (5x Contabo)
            └── vault-loader.sh → env vars in memory (no disk)
 
-Infisical (vault.gostoa.dev) — Legacy (dual-write during transition)
+OpenBao (dedicated VM, SSH tunnel) — platform-team secrets (ADR-075)
        │
-       └── prod/*             → Historical paths, read-only after migration
+       └── secret/stoa/tooling/* → repo tooling, read-only (scripts/lib/stoa-secret.sh)
 ```
 
 **HashiCorp Vault** is the primary secrets backend since March 2026 (CAB-1795).
-Infisical remains as dual-write target during transition. ESO syncs from Vault, not Infisical.
+Infisical was retired by ADR-075 (2026-11-07); `rotate-secrets.sh` no longer dual-writes.
+Tooling copies in OpenBao are refreshed by the owner with put-secret.
 
 ## Infrastructure
 
@@ -40,15 +41,15 @@ Infisical remains as dual-write target during transition. ESO syncs from Vault, 
 | Auth | AppRole (VPS agents), Kubernetes (ESO), Token (admin) |
 | KV Engine | `stoa/` (KV v2, versioned) |
 
-### Infisical (Legacy)
+### OpenBao (Tooling)
 
 | Component | Detail |
 |-----------|--------|
-| URL | `https://vault.gostoa.dev` |
-| Host | OVH infisical-vps (`<INFISICAL_VPS_IP>`) |
-| Stack | `infisical:latest` + `postgres:15-alpine` + `redis:7-alpine` |
-| Project | `stoa-infra` (`97972ffc-990b-4d28-9c4d-0664d217f03b`) |
-| Status | **Dual-write target** — to be decommissioned after 30-day transition |
+| Access | SSH tunnel, `https://127.0.0.1:18200` by default (`STOA_OPENBAO_ADDR`) |
+| TLS | Private CA, `~/.config/stoa/openbao-ca.pem` (`STOA_OPENBAO_CACERT`) |
+| KV Engine | `secret/` (KV v2); tooling reads `secret/stoa/tooling/<name>` |
+| Auth | Read-only periodic tooling token (Keychain `stoa-openbao` / `tooling`, or token file) |
+| Client | `scripts/lib/stoa-secret.sh` (`stoa_secret <name> <FIELD>`) |
 
 ## Secret Inventory
 
@@ -105,7 +106,7 @@ Infisical remains as dual-write target during transition. ESO syncs from Vault, 
 ### Vault Token — Primary Method
 
 ```bash
-# Admin token (stored in Infisical, for human rotation ops)
+# Admin token (held by the owner, for human rotation ops)
 export VAULT_TOKEN=<admin-token>
 
 # Verify access
@@ -121,12 +122,11 @@ curl -sf https://hcvault.gostoa.dev/v1/stoa/data/shared/keycloak \
 | AppRole | Vault Agent on VPS services | role-id + secret-id files |
 | Kubernetes | External Secrets Operator (ESO) | K8s service account JWT |
 
-### Infisical — Legacy (dual-write period)
+### OpenBao — Tooling Reads
 
 ```bash
-# Still available during transition
-eval $(infisical-token)
-infisical secrets get API_TOKEN --env=prod --path=/cloudflare
+# Read-only token from the Keychain or token file; never printed
+scripts/lib/stoa-secret.sh cloudflare API_TOKEN
 ```
 
 ## Retrieving Secrets
@@ -143,9 +143,8 @@ curl -sf https://hcvault.gostoa.dev/v1/stoa/data/vps/n8n \
 curl -sf https://hcvault.gostoa.dev/v1/stoa/metadata/vps?list=true \
   -H "X-Vault-Token: $VAULT_TOKEN" | jq '.data.keys'
 
-# From Infisical (legacy, still works)
-eval $(infisical-token)
-infisical secrets --env=prod --path=/cloudflare
+# From OpenBao (tooling copies, one field at a time)
+scripts/lib/stoa-secret.sh cloudflare API_TOKEN
 ```
 
 ## Automated Rotation Scripts
@@ -155,9 +154,8 @@ All rotation scripts are in `scripts/ops/`. They are idempotent and support `--d
 ### Quick Reference
 
 ```bash
-# Setup: Vault token (primary) + optional Infisical token (dual-write)
+# Setup: Vault token
 export VAULT_TOKEN=<vault-admin-token>
-eval $(infisical-token)  # optional, for dual-write during transition
 
 # === Keycloak + K8s commands ===
 
@@ -198,9 +196,6 @@ KC_ADMIN_PASSWORD=<current> ./scripts/ops/rotate-secrets.sh all
 
 # Dry run (show what would change)
 KC_ADMIN_PASSWORD=<current> ./scripts/ops/rotate-secrets.sh all --dry-run
-
-# Skip Infisical dual-write (Vault only)
-./scripts/ops/rotate-secrets.sh kong-admin --no-infisical
 ```
 
 ### Keycloak Password Policy
@@ -259,24 +254,12 @@ kubectl rollout restart deployment/<name> -n stoa-system
 curl -s https://api.gostoa.dev/health
 ```
 
-### Machine Identity Client Secret
+### OpenBao Tooling Token
 
-Rotate every 90 days or after team member departure.
-
-```bash
-# Automated: generates new secret, updates Keychain, verifies
-infisical-rotate-secret
-
-# Dry run (shows what would happen)
-infisical-rotate-secret --dry-run
-```
-
-The rotation script (`~/.local/bin/infisical-rotate-secret`):
-1. Authenticates with current credentials
-2. Generates a new client secret via Infisical API
-3. Updates macOS Keychain with new secret
-4. Verifies new credentials work
-5. Old secrets remain active (revoke manually in Infisical UI if needed)
+`scripts/lib/stoa-secret.sh` renews the periodic tooling token with `renew-self`
+at most once a day (stamp in `~/.cache/stoa`). If it expires anyway, reads fail
+with HTTP 403: the owner issues a new token and stores it in the Keychain item
+(`stoa-openbao` / `tooling`) or the token file.
 
 ### Emergency Rotation
 
@@ -284,14 +267,14 @@ If a secret is suspected compromised:
 
 1. **Immediately** revoke the old credential at the provider
 2. Generate a new credential
-3. Update Infisical: `infisical secrets set <KEY>=<new-value> --env=prod --path=/<service>`
+3. Update Vault, and the OpenBao tooling copy with put-secret if one exists
 4. Restart all affected pods: `kubectl rollout restart deployment -n stoa-system -l uses-secret=<name>`
 5. Verify services are healthy
 6. Document the incident in `#ops-alerts`
 
 ## K8s Secret References
 
-### How to Reference Infisical Secrets in Deployments
+### How to Reference Secrets in Deployments
 
 ```yaml
 # Option A: envFrom (all secrets from a K8s Secret)
@@ -311,7 +294,7 @@ env:
 
 ### Adding a New Secret
 
-1. Add to Infisical (correct env + path): `infisical secrets set MY_SECRET=value --env=prod --path=/my-service`
+1. Add to Vault (`stoa/` KV v2); if repo tooling needs it, the owner also stores it in OpenBao `secret/stoa/tooling/<name>` with put-secret
 2. Create or update K8s Secret manifest
 3. Reference in deployment manifest (`envFrom` or `env.valueFrom.secretKeyRef`)
 4. Set `optional: true` on non-critical secrets to avoid pod crash on missing secret
@@ -325,18 +308,18 @@ env:
 | `SONAR_TOKEN` | Quality gate jobs | SonarCloud analysis |
 | `CODECOV_TOKEN` | Coverage upload | Codecov reporting |
 
-CI secrets are managed in GitHub repo/org settings, not in Infisical.
+CI secrets are managed in GitHub repo/org settings, not in Vault or OpenBao.
 
 ## Anti-Patterns
 
 | Anti-Pattern | Why Wrong | Correct |
 |-------------|-----------|---------|
-| Hardcoded password in code | Committed to git, visible in image layers | Infisical → K8s Secret |
-| `kubectl create secret` manual | Drift, no audit trail, lost on rebuild | Infisical + Helm templates |
+| Hardcoded password in code | Committed to git, visible in image layers | Vault → ExternalSecret → K8s Secret |
+| `kubectl create secret` manual | Drift, no audit trail, lost on rebuild | ExternalSecret CR (ESO → Vault) |
 | Secret in ConfigMap | Not encrypted at rest | Use K8s `Secret` resource |
 | Secret in `Dockerfile ENV` | Baked into layers, visible via `docker inspect` | Runtime env from K8s Secret |
 | Secret in workflow file | Committed to git | GitHub Secrets (`${{ secrets.X }}`) |
-| `.env` committed | Plaintext in repo history | `.gitignore` + `infisical run` |
+| `.env` committed | Plaintext in repo history | `.gitignore` + Vault Agent templates |
 | Token in MEMORY.md/rules | AI context leak risk | Reference path only, never values |
 
 ## Verification
@@ -447,11 +430,9 @@ pki_int/   → Intermediate CA (EC P-256, 5y TTL, issues leaf certs)
 | `setup-ssh-engine.sh` | `stoa-infra:deploy/vps/vault/` | Configure Vault SSH CA signing engine + roles |
 | `deploy-ssh-trust.sh` | `stoa-infra:deploy/vps/vault/` | Deploy SSH CA public key to all VPS |
 | `setup-pki-engine.sh` | `stoa-infra:deploy/vps/vault/` | Configure Vault PKI CA hierarchy + mTLS roles |
-| `infisical-token` | `~/.local/bin/` | Get Infisical access token (legacy, dual-write) |
-| `infisical-rotate-secret` | `~/.local/bin/` | Rotate Infisical Machine Identity (legacy) |
+| `stoa-secret.sh` | `scripts/lib/` | Read a tooling secret from OpenBao (`stoa_secret <name> <FIELD>`) |
 
-`rotate-secrets.sh` writes to both Vault (primary, via HTTP API) and Infisical (legacy, via CLI/API).
-Use `--no-infisical` to skip Infisical writes after transition is complete.
+`rotate-secrets.sh` writes to Vault only and names the OpenBao tooling copy to refresh (ADR-075).
 
 ## Audit
 
@@ -459,12 +440,12 @@ All secret operations are traced in Vault's audit log. K8s and VPS mutations are
 - Vault audit: `curl -sf https://hcvault.gostoa.dev/v1/sys/audit -H "X-Vault-Token: $VAULT_TOKEN"`
 - K8s events: `kubectl get events -n stoa-system`
 - Vault Agent logs (VPS): `journalctl -u vault-agent -f`
-- Infisical audit (legacy): Settings → Audit Logs in web UI
 
 ## Rotation History
 
 | Date | Credential | Action | PRs |
 |------|-----------|--------|-----|
+| 2026-11-07 | Infisical retired | ADR-075: `rotate-secrets.sh` dual-write removed; tooling reads OpenBao via `scripts/lib/stoa-secret.sh` (CAB-1795) | — |
 | 2026-03-13 | SSH + PKI engines | Vault SSH CA signing (replaces static keys) + PKI intermediate CA for mTLS | #1731 |
 | 2026-03-13 | Vault migration | All secrets migrated Infisical → Vault. Rotation script extended with VPS commands | #1729 |
 | 2026-03-13 | Vault Agent | Deployed on VPS services (n8n, Kong, Gravitee, webMethods). Auto-rotation via templates | #1728 |
@@ -483,7 +464,6 @@ All secret operations are traced in Vault's audit log. K8s and VPS mutations are
 - **`opensearch-dashboards`** is `publicClient: true` in production KC — no client secret needed for OIDC flow. JWKS token validation only.
 - **OpenSearch securityadmin.sh** requires HTTP TLS enabled. Production runs with HTTP TLS disabled.
 - **Vault Agent restart latency**: After writing to Vault, Agent polls every 5 min. For urgent rotation, SSH and restart the Agent: `sudo systemctl restart vault-agent`
-- **Dual-write period**: `rotate-secrets.sh` writes to both Vault and Infisical. After 30 days of stable Vault operation, use `--no-infisical` flag exclusively.
 
 ## References
 

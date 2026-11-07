@@ -41,7 +41,7 @@ Options:
   --help             Show this help
 
 Environment:
-  STOA_ADMIN_TOKEN   Admin API token (from Infisical: prod/gateway/arena/ADMIN_API_TOKEN)
+  STOA_ADMIN_TOKEN   Admin API token (OpenBao: scripts/lib/stoa-secret.sh gateway/arena ADMIN_API_TOKEN)
 
 Examples:
   # Local Docker Compose

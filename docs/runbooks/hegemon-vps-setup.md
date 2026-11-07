@@ -8,11 +8,14 @@
 
 | Requirement | Source |
 |-------------|--------|
-| OVH API credentials | Infisical `/ovh` (APPLICATION_KEY, APPLICATION_SECRET, CONSUMER_KEY) |
+| OVH API credentials | OpenBao `ovh` (APPLICATION_KEY, APPLICATION_SECRET, CONSUMER_KEY) |
 | SSH key | `~/.ssh/id_ed25519_stoa` (or specify alternate) |
 | GitHub deploy key | Generated during setup, must be added to repo settings |
-| Anthropic API key | Infisical `/anthropic/ANTHROPIC_API_KEY` |
-| Slack webhook | Infisical `/slack/SLACK_WEBHOOK_URL` |
+| Anthropic API key | OpenBao `anthropic` (ANTHROPIC_API_KEY) |
+| Slack webhook | OpenBao `slack` (SLACK_WEBHOOK_URL) |
+
+OpenBao paths are under `secret/stoa/tooling/`; read them on an operator host with
+`scripts/lib/stoa-secret.sh <path> <FIELD>` (Infisical was retired by ADR-075).
 
 ## Step-by-Step Setup
 
@@ -59,7 +62,7 @@ Installs Claude Code CLI, Node.js, git deploy key, environment template, memory 
 ```
 
 **What it does** (6 steps):
-1. Installs Claude Code CLI (native binary via `claude.ai/install.sh`)
+1. Installs Claude Code CLI (native binary via `https://claude.ai/install.sh`)
 2. Installs Node.js 20 (for MCP servers)
 3. Generates ed25519 deploy key — **pause: add to GitHub repo settings**
 4. Clones `stoa` repo to `~/stoa`
@@ -85,7 +88,7 @@ Edit `~/.env.hegemon`:
 vim ~/.env.hegemon
 ```
 
-Required values (from Infisical):
+Required values (from OpenBao, see Prerequisites):
 ```bash
 export ANTHROPIC_API_KEY="sk-ant-..."     # /anthropic/ANTHROPIC_API_KEY
 export SLACK_WEBHOOK_URL="https://..."     # /slack/SLACK_WEBHOOK_URL

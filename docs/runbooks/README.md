@@ -49,9 +49,9 @@ This directory contains operational procedures for incident management on the ST
 
 | Runbook | Reason | Replacement |
 |---------|--------|-------------|
-| [Vault Sealed](../archive/vault-sealed.md) | Vault decommissioned Feb 2026 | Infisical (`vault.gostoa.dev`) |
-| [Vault Restore](../archive/vault-restore.md) | Vault decommissioned Feb 2026 | Infisical (`vault.gostoa.dev`) |
-| [Vault Emergency Unseal](../archive/vault-emergency-unseal.md) | Vault decommissioned Feb 2026 | Infisical (`vault.gostoa.dev`) |
+| [Vault Sealed](../archive/vault-sealed.md) | Vault decommissioned Feb 2026 | See [Secrets Management](#secrets-management) |
+| [Vault Restore](../archive/vault-restore.md) | Vault decommissioned Feb 2026 | See [Secrets Management](#secrets-management) |
+| [Vault Emergency Unseal](../archive/vault-emergency-unseal.md) | Vault decommissioned Feb 2026 | See [Secrets Management](#secrets-management) |
 
 ---
 
@@ -103,13 +103,12 @@ curl -s http://localhost:8000/metrics | grep stoa_
 | Grafana | https://grafana.gostoa.dev | Monitoring |
 | Prometheus | https://prometheus.gostoa.dev | Metrics |
 | ArgoCD | https://argocd.gostoa.dev | GitOps CD |
-| Infisical | https://vault.gostoa.dev | Secrets management |
 
 ---
 
 ## Secrets Management
 
-Secrets are managed via **Infisical** (self-hosted at `vault.gostoa.dev`). HashiCorp Vault, AWS Secrets Manager, and External Secrets Operator are decommissioned.
+Infisical was retired by ADR-075 (2026-11-07). The platform team's secrets live in **OpenBao** on a dedicated VM, reached through an SSH tunnel (no public URL). Repository tooling reads them with `scripts/lib/stoa-secret.sh` from `secret/stoa/tooling/<name>`; see [Multi-Device Access](multi-device-access.md) for the per-device setup.
 
 See `docs/SECRETS-ROTATION.md` for rotation procedures.
 
@@ -168,3 +167,4 @@ To add or modify a runbook:
 | 2024-12-28 | Initial creation - 9 runbooks |
 | 2026-02-06 | Added Gateway Registration Failed runbook (ADR-028) |
 | 2026-02-15 | Archived 3 Vault runbooks, added ArgoCD + Operator runbooks, updated for Infisical (CAB-1030) |
+| 2026-11-07 | Infisical retired (ADR-075): secrets section and runbooks point to OpenBao and `scripts/lib/stoa-secret.sh` (CAB-1795) |

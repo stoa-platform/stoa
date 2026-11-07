@@ -64,7 +64,7 @@ if [ "$TOOL_NAME" = "Bash" ] && [ -n "$COMMAND" ]; then
       echo '{"decision":"allow","reason":"safe ops tool: '"$FIRST_WORD"'"}'
       exit 0
       ;;
-    heg-state|stoa-dispatch|infisical)
+    heg-state|stoa-dispatch)
       echo '{"decision":"allow","reason":"safe stoa tool: '"$FIRST_WORD"'"}'
       exit 0
       ;;

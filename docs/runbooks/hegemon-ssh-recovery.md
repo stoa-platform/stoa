@@ -91,14 +91,14 @@ Once the console window opens:
 
 ```
 login: root
-password: <ROOT_PASSWORD_FROM_INFISICAL>
+password: <ROOT_PASSWORD_FROM_OPENBAO>
 ```
 
 **If password fails**, you must reset it via Contabo control panel:
 1. Go to **Account** → **VPS** → click the worker
 2. Click **Reset Password** (root account)
 3. Follow the email link or in-panel instructions
-4. **IMPORTANT**: After reset, update Infisical `/contabo/VPS_ROOT_PASSWORD` (see Step 4)
+4. **IMPORTANT**: After reset, update OpenBao `contabo` (`VPS_ROOT_PASSWORD`) (see Step 4)
 
 ### Step 3: Deploy SSH Public Key
 
@@ -192,21 +192,14 @@ ssh -i ~/.ssh/id_ed25519_stoa hegemon@<WORKER_1_IP> \
 
 **Expected output**: At least 1 line (the stoa-staging key).
 
-### Step 4: Update Infisical (if password was reset)
+### Step 4: Update OpenBao (if password was reset)
 
-If you reset the root password in Step 2 of the recovery procedure:
+If you reset the root password in Step 2 of the recovery procedure, store the new
+value with the owner's put-secret tool at `secret/stoa/tooling/contabo`, field
+`VPS_ROOT_PASSWORD` (tooling tokens are read-only). Then check it without printing it:
 
 ```bash
-# Evaluate Infisical token (requires Cloudflare Access + Machine Identity)
-eval $(infisical-token)
-
-# Update the root password in Infisical
-infisical secrets set VPS_ROOT_PASSWORD=<NEW_PASSWORD> \
-  --env=prod \
-  --path=/contabo
-
-# Verify it was stored
-infisical secrets get VPS_ROOT_PASSWORD --env=prod --path=/contabo
+v=$(scripts/lib/stoa-secret.sh contabo VPS_ROOT_PASSWORD) && echo "stored, ${#v} chars"; unset v
 ```
 
 **Do NOT commit any passwords to git or leave them in shell history.**
@@ -272,9 +265,9 @@ This provides failover if the primary key is ever compromised.
 
 ## 8. Related Documentation
 
-- [Multi-Device Access — SSH + Infisical Setup](multi-device-access.md) — SSH key management for new devices
+- [Multi-Device Access — SSH + OpenBao tooling access](multi-device-access.md) — SSH key management for new devices
 - [HEGEMON VPS Setup](hegemon-vps-setup.md) — Initial worker provisioning
-- [secrets-management.md](../.claude/rules/secrets-management.md) — Infisical + password storage
+- [secrets-management.md](../../.claude/docs/secrets-management.md) — Vault, OpenBao and password storage
 - [Contabo VPS Inventory](../VPS_INVENTORY.md) — Worker IP addresses and credentials
 
 ---
@@ -284,7 +277,7 @@ This provides failover if the primary key is ever compromised.
 - [ ] All 5 workers reachable via SSH (`hegemon@<IP>` works)
 - [ ] `hegemon-agent.service` disabled on all workers
 - [ ] `~/.ssh/authorized_keys` contains correct key on all workers
-- [ ] Infisical updated with new root password (if reset)
+- [ ] OpenBao updated with new root password (if reset)
 - [ ] No new SSH keys or backdoors added
 - [ ] Secondary key deployed (optional but recommended)
 - [ ] Runbook and VPS_INVENTORY.md updated with latest info

@@ -273,13 +273,31 @@ EOF
 }
 
 # =============================================================================
-# resolve_api_key — regression tests for CAB-2046 Infisical fallback
+# resolve_api_key — env first, then OpenBao (CAB-2046, CAB-1795)
 # =============================================================================
 #
-# These tests cover the no-op branches of resolve_api_key() without hitting
-# the real Infisical API. The happy-path (actual Infisical fetch) is covered
-# empirically by the self-review pre-push hook in this PR — see
-# council-history.jsonl for the APPROVED 8.00/10 run on commit e74b1dfa.
+# The OpenBao fallback goes through scripts/lib/stoa-secret.sh. A sandboxed
+# `curl` double answers like OpenBao, so no test touches the network.
+
+# Point the helper at a fake CA, a fake token and a curl double that returns
+# the given HTTP code (body carries the sentinel key on 200).
+use_fake_openbao() {
+    local code="$1"
+    OPENBAO_SENTINEL="sentinel-from-openbao"
+    mkdir -p "${TEST_TMPDIR}/bin"
+    : > "${TEST_TMPDIR}/ca.pem"
+    cat > "${TEST_TMPDIR}/bin/curl" <<EOF
+#!/bin/sh
+cat > /dev/null
+[ "${code}" = 200 ] && printf '{"data":{"data":{"ANTHROPIC_API_KEY":"%s"}}}' "${OPENBAO_SENTINEL}"
+printf '\\n%s' "${code}"
+EOF
+    chmod +x "${TEST_TMPDIR}/bin/curl"
+    export STOA_OPENBAO_CACERT="${TEST_TMPDIR}/ca.pem"
+    export STOA_OPENBAO_TOKEN="fake-tooling-token"
+    export HOME="${TEST_TMPDIR}"
+    PATH="${TEST_TMPDIR}/bin:${PATH}"
+}
 
 @test "resolve_api_key: regression CAB-2046 — env already set is no-op, value preserved" {
     export ANTHROPIC_API_KEY="sk-ant-sentinel-value-do-not-touch"
@@ -294,39 +312,35 @@ EOF
     [ -z "${ANTHROPIC_API_KEY:-}" ]
 }
 
-@test "resolve_api_key: regression CAB-2046 — COUNCIL_NO_INFISICAL=1 kill-switch skips fallback" {
-    unset ANTHROPIC_API_KEY
-    unset MOCK_API
+@test "resolve_api_key: regression CAB-1795 — COUNCIL_NO_SECRET_BACKEND=1 skips the fallback" {
+    unset ANTHROPIC_API_KEY MOCK_API
+    use_fake_openbao 200
+    export COUNCIL_NO_SECRET_BACKEND=1
+    resolve_api_key
+    [ -z "${ANTHROPIC_API_KEY:-}" ]
+}
+
+@test "resolve_api_key: regression CAB-1795 — COUNCIL_NO_INFISICAL=1 still works as an alias" {
+    unset ANTHROPIC_API_KEY MOCK_API COUNCIL_NO_SECRET_BACKEND
+    use_fake_openbao 200
     export COUNCIL_NO_INFISICAL=1
     resolve_api_key
     [ -z "${ANTHROPIC_API_KEY:-}" ]
 }
 
-@test "resolve_api_key: regression CAB-2046 — infisical CLI missing → silent no-op" {
-    unset ANTHROPIC_API_KEY
-    unset MOCK_API
-    unset COUNCIL_NO_INFISICAL
-    # Empty PATH guarantees `command -v infisical` fails
-    local saved_path="$PATH"
-    PATH=""
+@test "resolve_api_key: regression CAB-1795 — key read from OpenBao when env is empty" {
+    unset ANTHROPIC_API_KEY MOCK_API COUNCIL_NO_SECRET_BACKEND COUNCIL_NO_INFISICAL
+    use_fake_openbao 200
     resolve_api_key
-    PATH="$saved_path"
-    [ -z "${ANTHROPIC_API_KEY:-}" ]
+    [ "$ANTHROPIC_API_KEY" = "$OPENBAO_SENTINEL" ]
 }
 
-@test "resolve_api_key: regression CAB-2046 — infisical-token helper missing → silent no-op" {
-    unset ANTHROPIC_API_KEY
-    unset MOCK_API
-    unset COUNCIL_NO_INFISICAL
-    # Sandbox PATH so `infisical` resolves but `infisical-token` does not.
-    local sandbox
-    sandbox=$(mktemp -d)
-    : > "$sandbox/infisical"
-    chmod +x "$sandbox/infisical"
-    local saved_path="$PATH"
-    PATH="$sandbox"
-    resolve_api_key
-    PATH="$saved_path"
+@test "resolve_api_key: regression CAB-1795 — OpenBao denial leaves the key unset" {
+    unset ANTHROPIC_API_KEY MOCK_API COUNCIL_NO_SECRET_BACKEND COUNCIL_NO_INFISICAL
+    use_fake_openbao 403
+    run resolve_api_key
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"HTTP 403"* ]]
+    resolve_api_key 2>/dev/null
     [ -z "${ANTHROPIC_API_KEY:-}" ]
-    rm -rf "$sandbox"
 }

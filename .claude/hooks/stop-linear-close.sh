@@ -7,16 +7,19 @@
 # 3. If found → call Linear API to mark ticket Done + add comment
 # 4. MEGA tickets are skipped (handled by /verify-mega)
 #
-# Requires: LINEAR_API_KEY env var (from Infisical or GitHub secrets)
+# Requires: LINEAR_API_KEY env var, else OpenBao via scripts/lib/stoa-secret.sh
 # Kill-switch: DISABLE_LINEAR_SESSION_CLOSE=1
 # Gracefully degrades: no API key = silent skip, never blocks session exit.
 
 [ "${DISABLE_LINEAR_SESSION_CLOSE:-}" = "1" ] && exit 0
 
-# Resolve LINEAR_API_KEY: env var → Infisical → skip
+# Resolve LINEAR_API_KEY: env var → OpenBao (stoa/tooling/root) → skip
 LINEAR_API_KEY="${LINEAR_API_KEY:-}"
-if [ -z "$LINEAR_API_KEY" ] && command -v infisical >/dev/null 2>&1; then
-  LINEAR_API_KEY=$(infisical secrets get LINEAR_API_KEY --plain 2>/dev/null || true)
+STOA_SECRET_LIB="$(dirname "$0")/../../scripts/lib/stoa-secret.sh"
+if [ -z "$LINEAR_API_KEY" ] && [ -r "$STOA_SECRET_LIB" ]; then
+  # shellcheck source=scripts/lib/stoa-secret.sh
+  . "$STOA_SECRET_LIB"
+  LINEAR_API_KEY=$(stoa_secret root LINEAR_API_KEY 2>/dev/null || true)
 fi
 [ -z "$LINEAR_API_KEY" ] && exit 0
 

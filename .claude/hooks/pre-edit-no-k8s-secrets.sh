@@ -42,7 +42,7 @@ if echo "$CONTENT" | grep -qE '\$2[aby]?\$[0-9]+\$[./A-Za-z0-9]{53}'; then
   MATCH=$(echo "$CONTENT" | grep -E '\$2[aby]?\$[0-9]+\$' | head -1)
   echo "BLOCKED: Detected bcrypt hash in $FILE_PATH." >&2
   echo "  Line: $MATCH" >&2
-  echo "  Use REPLACE_WITH_BCRYPT_HASH_FROM_INFISICAL placeholder instead." >&2
+  echo "  Use a REPLACE_WITH_BCRYPT_HASH placeholder instead." >&2
   exit 2
 fi
 
@@ -69,8 +69,8 @@ while IFS= read -r line; do
       echo "BLOCKED: Detected what looks like a real secret in $FILE_PATH." >&2
       echo "  Line: $line" >&2
       echo "  Value: $value" >&2
-      echo "  Use a placeholder (REPLACE_FROM_INFISICAL, \${VAR}, CHANGE_ME) instead of hardcoded values." >&2
-      echo "  Secrets must be managed via Infisical (vault.gostoa.dev), not committed to git." >&2
+      echo "  Use a placeholder (REPLACE_FROM_VAULT, \${VAR}, CHANGE_ME) instead of hardcoded values." >&2
+      echo "  Secrets must be managed in Vault or OpenBao, not committed to git." >&2
       exit 2
     fi
   fi

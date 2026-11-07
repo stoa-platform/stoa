@@ -12,7 +12,7 @@ globs: "scripts/ai-ops/n8n-*,.github/workflows/claude-*"
 |-------|-------|
 | URL | `https://n8n.gostoa.dev` |
 | API Base | `https://n8n.gostoa.dev/api/v1` |
-| Auth | `X-N8N-API-KEY` header (Infisical `/n8n/N8N_API_KEY`) |
+| Auth | `X-N8N-API-KEY` header (OpenBao: `scripts/lib/stoa-secret.sh n8n N8N_API_KEY`) |
 
 ## Key Gotchas
 

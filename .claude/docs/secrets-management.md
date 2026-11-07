@@ -1,7 +1,7 @@
 <!-- Chargé à la demande par skills/commands. Jamais auto-chargé. -->
 
 ---
-globs: "deploy/**,terraform/**,.infisical.json,**/vault*"
+globs: "deploy/**,terraform/**,scripts/lib/stoa-secret.sh,**/vault*"
 ---
 
 # Secrets Management
@@ -20,13 +20,17 @@ HashiCorp Vault (hcvault.gostoa.dev) — Source of Truth (CAB-1795)
     └── Rotation
         └── rotate-secrets.sh (human-only) → Vault KV v2
 
-Infisical (vault.gostoa.dev) — Legacy, read-only reference during transition
+OpenBao (dedicated VM, SSH tunnel) — platform-team secrets (ADR-075)
+    └── Repo tooling → scripts/lib/stoa-secret.sh → secret/stoa/tooling/<name> (read-only token)
+
+Infisical — retired by ADR-075 (2026-11-07)
 ```
 
 - **Vault** = primary secrets manager (self-hosted on spare-gra-vps)
 - **URL**: `https://hcvault.gostoa.dev`
 - **Auth**: AppRole (VPS agents), Kubernetes (ESO), Token (admin/human)
-- **Infisical** = legacy, read-only reference. URL: `https://vault.gostoa.dev`
+- **OpenBao** = platform-team secrets (ADR-075). Repo tooling reads KV v2 `secret/stoa/tooling/<name>` with `stoa_secret <name> <FIELD>` from `scripts/lib/stoa-secret.sh`; an env var already set always wins. Writes go through the owner's put-secret tool, never through tooling.
+- **Infisical** = retired by ADR-075. Do not add Infisical calls.
 
 ## Agent Checklist
 
@@ -37,6 +41,7 @@ Infisical (vault.gostoa.dev) — Legacy, read-only reference during transition
 5. **CI/CD secret** → GitHub repo/org secrets (`${{ secrets.NAME }}`)
 6. **Rotation scripts are human-only** — never run by agents
 7. **Vault paths**: `stoa/k8s/*` (K8s), `stoa/vps/*` (VPS), `stoa/shared/*` (cross-service)
+8. **Script needs a tooling secret?** → source `scripts/lib/stoa-secret.sh`, call `stoa_secret <name> <FIELD>` only when the env var is empty, never print the value
 
 ## K8s Secret Manifests in GitOps
 
@@ -77,7 +82,7 @@ Infisical (vault.gostoa.dev) — Legacy, read-only reference during transition
 | `stoa-infra:deploy/vps/vault/` | Vault server deployment (docker-compose, config, policies) |
 | `stoa-infra:deploy/external-secrets/` | ESO SecretStore + ExternalSecret CRs |
 | `scripts/ops/rotate-secrets.sh` | Credential rotation (human-only) |
-| `scripts/ops/migrate-to-vault.sh` | Infisical → Vault migration |
+| `scripts/lib/stoa-secret.sh` | Tooling secret reads from OpenBao (ADR-075) |
 
 ## Reference
 

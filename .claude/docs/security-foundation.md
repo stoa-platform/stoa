@@ -23,8 +23,8 @@ Agents MUST NEVER autonomously reset, change, or rotate any password or credenti
 | Forbidden Action | Why |
 |-----------------|-----|
 | Keycloak `reset-password` API calls | Changes live credential, breaks all sessions |
-| Running `scripts/ops/rotate-secrets.sh` | Resets passwords in Keycloak + stores in Infisical |
-| `infisical secrets set` for password fields | Overwrites stored credential |
+| Running `scripts/ops/rotate-secrets.sh` | Resets passwords in Keycloak + stores in Vault |
+| Writing password fields to Vault or OpenBao (`vault kv put`, put-secret) | Overwrites stored credential |
 | Generating new passwords to replace existing ones | Causes credential mismatch |
 | `kubectl create secret` with new password values | Overrides live K8s secrets |
 

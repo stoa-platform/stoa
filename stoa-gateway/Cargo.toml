@@ -118,7 +118,7 @@ schemars = { version = "1", optional = true }
 # reviendrait à découvrir l'API par ses échecs ; à faire avec une chaîne Rust
 # locale, comme une passe dédiée.
 opentelemetry = { version = "0.27", features = ["trace"] }
-opentelemetry_sdk = { version = "0.27", features = ["rt-tokio"] }
+opentelemetry_sdk = { version = "0.32", features = ["rt-tokio"] }
 opentelemetry-otlp = { version = "0.27", default-features = false, features = ["grpc-tonic", "trace"] }
 tracing-opentelemetry = "0.28"
 

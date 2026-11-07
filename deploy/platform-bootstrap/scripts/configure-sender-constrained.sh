@@ -41,7 +41,6 @@ done
 if [[ -z "$ADMIN_PASS" ]]; then
   echo "ERROR: KEYCLOAK_ADMIN_PASSWORD not set"
   echo "  export KEYCLOAK_ADMIN_PASSWORD=<password>"
-  echo "  Or use: eval \$(infisical-token) && infisical run -- $0"
   exit 1
 fi
 

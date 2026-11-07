@@ -155,7 +155,9 @@ CLUSTER_GW_VPS=$(create_or_get "/virtualization/clusters/" "OVH Gateway VPS" \
 CLUSTER_TOOLING=$(create_or_get "/virtualization/clusters/" "OVH Tooling" \
   "{\"name\":\"OVH Tooling\",\"slug\":\"ovh-tooling\",\"type\":${CTYPE_VPS},\"site\":${SITE_OVH_GRA},\"description\":\"n8n, Netbox, PocketBase, Healthchecks, Uptime Kuma\"}")
 CLUSTER_INFRA=$(create_or_get "/virtualization/clusters/" "OVH Infra" \
-  "{\"name\":\"OVH Infra\",\"slug\":\"ovh-infra\",\"type\":${CTYPE_VPS},\"site\":${SITE_OVH_GRA},\"description\":\"Infisical, Vault, monitoring\"}")
+  "{\"name\":\"OVH Infra\",\"slug\":\"ovh-infra\",\"type\":${CTYPE_VPS},\"site\":${SITE_OVH_GRA},\"description\":\"Vault, monitoring\"}")
+CLUSTER_SECRETS=$(create_or_get "/virtualization/clusters/" "Contabo Secrets" \
+  "{\"name\":\"Contabo Secrets\",\"slug\":\"contabo-secrets\",\"type\":${CTYPE_VPS},\"site\":${SITE_CONTABO},\"description\":\"OpenBao secrets backend (ADR-075)\"}")
 CLUSTER_MKS=$(create_or_get "/virtualization/clusters/" "OVH MKS GRA9" \
   "{\"name\":\"OVH MKS GRA9\",\"slug\":\"ovh-mks-gra9\",\"type\":${CTYPE_K8S},\"site\":${SITE_OVH_GRA},\"description\":\"Production Kubernetes — 3x B2-15 nodes\"}")
 
@@ -172,7 +174,7 @@ ROLE_INFRA=$(create_or_get "/dcim/device-roles/" "Infrastructure" \
   '{"name":"Infrastructure","slug":"infrastructure","color":"607d8f","vm_role":true,"description":"Core infrastructure services"}')
 
 # ─── VPS IPs (sourced from env vars — see stoa-infra/docs/carto/dns-inventory.md) ─
-# Set all *_IP variables before running this script (e.g. from Infisical/Vault).
+# Set all *_IP variables before running this script.
 HEGEMON_W1_IP="${HEGEMON_W1_IP:?Set HEGEMON_W1_IP}"
 HEGEMON_W2_IP="${HEGEMON_W2_IP:?Set HEGEMON_W2_IP}"
 HEGEMON_W3_IP="${HEGEMON_W3_IP:?Set HEGEMON_W3_IP}"
@@ -182,7 +184,7 @@ VPS_KONG_IP="${VPS_KONG_IP:?Set VPS_KONG_IP}"
 VPS_GRAVITEE_IP="${VPS_GRAVITEE_IP:?Set VPS_GRAVITEE_IP}"
 VPS_WEBMETHODS_IP="${VPS_WEBMETHODS_IP:?Set VPS_WEBMETHODS_IP}"
 VPS_N8N_IP="${VPS_N8N_IP:?Set VPS_N8N_IP}"
-VPS_INFISICAL_IP="${VPS_INFISICAL_IP:?Set VPS_INFISICAL_IP}"
+VPS_SECRETS_IP="${VPS_SECRETS_IP:?Set VPS_SECRETS_IP}"
 VPS_SPARE_GRA_IP="${VPS_SPARE_GRA_IP:?Set VPS_SPARE_GRA_IP}"
 VPS_PUSH_GRA_IP="${VPS_PUSH_GRA_IP:?Set VPS_PUSH_GRA_IP}"
 
@@ -206,13 +208,13 @@ create_vm "webmethods-vps" "${CLUSTER_GW_VPS}" "${ROLE_GATEWAY}" 4 8192  80 "${V
 create_vm "n8n-tooling-vps" "${CLUSTER_TOOLING}" "${ROLE_TOOLING_R}" 4 8192 80 "${VPS_N8N_IP}" "[{\"id\":${TAG_TOOLING}},{\"id\":${TAG_PROD}}]" "n8n + Netbox + PocketBase + Healthchecks + Uptime Kuma | Traefik reverse proxy"
 
 # Infrastructure VPS
-create_vm "infisical-vps" "${CLUSTER_INFRA}" "${ROLE_INFRA}" 2 4096 40 "${VPS_INFISICAL_IP}" "[{\"id\":${TAG_PROD}}]" "Infisical vault.gostoa.dev | Caddy TLS"
+create_vm "secrets-vm" "${CLUSTER_SECRETS}" "${ROLE_INFRA}" 8 24576 400 "${VPS_SECRETS_IP}" "[{\"id\":${TAG_PROD}}]" "OpenBao (ADR-075) | loopback only, SSH tunnel"
 create_vm "spare-gra-vps" "${CLUSTER_INFRA}" "${ROLE_INFRA}" 2 4096 40 "${VPS_SPARE_GRA_IP}" "[{\"id\":${TAG_PROD}}]" "HashiCorp Vault hcvault.gostoa.dev | OVH GRA6"
 create_vm "push-gra-vps"  "${CLUSTER_INFRA}" "${ROLE_INFRA}" 2 4096 40 "${VPS_PUSH_GRA_IP}"  "[{\"id\":${TAG_PROD}}]" "Pushgateway push.gostoa.dev | Prometheus metrics relay"
 
 # ─── Cleanup obsolete entries ────────────────────────────────────────────────
 echo ""
-echo "[6/6] Checking for obsolete Hetzner entries..."
+echo "[6/6] Checking for obsolete entries (Hetzner, retired VMs)..."
 
 # Find and delete VMs with "hetzner" in name or from Hetzner sites
 HETZNER_VMS=$(nb_api GET "/virtualization/virtual-machines/?q=hetzner" | jq -r '.results[].id // empty')
@@ -234,6 +236,12 @@ for site_id in ${HETZNER_SITES}; do
     echo "  [delete] Obsolete site: ${site_name} (ID: ${site_id})"
     nb_api DELETE "/dcim/sites/${site_id}/" || true
   fi
+done
+
+# Infisical VPS retired by ADR-075 (2026-11-07)
+for vm_id in $(nb_api GET "/virtualization/virtual-machines/?name=infisical-vps" | jq -r '.results[].id // empty'); do
+  echo "  [delete] Retired VM: infisical-vps (ID: ${vm_id})"
+  nb_api DELETE "/virtualization/virtual-machines/${vm_id}/" || true
 done
 
 echo "  Cleanup done."

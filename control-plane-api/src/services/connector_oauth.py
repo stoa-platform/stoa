@@ -417,7 +417,7 @@ class ConnectorOAuthService:
 
         Priority:
         1. Template column (oauth_client_id) — set via migration seed or admin API
-        2. Env var MCP_OAUTH_{SLUG}_CLIENT_ID — injected via Infisical → K8s Secret
+        2. Env var MCP_OAUTH_{SLUG}_CLIENT_ID — injected from the secrets backend → K8s Secret
         3. Vault at secret/data/mcp-connector-templates/{slug} (legacy fallback)
         """
         # 1. Template column (preferred — no external dependency)
@@ -442,7 +442,7 @@ class ConnectorOAuthService:
         this returns empty string — the token exchange works with code_verifier alone.
 
         Priority:
-        1. Env var MCP_OAUTH_{SLUG}_CLIENT_SECRET — injected via Infisical → K8s Secret
+        1. Env var MCP_OAUTH_{SLUG}_CLIENT_SECRET — injected from the secrets backend → K8s Secret
         2. Vault at secret/data/mcp-connector-templates/{slug} (legacy fallback)
         """
         # 1. Env var (preferred — no Vault dependency for app-level secrets)

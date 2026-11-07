@@ -35,8 +35,8 @@ graph TD
     class opensearch database
     keycloak["Keycloak (OIDC)"]
     class keycloak identity
-    infisical["Infisical (Secrets Vault)"]
-    class infisical identity
+    openbao["OpenBao (Secrets Backend)"]
+    class openbao identity
     prometheus["Prometheus"]
     class prometheus monitoring
     grafana["Grafana"]
@@ -95,7 +95,7 @@ graph TD
 | operator | 1 | stoa-operator |
 | search | 1 | opensearch |
 | logging | 1 | loki |
-| secrets | 1 | infisical |
+| secrets | 1 | openbao |
 | gateway-benchmark | 2 | kong-arena, gravitee-arena |
 | gateway-external | 3 | kong-vps, gravitee-vps, webmethods-vps |
 
@@ -105,4 +105,4 @@ graph TD
 |---------|----------|-------|------------------|
 | OVH Managed Kubernetes (GRA9) | OVH | 3 | 6 |
 | OVH VPS Fleet | OVH | 4 | 4 |
-| OVH VPS (Infisical) | OVH | 1 | 1 |
+| Contabo VPS (Secrets) | Contabo | 1 | 1 |

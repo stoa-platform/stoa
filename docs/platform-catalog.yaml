@@ -283,25 +283,23 @@ services:
       - viewer
     owner: platform-team
 
-  - name: infisical
-    displayName: Infisical (Secrets Vault)
+  - name: openbao
+    displayName: OpenBao (Secrets Backend)
     type: secrets
-    tech: Infisical (self-hosted)
+    tech: OpenBao 2.7.2 (self-hosted, Vault HTTP API, ADR-075)
     path: null
-    containerPort: 443
-    image: infisical/infisical
+    containerPort: 8200
+    image: openbao/openbao
     deploy:
       prod:
-        cluster: ovh-infisical-vps
+        cluster: contabo-secrets-vm
         namespace: null
         replicas: 1
         k8sName: null
     dependsOn: []
     consumesSecrets: []
-    exposedTo:
-      - control-plane-api
-      - stoa-gateway
-    health: /api/status
+    exposedTo: []  # loopback only, reached through an SSH tunnel; no cluster path yet (CAB-2607)
+    health: /v1/sys/health
     metrics: null
     argocdApp: null
     ciWorkflow: null
@@ -638,15 +636,14 @@ clusters:
       - name: n8n-vps
         purpose: n8n workflow engine
 
-  - name: ovh-infisical-vps
-    displayName: OVH VPS (Infisical)
-    provider: OVH
-    region: GRA
+  - name: contabo-secrets-vm
+    displayName: Contabo VPS (Secrets)
+    provider: Contabo
     nodes: 1
     nodeType: VPS
     hosts:
-      - name: infisical-vps
-        purpose: Infisical secrets vault
+      - name: secrets-vm
+        purpose: OpenBao secrets backend (ADR-075)
 
 # ==============================================================================
 # RBAC ROLES

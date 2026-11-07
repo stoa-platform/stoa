@@ -3,6 +3,7 @@
 """CAB-2343: changed source/config/docs files must have no image-pinning debt.
 
 Only changed allowlisted files are scanned; untouched debt remains for migration.
+docs/platform-catalog.yaml is exempt: inventory only, not a deployment input (CAB-2359).
 Consumers need literal digests; split Helm image.digest is trusted lexically.
 SBOM actions may consume a pinned, earlier same-job build action's digest.
 Metadata semver/match require latest=false; raw latest aliases fail.
@@ -235,7 +236,7 @@ def main():
         paths = git("diff", "--name-only", "-z", "--diff-filter=ACMRT", args.base, args.head).decode().split("\0")
         errors = []
         for path in filter(None, paths):
-            if not allowed(path):
+            if path == "docs/platform-catalog.yaml" or not allowed(path):
                 continue
             if re.search(r"[\x00-\x1f:]", path):
                 raise ValueError

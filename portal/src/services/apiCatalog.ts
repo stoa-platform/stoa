@@ -89,42 +89,30 @@ export const apiCatalogService = {
    * Uses /v1/portal/apis endpoint for portal-specific API browsing.
    */
   listAPIs: async (params?: ListAPIsParams): Promise<PaginatedResponse<API>> => {
-    try {
-      const response = await apiClient.get<PortalAPIsResponse>('/v1/portal/apis', {
-        params: {
-          page: params?.page || 1,
-          page_size: params?.pageSize || 20,
-          search: params?.search,
-          category: params?.category,
-          universe: params?.universe,
-          status: params?.status,
-          include_unpromoted: params?.includeUnpromoted || false,
-          audience: params?.audience,
-          environment: params?.environment,
-          sort_by: params?.sortBy,
-        },
-      });
-
-      const apis = (response.data.apis || []).map(transformPortalAPI);
-
-      return {
-        items: apis,
-        total: response.data.total || apis.length,
-        page: response.data.page || params?.page || 1,
-        pageSize: response.data.page_size || params?.pageSize || 20,
-        totalPages: Math.ceil((response.data.total || apis.length) / (params?.pageSize || 20)),
-      };
-    } catch (error) {
-      console.error('Failed to fetch APIs from portal:', error);
-      // Return empty response on error
-      return {
-        items: [],
-        total: 0,
+    const response = await apiClient.get<PortalAPIsResponse>('/v1/portal/apis', {
+      params: {
         page: params?.page || 1,
-        pageSize: params?.pageSize || 20,
-        totalPages: 0,
-      };
-    }
+        page_size: params?.pageSize || 20,
+        search: params?.search,
+        category: params?.category,
+        universe: params?.universe,
+        status: params?.status,
+        include_unpromoted: params?.includeUnpromoted || false,
+        audience: params?.audience,
+        environment: params?.environment,
+        sort_by: params?.sortBy,
+      },
+    });
+
+    const apis = (response.data.apis || []).map(transformPortalAPI);
+
+    return {
+      items: apis,
+      total: response.data.total || apis.length,
+      page: response.data.page || params?.page || 1,
+      pageSize: response.data.page_size || params?.pageSize || 20,
+      totalPages: Math.ceil((response.data.total || apis.length) / (params?.pageSize || 20)),
+    };
   },
 
   /**

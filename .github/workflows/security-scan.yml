@@ -419,6 +419,9 @@ jobs:
           load: true
           push: false
           tags: stoa/${{ matrix.component.name }}:scan
+          # Refresh OS security updates; keep the gateway's Rust builder cache.
+          no-cache: ${{ matrix.component.name == 'control-plane-api' }}
+          no-cache-filters: ${{ matrix.component.name == 'stoa-gateway' && 'runtime' || '' }}
           cache-from: type=gha,scope=security-scan-${{ matrix.component.name }}
           cache-to: type=gha,mode=max,scope=security-scan-${{ matrix.component.name }}
 

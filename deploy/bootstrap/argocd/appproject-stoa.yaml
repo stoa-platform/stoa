@@ -30,6 +30,12 @@ spec:
     - https://github.com/stoa-platform/stoa.git
     - https://kubernetes.github.io/ingress-nginx
     - https://prometheus-community.github.io/helm-charts
+    # Chaîne OpenTelemetry (CAB-2615) : Alloy vient du dépôt Grafana, Loki et
+    # Tempo du dépôt communautaire où Grafana a déplacé leurs charts OSS.
+    # Les Applications correspondantes, comme celle de kube-prometheus-stack,
+    # sont déclarées dans le dépôt d'infrastructure privé, pas ici.
+    - https://grafana.github.io/helm-charts
+    - https://grafana-community.github.io/helm-charts
 
   # Destinations autorisées — énumérées, jamais `*`.
   destinations:

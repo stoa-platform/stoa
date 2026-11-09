@@ -1,6 +1,9 @@
-# Platform Configuration CI/CD
-# Validates and deploys platform bootstrap configs (APIs, Applications, Scopes, Policies)
+# Platform Configuration CI
+# Validates platform bootstrap configs (APIs, Applications, Scopes, Policies)
 # Triggered on changes to deploy/platform-bootstrap/
+# Validation only: this workflow does not sync or deploy the configs anywhere.
+# The sync to the stoa-gitops repository was removed (CAB-2607): that repository
+# is abandoned and no ArgoCD manifest reads it.
 # Note: gitops-templates/ migrated to stoa-infra (CAB-1911)
 
 name: Platform Config CI/CD
@@ -36,13 +39,6 @@ concurrency:
 
 permissions:
   contents: read
-
-env:
-  BASE_DOMAIN: gostoa.dev
-  ENV_PREFIX: ''
-  GIT_PROVIDER: ${{ vars.GIT_PROVIDER || 'github' }}
-  GITLAB_PROJECT: cab6961310/stoa-gitops
-  GITHUB_GITOPS_REPO: stoa-platform/stoa-gitops
 
 jobs:
   # ============================================
@@ -116,200 +112,27 @@ jobs:
           fi
 
   # ============================================
-  # Stage 2: Propose the sync as a pull request into the GitOps repo main.
-  # Supports GitLab (default) and GitHub via GIT_PROVIDER.
-  # Does not push that main branch and does not merge the pull request.
-  # ArgoCD reconciles only after a human merges it.
-  # ============================================
-  sync-gitops:
-    name: Sync to GitOps repo
-    needs: validate
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
-    outputs:
-      pr_url: ${{ steps.publish.outputs.pr_url }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Setup Git
-        run: |
-          git config --global user.name "STOA CI/CD"
-          git config --global user.email "ci@gostoa.dev"
-
-      - name: Clone GitOps repository
-        env:
-          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
-          GH_GITOPS_TOKEN: ${{ secrets.GITHUB_GITOPS_TOKEN }}
-        run: |
-          if [ "$GIT_PROVIDER" = "github" ]; then
-            echo "Cloning from GitHub: ${GITHUB_GITOPS_REPO}"
-            git clone "https://x-access-token:${GH_GITOPS_TOKEN}@github.com/${GITHUB_GITOPS_REPO}.git" /tmp/stoa-gitops
-          else
-            echo "Cloning from GitLab: ${GITLAB_PROJECT}"
-            git clone "https://oauth2:${GITLAB_TOKEN}@gitlab.com/${GITLAB_PROJECT}.git" /tmp/stoa-gitops
-          fi
-
-      - name: Sync platform configs
-        run: |
-          echo "=== Syncing platform-bootstrap to ${GIT_PROVIDER} ==="
-
-          # Create directories if not exist
-          mkdir -p /tmp/stoa-gitops/webmethods/apis
-          mkdir -p /tmp/stoa-gitops/webmethods/policies
-          mkdir -p /tmp/stoa-gitops/platform/applications
-          mkdir -p /tmp/stoa-gitops/platform/scopes
-
-          # Copy API configs
-          cp deploy/platform-bootstrap/apis/*.yaml /tmp/stoa-gitops/webmethods/apis/
-
-          # Copy policies
-          cp deploy/platform-bootstrap/policies/*.yaml /tmp/stoa-gitops/webmethods/policies/
-
-          # Copy applications
-          cp deploy/platform-bootstrap/applications/*.yaml /tmp/stoa-gitops/platform/applications/
-
-          # Copy scopes
-          cp deploy/platform-bootstrap/scopes/*.yaml /tmp/stoa-gitops/platform/scopes/
-
-          # Also sync webmethods templates if changed
-          if [ -d gitops-templates/webmethods/apis ]; then
-            cp gitops-templates/webmethods/apis/*.yaml /tmp/stoa-gitops/webmethods/apis/ 2>/dev/null || true  # intentional: glob may match zero files
-          fi
-          if [ -d gitops-templates/webmethods/policies ]; then
-            cp gitops-templates/webmethods/policies/*.yaml /tmp/stoa-gitops/webmethods/policies/ 2>/dev/null || true  # intentional: glob may match zero files
-          fi
-
-      - name: Commit and open pull request
-        id: publish
-        env:
-          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
-          GH_TOKEN: ${{ secrets.GITHUB_GITOPS_TOKEN }}
-          SOURCE_REPO: ${{ github.repository }}
-          SOURCE_SHA: ${{ github.sha }}
-          SOURCE_WORKFLOW: ${{ github.workflow }}
-          SOURCE_RUN_ID: ${{ github.run_id }}
-          SOURCE_SERVER: ${{ github.server_url }}
-        run: |
-          cd /tmp/stoa-gitops
-          cat > /tmp/commit-msg.txt << EOF
-          sync: platform configs from GitHub
-
-          Source: ${SOURCE_REPO}@${SOURCE_SHA}
-          Workflow: ${SOURCE_WORKFLOW}
-          Run: ${SOURCE_RUN_ID}
-          EOF
-          cat > /tmp/pr-body.md << EOF
-          ## Summary
-          Sync platform-bootstrap configs from \`${SOURCE_REPO}\`@\`${SOURCE_SHA}\`.
-
-          Workflow: ${SOURCE_WORKFLOW}
-          Run: ${SOURCE_SERVER}/${SOURCE_REPO}/actions/runs/${SOURCE_RUN_ID}
-
-          CI opens this pull request and does not merge it. ArgoCD syncs after a human merges it to main.
-          EOF
-          args=(
-            --branch bot/platform-config-sync
-            --path webmethods
-            --path platform
-            --message-file /tmp/commit-msg.txt
-            --title "sync: platform configs from ${SOURCE_REPO}"
-            --body-file /tmp/pr-body.md
-          )
-          if [ "$GIT_PROVIDER" = "github" ]; then
-            bash "$GITHUB_WORKSPACE/.github/scripts/open-or-update-pr.sh" \
-              --repo "$GITHUB_GITOPS_REPO" \
-              "${args[@]}"
-          else
-            bash "$GITHUB_WORKSPACE/.github/scripts/open-or-update-pr.sh" \
-              --forge gitlab \
-              --gitlab-project "$GITLAB_PROJECT" \
-              "${args[@]}"
-          fi
-
-      - name: Output sync result
-        env:
-          PR_URL: ${{ steps.publish.outputs.pr_url }}
-        run: |
-          if [ -n "$PR_URL" ]; then
-            echo "Pull request opened on ${GIT_PROVIDER}: $PR_URL"
-            echo "ArgoCD reconciles only after that pull request is merged to main."
-          else
-            echo "No changes to sync"
-          fi
-
-  # ============================================
-  # Stage 3: Verify Deployment
-  # ============================================
-  verify:
-    name: Verify Deployment
-    needs: sync-gitops
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Wait for Gateway sync
-        run: sleep 30
-
-      - name: Verify Control-Plane-API on Gateway
-        run: |
-          echo "=== Verifying Control-Plane-API on Gateway ==="
-
-          # Check API is accessible via Gateway
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-            "https://${ENV_PREFIX}apis.${BASE_DOMAIN}/gateway/Control-Plane-API/2.0/" \
-            -H "Accept: application/json")
-
-          echo "Gateway API response: HTTP $HTTP_CODE"
-
-          # 401 is expected (auth required), 404 means not deployed
-          if [ "$HTTP_CODE" = "401" ] || [ "$HTTP_CODE" = "403" ]; then
-            echo "✅ Control-Plane-API is deployed on Gateway (auth required)"
-          elif [ "$HTTP_CODE" = "200" ]; then
-            echo "✅ Control-Plane-API is deployed on Gateway"
-          elif [ "$HTTP_CODE" = "404" ]; then
-            echo "❌ Control-Plane-API not found on Gateway"
-            exit 1
-          else
-            echo "⚠️ Unexpected response: HTTP $HTTP_CODE"
-          fi
-
-      - name: Verify health endpoints
-        run: |
-          echo "=== Verifying backend health ==="
-
-          # Direct API health
-          curl -s "https://${ENV_PREFIX}api.${BASE_DOMAIN}/health/ready" | jq .
-
-          # MCP Gateway health (internal only, should 403)
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "https://${ENV_PREFIX}mcp.${BASE_DOMAIN}/health")
-          echo "MCP Gateway health (should be 403): $HTTP_CODE"
-
-  # ============================================
-  # Stage 4: Notify
+  # Stage 2: Notify
   # ============================================
   notify:
     name: Send Notifications
-    needs: [validate, sync-gitops, verify]
+    needs: validate
     if: always() && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Determine status
         env:
-          PR_URL: ${{ needs.sync-gitops.outputs.pr_url }}
+          VALIDATE_RESULT: ${{ needs.validate.result }}
         run: |
-          if [ "${{ needs.verify.result }}" = "success" ]; then
+          if [ "$VALIDATE_RESULT" = "success" ]; then
             echo "STATUS=success" >> "$GITHUB_ENV"
-            if [ -n "$PR_URL" ]; then
-              echo "MESSAGE=Platform configs validated. GitOps pull request opened; deployment waits for its merge. ${PR_URL}" >> "$GITHUB_ENV"
-            else
-              echo "MESSAGE=✅ Platform configs validated successfully" >> "$GITHUB_ENV"
-            fi
-          elif [ "${{ needs.validate.result }}" = "failure" ]; then
+            echo "MESSAGE=✅ Platform configs validated successfully" >> "$GITHUB_ENV"
+          elif [ "$VALIDATE_RESULT" = "failure" ]; then
             echo "STATUS=failure" >> "$GITHUB_ENV"
             echo "MESSAGE=❌ Config validation failed" >> "$GITHUB_ENV"
           else
             echo "STATUS=warning" >> "$GITHUB_ENV"
-            echo "MESSAGE=⚠️ Deployment completed with warnings" >> "$GITHUB_ENV"
+            echo "MESSAGE=⚠️ Config validation did not complete (${VALIDATE_RESULT})" >> "$GITHUB_ENV"
           fi
 
       - name: Send Slack notification

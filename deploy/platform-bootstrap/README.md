@@ -115,7 +115,7 @@ spec:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `BASE_DOMAIN` | `gostoa.dev` | Base domain for URLs |
+| `BASE_DOMAIN` | `gostoa.dev` | Placeholder used as `${BASE_DOMAIN}` in the YAML files. CI no longer substitutes it: the stoa-gitops sync that did was removed (CAB-2607). |
 
 ## Adding New APIs
 

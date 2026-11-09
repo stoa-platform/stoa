@@ -67,12 +67,4 @@ Each tool is denied until an owner-approved row `(tenant_id, mcp_server_id, tool
 
 **Inventoried count: 24.** That is P1–P5 (5 operations), T1–T17 (17 tools), and two cross-cutting controls from the decision table: blank-tenant deny, and unscoped deny-wins. The other decision rows describe how those 24 are evaluated.
 
-## Fail-open found, not patched
-
-The gateway allow path does not verify a signed policy. `fetch_permissions` (`tool_permissions.rs:361-364`) reads the unsigned JSON list `GET /v1/tenants/{tenant_id}/tool-permissions` and caches that result. `PolicyArtifactVerifier` refuses a bad signature (`policy_artifact.rs:128-129`) but nothing on the tool-call path calls it. The verifier also sets `validate_exp = false` (`policy_artifact.rs:125`) and does not read `expires_at`. An invalid or expired artifact therefore does not, by itself, deny a call that the unsigned list allows.
-
-That is fail-open relative to ADR-070 §4.2, which requires the cache consulted for a decision to be signed and verified, and a stale or tampered cache to count as no cache. The control-plane issuer does reissue on expiry and does not return a previous artifact when signing fails. Those issuance tests do not close the gateway decision gap.
-
-**Proposed minimal fix (not applied, security review required):** in `ToolPermissionService::fetch_permissions`, stop installing allows from the unsigned list. Fetch `GET /v1/tenants/{tenant_id}/tool-permissions/artifact`, verify it with `PolicyArtifactVerifier` against the pinned trust set (`STOA_POLICY_TRUST_JWKS_FILE`, expected `iss` and `aud`), refuse when verification fails, refuse when `expires_at` is missing or not in the future, and build the allow map only from the verified `permissions` claim. On refusal, return the existing deny path and do not extend a previous allow. Do not fall back to the unsigned list.
-
-This proof does not weaken a check to hide that gap, and it does not implement the fix.
+Vérification de l'artefact signé côté gateway : suivie dans Linear (CAB-2612).

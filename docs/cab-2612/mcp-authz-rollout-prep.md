@@ -29,7 +29,7 @@ Stop on any failure. Do not deploy the application first: tenants without a matc
 | Cold call, then a second call inside 60 seconds | Same decision. The second control-plane check does not need a new SQL read |
 | After the 60-second permission TTL, or after replicas restart | A row changed from allow to deny is denied. The old allow is not kept |
 | Control-plane artifact `expires_at` in the past, or signing unavailable | Issuer starts a new window, or returns 503 and not a stale 304 |
-| Gateway call while the signed artifact is invalid or expired | **Not proven on the live decision path.** The gateway still allows from the unsigned list. See the fail-open in the inventory. Do not roll out while treating signature failure as a gateway deny until that fix is reviewed and merged |
+| Vérification de l'artefact signé côté gateway : suivie dans Linear (CAB-2612). | Suivi Linear CAB-2612 |
 | One intended allow and one unlisted or explicitly denied tool per tenant | Allow succeeds and the other is denied, both through `POST /v1/mcp/tools/{name}/invoke` and through the gateway tool call, on a cold cache and again inside the TTL |
 
 Direct SQL does not invalidate API caches. Wait out the 60-second permission cache on every API replica, or restart those replicas through the normal deployment, and refresh signed artifacts through the existing policy delivery procedure.
@@ -51,4 +51,4 @@ Local SQLite and gateway mocks, with no live environment:
 - Existing artifact tests reissue after expiry and refuse to return a body when signing fails.
 - Existing gateway tests deny on an empty policy, an explicit deny, a cold miss, a hot cache, and a failed refetch after expiry. Invalid artifact signatures are refused by the verifier.
 
-They do not show a live gateway call failing closed on an invalid or expired signature. That remains the open assertion above.
+Vérification de l'artefact signé côté gateway : suivie dans Linear (CAB-2612).

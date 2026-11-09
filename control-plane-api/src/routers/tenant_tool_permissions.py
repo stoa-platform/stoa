@@ -79,11 +79,14 @@ async def check_tool_allowed(
     """Check if a tool is allowed for a tenant. Returns True if allowed.
 
     Uses in-memory cache with 60s TTL. Deny-by-default: a matching
-    explicit allow row is required.
+    explicit allow row is required. A blank tenant is not an identity.
 
     If mcp_server_id is provided, checks the specific (server, tool) pair.
     If not, requires at least one matching allow and no matching deny.
     """
+    if not tenant_id or not tenant_id.strip():
+        return False
+
     permission_map = await _load_permission_cache(tenant_id, db)
 
     if mcp_server_id:

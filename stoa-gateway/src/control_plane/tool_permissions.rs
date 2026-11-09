@@ -186,6 +186,18 @@ impl ToolPermissionService {
         requested_name: &str,
         canonical_name: &str,
     ) -> bool {
+        // A blank tenant is not an identity. Deny before any cache or Control Plane read.
+        if tenant_id.trim().is_empty() {
+            warn!(
+                audit_event = "tool_call_denied",
+                tenant_id = %tenant_id,
+                tool_name = %canonical_name,
+                requested_name = %requested_name,
+                reason = %PermissionDenyReason::PermissionAbsent.as_str(),
+                "Tool permission fail-closed deny"
+            );
+            return false;
+        }
         let state = if self.trust.as_ref().is_some_and(|t| t.current().is_none()) {
             PermissionState::Unavailable {
                 reason: PermissionDenyReason::TrustSetNotLoaded,
@@ -986,5 +998,48 @@ pub(crate) mod tests {
     fn regression_cache_ttl_is_capped_at_hard_limit() {
         let svc = ToolPermissionService::new(Client::new(), "http://cp", MAX_POLICY_AGE * 2);
         assert_eq!(svc.cache_ttl, MAX_POLICY_AGE);
+    }
+
+    #[tokio::test]
+    async fn regression_blank_tenant_denies_without_reading_an_allow() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path_regex(r"/v1/tenants/.*/tool-permissions"))
+            .respond_with(permissions_response(serde_json::json!([
+                {"mcp_server_id": "srv1", "tool_name": "ok_tool", "allowed": true}
+            ])))
+            .mount(&server)
+            .await;
+        let svc = authenticated_service(&server, Duration::from_secs(60)).await;
+        assert!(!svc.is_tool_allowed("", "ok_tool").await);
+        assert!(!svc.is_tool_allowed("   ", "ok_tool").await);
+        assert!(
+            server.received_requests().await.unwrap().is_empty(),
+            "a blank tenant must not be authorized from a Control Plane allow"
+        );
+    }
+
+    #[tokio::test]
+    async fn regression_tenant_cache_does_not_authorize_another_tenant() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/v1/tenants/tenant-a/tool-permissions"))
+            .respond_with(permissions_response(serde_json::json!([
+                {"mcp_server_id": "srv1", "tool_name": "ok_tool", "allowed": true}
+            ])))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/v1/tenants/tenant-b/tool-permissions"))
+            .respond_with(permissions_response(serde_json::json!([])))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let svc = authenticated_service(&server, Duration::from_secs(60)).await;
+        assert!(svc.is_tool_allowed("tenant-a", "ok_tool").await);
+        assert!(svc.is_tool_allowed("tenant-a", "ok_tool").await);
+        assert!(!svc.is_tool_allowed("tenant-b", "ok_tool").await);
+        assert!(!svc.is_tool_allowed("tenant-b", "ok_tool").await);
     }
 }

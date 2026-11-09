@@ -508,7 +508,7 @@ class Settings(BaseSettings):
 
     # Chat Agent — Anthropic integration
     CHAT_ENABLED: bool = False
-    CHAT_PROVIDER_API_KEY: str = ""  # Anthropic key — via Infisical
+    CHAT_PROVIDER_API_KEY: str = ""  # Anthropic key — from the secrets backend (OpenBao, ADR-075)
     # Gateway routing — when set, chat routes through Stoa Gateway LLM proxy
     CHAT_GATEWAY_URL: str = ""  # e.g. http://stoa-gateway.stoa-system.svc.cluster.local:80
     CHAT_GATEWAY_API_KEY: str = ""  # STOA consumer API key for gateway auth
@@ -516,7 +516,7 @@ class Settings(BaseSettings):
     # Docs Search — Semantic / Embedding
     EMBEDDING_PROVIDER: str = "openai"  # openai | none
     EMBEDDING_MODEL: str = "text-embedding-3-small"
-    EMBEDDING_API_KEY: str = ""  # via Infisical
+    EMBEDDING_API_KEY: str = ""  # from the secrets backend (OpenBao, ADR-075)
     EMBEDDING_DIMENSIONS: int = 1536
     EMBEDDING_API_URL: str = "https://api.openai.com/v1/embeddings"
     DOCS_REINDEX_ENABLED: bool = False  # Admin-only reindex endpoint

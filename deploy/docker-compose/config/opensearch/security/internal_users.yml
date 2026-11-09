@@ -9,18 +9,18 @@ _meta:
   config_version: 2
 
 # Admin user — used by init scripts and securityadmin CLI
-# Credential managed via Infisical /opensearch/ADMIN_PASSWORD — regenerate hash with:
-#   plugins/opensearch-security/tools/hash.sh -p "<value from Infisical>"
+# Store the credential in the secrets backend (OpenBao, ADR-075) — regenerate hash with:
+#   plugins/opensearch-security/tools/hash.sh -p "<admin password>"
 admin:
-  hash: "REPLACE_WITH_BCRYPT_HASH_FROM_INFISICAL"
+  hash: "REPLACE_WITH_BCRYPT_HASH"
   reserved: true
   backend_roles:
     - "admin"
   description: "OpenSearch admin user"
 
 # Dashboards service account — used by OpenSearch Dashboards to communicate with OpenSearch
-# Credential managed via Infisical /opensearch/DASHBOARDS_PASSWORD
+# Store the credential in the secrets backend (OpenBao, ADR-075)
 kibanaserver:
-  hash: "REPLACE_WITH_BCRYPT_HASH_FROM_INFISICAL"
+  hash: "REPLACE_WITH_BCRYPT_HASH"
   reserved: true
   description: "OpenSearch Dashboards internal service account"

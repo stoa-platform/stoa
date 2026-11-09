@@ -101,10 +101,12 @@ def test_control_plane_api_environment_safety_boundary_is_unchanged() -> None:
         caller["deploy"]["if"]
         == "github.event_name == 'push' || github.event_name == 'workflow_dispatch'"
     )
+    # CAB-2612: the job runs for a dev push so a skipped smoke is visible.
+    # Dev verify-endpoint stays empty (see the environment test above) and
+    # the health workflow refuses to probe prod.
     assert caller["smoke-test"]["if"] == (
         "(github.event_name == 'push' || github.event_name == 'workflow_dispatch') "
-        "&& needs.deploy.result == 'success' && vars.GITOPS_DEPLOY_ENABLED == 'true' "
-        "&& github.event.inputs.environment == 'prod'"
+        "&& needs.deploy.result == 'success' && vars.GITOPS_DEPLOY_ENABLED == 'true'"
     )
     assert caller["deploy"]["with"]["image-tag"] == "${{ needs.docker.outputs.image-tag }}"
     assert reusable["if"] == "vars.GITOPS_DEPLOY_ENABLED == 'true'"

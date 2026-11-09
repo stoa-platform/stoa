@@ -15,6 +15,11 @@
 # reusable-docker-ghcr.yml publishes only immutable <env>-<full SHA> tags
 # and attestations, independently of this switch.
 #
+# Endpoint verify (CAB-2612): an empty URL, or a deadline without HTTP 200,
+# is FAIL or SKIP — never a silent success. DEV_POST_DEPLOY_REQUIRED
+# (default false) fails the job on that verdict; otherwise the job warns
+# and stays green. The image-updated dispatch is unchanged.
+#
 # Requires: STOA_INFRA_DISPATCH_TOKEN secret (PAT with repo scope on PotoMitan/stoa-infra)
 # =============================================================================
 
@@ -51,6 +56,10 @@ on:
         required: false
         type: number
         default: 180
+    outputs:
+      post_deploy_status:
+        description: 'PASS, FAIL, or SKIP for the GitOps endpoint verify'
+        value: ${{ jobs.gitops-deploy.outputs.post_deploy_status }}
 
 jobs:
   gitops-deploy:
@@ -59,6 +68,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    outputs:
+      post_deploy_status: ${{ steps.truth.outputs.post_deploy_status }}
     environment:
       name: ${{ inputs.environment }}
       url: ${{ inputs.environment-url }}
@@ -81,40 +92,93 @@ jobs:
               "source_run_id": "${{ github.run_id }}"
             }
 
-      - name: Wait for ArgoCD sync
-        if: inputs.verify-endpoint != ''
-        run: |
-          echo "Waiting for ArgoCD to sync ${{ inputs.component }} in ${{ inputs.environment }}..."
-          echo "Polling ${{ inputs.verify-endpoint }} (timeout: ${{ inputs.verify-timeout }}s)"
+      - name: Checkout verify script
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          sparse-checkout: scripts/ci/dev_post_deploy_truth.sh
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
 
-          TIMEOUT=${{ inputs.verify-timeout }}
+      # Records the poll. The verdict step owns the job result.
+      - name: Wait for ArgoCD sync
+        id: wait
+        env:
+          VERIFY_ENDPOINT: ${{ inputs.verify-endpoint }}
+          VERIFY_TIMEOUT: ${{ inputs.verify-timeout }}
+          VERIFY_COMPONENT: ${{ inputs.component }}
+          VERIFY_ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          set -euo pipefail
+          if [ -z "${VERIFY_ENDPOINT}" ]; then
+            {
+              echo "ran=false"
+              echo "ok="
+              echo "detail=verify-endpoint empty; GitOps sync was not checked"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Waiting for ArgoCD to sync ${VERIFY_COMPONENT} in ${VERIFY_ENVIRONMENT}..."
+          echo "Polling ${VERIFY_ENDPOINT} (timeout: ${VERIFY_TIMEOUT}s)"
+
+          TIMEOUT="${VERIFY_TIMEOUT}"
           INTERVAL=15
           ELAPSED=0
+          HTTP_CODE="000"
 
           # Initial delay for stoa-infra to process dispatch + ArgoCD to detect change
           sleep 30
 
           while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "${{ inputs.verify-endpoint }}" 2>/dev/null) || HTTP_CODE="000"
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "${VERIFY_ENDPOINT}" 2>/dev/null) || HTTP_CODE="000"
             if [ "$HTTP_CODE" = "200" ]; then
-              echo "Endpoint healthy (HTTP $HTTP_CODE) after ${ELAPSED}s"
+              echo "Endpoint healthy (HTTP ${HTTP_CODE}) after ${ELAPSED}s"
+              {
+                echo "ran=true"
+                echo "ok=true"
+                echo "detail=endpoint healthy"
+              } >> "$GITHUB_OUTPUT"
               exit 0
             fi
-            echo "  ${ELAPSED}s — HTTP $HTTP_CODE (waiting...)"
+            echo "  ${ELAPSED}s — HTTP ${HTTP_CODE} (waiting...)"
             sleep "$INTERVAL"
             ELAPSED=$((ELAPSED + INTERVAL))
           done
 
-          echo "::warning::Endpoint not healthy after ${TIMEOUT}s (last: HTTP $HTTP_CODE). ArgoCD sync may still be in progress."
+          echo "Endpoint not healthy after ${TIMEOUT}s (last: HTTP ${HTTP_CODE})"
+          {
+            echo "ran=true"
+            echo "ok=false"
+            echo "detail=Endpoint not healthy after ${TIMEOUT}s (last: HTTP ${HTTP_CODE})"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Record GitOps verify verdict
+        id: truth
+        if: always() && steps.wait.outcome == 'success'
+        env:
+          POST_DEPLOY_CONTROL: Wait for ArgoCD sync
+          POST_DEPLOY_RAN: ${{ steps.wait.outputs.ran }}
+          POST_DEPLOY_OK: ${{ steps.wait.outputs.ok }}
+          POST_DEPLOY_REASON: ${{ steps.wait.outputs.detail }}
+          POST_DEPLOY_REQUIRED_VAR: ${{ vars.DEV_POST_DEPLOY_REQUIRED }}
+          POST_DEPLOY_COMMIT: ${{ github.sha }}
+          POST_DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
+        run: bash scripts/ci/dev_post_deploy_truth.sh
 
       - name: Deploy Summary
         if: always()
+        env:
+          DEPLOY_COMPONENT: ${{ inputs.component }}
+          DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
+          DEPLOY_IMAGE: ${{ inputs.image-tag }}
+          DEPLOY_SHA: ${{ github.sha }}
         run: |
-          echo "### GitOps Deploy: ${{ inputs.component }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Environment | ${{ inputs.environment }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Image | \`${{ inputs.image-tag }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Method | GitOps (stoa-infra → ArgoCD) |" >> $GITHUB_STEP_SUMMARY
-          echo "| SHA | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "### GitOps Deploy: ${DEPLOY_COMPONENT}"
+            echo ""
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| Environment | ${DEPLOY_ENVIRONMENT} |"
+            echo "| Image | \`${DEPLOY_IMAGE}\` |"
+            echo "| Method | GitOps (stoa-infra → ArgoCD) |"
+            echo "| SHA | \`${DEPLOY_SHA}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"

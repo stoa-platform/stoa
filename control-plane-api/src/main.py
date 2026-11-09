@@ -32,6 +32,7 @@ from .middleware.http_logging import HTTPLoggingMiddleware
 from .middleware.metrics import MetricsMiddleware, get_metrics
 from .middleware.pii_masking import PIIMaskingMiddleware
 from .middleware.rate_limit import limiter, rate_limit_exceeded_handler
+from .middleware.security_headers import SecurityHeadersMiddleware
 from .opensearch import search_router, setup_opensearch
 from .opensearch.audit_middleware import AuditMiddleware
 from .routers import (
@@ -783,6 +784,11 @@ add_error_snapshot_middleware(app)
 
 # Audit middleware (CAB-307) - registered at init, lazy-connects to OpenSearch at request time
 app.add_middleware(AuditMiddleware)
+
+# Security headers (CAB-2587). Added last so this is the outermost user
+# middleware and every response — including errors — carries exactly one CSP:
+# strict for the API, and the Swagger/ReDoc policy only on /docs and /redoc.
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Routers
 app.include_router(tenants.router)

@@ -31,60 +31,28 @@ platform-bootstrap/
     └── stoa-scopes.yaml         # Platform scopes
 ```
 
-## Deployment Flow
+## Continuous Integration
 
-```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│  GitHub Actions │────▶│  GitLab Sync    │────▶│  ArgoCD     │
-│  (Validate)     │     │  (stoa-gitops)  │     │  (Apply)        │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-                                                        │
-                                                        ▼
-                                               ┌─────────────────┐
-                                               │  API Gateway    │
-                                               │  (webMethods)   │
-                                               └─────────────────┘
-```
+The `platform-config-ci.yml` workflow validates these configs. It does not sync
+or deploy them anywhere.
 
-## CI/CD Pipeline
+1. **Validate** - Lint YAML, check required fields, validate cross-references,
+   report variables without defaults
+2. **Notify** - On `main`, send the validation result to Slack
 
-The `platform-config-ci.yml` workflow:
-
-1. **Validate** - Lint YAML, check required fields, validate cross-references
-2. **Sync to GitLab** - Push configs to `stoa-gitops` repository
-3. **Reconcile Gateway** - ArgoCD reconciles via CRD operator
-4. **Verify** - Check API is accessible on Gateway
-5. **Notify** - Send Slack notification
+The former sync to the `stoa-gitops` repository was removed: that repository is
+abandoned and no ArgoCD application reads it.
 
 ### Triggers
 
-- Push to `main` branch with changes in:
+- Pull requests and pushes to `main` with changes in:
   - `deploy/platform-bootstrap/**`
 - Manual trigger via `workflow_dispatch`
 
-## Manual Deployment
-
-### Initialize Platform
-
-```bash
-# Full initialization (validates, syncs, triggers reconciliation)
-./scripts/init-platform-bootstrap.sh --env dev
-
-# Dry run (validation only)
-./scripts/init-platform-bootstrap.sh --env dev --dry-run
-```
-
-### Validate Only
+## Local Validation
 
 ```bash
 python scripts/validate-platform-config.py --dir deploy/platform-bootstrap
-```
-
-### Sync to GitLab Manually
-
-```bash
-export GITLAB_TOKEN="your-token"
-./scripts/init-platform-bootstrap.sh --env dev
 ```
 
 ## Configuration Reference
@@ -147,9 +115,7 @@ spec:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `BASE_DOMAIN` | `gostoa.dev` | Base domain for URLs |
-| `GITLAB_TOKEN` | - | GitLab access token |
-| `GITLAB_PROJECT` | `stoa-platform/stoa-gitops` | GitLab project path |
+| `BASE_DOMAIN` | `gostoa.dev` | Placeholder used as `${BASE_DOMAIN}` in the YAML files. CI no longer substitutes it: the stoa-gitops sync that did was removed (CAB-2607). |
 
 ## Adding New APIs
 
@@ -167,23 +133,18 @@ spec:
        scopes: [my-api:read]
    ```
 
-4. Commit and push - CI/CD will handle deployment
+4. Open a pull request - CI validates the configs
 
 ## Troubleshooting
 
 ### API not accessible on Gateway
 
-1. Check GitLab sync:
-   ```bash
-   git -C /tmp/stoa-gitops log -1
-   ```
-
-2. Check ArgoCD sync status:
+1. Check ArgoCD sync status:
    ```bash
    kubectl get applications -n argocd
    ```
 
-3. Check Gateway directly:
+2. Check Gateway directly:
    ```bash
    curl https://vps-wm.gostoa.dev/rest/apigateway/apis
    ```

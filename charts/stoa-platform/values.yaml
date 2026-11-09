@@ -1,8 +1,10 @@
 # STOA Platform Helm Values
 # =========================
 
-# Shared parameters. Component keys left empty inherit these values;
-# a non-empty component key overrides them for that component only.
+# Shared parameters for a standalone install. Component keys left empty
+# inherit these values; a non-empty component key overrides them.
+# stoa-stack sets global.observability, and then global.environment wins
+# over the component key so sibling charts share one value.
 global:
   # Environment label for workloads and ServiceMonitors: dev | staging | prod
   environment: dev

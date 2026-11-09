@@ -138,9 +138,9 @@ spec:
               value: {{ .Values.stoaGateway.kafka.errorsTopic | quote }}
             {{- end }}
             {{- end }}
-            {{- if .Values.stoaGateway.otelEndpoint }}
+            {{- with include "stoa-platform.otelEndpoint" (dict "root" $ "value" .Values.stoaGateway.otelEndpoint) }}
             - name: STOA_OTEL_ENDPOINT
-              value: {{ .Values.stoaGateway.otelEndpoint | quote }}
+              value: {{ . | quote }}
             {{- end }}
             {{- if .Values.stoaGateway.secretName }}
             - name: STOA_CONTROL_PLANE_API_KEY

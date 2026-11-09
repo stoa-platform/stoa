@@ -54,6 +54,9 @@ Database upgrade/downgrade verification is a separate prerequisite for live roll
 
 | Key | Default | Description |
 |-----|---------|-------------|
+| `global.environment` | `dev` | Environment label for the gateway, sidecar and API ServiceMonitor; a non-empty `<component>.environment` overrides it |
+| `keycloak.realm` | `stoa` | Realm provisioned by the bootstrap jobs; default for `stoaGateway.keycloakRealm` and `stoaSidecar.keycloakRealm` |
+| `keycloak.internalUrl` | `""` | In-cluster identity admin URL for the bootstrap jobs and Helm test (empty = in-namespace service) |
 | `stoa.domain` | `gostoa.dev` | Base domain for all service URLs |
 | `stoa.adminEmail` | `""` | Admin email for initial setup |
 | `stoa.anthropicApiKey` | `""` | Anthropic key (empty = chat disabled) |

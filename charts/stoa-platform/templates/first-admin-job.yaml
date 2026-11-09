@@ -55,9 +55,9 @@ spec:
             - name: PYTHONDONTWRITEBYTECODE
               value: "1"
             - name: KEYCLOAK_URL
-              value: {{ .Values.stoa.bootstrap.firstAdmin.keycloakUrl | default (printf "http://keycloak-http.%s.svc.cluster.local:80" .Release.Namespace) | quote }}
+              value: {{ .Values.stoa.bootstrap.firstAdmin.keycloakUrl | default (include "stoa-platform.keycloakInternalUrl" .) | quote }}
             - name: KEYCLOAK_REALM
-              value: {{ .Values.stoaGateway.keycloakRealm | default "stoa" | quote }}
+              value: {{ include "stoa-platform.keycloakRealm" . | quote }}
           resources:
             requests:
               cpu: 50m

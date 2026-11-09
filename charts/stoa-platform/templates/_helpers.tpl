@@ -49,3 +49,27 @@ app.kubernetes.io/part-of: stoa-platform
 {{- end -}}
 {{- printf "image: %s" ($image | quote) -}}
 {{- end -}}
+
+{{/*
+Effective environment label: a non-empty component override wins, otherwise
+global.environment, otherwise "dev". Call with (dict "root" $ "value" <override>).
+*/}}
+{{- define "stoa-platform.environment" -}}
+{{- $global := .root.Values.global | default dict -}}
+{{- .value | default $global.environment | default "dev" -}}
+{{- end -}}
+
+{{/* Shared identity realm used by bootstrap jobs and as the workload default. */}}
+{{- define "stoa-platform.keycloakRealm" -}}
+{{- .Values.keycloak.realm | default "stoa" -}}
+{{- end -}}
+
+{{/* In-cluster identity admin endpoint used by the bootstrap jobs. */}}
+{{- define "stoa-platform.keycloakInternalUrl" -}}
+{{- .Values.keycloak.internalUrl | default (printf "http://keycloak-http.%s.svc.cluster.local:80" .Release.Namespace) -}}
+{{- end -}}
+
+{{/* Realm bootstrap runs unless the identity operator owns the realm. */}}
+{{- define "stoa-platform.realmBootstrapEnabled" -}}
+{{- if and .Values.stoa.bootstrap.enabled (not .Values.keycloak.operator.enabled) -}}true{{- end -}}
+{{- end -}}

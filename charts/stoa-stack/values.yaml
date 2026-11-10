@@ -1,0 +1,28 @@
+# STOA umbrella chart - shared parameters
+# =======================================
+# `global` is the single source for parameters shared between the dependent
+# charts. Helm propagates it to every subchart, where it takes precedence over
+# the component-local fallbacks used by standalone installs:
+#
+#   global.environment            stoa-platform: gateway/sidecar STOA_ENVIRONMENT
+#                                 and ServiceMonitor `environment` labels
+#                                 stoa-observability: Alloy `environment` label
+#   global.clusterName            stoa-platform: ServiceMonitor `cluster` labels
+#   global.observability.enabled  installs stoa-observability and wires the
+#                                 gateway/sidecar OTLP export to its collector;
+#                                 false disables both
+#   global.observability.namespace
+#                                 namespace of the OTLP collector; empty means
+#                                 co-installed in the release namespace
+#
+# Do not repeat these keys under `stoa-platform` or `stoa-observability`;
+# component-specific settings go under the subchart key as usual.
+global:
+  environment: dev
+  clusterName: default
+  observability:
+    enabled: true
+    namespace: ""
+
+# stoa-platform: {}
+# stoa-observability: {}

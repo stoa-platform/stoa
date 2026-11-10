@@ -73,11 +73,27 @@ jobs:
           python3 -B -m unittest discover -s scripts/security -p test_companion_security_context.py -v
           python3 -B -m unittest discover -s tests -p test_regression_companion_security_context.py -v
 
+      - name: Verify shared environment and identity parameters
+        run: python3 -B -m unittest discover -s charts/stoa-platform/tests -p test_shared_parameters.py -v
+
       - name: Lint stoa-observability chart
         run: helm lint charts/stoa-observability
 
       - name: Template stoa-observability chart (dry-run)
         run: helm template stoa-observability charts/stoa-observability > /dev/null
+
+      # Umbrella dependencies are the sibling charts (file://), built locally.
+      - name: Build stoa-stack umbrella dependencies
+        run: helm dependency build charts/stoa-stack
+
+      - name: Lint stoa-stack umbrella chart
+        run: helm lint charts/stoa-stack
+
+      - name: Template stoa-stack umbrella chart (dry-run)
+        run: helm template stoa-stack charts/stoa-stack > /dev/null
+
+      - name: Verify shared parameters stay coherent across dependent charts
+        run: python3 -B -m unittest discover -s charts/stoa-stack/tests -p 'test_*.py' -v
 
   # Notify stoa-infra when Helm charts change on main
   # Requires STOA_INFRA_DISPATCH_TOKEN secret (PAT with repo scope on PotoMitan/stoa-infra)

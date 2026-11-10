@@ -73,11 +73,11 @@ spec:
               {{- toYaml $np.controlPlanePodLabels | nindent 14 }}
       ports:
         - {port: {{ $np.controlPlanePort }}, protocol: TCP}
-    {{- if $config.otelEndpoint }}
+    {{- if include "stoa-platform.otelEndpoint" (dict "root" $ "value" $config.otelEndpoint) }}
     - to:
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: {{ $np.monitoringNamespace | quote }}
+              kubernetes.io/metadata.name: {{ include "stoa-platform.observabilityNamespace" $ | quote }}
           podSelector:
             matchLabels:
               {{- toYaml $np.otelPodLabels | nindent 14 }}

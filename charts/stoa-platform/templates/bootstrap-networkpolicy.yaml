@@ -1,5 +1,5 @@
 {{/* Keep bootstrap egress limited to its dependencies, including under default-deny. */}}
-{{- if and .Values.stoa.bootstrap.enabled (not (dig "keycloak" "operator" "enabled" false .Values.AsMap)) }}
+{{- if include "stoa-platform.realmBootstrapEnabled" . }}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -31,6 +31,10 @@ spec:
           port: 80
         - protocol: TCP
           port: 8080
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 8443
     - to:
         - podSelector:
             matchLabels:

@@ -3,23 +3,31 @@
 ## Identity
 
 Scanned image: `stoa-gateway:standalone`
-Label `org.opencontainers.image.revision`: `6d23399e4d1a1f4c54a03122640c0469c8b4829c`
-That value is `git rev-parse HEAD` at build time (`deploy/standalone/build-image.sh`, `STOA_REVISION` unset). It is the commit that matches a JWT policy to the exact contract key.
+Label `org.opencontainers.image.revision`: `4e84fae718a14dd6d1e75504cfe6f031cb76ea9d`
+That value is `git rev-parse HEAD` at build time (`deploy/standalone/build-image.sh`, `STOA_REVISION` unset). It is the commit that bumps tokio to 1.54.1, on top of the opt-in public MCP surface (`c2e40501a5a0ab696f06b308dbb40fab81447b01`).
 Tar: `deploy/standalone/stoa-gateway-standalone.tar` (not committed)
-Tar sha256: `c714dbf06d0f7e592d47ae3ee706ffec7dfa52603bbf024beec28162c3a52031`
-Tar.gz sha256: `ae0275aa54c7a19255c86df7d3f3a023e802ccacb751dfe9801d8cedbfd4b750` (`/cursor/stores/self/stoa-gateway-standalone/stoa-gateway-standalone.tar.gz`)
+Tar sha256: `f1108188dd87822ad5850ec20954c61f3126f387f3d6beb3644c5871223d0635`
 Base: `debian:bookworm-slim` (Trivy detected Debian 12.15), builder `rust:1.93-bookworm`
 Build: `cargo chef cook --release --locked` and `cargo auditable build --release --locked` (cargo-auditable 0.7.5). The binary is not stripped; `readelf` finds `.dep-v0`.
+Build host: macOS arm64, Docker Desktop 29.6.1, `DOCKER_DEFAULT_PLATFORM=linux/amd64`. The image is `linux/amd64`. Trivy 0.58.1 ran from the `aquasec/trivy:0.58.1` container: the script's fallback downloads a Linux binary.
+Built, scanned and imported on worker-3 on 2026-11-10. Config digest on the node: `sha256:ca6a3c050cfb5026344efdb3d80b93a98c5ec935cd08fff9fd59f03a1cb59547`.
 
-The triage commit does not touch the docker context (`stoa-gateway/`, including `Dockerfile` and `Cargo.lock`). Proof, empty at this commit and after it:
+Previous images, kept on worker-3 for rollback:
+
+| Tag on worker-3 | Revision | In service |
+| --- | --- | --- |
+| `stoa-gateway:standalone-prev-c2e40501` | `c2e40501a5a0ab696f06b308dbb40fab81447b01` | 2026-11-10, about 15 minutes (tokio 1.54.0) |
+| `stoa-gateway:standalone-prev-6d23399e` | `6d23399e4d1a1f4c54a03122640c0469c8b4829c` | 2026-10-21 to 2026-11-10, tar sha256 `c714dbf06d0f7e592d47ae3ee706ffec7dfa52603bbf024beec28162c3a52031` |
+
+This triage commit does not touch the docker context (`stoa-gateway/`, including `Dockerfile` and `Cargo.lock`). Proof, empty at this commit and after it:
 
 ```text
-git diff 6d23399e4d1a1f4c54a03122640c0469c8b4829c HEAD -- stoa-gateway/
+git diff 4e84fae718a14dd6d1e75504cfe6f031cb76ea9d HEAD -- stoa-gateway/
 ```
 
 ## Disposition
 
-`trivy image --ignore-unfixed=false stoa-gateway:standalone` (Trivy 0.58.1, exit 0) reports Debian 12.15: 364 findings (1 CRITICAL, 70 HIGH, 131 MEDIUM, 161 LOW, 1 UNKNOWN) and the Rust binary: 1 MEDIUM. `quick-xml` 0.39.4 is not in that Rust report. RustSec still lists two HIGH advisories on it. >= 0.41.0 avant tout câblage SOAP.
+`trivy image --ignore-unfixed=false` on the tar (Trivy 0.58.1, exit 0, database of 2026-11-10) reports Debian 12.15: 421 findings (1 CRITICAL, 96 HIGH, 133 MEDIUM, 161 LOW, 30 UNKNOWN) and the Rust binary: 1 MEDIUM. With `--ignore-unfixed`, the build gate, both CRITICAL and HIGH are 0: no finding has a fixed package in bookworm. The scan of 2026-10-21 on revision `6d23399e` reported 364 findings (1 CRITICAL, 70 HIGH, 131 MEDIUM, 161 LOW, 1 UNKNOWN). The rows below are that triage; the changes since are listed under "Rebuild of 2026-11-10". `quick-xml` 0.39.4 is not in that Rust report. RustSec still lists two HIGH advisories on it. >= 0.41.0 avant tout câblage SOAP.
 
 | Vulnerability | Packages | Disposition |
 | --- | --- | --- |
@@ -36,9 +44,41 @@ git diff 6d23399e4d1a1f4c54a03122640c0469c8b4829c HEAD -- stoa-gateway/
 | CVE-2025-69720 HIGH, affected | ncurses, libtinfo6 | Terminal library overflow. The process does not link ncurses for request handling. Accept. |
 | CVE-2026-9538 HIGH, fix_deferred | perl-base | `Archive::Tar` denial of service. perl is a base-image essential and is not executed. Accept. |
 
+### Rebuild of 2026-11-10
+
+The CRITICAL is unchanged (`CVE-2023-45853`, zlib1g, will_not_fix, accepted above).
+
+No longer reported at HIGH on this image: `CVE-2026-76642`, `CVE-2026-78408`, `CVE-2026-78409` (util-linux) and `CVE-2026-84782` (libssl3, openssl). Their rows above are kept as the record of the earlier acceptance.
+
+Reported at HIGH and absent from the triage above. The dispositions are proposals written during the rebuild; none is accepted until Christophe says so.
+
+| Vulnerability | Packages | Proposed disposition |
+| --- | --- | --- |
+| CVE-2026-112315 to CVE-2026-112323, CVE-2026-119079 HIGH, affected | krb5-locales, libgssapi-krb5-2, libk5crypto3, libkrb5-3, libkrb5support0 | Memory leaks, CPU exhaustion and a null dereference in the MIT krb5 daemons (`kadmind`, KDC). The image runs neither. The libraries are pulled in by curl, which only runs the `HEALTHCHECK` against localhost. Proposed: accept. |
+| CVE-2026-76844 HIGH, affected | zlib1g | Heap overflow in `gz_write` after a failed `write()` (the `gz*` file API). The gateway binary does not link the system zlib (no `libz-sys` in the SBOM) and nothing in the container writes gzip files. Proposed: accept. |
+
+Rust binary: the first rebuild of the day (revision `c2e40501`) carried `CVE-2026-115567`, a race in tokio 1.54.0 timer handling, fixed in 1.54.1. It was in the image of 2026-10-21 as well; Trivy's database did not list it then. This image links tokio 1.54.1 and the finding is gone. `CVE-2026-48504` (opentelemetry_sdk 0.27.1, MEDIUM) is unchanged and accepted above.
+
+The commitment below gives 06/11/2026 for the move to `gcr.io/distroless/cc` pinned by digest. On 2026-11-10 the runtime base is still `debian:bookworm-slim`: that date has passed.
+
 Commitment: migration to `gcr.io/distroless/cc` pinned by digest by 06/11/2026 at the latest. The runtime base is still `debian:bookworm-slim` (a tag, not a digest). That move removes the zlib/MiniZip package and the other Debian rows above. This image is not that base.
 
 ## cargo audit
+
+### Run of 2026-11-10
+
+`cargo audit` (cargo-audit 0.22.1, 1446 advisories, database fetched on 2026-11-10) on the lock of this image exits 1: seven advisories published since 2026-10-21 are outside the 12 exceptions. `.cargo/audit.toml` is not extended here: adding an exception is an acceptance, and none of these is accepted yet.
+
+| Advisory | Crate | In the standalone binary (SBOM) | Proposed disposition |
+| --- | --- | --- | --- |
+| `RUSTSEC-2026-0387` | crypto-bigint 0.5.5 | yes, through p256 and p384 of jsonwebtoken | Timing variability in operations meant to be constant-time. The gateway verifies JWT signatures with public keys and holds no secret scalar. Proposed: accept, on the same ground as `RUSTSEC-2023-0071`. |
+| `RUSTSEC-2026-0391` | zstd 0.13.3 | no | Not linked. Proposed: exception, not in the image. |
+| `RUSTSEC-2026-0403`, `RUSTSEC-2026-0398` | zstd-safe 7.3.0 | no | Not linked. Proposed: exception, not in the image. |
+| `RUSTSEC-2026-0418` | libz-sys 1.1.30 | no | Build script issue, crate not linked. Proposed: exception, not in the image. |
+| `RUSTSEC-2026-0388` | pingora-core 0.8.1 | no | Optional `pingora` feature, `FEATURES` is empty. Proposed: exception, not in the image. |
+| `RUSTSEC-2026-0424` | wasmtime 43.0.2 | no | Optional `wasm` feature, like the seven wasmtime exceptions. Proposed: exception, not in the image. |
+
+The text below is the run of 2026-10-21.
 
 cargo-audit 0.22.2 has no `--locked` flag. The scan reads `stoa-gateway/Cargo.lock`. The image build is `cargo auditable build --release --locked`.
 
@@ -66,1407 +106,1594 @@ The 12 exceptions in `stoa-gateway/.cargo/audit.toml`:
 
 ## trivy image --ignore-unfixed=false
 
-Command: `trivy image --ignore-unfixed=false stoa-gateway:standalone` (Trivy 0.58.1, exit 0).
+Command: `trivy image --input deploy/standalone/stoa-gateway-standalone.tar --ignore-unfixed=false` (Trivy 0.58.1 from `aquasec/trivy:0.58.1`, exit 0), on the image of 2026-11-10.
 
 ```text
-2026-10-21T17:54:01Z	INFO	[vuln] Vulnerability scanning is enabled
-2026-10-21T17:54:01Z	INFO	[secret] Secret scanning is enabled
-2026-10-21T17:54:01Z	INFO	[secret] If your scanning is slow, please try '--scanners vuln' to disable secret scanning
-2026-10-21T17:54:01Z	INFO	[secret] Please see also https://aquasecurity.github.io/trivy/v0.58/docs/scanner/secret#recommendation for faster secret detection
-2026-10-21T17:54:01Z	INFO	Detected OS	family="debian" version="12.15"
-2026-10-21T17:54:01Z	INFO	[debian] Detecting vulnerabilities...	os_version="12" pkg_num=110
-2026-10-21T17:54:01Z	INFO	Number of language-specific files	num=1
-2026-10-21T17:54:01Z	INFO	[rustbinary] Detecting vulnerabilities...
-2026-10-21T17:54:01Z	WARN	Using severities from other vendors for some vulnerabilities. Read https://aquasecurity.github.io/trivy/v0.58/docs/scanner/vulnerability#severity-selection for details.
+2026-11-10T17:13:46Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-11-10T17:13:46Z	INFO	[secret] Secret scanning is enabled
+2026-11-10T17:13:46Z	INFO	[secret] If your scanning is slow, please try '--scanners vuln' to disable secret scanning
+2026-11-10T17:13:46Z	INFO	[secret] Please see also https://aquasecurity.github.io/trivy/v0.58/docs/scanner/secret#recommendation for faster secret detection
+2026-11-10T17:13:46Z	INFO	Detected OS	family="debian" version="12.15"
+2026-11-10T17:13:46Z	INFO	[debian] Detecting vulnerabilities...	os_version="12" pkg_num=110
+2026-11-10T17:13:46Z	INFO	Number of language-specific files	num=1
+2026-11-10T17:13:46Z	INFO	[rustbinary] Detecting vulnerabilities...
+2026-11-10T17:13:46Z	WARN	Using severities from other vendors for some vulnerabilities. Read https://aquasecurity.github.io/trivy/v0.58/docs/scanner/vulnerability#severity-selection for details.
 
-stoa-gateway:standalone (debian 12.15)
-======================================
-Total: 364 (UNKNOWN: 1, LOW: 161, MEDIUM: 131, HIGH: 70, CRITICAL: 1)
+deploy/standalone/stoa-gateway-standalone.tar (debian 12.15)
+======================================================================================
+Total: 421 (UNKNOWN: 30, LOW: 161, MEDIUM: 133, HIGH: 96, CRITICAL: 1)
 
-┌─────────────────────┬─────────────────────┬──────────┬──────────────┬────────────────────────┬───────────────┬──────────────────────────────────────────────────────────────┐
-│       Library       │    Vulnerability    │ Severity │    Status    │   Installed Version    │ Fixed Version │                            Title                             │
-├─────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ apt                 │ CVE-2011-3374       │ LOW      │ affected     │ 2.6.1                  │               │ It was found that apt-key in apt, all versions, do not       │
-│                     │                     │          │              │                        │               │ correctly...                                                 │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2011-3374                    │
-├─────────────────────┼─────────────────────┤          │              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ bash                │ TEMP-0841856-B18BAF │          │              │ 5.2.15-2+b13           │               │ [Privilege escalation possible to other user than root]      │
-│                     │                     │          │              │                        │               │ https://security-tracker.debian.org/tracker/TEMP-0841856-B1- │
-│                     │                     │          │              │                        │               │ 8BAF                                                         │
-├─────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ bsdutils            │ CVE-2026-53613      │ HIGH     │              │ 1:2.38.1-5+deb12u3     │               │ util-linux: util-linux: TOCTOU in the mount program via      │
-│                     │                     │          │              │                        │               │ ancestor directory swap on...                                │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53613                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-53615      │          │              │                        │               │ util-linux: util-linux: Partition metadata compromise via    │
-│                     │                     │          │              │                        │               │ integer overflow in DOS partition parser...                  │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53615                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-76642      │          │              │                        │               │ util-linux: util-linux: failed external mount helper still   │
-│                     │                     │          │              │                        │               │ runs privileged X-mount post-hooks                           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-76642                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-78408      │          │              │                        │               │ util-linux: util-linux: nsenter --join-cgroup leaks root     │
-│                     │                     │          │              │                        │               │ cgroup migration authority                                   │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78408                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-78409      │          │              │                        │               │ util-linux: util-linux: X-mount.subdir detached-tree         │
-│                     │                     │          │              │                        │               │ resolution can escape via intermediate symlinks              │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78409                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-78410      │          │              │                        │               │ util-linux: util-linux: restricted bind mounts do not pin    │
-│                     │                     │          │              │                        │               │ the source, allowing X-mount.owner/group/mode...             │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78410                   │
-│                     ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-13595      │ MEDIUM   │              │                        │               │ util-linux: util-linux: heap use-after-free in libblkid      │
-│                     │                     │          │              │                        │               │ nested partition probing                                     │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-13595                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-27456      │          │              │                        │               │ util-linux: TOCTOU in the mount program when setting up loop │
-│                     │                     │          │              │                        │               │ devices                                                      │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-27456                   │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-3184       │          │ will_not_fix │                        │               │ util-linux: util-linux: Access control bypass due to         │
-│                     │                     │          │              │                        │               │ improper hostname canonicalization                           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-3184                    │
-│                     ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2022-0563       │ LOW      │ affected     │                        │               │ util-linux: partial disclosure of arbitrary files in chfn    │
-│                     │                     │          │              │                        │               │ and chsh when compiled...                                    │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2022-0563                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2025-14104      │          │              │                        │               │ util-linux: util-linux: Heap buffer overread in setpwnam()   │
-│                     │                     │          │              │                        │               │ when processing 256-byte usernames                           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-14104                   │
-├─────────────────────┼─────────────────────┤          ├──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ coreutils           │ CVE-2016-2781       │          │ will_not_fix │ 9.1-1                  │               │ coreutils: Non-privileged session can escape to the parent   │
-│                     │                     │          │              │                        │               │ session in chroot                                            │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2016-2781                    │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2017-18018      │          │ affected     │                        │               │ coreutils: race condition vulnerability in chown and chgrp   │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2017-18018                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2025-5278       │          │              │                        │               │ coreutils: Heap Buffer Under-Read in GNU Coreutils sort via  │
-│                     │                     │          │              │                        │               │ Key Specification                                            │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-5278                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-56391      │          │              │                        │               │ coreutils: GNU coreutils uniq: Denial of Service and         │
-│                     │                     │          │              │                        │               │ information disclosure via out-of-bounds...                  │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-56391                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-56392      │          │              │                        │               │ coreutils: GNU coreutils unexpand: Denial of Service via     │
-│                     │                     │          │              │                        │               │ crafted tab stop values...                                   │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-56392                   │
-├─────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ curl                │ CVE-2026-12064      │ HIGH     │ fix_deferred │ 7.88.1-10+deb12u15     │               │ curl: curl: SSH host verification bypass when using          │
-│                     │                     │          │              │                        │               │ schemeless URLs with SFTP/SCP...                             │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-12064                   │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-6276       │          │ affected     │                        │               │ curl: libcurl: Information disclosure due to cookie leak     │
-│                     │                     │          │              │                        │               │ when reusing connections with...                             │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-6276                    │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-8286       │          │ fix_deferred │                        │               │ curl: curl: Insecure connection establishment due to TLS     │
-│                     │                     │          │              │                        │               │ configuration mismatch                                       │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-8286                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-8458       │          │              │                        │               │ curl: libcurl: Unauthorized connection reuse due to a        │
-│                     │                     │          │              │                        │               │ logical error                                                │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-8458                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-8927       │          │              │                        │               │ curl: Information disclosure due to uncleared proxy          │
-│                     │                     │          │              │                        │               │ authentication state                                         │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-8927                    │
-│                     ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-10536      │ MEDIUM   │              │                        │               │ libcurl: libcurl: Use-after-free vulnerability leading to    │
-│                     │                     │          │              │                        │               │ Denial of Service                                            │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-10536                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-11856      │          │              │                        │               │ curl: curl: Information disclosure via incorrect Digest      │
-│                     │                     │          │              │                        │               │ authentication header reuse                                  │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-11856                   │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-1965       │          │ affected     │                        │               │ curl: curl: Authentication bypass due to incorrect           │
-│                     │                     │          │              │                        │               │ connection reuse with Negotiate authentication...            │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-1965                    │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-19931      │          │ fix_deferred │                        │               │ curl: libcurl: Information disclosure via incorrect          │
-│                     │                     │          │              │                        │               │ connection reuse with Negotiate authentication               │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-19931                   │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-4873       │          │ affected     │                        │               │ curl: curl: Information disclosure due to incorrect TLS      │
-│                     │                     │          │              │                        │               │ connection reuse                                             │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-4873                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-5545       │          │              │                        │               │ curl: libcurl: Authentication bypass due to incorrect HTTP   │
-│                     │                     │          │              │                        │               │ Negotiate connection reuse                                   │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-5545                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-6253       │          │              │                        │               │ curl: curl: Proxy credential disclosure via redirects to     │
-│                     │                     │          │              │                        │               │ unauthenticated proxies                                      │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-6253                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-6429       │          │              │                        │               │ curl: libcurl: Credential leak via reused proxy connection   │
-│                     │                     │          │              │                        │               │ during HTTP redirects                                        │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-6429                    │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-8924       │          │ fix_deferred │                        │               │ curl: curl: Cookie injection via malicious HTTP server using │
-│                     │                     │          │              │                        │               │ super cookies                                                │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-8924                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-8932       │          │              │                        │               │ libcurl: libcurl: Security feature bypass due to improper    │
-│                     │                     │          │              │                        │               │ mTLS connection reuse                                        │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-8932                    │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-92388      │          │ affected     │                        │               │ curl: curl: FTP wildcard write callback mixup                │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-92388                   │
-│                     ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2024-2379       │ LOW      │              │                        │               │ curl: QUIC certificate check bypass with wolfSSL             │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-2379                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2025-0725       │          │              │                        │               │ libcurl: Buffer Overflow in libcurl via zlib Integer         │
-│                     │                     │          │              │                        │               │ Overflow                                                     │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-0725                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2025-10966      │          │              │                        │               │ curl: Curl missing SFTP host verification with wolfSSH       │
-│                     │                     │          │              │                        │               │ backend                                                      │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-10966                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2025-14017      │          │              │                        │               │ curl: curl: Security bypass due to global TLS option changes │
-│                     │                     │          │              │                        │               │ in multi-threaded...                                         │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-14017                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2025-15079      │          │              │                        │               │ curl: Host verification bypass during SSH transfers          │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-15079                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2025-15224      │          │              │                        │               │ curl: libssh key passphrase bypass without agent set         │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-15224                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-107928     │          │              │                        │               │ curl: curl: info leak uploading over WebSockets with GnuTLS  │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107928                  │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-13608      │          │ fix_deferred │                        │               │ curl: curl: Authentication bypass in OpenLDAP SASL           │
-│                     │                     │          │              │                        │               │ negotiation via Man-in-the-Middle (MITM) attack...           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-13608                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-18924      │          │              │                        │               │ curl: libcurl: Use-after-free in HTTP/2 Server Push with     │
-│                     │                     │          │              │                        │               │ shared connections                                           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-18924                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-80230      │          │              │                        │               │ curl: curl: Public key pinning bypass allows unauthenticated │
-│                     │                     │          │              │                        │               │ connections                                                  │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-80230                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-82209      │          │              │                        │               │ curl: libcurl: Information disclosure via improper Public    │
-│                     │                     │          │              │                        │               │ Suffix List boundary check                                   │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-82209                   │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-86409      │          │ affected     │                        │               │ curl: curl: stale SigV4 headers sent unintended              │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-86409                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-86410      │          │              │                        │               │ curl: curl: redirect to SFTP or SCP bypasses host            │
-│                     │                     │          │              │                        │               │ verification                                                 │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-86410                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-86414      │          │              │                        │               │ curl: curl: leaking host credentials to HTTP proxy           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-86414                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-87864      │          │              │                        │               │ curl: IMAP APPEND plus CRLF conversion command injection     │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-87864                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-87865      │          │              │                        │               │ curl: curl: knownhost callback mismatches key as missing     │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-87865                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-87866      │          │              │                        │               │ curl: curl: wolfSSL public-key pinning bypass                │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-87866                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-92389      │          │              │                        │               │ curl: curl: TFTP direction confusion                         │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-92389                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-92390      │          │              │                        │               │ curl: curl: -J no-clobber guarantee bypassed with 103 early  │
-│                     │                     │          │              │                        │               │ hints                                                        │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-92390                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-92391      │          │              │                        │               │ curl: curl: curl_mime_free stack overflow by recursion       │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-92391                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-94266      │          │              │                        │               │ curl: curl: password leak in CURLINFO_EFFECTIVE_URL          │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-94266                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-9547       │          │              │                        │               │ curl: curl: Man-in-the-middle attack via SSH host key bypass │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-9547                    │
-├─────────────────────┼─────────────────────┤          │              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ dash                │ CVE-2026-102473     │          │              │ 0.5.12-2               │               │ dash: dash: Super-polynomial backtracking in pmatch when     │
-│                     │                     │          │              │                        │               │ libc fnmatch is disabled                                     │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-102473                  │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-102474     │          │              │                        │               │ dash: dash: Heap out-of-bounds write in conv_escape via      │
-│                     │                     │          │              │                        │               │ undersized Unicode escape reservation...                     │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-102474                  │
-├─────────────────────┼─────────────────────┤          │              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ diffutils           │ CVE-2026-53910      │          │              │ 1:3.8-4                │               │ diffutils: heap‑based buffer overflow due to multiple signed │
-│                     │                     │          │              │                        │               │ integer overflows in line‑mapping...                         │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53910                   │
-├─────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ gcc-12-base         │ CVE-2026-102010     │ MEDIUM   │ will_not_fix │ 12.2.0-14+deb12u1      │               │ gcc-toolset-15-gcc: gcc: gcc-toolset-16: gcc: Denial of      │
-│                     │                     │          │              │                        │               │ Service via use-after-free in binary heap...                 │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-102010                  │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-95619      │          │ fix_deferred │                        │               │ gcc: libstdc++ integer overflow in `new` operator            │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-95619                   │
-│                     ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2022-27943      │ LOW      │ affected     │                        │               │ binutils: libiberty/rust-demangle.c in GNU GCC 11.2 allows   │
-│                     │                     │          │              │                        │               │ stack exhaustion in demangle_const                           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2022-27943                   │
-├─────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ gpgv                │ CVE-2025-30258      │ MEDIUM   │              │ 2.2.40-1.1+deb12u2     │               │ gnupg: verification DoS due to a malicious subkey in the     │
-│                     │                     │          │              │                        │               │ keyring                                                      │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-30258                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2025-68972      │          │              │                        │               │ gnupg: GnuPG: Signature bypass via form feed character in    │
-│                     │                     │          │              │                        │               │ signed messages                                              │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-68972                   │
-│                     ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2022-3219       │ LOW      │              │                        │               │ gnupg: denial of service issue (resource consumption) using  │
-│                     │                     │          │              │                        │               │ compressed packets                                           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2022-3219                    │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-105712     │          │ fix_deferred │                        │               │ gnupg2: gnupg: Arbitrary file overwrite via symlink          │
-│                     │                     │          │              │                        │               │ traversal in gpgtar                                          │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-105712                  │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-57062      │          │              │                        │               │ GnuPG: Incorrect cryptographic message parsing               │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-57062                   │
-├─────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ gzip                │ CVE-2026-41992      │ HIGH     │              │ 1.12-1                 │               │ gzip: gzip: Information disclosure via global buffer         │
-│                     │                     │          │              │                        │               │ overflow in LZH decompression                                │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-41992                   │
-│                     ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-41991      │ MEDIUM   │              │                        │               │ gzip: gzip: Arbitrary file overwrite via insecure temporary  │
-│                     │                     │          │              │                        │               │ file handling in gzexe...                                    │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-41991                   │
-├─────────────────────┼─────────────────────┤          │              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ krb5-locales        │ CVE-2026-107708     │          │              │ 1.20.1-2+deb12u5       │               │ krb5: krb5: Denial of Service via malformed PAC in S4U2Proxy │
-│                     │                     │          │              │                        │               │ requests                                                     │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107708                  │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-107778     │          │              │                        │               │ krb5: krb5: Denial of Service via crafted forwarded          │
-│                     │                     │          │              │                        │               │ credentials                                                  │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107778                  │
-│                     ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2018-5709       │ LOW      │ affected     │                        │               │ krb5: integer overflow in dbentry->n_key_data in             │
-│                     │                     │          │              │                        │               │ kadmin/dbutil/dump.c                                         │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2018-5709                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2024-26458      │          │              │                        │               │ krb5: Memory leak at /krb5/src/lib/rpc/pmap_rmt.c            │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-26458                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2024-26461      │          │              │                        │               │ krb5: Memory leak at /krb5/src/lib/gssapi/krb5/k5sealv3.c    │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-26461                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-11850      │          │              │                        │               │ krb5: krb5: integer underflow in berval2tl_data() leads to   │
-│                     │                     │          │              │                        │               │ heap out-of-bounds read                                      │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-11850                   │
-├─────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libacl1             │ CVE-2026-54369      │ HIGH     │ fix_deferred │ 2.3.1-3                │               │ acl: Symlink traversal privilege escalation via libacl       │
-│                     │                     │          │              │                        │               │ functions                                                    │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-54369                   │
-│                     ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-54370      │ MEDIUM   │              │                        │               │ acl: TOCTOU Symlink Traversal via getfacl/setfacl            │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-54370                   │
-├─────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libapt-pkg6.0       │ CVE-2011-3374       │ LOW      │ affected     │ 2.6.1                  │               │ It was found that apt-key in apt, all versions, do not       │
-│                     │                     │          │              │                        │               │ correctly...                                                 │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2011-3374                    │
-├─────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libattr1            │ CVE-2026-54371      │ MEDIUM   │ fix_deferred │ 1:2.5.1-4              │               │ attr: attr: Symlink Traversal Privilege Escalation via       │
-│                     │                     │          │              │                        │               │ getfattr and setfattr                                        │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-54371                   │
-├─────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libblkid1           │ CVE-2026-53613      │ HIGH     │ affected     │ 2.38.1-5+deb12u3       │               │ util-linux: util-linux: TOCTOU in the mount program via      │
-│                     │                     │          │              │                        │               │ ancestor directory swap on...                                │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53613                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-53615      │          │              │                        │               │ util-linux: util-linux: Partition metadata compromise via    │
-│                     │                     │          │              │                        │               │ integer overflow in DOS partition parser...                  │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53615                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-76642      │          │              │                        │               │ util-linux: util-linux: failed external mount helper still   │
-│                     │                     │          │              │                        │               │ runs privileged X-mount post-hooks                           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-76642                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-78408      │          │              │                        │               │ util-linux: util-linux: nsenter --join-cgroup leaks root     │
-│                     │                     │          │              │                        │               │ cgroup migration authority                                   │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78408                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-78409      │          │              │                        │               │ util-linux: util-linux: X-mount.subdir detached-tree         │
-│                     │                     │          │              │                        │               │ resolution can escape via intermediate symlinks              │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78409                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-78410      │          │              │                        │               │ util-linux: util-linux: restricted bind mounts do not pin    │
-│                     │                     │          │              │                        │               │ the source, allowing X-mount.owner/group/mode...             │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78410                   │
-│                     ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-13595      │ MEDIUM   │              │                        │               │ util-linux: util-linux: heap use-after-free in libblkid      │
-│                     │                     │          │              │                        │               │ nested partition probing                                     │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-13595                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-27456      │          │              │                        │               │ util-linux: TOCTOU in the mount program when setting up loop │
-│                     │                     │          │              │                        │               │ devices                                                      │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-27456                   │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-3184       │          │ will_not_fix │                        │               │ util-linux: util-linux: Access control bypass due to         │
-│                     │                     │          │              │                        │               │ improper hostname canonicalization                           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-3184                    │
-│                     ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2022-0563       │ LOW      │ affected     │                        │               │ util-linux: partial disclosure of arbitrary files in chfn    │
-│                     │                     │          │              │                        │               │ and chsh when compiled...                                    │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2022-0563                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2025-14104      │          │              │                        │               │ util-linux: util-linux: Heap buffer overread in setpwnam()   │
-│                     │                     │          │              │                        │               │ when processing 256-byte usernames                           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-14104                   │
-├─────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libbz2-1.0          │ CVE-2026-42250      │ MEDIUM   │              │ 1.0.8-5+b1             │               │ bzip2: bzip2: Denial of Service in bzip2recover via a        │
-│                     │                     │          │              │                        │               │ specially crafted file...                                    │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-42250                   │
-├─────────────────────┼─────────────────────┤          ├──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libc-bin            │ CVE-2026-18374      │          │ fix_deferred │ 2.36-9+deb12u14        │               │ glibc: glibc: Heap buffer overflow via attacker-controlled   │
-│                     │                     │          │              │                        │               │ fopen mode string                                            │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-18374                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-19499      │          │              │                        │               │ glibc: Buffer Overflow in strfmon right-justification        │
-│                     │                     │          │              │                        │               │ padding                                                      │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-19499                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-19542      │          │              │                        │               │ glibc: Fix out-of-bounds array write in tdelete              │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-19542                   │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-5435       │          │ affected     │                        │               │ glibc: glibc: Out-of-bounds write via TSIG record processing │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-5435                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-5450       │          │              │                        │               │ glibc: glibc: Heap Buffer Overflow in `scanf` with `%mc`     │
-│                     │                     │          │              │                        │               │ format specifier and...                                      │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-5450                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-5928       │          │              │                        │               │ glibc: glibc: Information disclosure or denial of service    │
-│                     │                     │          │              │                        │               │ via ungetwc function with...                                 │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-5928                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-6238       │          │              │                        │               │ glibc: glibc: Application crash or uninitialized memory read │
-│                     │                     │          │              │                        │               │ via crafted DNS response...                                  │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-6238                    │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-6368       │          │ fix_deferred │                        │               │ glibc: glibc: Process abort due to invalid memory in wordexp │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-6368                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-6791       │          │              │                        │               │ glibc: Glibc: Denial of Service via stack exhaustion during  │
-│                     │                     │          │              │                        │               │ tilde expansion                                              │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-6791                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-77117      │          │              │                        │               │ glibc: Non-progress DoS in SHIFT_JISX0213 -&gt               │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-77117                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-80489      │          │              │                        │               │ glibc: Non-progress DoS in EUC_JISX0213 -> UCS-4 conversion  │
-│                     │                     │          │              │                        │               │ state                                                        │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-80489                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-8674       │          │              │                        │               │ glibc: glibc DNS stub resolver: Denial of Service via long   │
-│                     │                     │          │              │                        │               │ search domain...                                             │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-8674                    │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-86805      │          │ affected     │                        │               │ glibc: glibc: Privilege escalation and arbitrary code        │
-│                     │                     │          │              │                        │               │ execution via TOCTOU race condition...                       │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-86805                   │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-89092      │          │ fix_deferred │                        │               │ glibc: nscd stack overflow leads to degraded DNS resolution  │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-89092                   │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-95818      │          │ affected     │                        │               │ glibc: glibc: Local attacker can cause denial of service and │
-│                     │                     │          │              │                        │               │ information disclosure...                                    │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-95818                   │
-│                     ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2010-4756       │ LOW      │              │                        │               │ glibc: glob implementation can cause excessive CPU and       │
-│                     │                     │          │              │                        │               │ memory consumption due to...                                 │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2010-4756                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2018-20796      │          │              │                        │               │ glibc: uncontrolled recursion in function                    │
-│                     │                     │          │              │                        │               │ check_dst_limits_calc_pos_1 in posix/regexec.c               │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2018-20796                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2019-1010022    │          │              │                        │               │ glibc: stack guard protection bypass                         │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2019-1010022                 │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2019-1010023    │          │              │                        │               │ glibc: running ldd on malicious ELF leads to code execution  │
-│                     │                     │          │              │                        │               │ because of...                                                │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2019-1010023                 │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2019-1010024    │          │              │                        │               │ glibc: ASLR bypass using cache of thread stack and heap      │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2019-1010024                 │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2019-1010025    │          │              │                        │               │ glibc: information disclosure of heap addresses of           │
-│                     │                     │          │              │                        │               │ pthread_created thread                                       │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2019-1010025                 │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2019-9192       │          │              │                        │               │ glibc: uncontrolled recursion in function                    │
-│                     │                     │          │              │                        │               │ check_dst_limits_calc_pos_1 in posix/regexec.c               │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2019-9192                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-97399      │          │              │                        │               │ glibc: glibc: Denial of Service via out-of-bounds read in    │
-│                     │                     │          │              │                        │               │ strncasecmp                                                  │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-97399                   │
-├─────────────────────┼─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│ libc6               │ CVE-2026-18374      │ MEDIUM   │ fix_deferred │                        │               │ glibc: glibc: Heap buffer overflow via attacker-controlled   │
-│                     │                     │          │              │                        │               │ fopen mode string                                            │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-18374                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-19499      │          │              │                        │               │ glibc: Buffer Overflow in strfmon right-justification        │
-│                     │                     │          │              │                        │               │ padding                                                      │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-19499                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-19542      │          │              │                        │               │ glibc: Fix out-of-bounds array write in tdelete              │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-19542                   │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-5435       │          │ affected     │                        │               │ glibc: glibc: Out-of-bounds write via TSIG record processing │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-5435                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-5450       │          │              │                        │               │ glibc: glibc: Heap Buffer Overflow in `scanf` with `%mc`     │
-│                     │                     │          │              │                        │               │ format specifier and...                                      │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-5450                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-5928       │          │              │                        │               │ glibc: glibc: Information disclosure or denial of service    │
-│                     │                     │          │              │                        │               │ via ungetwc function with...                                 │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-5928                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-6238       │          │              │                        │               │ glibc: glibc: Application crash or uninitialized memory read │
-│                     │                     │          │              │                        │               │ via crafted DNS response...                                  │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-6238                    │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-6368       │          │ fix_deferred │                        │               │ glibc: glibc: Process abort due to invalid memory in wordexp │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-6368                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-6791       │          │              │                        │               │ glibc: Glibc: Denial of Service via stack exhaustion during  │
-│                     │                     │          │              │                        │               │ tilde expansion                                              │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-6791                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-77117      │          │              │                        │               │ glibc: Non-progress DoS in SHIFT_JISX0213 -&gt               │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-77117                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-80489      │          │              │                        │               │ glibc: Non-progress DoS in EUC_JISX0213 -> UCS-4 conversion  │
-│                     │                     │          │              │                        │               │ state                                                        │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-80489                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-8674       │          │              │                        │               │ glibc: glibc DNS stub resolver: Denial of Service via long   │
-│                     │                     │          │              │                        │               │ search domain...                                             │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-8674                    │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-86805      │          │ affected     │                        │               │ glibc: glibc: Privilege escalation and arbitrary code        │
-│                     │                     │          │              │                        │               │ execution via TOCTOU race condition...                       │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-86805                   │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-89092      │          │ fix_deferred │                        │               │ glibc: nscd stack overflow leads to degraded DNS resolution  │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-89092                   │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-95818      │          │ affected     │                        │               │ glibc: glibc: Local attacker can cause denial of service and │
-│                     │                     │          │              │                        │               │ information disclosure...                                    │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-95818                   │
-│                     ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2010-4756       │ LOW      │              │                        │               │ glibc: glob implementation can cause excessive CPU and       │
-│                     │                     │          │              │                        │               │ memory consumption due to...                                 │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2010-4756                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2018-20796      │          │              │                        │               │ glibc: uncontrolled recursion in function                    │
-│                     │                     │          │              │                        │               │ check_dst_limits_calc_pos_1 in posix/regexec.c               │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2018-20796                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2019-1010022    │          │              │                        │               │ glibc: stack guard protection bypass                         │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2019-1010022                 │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2019-1010023    │          │              │                        │               │ glibc: running ldd on malicious ELF leads to code execution  │
-│                     │                     │          │              │                        │               │ because of...                                                │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2019-1010023                 │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2019-1010024    │          │              │                        │               │ glibc: ASLR bypass using cache of thread stack and heap      │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2019-1010024                 │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2019-1010025    │          │              │                        │               │ glibc: information disclosure of heap addresses of           │
-│                     │                     │          │              │                        │               │ pthread_created thread                                       │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2019-1010025                 │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2019-9192       │          │              │                        │               │ glibc: uncontrolled recursion in function                    │
-│                     │                     │          │              │                        │               │ check_dst_limits_calc_pos_1 in posix/regexec.c               │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2019-9192                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-97399      │          │              │                        │               │ glibc: glibc: Denial of Service via out-of-bounds read in    │
-│                     │                     │          │              │                        │               │ strncasecmp                                                  │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-97399                   │
-├─────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libcurl4            │ CVE-2026-12064      │ HIGH     │ fix_deferred │ 7.88.1-10+deb12u15     │               │ curl: curl: SSH host verification bypass when using          │
-│                     │                     │          │              │                        │               │ schemeless URLs with SFTP/SCP...                             │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-12064                   │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-6276       │          │ affected     │                        │               │ curl: libcurl: Information disclosure due to cookie leak     │
-│                     │                     │          │              │                        │               │ when reusing connections with...                             │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-6276                    │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-8286       │          │ fix_deferred │                        │               │ curl: curl: Insecure connection establishment due to TLS     │
-│                     │                     │          │              │                        │               │ configuration mismatch                                       │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-8286                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-8458       │          │              │                        │               │ curl: libcurl: Unauthorized connection reuse due to a        │
-│                     │                     │          │              │                        │               │ logical error                                                │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-8458                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-8927       │          │              │                        │               │ curl: Information disclosure due to uncleared proxy          │
-│                     │                     │          │              │                        │               │ authentication state                                         │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-8927                    │
-│                     ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-10536      │ MEDIUM   │              │                        │               │ libcurl: libcurl: Use-after-free vulnerability leading to    │
-│                     │                     │          │              │                        │               │ Denial of Service                                            │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-10536                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-11856      │          │              │                        │               │ curl: curl: Information disclosure via incorrect Digest      │
-│                     │                     │          │              │                        │               │ authentication header reuse                                  │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-11856                   │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-1965       │          │ affected     │                        │               │ curl: curl: Authentication bypass due to incorrect           │
-│                     │                     │          │              │                        │               │ connection reuse with Negotiate authentication...            │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-1965                    │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-19931      │          │ fix_deferred │                        │               │ curl: libcurl: Information disclosure via incorrect          │
-│                     │                     │          │              │                        │               │ connection reuse with Negotiate authentication               │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-19931                   │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-4873       │          │ affected     │                        │               │ curl: curl: Information disclosure due to incorrect TLS      │
-│                     │                     │          │              │                        │               │ connection reuse                                             │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-4873                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-5545       │          │              │                        │               │ curl: libcurl: Authentication bypass due to incorrect HTTP   │
-│                     │                     │          │              │                        │               │ Negotiate connection reuse                                   │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-5545                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-6253       │          │              │                        │               │ curl: curl: Proxy credential disclosure via redirects to     │
-│                     │                     │          │              │                        │               │ unauthenticated proxies                                      │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-6253                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-6429       │          │              │                        │               │ curl: libcurl: Credential leak via reused proxy connection   │
-│                     │                     │          │              │                        │               │ during HTTP redirects                                        │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-6429                    │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-8924       │          │ fix_deferred │                        │               │ curl: curl: Cookie injection via malicious HTTP server using │
-│                     │                     │          │              │                        │               │ super cookies                                                │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-8924                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-8932       │          │              │                        │               │ libcurl: libcurl: Security feature bypass due to improper    │
-│                     │                     │          │              │                        │               │ mTLS connection reuse                                        │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-8932                    │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-92388      │          │ affected     │                        │               │ curl: curl: FTP wildcard write callback mixup                │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-92388                   │
-│                     ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2024-2379       │ LOW      │              │                        │               │ curl: QUIC certificate check bypass with wolfSSL             │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-2379                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2025-0725       │          │              │                        │               │ libcurl: Buffer Overflow in libcurl via zlib Integer         │
-│                     │                     │          │              │                        │               │ Overflow                                                     │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-0725                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2025-10966      │          │              │                        │               │ curl: Curl missing SFTP host verification with wolfSSH       │
-│                     │                     │          │              │                        │               │ backend                                                      │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-10966                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2025-14017      │          │              │                        │               │ curl: curl: Security bypass due to global TLS option changes │
-│                     │                     │          │              │                        │               │ in multi-threaded...                                         │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-14017                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2025-15079      │          │              │                        │               │ curl: Host verification bypass during SSH transfers          │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-15079                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2025-15224      │          │              │                        │               │ curl: libssh key passphrase bypass without agent set         │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-15224                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-107928     │          │              │                        │               │ curl: curl: info leak uploading over WebSockets with GnuTLS  │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107928                  │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-13608      │          │ fix_deferred │                        │               │ curl: curl: Authentication bypass in OpenLDAP SASL           │
-│                     │                     │          │              │                        │               │ negotiation via Man-in-the-Middle (MITM) attack...           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-13608                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-18924      │          │              │                        │               │ curl: libcurl: Use-after-free in HTTP/2 Server Push with     │
-│                     │                     │          │              │                        │               │ shared connections                                           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-18924                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-80230      │          │              │                        │               │ curl: curl: Public key pinning bypass allows unauthenticated │
-│                     │                     │          │              │                        │               │ connections                                                  │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-80230                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-82209      │          │              │                        │               │ curl: libcurl: Information disclosure via improper Public    │
-│                     │                     │          │              │                        │               │ Suffix List boundary check                                   │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-82209                   │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-86409      │          │ affected     │                        │               │ curl: curl: stale SigV4 headers sent unintended              │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-86409                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-86410      │          │              │                        │               │ curl: curl: redirect to SFTP or SCP bypasses host            │
-│                     │                     │          │              │                        │               │ verification                                                 │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-86410                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-86414      │          │              │                        │               │ curl: curl: leaking host credentials to HTTP proxy           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-86414                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-87864      │          │              │                        │               │ curl: IMAP APPEND plus CRLF conversion command injection     │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-87864                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-87865      │          │              │                        │               │ curl: curl: knownhost callback mismatches key as missing     │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-87865                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-87866      │          │              │                        │               │ curl: curl: wolfSSL public-key pinning bypass                │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-87866                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-92389      │          │              │                        │               │ curl: curl: TFTP direction confusion                         │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-92389                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-92390      │          │              │                        │               │ curl: curl: -J no-clobber guarantee bypassed with 103 early  │
-│                     │                     │          │              │                        │               │ hints                                                        │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-92390                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-92391      │          │              │                        │               │ curl: curl: curl_mime_free stack overflow by recursion       │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-92391                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-94266      │          │              │                        │               │ curl: curl: password leak in CURLINFO_EFFECTIVE_URL          │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-94266                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-9547       │          │              │                        │               │ curl: curl: Man-in-the-middle attack via SSH host key bypass │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-9547                    │
-├─────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libgcc-s1           │ CVE-2026-102010     │ MEDIUM   │ will_not_fix │ 12.2.0-14+deb12u1      │               │ gcc-toolset-15-gcc: gcc: gcc-toolset-16: gcc: Denial of      │
-│                     │                     │          │              │                        │               │ Service via use-after-free in binary heap...                 │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-102010                  │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-95619      │          │ fix_deferred │                        │               │ gcc: libstdc++ integer overflow in `new` operator            │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-95619                   │
-│                     ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2022-27943      │ LOW      │ affected     │                        │               │ binutils: libiberty/rust-demangle.c in GNU GCC 11.2 allows   │
-│                     │                     │          │              │                        │               │ stack exhaustion in demangle_const                           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2022-27943                   │
-├─────────────────────┼─────────────────────┤          │              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libgcrypt20         │ CVE-2018-6829       │          │              │ 1.10.1-3+deb12u1       │               │ libgcrypt: ElGamal implementation doesn't have semantic      │
-│                     │                     │          │              │                        │               │ security due to incorrectly encoded plaintexts...            │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2018-6829                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2024-2236       │          │              │                        │               │ libgcrypt: vulnerable to Marvin Attack                       │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-2236                    │
-├─────────────────────┼─────────────────────┤          │              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libgnutls30         │ CVE-2011-3389       │          │              │ 3.7.9-2+deb12u7        │               │ HTTPS: block-wise chosen-plaintext attack against SSL/TLS    │
-│                     │                     │          │              │                        │               │ (BEAST)                                                      │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2011-3389                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-67693      │          │              │                        │               │ gnutls: gnutls: Information disclosure via contradictory Key │
-│                     │                     │          │              │                        │               │ Usage and Extended Key Usage...                              │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-67693                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-88647      │          │              │                        │               │ gnutls: gnutls: Information disclosure via hostname          │
-│                     │                     │          │              │                        │               │ verification bypass                                          │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-88647                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-88648      │          │              │                        │               │ gnutls: gnutls: Cross-domain certificate restriction bypass  │
-│                     │                     │          │              │                        │               │ via incomplete X.509 validation                              │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-88648                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-95184      │          │              │                        │               │ gnutls: gnutls: legitimate user certificates incorrectly     │
-│                     │                     │          │              │                        │               │ rejected causing denial of service                           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-95184                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-95209      │          │              │                        │               │ gnutls: gnutls: legitimate CA certificates incorrectly       │
-│                     │                     │          │              │                        │               │ rejected causing denial of service                           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-95209                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-95210      │          │              │                        │               │ gnutls: gnutls: certificates with invalid extensions         │
-│                     │                     │          │              │                        │               │ incorrectly accepted                                         │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-95210                   │
-├─────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libgssapi-krb5-2    │ CVE-2026-107708     │ MEDIUM   │ fix_deferred │ 1.20.1-2+deb12u5       │               │ krb5: krb5: Denial of Service via malformed PAC in S4U2Proxy │
-│                     │                     │          │              │                        │               │ requests                                                     │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107708                  │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-107778     │          │              │                        │               │ krb5: krb5: Denial of Service via crafted forwarded          │
-│                     │                     │          │              │                        │               │ credentials                                                  │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107778                  │
-│                     ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2018-5709       │ LOW      │ affected     │                        │               │ krb5: integer overflow in dbentry->n_key_data in             │
-│                     │                     │          │              │                        │               │ kadmin/dbutil/dump.c                                         │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2018-5709                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2024-26458      │          │              │                        │               │ krb5: Memory leak at /krb5/src/lib/rpc/pmap_rmt.c            │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-26458                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2024-26461      │          │              │                        │               │ krb5: Memory leak at /krb5/src/lib/gssapi/krb5/k5sealv3.c    │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-26461                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-11850      │          │              │                        │               │ krb5: krb5: integer underflow in berval2tl_data() leads to   │
-│                     │                     │          │              │                        │               │ heap out-of-bounds read                                      │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-11850                   │
-├─────────────────────┼─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│ libk5crypto3        │ CVE-2026-107708     │ MEDIUM   │ fix_deferred │                        │               │ krb5: krb5: Denial of Service via malformed PAC in S4U2Proxy │
-│                     │                     │          │              │                        │               │ requests                                                     │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107708                  │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-107778     │          │              │                        │               │ krb5: krb5: Denial of Service via crafted forwarded          │
-│                     │                     │          │              │                        │               │ credentials                                                  │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107778                  │
-│                     ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2018-5709       │ LOW      │ affected     │                        │               │ krb5: integer overflow in dbentry->n_key_data in             │
-│                     │                     │          │              │                        │               │ kadmin/dbutil/dump.c                                         │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2018-5709                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2024-26458      │          │              │                        │               │ krb5: Memory leak at /krb5/src/lib/rpc/pmap_rmt.c            │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-26458                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2024-26461      │          │              │                        │               │ krb5: Memory leak at /krb5/src/lib/gssapi/krb5/k5sealv3.c    │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-26461                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-11850      │          │              │                        │               │ krb5: krb5: integer underflow in berval2tl_data() leads to   │
-│                     │                     │          │              │                        │               │ heap out-of-bounds read                                      │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-11850                   │
-├─────────────────────┼─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│ libkrb5-3           │ CVE-2026-107708     │ MEDIUM   │ fix_deferred │                        │               │ krb5: krb5: Denial of Service via malformed PAC in S4U2Proxy │
-│                     │                     │          │              │                        │               │ requests                                                     │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107708                  │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-107778     │          │              │                        │               │ krb5: krb5: Denial of Service via crafted forwarded          │
-│                     │                     │          │              │                        │               │ credentials                                                  │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107778                  │
-│                     ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2018-5709       │ LOW      │ affected     │                        │               │ krb5: integer overflow in dbentry->n_key_data in             │
-│                     │                     │          │              │                        │               │ kadmin/dbutil/dump.c                                         │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2018-5709                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2024-26458      │          │              │                        │               │ krb5: Memory leak at /krb5/src/lib/rpc/pmap_rmt.c            │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-26458                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2024-26461      │          │              │                        │               │ krb5: Memory leak at /krb5/src/lib/gssapi/krb5/k5sealv3.c    │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-26461                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-11850      │          │              │                        │               │ krb5: krb5: integer underflow in berval2tl_data() leads to   │
-│                     │                     │          │              │                        │               │ heap out-of-bounds read                                      │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-11850                   │
-├─────────────────────┼─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│ libkrb5support0     │ CVE-2026-107708     │ MEDIUM   │ fix_deferred │                        │               │ krb5: krb5: Denial of Service via malformed PAC in S4U2Proxy │
-│                     │                     │          │              │                        │               │ requests                                                     │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107708                  │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-107778     │          │              │                        │               │ krb5: krb5: Denial of Service via crafted forwarded          │
-│                     │                     │          │              │                        │               │ credentials                                                  │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107778                  │
-│                     ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2018-5709       │ LOW      │ affected     │                        │               │ krb5: integer overflow in dbentry->n_key_data in             │
-│                     │                     │          │              │                        │               │ kadmin/dbutil/dump.c                                         │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2018-5709                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2024-26458      │          │              │                        │               │ krb5: Memory leak at /krb5/src/lib/rpc/pmap_rmt.c            │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-26458                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2024-26461      │          │              │                        │               │ krb5: Memory leak at /krb5/src/lib/gssapi/krb5/k5sealv3.c    │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-26461                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-11850      │          │              │                        │               │ krb5: krb5: integer underflow in berval2tl_data() leads to   │
-│                     │                     │          │              │                        │               │ heap out-of-bounds read                                      │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-11850                   │
-├─────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libldap-2.5-0       │ CVE-2023-2953       │ HIGH     │              │ 2.5.13+dfsg-5          │               │ openldap: null pointer dereference in ber_memalloc_x         │
-│                     │                     │          │              │                        │               │ function                                                     │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-2953                    │
-│                     ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2015-3276       │ LOW      │              │                        │               │ openldap: incorrect multi-keyword mode cipherstring parsing  │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2015-3276                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2017-14159      │          │              │                        │               │ openldap: Privilege escalation via PID file manipulation     │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2017-14159                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2017-17740      │          │              │                        │               │ openldap: contrib/slapd-modules/nops/nops.c attempts to free │
-│                     │                     │          │              │                        │               │ stack buffer allowing remote attackers to cause...           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2017-17740                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2020-15719      │          │              │                        │               │ openldap: Certificate validation incorrectly matches name    │
-│                     │                     │          │              │                        │               │ against CN-ID                                                │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2020-15719                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-22185      │          │              │                        │               │ OpenLDAP: OpenLDAP LMDB: Denial of Service and Information   │
-│                     │                     │          │              │                        │               │ Disclosure via Heap Buffer...                                │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-22185                   │
-├─────────────────────┼─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│ libldap-common      │ CVE-2023-2953       │ HIGH     │              │                        │               │ openldap: null pointer dereference in ber_memalloc_x         │
-│                     │                     │          │              │                        │               │ function                                                     │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-2953                    │
-│                     ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2015-3276       │ LOW      │              │                        │               │ openldap: incorrect multi-keyword mode cipherstring parsing  │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2015-3276                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2017-14159      │          │              │                        │               │ openldap: Privilege escalation via PID file manipulation     │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2017-14159                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2017-17740      │          │              │                        │               │ openldap: contrib/slapd-modules/nops/nops.c attempts to free │
-│                     │                     │          │              │                        │               │ stack buffer allowing remote attackers to cause...           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2017-17740                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2020-15719      │          │              │                        │               │ openldap: Certificate validation incorrectly matches name    │
-│                     │                     │          │              │                        │               │ against CN-ID                                                │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2020-15719                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-22185      │          │              │                        │               │ OpenLDAP: OpenLDAP LMDB: Denial of Service and Information   │
-│                     │                     │          │              │                        │               │ Disclosure via Heap Buffer...                                │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-22185                   │
-├─────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libmount1           │ CVE-2026-53613      │ HIGH     │              │ 2.38.1-5+deb12u3       │               │ util-linux: util-linux: TOCTOU in the mount program via      │
-│                     │                     │          │              │                        │               │ ancestor directory swap on...                                │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53613                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-53615      │          │              │                        │               │ util-linux: util-linux: Partition metadata compromise via    │
-│                     │                     │          │              │                        │               │ integer overflow in DOS partition parser...                  │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53615                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-76642      │          │              │                        │               │ util-linux: util-linux: failed external mount helper still   │
-│                     │                     │          │              │                        │               │ runs privileged X-mount post-hooks                           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-76642                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-78408      │          │              │                        │               │ util-linux: util-linux: nsenter --join-cgroup leaks root     │
-│                     │                     │          │              │                        │               │ cgroup migration authority                                   │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78408                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-78409      │          │              │                        │               │ util-linux: util-linux: X-mount.subdir detached-tree         │
-│                     │                     │          │              │                        │               │ resolution can escape via intermediate symlinks              │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78409                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-78410      │          │              │                        │               │ util-linux: util-linux: restricted bind mounts do not pin    │
-│                     │                     │          │              │                        │               │ the source, allowing X-mount.owner/group/mode...             │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78410                   │
-│                     ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-13595      │ MEDIUM   │              │                        │               │ util-linux: util-linux: heap use-after-free in libblkid      │
-│                     │                     │          │              │                        │               │ nested partition probing                                     │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-13595                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-27456      │          │              │                        │               │ util-linux: TOCTOU in the mount program when setting up loop │
-│                     │                     │          │              │                        │               │ devices                                                      │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-27456                   │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-3184       │          │ will_not_fix │                        │               │ util-linux: util-linux: Access control bypass due to         │
-│                     │                     │          │              │                        │               │ improper hostname canonicalization                           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-3184                    │
-│                     ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2022-0563       │ LOW      │ affected     │                        │               │ util-linux: partial disclosure of arbitrary files in chfn    │
-│                     │                     │          │              │                        │               │ and chsh when compiled...                                    │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2022-0563                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2025-14104      │          │              │                        │               │ util-linux: util-linux: Heap buffer overread in setpwnam()   │
-│                     │                     │          │              │                        │               │ when processing 256-byte usernames                           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-14104                   │
-├─────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libnghttp2-14       │ CVE-2026-58055      │ MEDIUM   │ fix_deferred │ 1.52.0-1+deb12u3       │               │ nghttp2: nghttp2: HTTP Request/Response Smuggling and        │
-│                     │                     │          │              │                        │               │ Response-Queue Poisoning via ambiguous HTTP/1.1 Upgrade...   │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-58055                   │
-├─────────────────────┼─────────────────────┤          │              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libp11-kit0         │ CVE-2026-13757      │          │              │ 0.24.1-2               │               │ p11-kit: Stack exhaustion via unbounded recursion in RPC     │
-│                     │                     │          │              │                        │               │ attribute parsing                                            │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-13757                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-18938      │          │              │                        │               │ p11-kit: Integer overflow in RPC attribute-array length      │
-│                     │                     │          │              │                        │               │ calculation can under-allocate nested attribute...           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-18938                   │
-├─────────────────────┼─────────────────────┤          ├──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libpam-modules      │ CVE-2024-10041      │          │ will_not_fix │ 1.5.2-6+deb12u2        │               │ pam: libpam: Libpam vulnerable to read hashed password       │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-10041                   │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-54411      │          │ fix_deferred │                        │               │ linux-pam: Plaintext password recovery via timing            │
-│                     │                     │          │              │                        │               │ discrepancy in pam_userdb module                             │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-54411                   │
-├─────────────────────┼─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│ libpam-modules-bin  │ CVE-2024-10041      │          │ will_not_fix │                        │               │ pam: libpam: Libpam vulnerable to read hashed password       │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-10041                   │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-54411      │          │ fix_deferred │                        │               │ linux-pam: Plaintext password recovery via timing            │
-│                     │                     │          │              │                        │               │ discrepancy in pam_userdb module                             │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-54411                   │
-├─────────────────────┼─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│ libpam-runtime      │ CVE-2024-10041      │          │ will_not_fix │                        │               │ pam: libpam: Libpam vulnerable to read hashed password       │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-10041                   │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-54411      │          │ fix_deferred │                        │               │ linux-pam: Plaintext password recovery via timing            │
-│                     │                     │          │              │                        │               │ discrepancy in pam_userdb module                             │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-54411                   │
-├─────────────────────┼─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│ libpam0g            │ CVE-2024-10041      │          │ will_not_fix │                        │               │ pam: libpam: Libpam vulnerable to read hashed password       │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-10041                   │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-54411      │          │ fix_deferred │                        │               │ linux-pam: Plaintext password recovery via timing            │
-│                     │                     │          │              │                        │               │ discrepancy in pam_userdb module                             │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-54411                   │
-├─────────────────────┼─────────────────────┤          ├──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libsasl2-2          │ CVE-2026-107161     │          │ affected     │ 2.1.28+dfsg-10         │               │ cyrus-sasl: Heap buffer overflow in cyrus-sasl               │
-│                     │                     │          │              │                        │               │ add_to_challenge() allows malicious server to crash...       │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107161                  │
-├─────────────────────┤                     │          │              │                        ├───────────────┤                                                              │
-│ libsasl2-modules    │                     │          │              │                        │               │                                                              │
-│                     │                     │          │              │                        │               │                                                              │
-│                     │                     │          │              │                        │               │                                                              │
-├─────────────────────┤                     │          │              │                        ├───────────────┤                                                              │
-│ libsasl2-modules-db │                     │          │              │                        │               │                                                              │
-│                     │                     │          │              │                        │               │                                                              │
-│                     │                     │          │              │                        │               │                                                              │
-├─────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libsmartcols1       │ CVE-2026-53613      │ HIGH     │              │ 2.38.1-5+deb12u3       │               │ util-linux: util-linux: TOCTOU in the mount program via      │
-│                     │                     │          │              │                        │               │ ancestor directory swap on...                                │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53613                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-53615      │          │              │                        │               │ util-linux: util-linux: Partition metadata compromise via    │
-│                     │                     │          │              │                        │               │ integer overflow in DOS partition parser...                  │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53615                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-76642      │          │              │                        │               │ util-linux: util-linux: failed external mount helper still   │
-│                     │                     │          │              │                        │               │ runs privileged X-mount post-hooks                           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-76642                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-78408      │          │              │                        │               │ util-linux: util-linux: nsenter --join-cgroup leaks root     │
-│                     │                     │          │              │                        │               │ cgroup migration authority                                   │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78408                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-78409      │          │              │                        │               │ util-linux: util-linux: X-mount.subdir detached-tree         │
-│                     │                     │          │              │                        │               │ resolution can escape via intermediate symlinks              │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78409                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-78410      │          │              │                        │               │ util-linux: util-linux: restricted bind mounts do not pin    │
-│                     │                     │          │              │                        │               │ the source, allowing X-mount.owner/group/mode...             │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78410                   │
-│                     ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-13595      │ MEDIUM   │              │                        │               │ util-linux: util-linux: heap use-after-free in libblkid      │
-│                     │                     │          │              │                        │               │ nested partition probing                                     │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-13595                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-27456      │          │              │                        │               │ util-linux: TOCTOU in the mount program when setting up loop │
-│                     │                     │          │              │                        │               │ devices                                                      │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-27456                   │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-3184       │          │ will_not_fix │                        │               │ util-linux: util-linux: Access control bypass due to         │
-│                     │                     │          │              │                        │               │ improper hostname canonicalization                           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-3184                    │
-│                     ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2022-0563       │ LOW      │ affected     │                        │               │ util-linux: partial disclosure of arbitrary files in chfn    │
-│                     │                     │          │              │                        │               │ and chsh when compiled...                                    │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2022-0563                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2025-14104      │          │              │                        │               │ util-linux: util-linux: Heap buffer overread in setpwnam()   │
-│                     │                     │          │              │                        │               │ when processing 256-byte usernames                           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-14104                   │
-├─────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libssl3             │ CVE-2026-84782      │ HIGH     │              │ 3.0.22-1~deb12u1       │               │ openssl: compat-openssl: openssl: Information disclosure via │
-│                     │                     │          │              │                        │               │ DTLS handshake retransmission                                │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-84782                   │
-│                     ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-54872      │ MEDIUM   │              │                        │               │ openssl: OpenSSL: Private key recovery via timing            │
-│                     │                     │          │              │                        │               │ side-channel in generic elliptic curve...                    │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-54872                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-75805      │          │              │                        │               │ openssl: openssl: Denial of Service via crafted CMP          │
-│                     │                     │          │              │                        │               │ certificate revocation response                              │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-75805                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-75806      │          │              │                        │               │ openssl: OpenSSL: Denial of Service via undersized DTLS      │
-│                     │                     │          │              │                        │               │ record                                                       │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-75806                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-77696      │          │              │                        │               │ openssl: OpenSSL: Private key recovery via SM2 timing        │
-│                     │                     │          │              │                        │               │ side-channel                                                 │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-77696                   │
-│                     ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2025-27587      │ LOW      │              │                        │               │ OpenSSL 3.0.0 through 3.3.2 on the PowerPC architecture is   │
-│                     │                     │          │              │                        │               │ vulnerable ......                                            │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-27587                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-35189      │          │              │                        │               │ openssl: openssl: Denial of Service via excessive memory     │
-│                     │                     │          │              │                        │               │ allocation in CRL distribution...                            │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-35189                   │
-├─────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libstdc++6          │ CVE-2026-102010     │ MEDIUM   │ will_not_fix │ 12.2.0-14+deb12u1      │               │ gcc-toolset-15-gcc: gcc: gcc-toolset-16: gcc: Denial of      │
-│                     │                     │          │              │                        │               │ Service via use-after-free in binary heap...                 │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-102010                  │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-95619      │          │ fix_deferred │                        │               │ gcc: libstdc++ integer overflow in `new` operator            │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-95619                   │
-│                     ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2022-27943      │ LOW      │ affected     │                        │               │ binutils: libiberty/rust-demangle.c in GNU GCC 11.2 allows   │
-│                     │                     │          │              │                        │               │ stack exhaustion in demangle_const                           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2022-27943                   │
-├─────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libsystemd0         │ CVE-2026-16742      │ HIGH     │ fix_deferred │ 252.39-1~deb12u2       │               │ systemd: systemd-homed: Local privilege escalation via       │
-│                     │                     │          │              │                        │               │ missing home-record signature verification                   │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-16742                   │
-│                     ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-15059      │ MEDIUM   │              │                        │               │ systemd: systemd-oomd: Unprivileged users can terminate      │
-│                     │                     │          │              │                        │               │ arbitrary processes via IPC API                              │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-15059                   │
-│                     ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2013-4392       │ LOW      │ affected     │                        │               │ systemd: TOCTOU race condition when updating file            │
-│                     │                     │          │              │                        │               │ permissions and SELinux security contexts...                 │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2013-4392                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2023-31437      │          │              │                        │               │ An issue was discovered in systemd 253. An attacker can      │
-│                     │                     │          │              │                        │               │ modify a...                                                  │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-31437                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2023-31438      │          │              │                        │               │ An issue was discovered in systemd 253. An attacker can      │
-│                     │                     │          │              │                        │               │ truncate a...                                                │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-31438                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2023-31439      │          │              │                        │               │ An issue was discovered in systemd 253. An attacker can      │
-│                     │                     │          │              │                        │               │ modify the...                                                │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-31439                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-40228      │          │              │                        │               │ systemd: systemd-journald: Unintended output to user         │
-│                     │                     │          │              │                        │               │ terminals via logger command                                 │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-40228                   │
-├─────────────────────┼─────────────────────┤          │              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libtasn1-6          │ CVE-2025-13151      │          │              │ 4.19.0-2+deb12u1       │               │ libtasn1: libtasn1: Denial of Service via stack-based buffer │
-│                     │                     │          │              │                        │               │ overflow in asn1_expend_octet_string                         │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-13151                   │
-├─────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libtinfo6           │ CVE-2025-69720      │ HIGH     │              │ 6.4-4                  │               │ ncurses: ncurses: Buffer overflow vulnerability may lead to  │
-│                     │                     │          │              │                        │               │ arbitrary code execution.                                    │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-69720                   │
-│                     ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2023-50495      │ MEDIUM   │              │                        │               │ ncurses: segmentation fault via _nc_wrap_entry()             │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-50495                   │
-│                     ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2025-6141       │ LOW      │              │                        │               │ gnu-ncurses: ncurses Stack Buffer Overflow                   │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-6141                    │
-├─────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libudev1            │ CVE-2026-16742      │ HIGH     │ fix_deferred │ 252.39-1~deb12u2       │               │ systemd: systemd-homed: Local privilege escalation via       │
-│                     │                     │          │              │                        │               │ missing home-record signature verification                   │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-16742                   │
-│                     ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-15059      │ MEDIUM   │              │                        │               │ systemd: systemd-oomd: Unprivileged users can terminate      │
-│                     │                     │          │              │                        │               │ arbitrary processes via IPC API                              │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-15059                   │
-│                     ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2013-4392       │ LOW      │ affected     │                        │               │ systemd: TOCTOU race condition when updating file            │
-│                     │                     │          │              │                        │               │ permissions and SELinux security contexts...                 │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2013-4392                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2023-31437      │          │              │                        │               │ An issue was discovered in systemd 253. An attacker can      │
-│                     │                     │          │              │                        │               │ modify a...                                                  │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-31437                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2023-31438      │          │              │                        │               │ An issue was discovered in systemd 253. An attacker can      │
-│                     │                     │          │              │                        │               │ truncate a...                                                │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-31438                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2023-31439      │          │              │                        │               │ An issue was discovered in systemd 253. An attacker can      │
-│                     │                     │          │              │                        │               │ modify the...                                                │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-31439                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-40228      │          │              │                        │               │ systemd: systemd-journald: Unintended output to user         │
-│                     │                     │          │              │                        │               │ terminals via logger command                                 │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-40228                   │
-├─────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libuuid1            │ CVE-2026-53613      │ HIGH     │              │ 2.38.1-5+deb12u3       │               │ util-linux: util-linux: TOCTOU in the mount program via      │
-│                     │                     │          │              │                        │               │ ancestor directory swap on...                                │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53613                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-53615      │          │              │                        │               │ util-linux: util-linux: Partition metadata compromise via    │
-│                     │                     │          │              │                        │               │ integer overflow in DOS partition parser...                  │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53615                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-76642      │          │              │                        │               │ util-linux: util-linux: failed external mount helper still   │
-│                     │                     │          │              │                        │               │ runs privileged X-mount post-hooks                           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-76642                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-78408      │          │              │                        │               │ util-linux: util-linux: nsenter --join-cgroup leaks root     │
-│                     │                     │          │              │                        │               │ cgroup migration authority                                   │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78408                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-78409      │          │              │                        │               │ util-linux: util-linux: X-mount.subdir detached-tree         │
-│                     │                     │          │              │                        │               │ resolution can escape via intermediate symlinks              │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78409                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-78410      │          │              │                        │               │ util-linux: util-linux: restricted bind mounts do not pin    │
-│                     │                     │          │              │                        │               │ the source, allowing X-mount.owner/group/mode...             │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78410                   │
-│                     ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-13595      │ MEDIUM   │              │                        │               │ util-linux: util-linux: heap use-after-free in libblkid      │
-│                     │                     │          │              │                        │               │ nested partition probing                                     │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-13595                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-27456      │          │              │                        │               │ util-linux: TOCTOU in the mount program when setting up loop │
-│                     │                     │          │              │                        │               │ devices                                                      │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-27456                   │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-3184       │          │ will_not_fix │                        │               │ util-linux: util-linux: Access control bypass due to         │
-│                     │                     │          │              │                        │               │ improper hostname canonicalization                           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-3184                    │
-│                     ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2022-0563       │ LOW      │ affected     │                        │               │ util-linux: partial disclosure of arbitrary files in chfn    │
-│                     │                     │          │              │                        │               │ and chsh when compiled...                                    │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2022-0563                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2025-14104      │          │              │                        │               │ util-linux: util-linux: Heap buffer overread in setpwnam()   │
-│                     │                     │          │              │                        │               │ when processing 256-byte usernames                           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-14104                   │
-├─────────────────────┼─────────────────────┤          │              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ login               │ CVE-2007-5686       │          │              │ 1:4.13+dfsg1-1+deb12u2 │               │ initscripts in rPath Linux 1 sets insecure permissions for   │
-│                     │                     │          │              │                        │               │ the /var/lo ......                                           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2007-5686                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2024-56433      │          │              │                        │               │ shadow-utils: Default subordinate ID configuration in        │
-│                     │                     │          │              │                        │               │ /etc/login.defs could lead to compromise                     │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-56433                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ TEMP-0628843-DBAD28 │          │              │                        │               │ [more related to CVE-2005-4890]                              │
-│                     │                     │          │              │                        │               │ https://security-tracker.debian.org/tracker/TEMP-0628843-DB- │
-│                     │                     │          │              │                        │               │ AD28                                                         │
-├─────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ mount               │ CVE-2026-53613      │ HIGH     │              │ 2.38.1-5+deb12u3       │               │ util-linux: util-linux: TOCTOU in the mount program via      │
-│                     │                     │          │              │                        │               │ ancestor directory swap on...                                │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53613                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-53615      │          │              │                        │               │ util-linux: util-linux: Partition metadata compromise via    │
-│                     │                     │          │              │                        │               │ integer overflow in DOS partition parser...                  │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53615                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-76642      │          │              │                        │               │ util-linux: util-linux: failed external mount helper still   │
-│                     │                     │          │              │                        │               │ runs privileged X-mount post-hooks                           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-76642                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-78408      │          │              │                        │               │ util-linux: util-linux: nsenter --join-cgroup leaks root     │
-│                     │                     │          │              │                        │               │ cgroup migration authority                                   │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78408                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-78409      │          │              │                        │               │ util-linux: util-linux: X-mount.subdir detached-tree         │
-│                     │                     │          │              │                        │               │ resolution can escape via intermediate symlinks              │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78409                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-78410      │          │              │                        │               │ util-linux: util-linux: restricted bind mounts do not pin    │
-│                     │                     │          │              │                        │               │ the source, allowing X-mount.owner/group/mode...             │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78410                   │
-│                     ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-13595      │ MEDIUM   │              │                        │               │ util-linux: util-linux: heap use-after-free in libblkid      │
-│                     │                     │          │              │                        │               │ nested partition probing                                     │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-13595                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-27456      │          │              │                        │               │ util-linux: TOCTOU in the mount program when setting up loop │
-│                     │                     │          │              │                        │               │ devices                                                      │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-27456                   │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-3184       │          │ will_not_fix │                        │               │ util-linux: util-linux: Access control bypass due to         │
-│                     │                     │          │              │                        │               │ improper hostname canonicalization                           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-3184                    │
-│                     ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2022-0563       │ LOW      │ affected     │                        │               │ util-linux: partial disclosure of arbitrary files in chfn    │
-│                     │                     │          │              │                        │               │ and chsh when compiled...                                    │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2022-0563                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2025-14104      │          │              │                        │               │ util-linux: util-linux: Heap buffer overread in setpwnam()   │
-│                     │                     │          │              │                        │               │ when processing 256-byte usernames                           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-14104                   │
-├─────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ ncurses-base        │ CVE-2025-69720      │ HIGH     │              │ 6.4-4                  │               │ ncurses: ncurses: Buffer overflow vulnerability may lead to  │
-│                     │                     │          │              │                        │               │ arbitrary code execution.                                    │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-69720                   │
-│                     ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2023-50495      │ MEDIUM   │              │                        │               │ ncurses: segmentation fault via _nc_wrap_entry()             │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-50495                   │
-│                     ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2025-6141       │ LOW      │              │                        │               │ gnu-ncurses: ncurses Stack Buffer Overflow                   │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-6141                    │
-├─────────────────────┼─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│ ncurses-bin         │ CVE-2025-69720      │ HIGH     │              │                        │               │ ncurses: ncurses: Buffer overflow vulnerability may lead to  │
-│                     │                     │          │              │                        │               │ arbitrary code execution.                                    │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-69720                   │
-│                     ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2023-50495      │ MEDIUM   │              │                        │               │ ncurses: segmentation fault via _nc_wrap_entry()             │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-50495                   │
-│                     ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2025-6141       │ LOW      │              │                        │               │ gnu-ncurses: ncurses Stack Buffer Overflow                   │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-6141                    │
-├─────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ openssl             │ CVE-2026-84782      │ HIGH     │              │ 3.0.22-1~deb12u1       │               │ openssl: compat-openssl: openssl: Information disclosure via │
-│                     │                     │          │              │                        │               │ DTLS handshake retransmission                                │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-84782                   │
-│                     ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-54872      │ MEDIUM   │              │                        │               │ openssl: OpenSSL: Private key recovery via timing            │
-│                     │                     │          │              │                        │               │ side-channel in generic elliptic curve...                    │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-54872                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-75805      │          │              │                        │               │ openssl: openssl: Denial of Service via crafted CMP          │
-│                     │                     │          │              │                        │               │ certificate revocation response                              │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-75805                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-75806      │          │              │                        │               │ openssl: OpenSSL: Denial of Service via undersized DTLS      │
-│                     │                     │          │              │                        │               │ record                                                       │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-75806                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-77696      │          │              │                        │               │ openssl: OpenSSL: Private key recovery via SM2 timing        │
-│                     │                     │          │              │                        │               │ side-channel                                                 │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-77696                   │
-│                     ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2025-27587      │ LOW      │              │                        │               │ OpenSSL 3.0.0 through 3.3.2 on the PowerPC architecture is   │
-│                     │                     │          │              │                        │               │ vulnerable ......                                            │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-27587                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-35189      │          │              │                        │               │ openssl: openssl: Denial of Service via excessive memory     │
-│                     │                     │          │              │                        │               │ allocation in CRL distribution...                            │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-35189                   │
-├─────────────────────┼─────────────────────┤          │              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ passwd              │ CVE-2007-5686       │          │              │ 1:4.13+dfsg1-1+deb12u2 │               │ initscripts in rPath Linux 1 sets insecure permissions for   │
-│                     │                     │          │              │                        │               │ the /var/lo ......                                           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2007-5686                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2024-56433      │          │              │                        │               │ shadow-utils: Default subordinate ID configuration in        │
-│                     │                     │          │              │                        │               │ /etc/login.defs could lead to compromise                     │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-56433                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ TEMP-0628843-DBAD28 │          │              │                        │               │ [more related to CVE-2005-4890]                              │
-│                     │                     │          │              │                        │               │ https://security-tracker.debian.org/tracker/TEMP-0628843-DB- │
-│                     │                     │          │              │                        │               │ AD28                                                         │
-├─────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ perl-base           │ CVE-2026-9538       │ HIGH     │ fix_deferred │ 5.36.0-7+deb12u4       │               │ perl-Archive-Tar: perl-Archive-Tar: Denial of Service via    │
-│                     │                     │          │              │                        │               │ crafted tar header with large entry...                       │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-9538                    │
-│                     ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-15534      │ MEDIUM   │ affected     │                        │               │ perl: Perl: Arbitrary code execution via out-of-bounds       │
-│                     │                     │          │              │                        │               │ memory access in regular expression...                       │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-15534                   │
-│                     ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2011-4116       │ LOW      │              │                        │               │ perl: File:: Temp insecure temporary file handling           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2011-4116                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2023-31486      │          │              │                        │               │ http-tiny: perl: insecure TLS cert default                   │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-31486                   │
-│                     ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-82560      │ UNKNOWN  │              │                        │               │ Pod::Text versions before 6.1.1 for Perl allow CPU and       │
-│                     │                     │          │              │                        │               │ memory exhausti ......                                       │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-82560                   │
-├─────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ sysvinit-utils      │ TEMP-0517018-A83CE6 │ LOW      │              │ 3.06-4                 │               │ [sysvinit: no-root option in expert installer exposes        │
-│                     │                     │          │              │                        │               │ locally exploitable security flaw]                           │
-│                     │                     │          │              │                        │               │ https://security-tracker.debian.org/tracker/TEMP-0517018-A8- │
-│                     │                     │          │              │                        │               │ 3CE6                                                         │
-├─────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ tar                 │ CVE-2026-18477      │ MEDIUM   │ fix_deferred │ 1.34+dfsg-1.2+deb12u1  │               │ tar: tar: TOCTOU in incremental dumpdir 'X' rename handling  │
-│                     │                     │          │              │                        │               │ allows restore path...                                       │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-18477                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-18508      │          │              │                        │               │ tar: tar: --one-top-level hardlink targets not confined to   │
-│                     │                     │          │              │                        │               │ top-level directory enabling arbitrary...                    │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-18508                   │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-5704       │          │ affected     │                        │               │ tar: tar: Hidden file injection via crafted archives         │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-5704                    │
-│                     ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2005-2541       │ LOW      │              │                        │               │ tar: does not properly warn the user when extracting setuid  │
-│                     │                     │          │              │                        │               │ or setgid...                                                 │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2005-2541                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ TEMP-0290435-0B57B5 │          │              │                        │               │ [tar's rmt command may have undesired side effects]          │
-│                     │                     │          │              │                        │               │ https://security-tracker.debian.org/tracker/TEMP-0290435-0B- │
-│                     │                     │          │              │                        │               │ 57B5                                                         │
-├─────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ util-linux          │ CVE-2026-53613      │ HIGH     │              │ 2.38.1-5+deb12u3       │               │ util-linux: util-linux: TOCTOU in the mount program via      │
-│                     │                     │          │              │                        │               │ ancestor directory swap on...                                │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53613                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-53615      │          │              │                        │               │ util-linux: util-linux: Partition metadata compromise via    │
-│                     │                     │          │              │                        │               │ integer overflow in DOS partition parser...                  │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53615                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-76642      │          │              │                        │               │ util-linux: util-linux: failed external mount helper still   │
-│                     │                     │          │              │                        │               │ runs privileged X-mount post-hooks                           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-76642                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-78408      │          │              │                        │               │ util-linux: util-linux: nsenter --join-cgroup leaks root     │
-│                     │                     │          │              │                        │               │ cgroup migration authority                                   │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78408                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-78409      │          │              │                        │               │ util-linux: util-linux: X-mount.subdir detached-tree         │
-│                     │                     │          │              │                        │               │ resolution can escape via intermediate symlinks              │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78409                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-78410      │          │              │                        │               │ util-linux: util-linux: restricted bind mounts do not pin    │
-│                     │                     │          │              │                        │               │ the source, allowing X-mount.owner/group/mode...             │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78410                   │
-│                     ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-13595      │ MEDIUM   │              │                        │               │ util-linux: util-linux: heap use-after-free in libblkid      │
-│                     │                     │          │              │                        │               │ nested partition probing                                     │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-13595                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-27456      │          │              │                        │               │ util-linux: TOCTOU in the mount program when setting up loop │
-│                     │                     │          │              │                        │               │ devices                                                      │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-27456                   │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-3184       │          │ will_not_fix │                        │               │ util-linux: util-linux: Access control bypass due to         │
-│                     │                     │          │              │                        │               │ improper hostname canonicalization                           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-3184                    │
-│                     ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2022-0563       │ LOW      │ affected     │                        │               │ util-linux: partial disclosure of arbitrary files in chfn    │
-│                     │                     │          │              │                        │               │ and chsh when compiled...                                    │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2022-0563                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2025-14104      │          │              │                        │               │ util-linux: util-linux: Heap buffer overread in setpwnam()   │
-│                     │                     │          │              │                        │               │ when processing 256-byte usernames                           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-14104                   │
-├─────────────────────┼─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│ util-linux-extra    │ CVE-2026-53613      │ HIGH     │              │                        │               │ util-linux: util-linux: TOCTOU in the mount program via      │
-│                     │                     │          │              │                        │               │ ancestor directory swap on...                                │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53613                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-53615      │          │              │                        │               │ util-linux: util-linux: Partition metadata compromise via    │
-│                     │                     │          │              │                        │               │ integer overflow in DOS partition parser...                  │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53615                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-76642      │          │              │                        │               │ util-linux: util-linux: failed external mount helper still   │
-│                     │                     │          │              │                        │               │ runs privileged X-mount post-hooks                           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-76642                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-78408      │          │              │                        │               │ util-linux: util-linux: nsenter --join-cgroup leaks root     │
-│                     │                     │          │              │                        │               │ cgroup migration authority                                   │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78408                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-78409      │          │              │                        │               │ util-linux: util-linux: X-mount.subdir detached-tree         │
-│                     │                     │          │              │                        │               │ resolution can escape via intermediate symlinks              │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78409                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-78410      │          │              │                        │               │ util-linux: util-linux: restricted bind mounts do not pin    │
-│                     │                     │          │              │                        │               │ the source, allowing X-mount.owner/group/mode...             │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78410                   │
-│                     ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-13595      │ MEDIUM   │              │                        │               │ util-linux: util-linux: heap use-after-free in libblkid      │
-│                     │                     │          │              │                        │               │ nested partition probing                                     │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-13595                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-27456      │          │              │                        │               │ util-linux: TOCTOU in the mount program when setting up loop │
-│                     │                     │          │              │                        │               │ devices                                                      │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-27456                   │
-│                     ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-3184       │          │ will_not_fix │                        │               │ util-linux: util-linux: Access control bypass due to         │
-│                     │                     │          │              │                        │               │ improper hostname canonicalization                           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-3184                    │
-│                     ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2022-0563       │ LOW      │ affected     │                        │               │ util-linux: partial disclosure of arbitrary files in chfn    │
-│                     │                     │          │              │                        │               │ and chsh when compiled...                                    │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2022-0563                    │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2025-14104      │          │              │                        │               │ util-linux: util-linux: Heap buffer overread in setpwnam()   │
-│                     │                     │          │              │                        │               │ when processing 256-byte usernames                           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-14104                   │
-├─────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ zlib1g              │ CVE-2023-45853      │ CRITICAL │ will_not_fix │ 1:1.2.13.dfsg-1        │               │ zlib: integer overflow and resultant heap-based buffer       │
-│                     │                     │          │              │                        │               │ overflow in zipOpenNewFileInZip4_6                           │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-45853                   │
-│                     ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-27171      │ MEDIUM   │ affected     │                        │               │ zlib: zlib: Denial of Service via infinite loop in CRC32     │
-│                     │                     │          │              │                        │               │ combine functions...                                         │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-27171                   │
-│                     ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                     │ CVE-2026-85091      │          │              │                        │               │ zlib versions 1.3.1.2 through 1.3.2 contain a heap buffer    │
-│                     │                     │          │              │                        │               │ overflow vul ......                                          │
-│                     │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-85091                   │
-└─────────────────────┴─────────────────────┴──────────┴──────────────┴────────────────────────┴───────────────┴──────────────────────────────────────────────────────────────┘
+┌────────────────────┬─────────────────────┬──────────┬──────────────┬────────────────────────┬───────────────┬──────────────────────────────────────────────────────────────┐
+│      Library       │    Vulnerability    │ Severity │    Status    │   Installed Version    │ Fixed Version │                            Title                             │
+├────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ apt                │ CVE-2011-3374       │ LOW      │ affected     │ 2.6.2                  │               │ It was found that apt-key in apt, all versions, do not       │
+│                    │                     │          │              │                        │               │ correctly...                                                 │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2011-3374                    │
+├────────────────────┼─────────────────────┤          │              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ bash               │ TEMP-0841856-B18BAF │          │              │ 5.2.15-2+b13           │               │ [Privilege escalation possible to other user than root]      │
+│                    │                     │          │              │                        │               │ https://security-tracker.debian.org/tracker/TEMP-0841856-B1- │
+│                    │                     │          │              │                        │               │ 8BAF                                                         │
+├────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ bsdutils           │ CVE-2026-53613      │ HIGH     │              │ 1:2.38.1-5+deb12u3     │               │ util-linux: TOCTOU in the mount program via ancestor         │
+│                    │                     │          │              │                        │               │ directory swap on target...                                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53613                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-53615      │          │              │                        │               │ util-linux: util-linux: Partition metadata compromise via    │
+│                    │                     │          │              │                        │               │ integer overflow in DOS partition parser...                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53615                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-78410      │          │              │                        │               │ util-linux: util-linux: restricted bind mounts do not pin    │
+│                    │                     │          │              │                        │               │ the source, allowing X-mount.owner/group/mode...             │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78410                   │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-13595      │ MEDIUM   │              │                        │               │ util-linux: util-linux: heap use-after-free in libblkid      │
+│                    │                     │          │              │                        │               │ nested partition probing                                     │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-13595                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-27456      │          │              │                        │               │ util-linux: TOCTOU in the mount program when setting up loop │
+│                    │                     │          │              │                        │               │ devices                                                      │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-27456                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-3184       │          │ will_not_fix │                        │               │ util-linux: util-linux: Access control bypass due to         │
+│                    │                     │          │              │                        │               │ improper hostname canonicalization                           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-3184                    │
+│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2022-0563       │ LOW      │ affected     │                        │               │ util-linux: partial disclosure of arbitrary files in chfn    │
+│                    │                     │          │              │                        │               │ and chsh when compiled...                                    │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2022-0563                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2025-14104      │          │              │                        │               │ util-linux: util-linux: Heap buffer overread in setpwnam()   │
+│                    │                     │          │              │                        │               │ when processing 256-byte usernames                           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-14104                   │
+├────────────────────┼─────────────────────┤          ├──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ coreutils          │ CVE-2016-2781       │          │ will_not_fix │ 9.1-1                  │               │ coreutils: Non-privileged session can escape to the parent   │
+│                    │                     │          │              │                        │               │ session in chroot                                            │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2016-2781                    │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2017-18018      │          │ affected     │                        │               │ coreutils: race condition vulnerability in chown and chgrp   │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2017-18018                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2025-5278       │          │              │                        │               │ coreutils: Heap Buffer Under-Read in GNU Coreutils sort via  │
+│                    │                     │          │              │                        │               │ Key Specification                                            │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-5278                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-56391      │          │              │                        │               │ coreutils: GNU coreutils uniq: Denial of Service and         │
+│                    │                     │          │              │                        │               │ information disclosure via out-of-bounds...                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-56391                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-56392      │          │              │                        │               │ coreutils: GNU coreutils unexpand: Denial of Service via     │
+│                    │                     │          │              │                        │               │ crafted tab stop values...                                   │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-56392                   │
+├────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ curl               │ CVE-2026-12064      │ HIGH     │ fix_deferred │ 7.88.1-10+deb12u15     │               │ curl: curl: SSH host verification bypass when using          │
+│                    │                     │          │              │                        │               │ schemeless URLs with SFTP/SCP...                             │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-12064                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-6276       │          │ affected     │                        │               │ curl: libcurl: Information disclosure due to cookie leak     │
+│                    │                     │          │              │                        │               │ when reusing connections with...                             │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-6276                    │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-8286       │          │ fix_deferred │                        │               │ curl: curl: Insecure connection establishment due to TLS     │
+│                    │                     │          │              │                        │               │ configuration mismatch                                       │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-8286                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-8458       │          │              │                        │               │ curl: libcurl: Unauthorized connection reuse due to a        │
+│                    │                     │          │              │                        │               │ logical error                                                │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-8458                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-8927       │          │              │                        │               │ curl: Information disclosure due to uncleared proxy          │
+│                    │                     │          │              │                        │               │ authentication state                                         │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-8927                    │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-10536      │ MEDIUM   │              │                        │               │ libcurl: libcurl: Use-after-free vulnerability leading to    │
+│                    │                     │          │              │                        │               │ Denial of Service                                            │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-10536                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-11856      │          │              │                        │               │ curl: curl: Information disclosure via incorrect Digest      │
+│                    │                     │          │              │                        │               │ authentication header reuse                                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-11856                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-1965       │          │ affected     │                        │               │ curl: curl: Authentication bypass due to incorrect           │
+│                    │                     │          │              │                        │               │ connection reuse with Negotiate authentication...            │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-1965                    │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-19931      │          │ fix_deferred │                        │               │ curl: libcurl: Information disclosure via incorrect          │
+│                    │                     │          │              │                        │               │ connection reuse with Negotiate authentication               │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-19931                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-4873       │          │ affected     │                        │               │ curl: curl: Information disclosure due to incorrect TLS      │
+│                    │                     │          │              │                        │               │ connection reuse                                             │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-4873                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-5545       │          │              │                        │               │ curl: libcurl: Authentication bypass due to incorrect HTTP   │
+│                    │                     │          │              │                        │               │ Negotiate connection reuse                                   │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-5545                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-6253       │          │              │                        │               │ curl: curl: Proxy credential disclosure via redirects to     │
+│                    │                     │          │              │                        │               │ unauthenticated proxies                                      │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-6253                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-6429       │          │              │                        │               │ curl: libcurl: Credential leak via reused proxy connection   │
+│                    │                     │          │              │                        │               │ during HTTP redirects                                        │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-6429                    │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-8924       │          │ fix_deferred │                        │               │ curl: curl: Cookie injection via malicious HTTP server using │
+│                    │                     │          │              │                        │               │ super cookies                                                │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-8924                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-8932       │          │              │                        │               │ libcurl: libcurl: Security feature bypass due to improper    │
+│                    │                     │          │              │                        │               │ mTLS connection reuse                                        │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-8932                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-92388      │          │              │                        │               │ curl: curl: FTP wildcard write callback mixup                │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-92388                   │
+│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2024-2379       │ LOW      │ affected     │                        │               │ curl: QUIC certificate check bypass with wolfSSL             │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-2379                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2025-0725       │          │              │                        │               │ libcurl: Buffer Overflow in libcurl via zlib Integer         │
+│                    │                     │          │              │                        │               │ Overflow                                                     │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-0725                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2025-10966      │          │              │                        │               │ curl: Curl missing SFTP host verification with wolfSSH       │
+│                    │                     │          │              │                        │               │ backend                                                      │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-10966                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2025-14017      │          │              │                        │               │ curl: curl: Security bypass due to global TLS option changes │
+│                    │                     │          │              │                        │               │ in multi-threaded...                                         │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-14017                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2025-15079      │          │              │                        │               │ curl: Host verification bypass during SSH transfers          │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-15079                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2025-15224      │          │              │                        │               │ curl: libssh key passphrase bypass without agent set         │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-15224                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-107928     │          │              │                        │               │ curl: curl: info leak uploading over WebSockets with GnuTLS  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107928                  │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-13608      │          │ fix_deferred │                        │               │ curl: curl: Authentication bypass in OpenLDAP SASL           │
+│                    │                     │          │              │                        │               │ negotiation via Man-in-the-Middle (MITM) attack...           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-13608                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-18924      │          │              │                        │               │ curl: libcurl: Use-after-free in HTTP/2 Server Push with     │
+│                    │                     │          │              │                        │               │ shared connections                                           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-18924                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-80230      │          │              │                        │               │ curl: curl: Public key pinning bypass allows unauthenticated │
+│                    │                     │          │              │                        │               │ connections                                                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-80230                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-82209      │          │              │                        │               │ curl: libcurl: Information disclosure via improper Public    │
+│                    │                     │          │              │                        │               │ Suffix List boundary check                                   │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-82209                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-86409      │          │ affected     │                        │               │ curl: curl: stale SigV4 headers sent unintended              │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-86409                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-86410      │          │              │                        │               │ curl: curl: redirect to SFTP or SCP bypasses host            │
+│                    │                     │          │              │                        │               │ verification                                                 │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-86410                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-86414      │          │              │                        │               │ curl: curl: leaking host credentials to HTTP proxy           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-86414                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-87864      │          │ fix_deferred │                        │               │ curl: IMAP APPEND plus CRLF conversion command injection     │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-87864                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-87865      │          │              │                        │               │ curl: curl: knownhost callback mismatches key as missing     │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-87865                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-87866      │          │ affected     │                        │               │ curl: curl: wolfSSL public-key pinning bypass                │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-87866                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-92389      │          │ fix_deferred │                        │               │ curl: curl: TFTP direction confusion                         │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-92389                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-92390      │          │              │                        │               │ curl: curl: -J no-clobber guarantee bypassed with 103 early  │
+│                    │                     │          │              │                        │               │ hints                                                        │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-92390                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-92391      │          │ affected     │                        │               │ curl: curl: curl_mime_free stack overflow by recursion       │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-92391                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-94266      │          │              │                        │               │ curl: curl: password leak in CURLINFO_EFFECTIVE_URL          │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-94266                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-9547       │          │              │                        │               │ curl: curl: Man-in-the-middle attack via SSH host key bypass │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-9547                    │
+├────────────────────┼─────────────────────┤          │              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ dash               │ CVE-2026-102473     │          │              │ 0.5.12-2               │               │ dash: dash: Super-polynomial backtracking in pmatch when     │
+│                    │                     │          │              │                        │               │ libc fnmatch is disabled                                     │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-102473                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-102474     │          │              │                        │               │ dash: dash: Heap out-of-bounds write in conv_escape via      │
+│                    │                     │          │              │                        │               │ undersized Unicode escape reservation...                     │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-102474                  │
+├────────────────────┼─────────────────────┤          │              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ diffutils          │ CVE-2026-53910      │          │              │ 1:3.8-4                │               │ diffutils: heap‑based buffer overflow due to multiple signed │
+│                    │                     │          │              │                        │               │ integer overflows in line‑mapping...                         │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53910                   │
+├────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ gcc-12-base        │ CVE-2026-102010     │ MEDIUM   │ will_not_fix │ 12.2.0-14+deb12u1      │               │ gcc-toolset-15-gcc: gcc: gcc-toolset-16: gcc: Denial of      │
+│                    │                     │          │              │                        │               │ Service via use-after-free in binary heap...                 │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-102010                  │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-114690     │          │ affected     │                        │               │ gcc: Confirmed out-of-bounds read/write in libstdc++         │
+│                    │                     │          │              │                        │               │ parallel `std                                                │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-114690                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-114691     │          │              │                        │               │ gcc: Integer wrap in `std                                    │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-114691                  │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-95619      │          │ fix_deferred │                        │               │ gcc: libstdc++ integer overflow in `new` operator            │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-95619                   │
+│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2022-27943      │ LOW      │ affected     │                        │               │ binutils: libiberty/rust-demangle.c in GNU GCC 11.2 allows   │
+│                    │                     │          │              │                        │               │ stack exhaustion in demangle_const                           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2022-27943                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-115456     │          │              │                        │               │ gcc: Out-of-bounds read in std::from_chars                   │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-115456                  │
+├────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ gpgv               │ CVE-2025-30258      │ MEDIUM   │              │ 2.2.40-1.1+deb12u2     │               │ gnupg: verification DoS due to a malicious subkey in the     │
+│                    │                     │          │              │                        │               │ keyring                                                      │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-30258                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2025-68972      │          │              │                        │               │ gnupg: GnuPG: Signature bypass via form feed character in    │
+│                    │                     │          │              │                        │               │ signed messages                                              │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-68972                   │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2022-3219       │ LOW      │              │                        │               │ gnupg: denial of service issue (resource consumption) using  │
+│                    │                     │          │              │                        │               │ compressed packets                                           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2022-3219                    │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-105712     │          │ fix_deferred │                        │               │ gnupg2: gnupg: Arbitrary file overwrite via symlink          │
+│                    │                     │          │              │                        │               │ traversal in gpgtar                                          │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-105712                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-57062      │          │              │                        │               │ GnuPG: Incorrect cryptographic message parsing               │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-57062                   │
+├────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ gzip               │ CVE-2026-41992      │ HIGH     │              │ 1.12-1                 │               │ gzip: gzip: Information disclosure via global buffer         │
+│                    │                     │          │              │                        │               │ overflow in LZH decompression                                │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-41992                   │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-41991      │ MEDIUM   │              │                        │               │ gzip: gzip: Arbitrary file overwrite via insecure temporary  │
+│                    │                     │          │              │                        │               │ file handling in gzexe...                                    │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-41991                   │
+├────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ krb5-locales       │ CVE-2026-112315     │ HIGH     │ affected     │ 1.20.1-2+deb12u5       │               │ krb5: MIT krb5 kadmind unauthenticated memory leak DoS in    │
+│                    │                     │          │              │                        │               │ RPCSEC_GSS buffer decode...                                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112315                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112316     │          │              │                        │               │ krb5: MIT krb5 kadmind authenticated memory leak DoS in      │
+│                    │                     │          │              │                        │               │ xdr_krb5_tl_data() decode failure...                         │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112316                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112317     │          │              │                        │               │ krb5: MIT krb5 KDC unauthenticated memory leak DoS in KDB    │
+│                    │                     │          │              │                        │               │ keytab key...                                                │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112317                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112318     │          │              │                        │               │ krb5: MIT krb5 kadmind authenticated DoS exploiting          │
+│                    │                     │          │              │                        │               │ dereference of null policy name...                           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112318                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112319     │          │              │                        │               │ krb5: MIT krb5 kadmind authenticated memory exhaustion DoS   │
+│                    │                     │          │              │                        │               │ via unbounded RPC XDR...                                     │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112319                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112320     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated memory leak DoS via   │
+│                    │                     │          │              │                        │               │ GSS-RPC auth flavor...                                       │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112320                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112321     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated memory leak DoS via   │
+│                    │                     │          │              │                        │               │ AUTH_GSSAPI_INIT error paths...                              │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112321                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112322     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated CPU DoS via           │
+│                    │                     │          │              │                        │               │ AUTH_GSSAPI client states cleanup...                         │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112322                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112323     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated memory exhaustion via │
+│                    │                     │          │              │                        │               │ failed AUTH_GSSAPI_INIT requests                             │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112323                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-119079     │          │              │                        │               │ krb5: MIT krb5 KDC unauthenticated CPU DoS via quadratic     │
+│                    │                     │          │              │                        │               │ ASN.1 SEQUENCE OF...                                         │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-119079                  │
+│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-107708     │ MEDIUM   │ fix_deferred │                        │               │ krb5: krb5: Denial of Service via malformed PAC in S4U2Proxy │
+│                    │                     │          │              │                        │               │ requests                                                     │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107708                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-107778     │          │              │                        │               │ krb5: krb5: Denial of Service via crafted forwarded          │
+│                    │                     │          │              │                        │               │ credentials                                                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107778                  │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112314     │          │ affected     │                        │               │ krb5: MIT krb5 GSS-RPC client memory leak on XID mismatch    │
+│                    │                     │          │              │                        │               │ retries                                                      │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112314                  │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2018-5709       │ LOW      │              │                        │               │ krb5: integer overflow in dbentry->n_key_data in             │
+│                    │                     │          │              │                        │               │ kadmin/dbutil/dump.c                                         │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2018-5709                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2024-26458      │          │              │                        │               │ krb5: Memory leak at /krb5/src/lib/rpc/pmap_rmt.c            │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-26458                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2024-26461      │          │              │                        │               │ krb5: Memory leak at /krb5/src/lib/gssapi/krb5/k5sealv3.c    │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-26461                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-11850      │          │              │                        │               │ krb5: krb5: integer underflow in berval2tl_data() leads to   │
+│                    │                     │          │              │                        │               │ heap out-of-bounds read                                      │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-11850                   │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-107364     │ UNKNOWN  │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107364                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-107884     │          │              │                        │               │ [Check for the lockdown_keys attribute when processing       │
+│                    │                     │          │              │                        │               │ password change protocol requests in...                      │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107884                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-111423     │          │              │                        │               │ [Fix a logic error when checking PAC server checksums]       │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-111423                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-118380     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-118380                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-71199      │          │              │                        │               │ [Check for unkeyed checksums when validating CAMMAC          │
+│                    │                     │          │              │                        │               │ verifiers]                                                   │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-71199                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-71200      │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-71200                   │
+├────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libacl1            │ CVE-2026-54369      │ HIGH     │ fix_deferred │ 2.3.1-3                │               │ acl: Symlink traversal privilege escalation via libacl       │
+│                    │                     │          │              │                        │               │ functions                                                    │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-54369                   │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-54370      │ MEDIUM   │              │                        │               │ acl: TOCTOU Symlink Traversal via getfacl/setfacl            │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-54370                   │
+├────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libapt-pkg6.0      │ CVE-2011-3374       │ LOW      │ affected     │ 2.6.2                  │               │ It was found that apt-key in apt, all versions, do not       │
+│                    │                     │          │              │                        │               │ correctly...                                                 │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2011-3374                    │
+├────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libattr1           │ CVE-2026-54371      │ MEDIUM   │ fix_deferred │ 1:2.5.1-4              │               │ attr: attr: Symlink Traversal Privilege Escalation via       │
+│                    │                     │          │              │                        │               │ getfattr and setfattr                                        │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-54371                   │
+├────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libblkid1          │ CVE-2026-53613      │ HIGH     │ affected     │ 2.38.1-5+deb12u3       │               │ util-linux: TOCTOU in the mount program via ancestor         │
+│                    │                     │          │              │                        │               │ directory swap on target...                                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53613                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-53615      │          │              │                        │               │ util-linux: util-linux: Partition metadata compromise via    │
+│                    │                     │          │              │                        │               │ integer overflow in DOS partition parser...                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53615                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-78410      │          │              │                        │               │ util-linux: util-linux: restricted bind mounts do not pin    │
+│                    │                     │          │              │                        │               │ the source, allowing X-mount.owner/group/mode...             │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78410                   │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-13595      │ MEDIUM   │              │                        │               │ util-linux: util-linux: heap use-after-free in libblkid      │
+│                    │                     │          │              │                        │               │ nested partition probing                                     │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-13595                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-27456      │          │              │                        │               │ util-linux: TOCTOU in the mount program when setting up loop │
+│                    │                     │          │              │                        │               │ devices                                                      │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-27456                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-3184       │          │ will_not_fix │                        │               │ util-linux: util-linux: Access control bypass due to         │
+│                    │                     │          │              │                        │               │ improper hostname canonicalization                           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-3184                    │
+│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2022-0563       │ LOW      │ affected     │                        │               │ util-linux: partial disclosure of arbitrary files in chfn    │
+│                    │                     │          │              │                        │               │ and chsh when compiled...                                    │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2022-0563                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2025-14104      │          │              │                        │               │ util-linux: util-linux: Heap buffer overread in setpwnam()   │
+│                    │                     │          │              │                        │               │ when processing 256-byte usernames                           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-14104                   │
+├────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libbz2-1.0         │ CVE-2026-42250      │ MEDIUM   │              │ 1.0.8-5+b1             │               │ bzip2: bzip2: Denial of Service in bzip2recover via a        │
+│                    │                     │          │              │                        │               │ specially crafted file...                                    │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-42250                   │
+├────────────────────┼─────────────────────┤          ├──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libc-bin           │ CVE-2026-18374      │          │ fix_deferred │ 2.36-9+deb12u14        │               │ glibc: glibc: Heap buffer overflow via attacker-controlled   │
+│                    │                     │          │              │                        │               │ fopen mode string                                            │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-18374                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-19499      │          │              │                        │               │ glibc: Buffer Overflow in strfmon right-justification        │
+│                    │                     │          │              │                        │               │ padding                                                      │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-19499                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-19542      │          │              │                        │               │ glibc: Fix out-of-bounds array write in tdelete              │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-19542                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-5435       │          │ affected     │                        │               │ glibc: glibc: Out-of-bounds write via TSIG record processing │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-5435                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-5450       │          │              │                        │               │ glibc: glibc: Heap Buffer Overflow in `scanf` with `%mc`     │
+│                    │                     │          │              │                        │               │ format specifier and...                                      │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-5450                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-5928       │          │              │                        │               │ glibc: glibc: Information disclosure or denial of service    │
+│                    │                     │          │              │                        │               │ via ungetwc function with...                                 │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-5928                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-6238       │          │              │                        │               │ glibc: glibc: Application crash or uninitialized memory read │
+│                    │                     │          │              │                        │               │ via crafted DNS response...                                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-6238                    │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-6368       │          │ fix_deferred │                        │               │ glibc: glibc: Process abort due to invalid memory in wordexp │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-6368                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-6791       │          │              │                        │               │ glibc: Glibc: Denial of Service via stack exhaustion during  │
+│                    │                     │          │              │                        │               │ tilde expansion                                              │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-6791                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-77117      │          │              │                        │               │ glibc: Non-progress DoS in SHIFT_JISX0213 -&gt               │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-77117                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-80489      │          │              │                        │               │ glibc: Non-progress DoS in EUC_JISX0213 -> UCS-4 conversion  │
+│                    │                     │          │              │                        │               │ state                                                        │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-80489                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-84243      │          │ affected     │                        │               │ glibc: glibc: Arbitrary code execution via directory         │
+│                    │                     │          │              │                        │               │ traversal in LANGUAGE environment variable...                │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-84243                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-8674       │          │ fix_deferred │                        │               │ glibc: glibc DNS stub resolver: Denial of Service via long   │
+│                    │                     │          │              │                        │               │ search domain...                                             │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-8674                    │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-86805      │          │ affected     │                        │               │ glibc: glibc: Privilege escalation and arbitrary code        │
+│                    │                     │          │              │                        │               │ execution via TOCTOU race condition...                       │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-86805                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-89092      │          │ fix_deferred │                        │               │ glibc: nscd stack overflow leads to degraded DNS resolution  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-89092                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-95818      │          │ affected     │                        │               │ glibc: glibc: Local attacker can cause denial of service and │
+│                    │                     │          │              │                        │               │ information disclosure...                                    │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-95818                   │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2010-4756       │ LOW      │              │                        │               │ glibc: glob implementation can cause excessive CPU and       │
+│                    │                     │          │              │                        │               │ memory consumption due to...                                 │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2010-4756                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2018-20796      │          │              │                        │               │ glibc: uncontrolled recursion in function                    │
+│                    │                     │          │              │                        │               │ check_dst_limits_calc_pos_1 in posix/regexec.c               │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2018-20796                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2019-1010022    │          │              │                        │               │ glibc: stack guard protection bypass                         │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2019-1010022                 │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2019-1010023    │          │              │                        │               │ glibc: running ldd on malicious ELF leads to code execution  │
+│                    │                     │          │              │                        │               │ because of...                                                │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2019-1010023                 │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2019-1010024    │          │              │                        │               │ glibc: ASLR bypass using cache of thread stack and heap      │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2019-1010024                 │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2019-1010025    │          │              │                        │               │ glibc: information disclosure of heap addresses of           │
+│                    │                     │          │              │                        │               │ pthread_created thread                                       │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2019-1010025                 │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2019-9192       │          │              │                        │               │ glibc: uncontrolled recursion in function                    │
+│                    │                     │          │              │                        │               │ check_dst_limits_calc_pos_1 in posix/regexec.c               │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2019-9192                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-97399      │          │              │                        │               │ glibc: glibc: Denial of Service via out-of-bounds read in    │
+│                    │                     │          │              │                        │               │ strncasecmp                                                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-97399                   │
+├────────────────────┼─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│ libc6              │ CVE-2026-18374      │ MEDIUM   │ fix_deferred │                        │               │ glibc: glibc: Heap buffer overflow via attacker-controlled   │
+│                    │                     │          │              │                        │               │ fopen mode string                                            │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-18374                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-19499      │          │              │                        │               │ glibc: Buffer Overflow in strfmon right-justification        │
+│                    │                     │          │              │                        │               │ padding                                                      │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-19499                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-19542      │          │              │                        │               │ glibc: Fix out-of-bounds array write in tdelete              │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-19542                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-5435       │          │ affected     │                        │               │ glibc: glibc: Out-of-bounds write via TSIG record processing │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-5435                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-5450       │          │              │                        │               │ glibc: glibc: Heap Buffer Overflow in `scanf` with `%mc`     │
+│                    │                     │          │              │                        │               │ format specifier and...                                      │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-5450                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-5928       │          │              │                        │               │ glibc: glibc: Information disclosure or denial of service    │
+│                    │                     │          │              │                        │               │ via ungetwc function with...                                 │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-5928                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-6238       │          │              │                        │               │ glibc: glibc: Application crash or uninitialized memory read │
+│                    │                     │          │              │                        │               │ via crafted DNS response...                                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-6238                    │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-6368       │          │ fix_deferred │                        │               │ glibc: glibc: Process abort due to invalid memory in wordexp │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-6368                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-6791       │          │              │                        │               │ glibc: Glibc: Denial of Service via stack exhaustion during  │
+│                    │                     │          │              │                        │               │ tilde expansion                                              │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-6791                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-77117      │          │              │                        │               │ glibc: Non-progress DoS in SHIFT_JISX0213 -&gt               │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-77117                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-80489      │          │              │                        │               │ glibc: Non-progress DoS in EUC_JISX0213 -> UCS-4 conversion  │
+│                    │                     │          │              │                        │               │ state                                                        │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-80489                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-84243      │          │ affected     │                        │               │ glibc: glibc: Arbitrary code execution via directory         │
+│                    │                     │          │              │                        │               │ traversal in LANGUAGE environment variable...                │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-84243                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-8674       │          │ fix_deferred │                        │               │ glibc: glibc DNS stub resolver: Denial of Service via long   │
+│                    │                     │          │              │                        │               │ search domain...                                             │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-8674                    │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-86805      │          │ affected     │                        │               │ glibc: glibc: Privilege escalation and arbitrary code        │
+│                    │                     │          │              │                        │               │ execution via TOCTOU race condition...                       │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-86805                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-89092      │          │ fix_deferred │                        │               │ glibc: nscd stack overflow leads to degraded DNS resolution  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-89092                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-95818      │          │ affected     │                        │               │ glibc: glibc: Local attacker can cause denial of service and │
+│                    │                     │          │              │                        │               │ information disclosure...                                    │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-95818                   │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2010-4756       │ LOW      │              │                        │               │ glibc: glob implementation can cause excessive CPU and       │
+│                    │                     │          │              │                        │               │ memory consumption due to...                                 │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2010-4756                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2018-20796      │          │              │                        │               │ glibc: uncontrolled recursion in function                    │
+│                    │                     │          │              │                        │               │ check_dst_limits_calc_pos_1 in posix/regexec.c               │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2018-20796                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2019-1010022    │          │              │                        │               │ glibc: stack guard protection bypass                         │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2019-1010022                 │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2019-1010023    │          │              │                        │               │ glibc: running ldd on malicious ELF leads to code execution  │
+│                    │                     │          │              │                        │               │ because of...                                                │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2019-1010023                 │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2019-1010024    │          │              │                        │               │ glibc: ASLR bypass using cache of thread stack and heap      │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2019-1010024                 │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2019-1010025    │          │              │                        │               │ glibc: information disclosure of heap addresses of           │
+│                    │                     │          │              │                        │               │ pthread_created thread                                       │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2019-1010025                 │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2019-9192       │          │              │                        │               │ glibc: uncontrolled recursion in function                    │
+│                    │                     │          │              │                        │               │ check_dst_limits_calc_pos_1 in posix/regexec.c               │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2019-9192                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-97399      │          │              │                        │               │ glibc: glibc: Denial of Service via out-of-bounds read in    │
+│                    │                     │          │              │                        │               │ strncasecmp                                                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-97399                   │
+├────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libcurl4           │ CVE-2026-12064      │ HIGH     │ fix_deferred │ 7.88.1-10+deb12u15     │               │ curl: curl: SSH host verification bypass when using          │
+│                    │                     │          │              │                        │               │ schemeless URLs with SFTP/SCP...                             │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-12064                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-6276       │          │ affected     │                        │               │ curl: libcurl: Information disclosure due to cookie leak     │
+│                    │                     │          │              │                        │               │ when reusing connections with...                             │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-6276                    │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-8286       │          │ fix_deferred │                        │               │ curl: curl: Insecure connection establishment due to TLS     │
+│                    │                     │          │              │                        │               │ configuration mismatch                                       │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-8286                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-8458       │          │              │                        │               │ curl: libcurl: Unauthorized connection reuse due to a        │
+│                    │                     │          │              │                        │               │ logical error                                                │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-8458                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-8927       │          │              │                        │               │ curl: Information disclosure due to uncleared proxy          │
+│                    │                     │          │              │                        │               │ authentication state                                         │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-8927                    │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-10536      │ MEDIUM   │              │                        │               │ libcurl: libcurl: Use-after-free vulnerability leading to    │
+│                    │                     │          │              │                        │               │ Denial of Service                                            │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-10536                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-11856      │          │              │                        │               │ curl: curl: Information disclosure via incorrect Digest      │
+│                    │                     │          │              │                        │               │ authentication header reuse                                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-11856                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-1965       │          │ affected     │                        │               │ curl: curl: Authentication bypass due to incorrect           │
+│                    │                     │          │              │                        │               │ connection reuse with Negotiate authentication...            │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-1965                    │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-19931      │          │ fix_deferred │                        │               │ curl: libcurl: Information disclosure via incorrect          │
+│                    │                     │          │              │                        │               │ connection reuse with Negotiate authentication               │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-19931                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-4873       │          │ affected     │                        │               │ curl: curl: Information disclosure due to incorrect TLS      │
+│                    │                     │          │              │                        │               │ connection reuse                                             │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-4873                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-5545       │          │              │                        │               │ curl: libcurl: Authentication bypass due to incorrect HTTP   │
+│                    │                     │          │              │                        │               │ Negotiate connection reuse                                   │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-5545                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-6253       │          │              │                        │               │ curl: curl: Proxy credential disclosure via redirects to     │
+│                    │                     │          │              │                        │               │ unauthenticated proxies                                      │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-6253                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-6429       │          │              │                        │               │ curl: libcurl: Credential leak via reused proxy connection   │
+│                    │                     │          │              │                        │               │ during HTTP redirects                                        │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-6429                    │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-8924       │          │ fix_deferred │                        │               │ curl: curl: Cookie injection via malicious HTTP server using │
+│                    │                     │          │              │                        │               │ super cookies                                                │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-8924                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-8932       │          │              │                        │               │ libcurl: libcurl: Security feature bypass due to improper    │
+│                    │                     │          │              │                        │               │ mTLS connection reuse                                        │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-8932                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-92388      │          │              │                        │               │ curl: curl: FTP wildcard write callback mixup                │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-92388                   │
+│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2024-2379       │ LOW      │ affected     │                        │               │ curl: QUIC certificate check bypass with wolfSSL             │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-2379                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2025-0725       │          │              │                        │               │ libcurl: Buffer Overflow in libcurl via zlib Integer         │
+│                    │                     │          │              │                        │               │ Overflow                                                     │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-0725                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2025-10966      │          │              │                        │               │ curl: Curl missing SFTP host verification with wolfSSH       │
+│                    │                     │          │              │                        │               │ backend                                                      │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-10966                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2025-14017      │          │              │                        │               │ curl: curl: Security bypass due to global TLS option changes │
+│                    │                     │          │              │                        │               │ in multi-threaded...                                         │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-14017                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2025-15079      │          │              │                        │               │ curl: Host verification bypass during SSH transfers          │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-15079                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2025-15224      │          │              │                        │               │ curl: libssh key passphrase bypass without agent set         │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-15224                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-107928     │          │              │                        │               │ curl: curl: info leak uploading over WebSockets with GnuTLS  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107928                  │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-13608      │          │ fix_deferred │                        │               │ curl: curl: Authentication bypass in OpenLDAP SASL           │
+│                    │                     │          │              │                        │               │ negotiation via Man-in-the-Middle (MITM) attack...           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-13608                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-18924      │          │              │                        │               │ curl: libcurl: Use-after-free in HTTP/2 Server Push with     │
+│                    │                     │          │              │                        │               │ shared connections                                           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-18924                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-80230      │          │              │                        │               │ curl: curl: Public key pinning bypass allows unauthenticated │
+│                    │                     │          │              │                        │               │ connections                                                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-80230                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-82209      │          │              │                        │               │ curl: libcurl: Information disclosure via improper Public    │
+│                    │                     │          │              │                        │               │ Suffix List boundary check                                   │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-82209                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-86409      │          │ affected     │                        │               │ curl: curl: stale SigV4 headers sent unintended              │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-86409                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-86410      │          │              │                        │               │ curl: curl: redirect to SFTP or SCP bypasses host            │
+│                    │                     │          │              │                        │               │ verification                                                 │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-86410                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-86414      │          │              │                        │               │ curl: curl: leaking host credentials to HTTP proxy           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-86414                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-87864      │          │ fix_deferred │                        │               │ curl: IMAP APPEND plus CRLF conversion command injection     │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-87864                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-87865      │          │              │                        │               │ curl: curl: knownhost callback mismatches key as missing     │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-87865                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-87866      │          │ affected     │                        │               │ curl: curl: wolfSSL public-key pinning bypass                │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-87866                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-92389      │          │ fix_deferred │                        │               │ curl: curl: TFTP direction confusion                         │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-92389                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-92390      │          │              │                        │               │ curl: curl: -J no-clobber guarantee bypassed with 103 early  │
+│                    │                     │          │              │                        │               │ hints                                                        │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-92390                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-92391      │          │ affected     │                        │               │ curl: curl: curl_mime_free stack overflow by recursion       │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-92391                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-94266      │          │              │                        │               │ curl: curl: password leak in CURLINFO_EFFECTIVE_URL          │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-94266                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-9547       │          │              │                        │               │ curl: curl: Man-in-the-middle attack via SSH host key bypass │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-9547                    │
+├────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libgcc-s1          │ CVE-2026-102010     │ MEDIUM   │ will_not_fix │ 12.2.0-14+deb12u1      │               │ gcc-toolset-15-gcc: gcc: gcc-toolset-16: gcc: Denial of      │
+│                    │                     │          │              │                        │               │ Service via use-after-free in binary heap...                 │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-102010                  │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-114690     │          │ affected     │                        │               │ gcc: Confirmed out-of-bounds read/write in libstdc++         │
+│                    │                     │          │              │                        │               │ parallel `std                                                │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-114690                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-114691     │          │              │                        │               │ gcc: Integer wrap in `std                                    │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-114691                  │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-95619      │          │ fix_deferred │                        │               │ gcc: libstdc++ integer overflow in `new` operator            │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-95619                   │
+│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2022-27943      │ LOW      │ affected     │                        │               │ binutils: libiberty/rust-demangle.c in GNU GCC 11.2 allows   │
+│                    │                     │          │              │                        │               │ stack exhaustion in demangle_const                           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2022-27943                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-115456     │          │              │                        │               │ gcc: Out-of-bounds read in std::from_chars                   │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-115456                  │
+├────────────────────┼─────────────────────┤          │              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libgcrypt20        │ CVE-2018-6829       │          │              │ 1.10.1-3+deb12u1       │               │ libgcrypt: ElGamal implementation doesn't have semantic      │
+│                    │                     │          │              │                        │               │ security due to incorrectly encoded plaintexts...            │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2018-6829                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2024-2236       │          │              │                        │               │ libgcrypt: vulnerable to Marvin Attack                       │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-2236                    │
+├────────────────────┼─────────────────────┤          │              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libgnutls30        │ CVE-2011-3389       │          │              │ 3.7.9-2+deb12u7        │               │ HTTPS: block-wise chosen-plaintext attack against SSL/TLS    │
+│                    │                     │          │              │                        │               │ (BEAST)                                                      │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2011-3389                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-67693      │          │              │                        │               │ gnutls: gnutls: Information disclosure via contradictory Key │
+│                    │                     │          │              │                        │               │ Usage and Extended Key Usage...                              │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-67693                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-88647      │          │              │                        │               │ gnutls: gnutls: Information disclosure via hostname          │
+│                    │                     │          │              │                        │               │ verification bypass                                          │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-88647                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-88648      │          │              │                        │               │ gnutls: gnutls: Cross-domain certificate restriction bypass  │
+│                    │                     │          │              │                        │               │ via incomplete X.509 validation                              │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-88648                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-95184      │          │              │                        │               │ gnutls: gnutls: legitimate user certificates incorrectly     │
+│                    │                     │          │              │                        │               │ rejected causing denial of service                           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-95184                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-95210      │          │              │                        │               │ gnutls: gnutls: certificates with invalid extensions         │
+│                    │                     │          │              │                        │               │ incorrectly accepted                                         │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-95210                   │
+├────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libgssapi-krb5-2   │ CVE-2026-112315     │ HIGH     │              │ 1.20.1-2+deb12u5       │               │ krb5: MIT krb5 kadmind unauthenticated memory leak DoS in    │
+│                    │                     │          │              │                        │               │ RPCSEC_GSS buffer decode...                                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112315                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112316     │          │              │                        │               │ krb5: MIT krb5 kadmind authenticated memory leak DoS in      │
+│                    │                     │          │              │                        │               │ xdr_krb5_tl_data() decode failure...                         │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112316                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112317     │          │              │                        │               │ krb5: MIT krb5 KDC unauthenticated memory leak DoS in KDB    │
+│                    │                     │          │              │                        │               │ keytab key...                                                │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112317                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112318     │          │              │                        │               │ krb5: MIT krb5 kadmind authenticated DoS exploiting          │
+│                    │                     │          │              │                        │               │ dereference of null policy name...                           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112318                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112319     │          │              │                        │               │ krb5: MIT krb5 kadmind authenticated memory exhaustion DoS   │
+│                    │                     │          │              │                        │               │ via unbounded RPC XDR...                                     │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112319                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112320     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated memory leak DoS via   │
+│                    │                     │          │              │                        │               │ GSS-RPC auth flavor...                                       │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112320                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112321     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated memory leak DoS via   │
+│                    │                     │          │              │                        │               │ AUTH_GSSAPI_INIT error paths...                              │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112321                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112322     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated CPU DoS via           │
+│                    │                     │          │              │                        │               │ AUTH_GSSAPI client states cleanup...                         │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112322                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112323     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated memory exhaustion via │
+│                    │                     │          │              │                        │               │ failed AUTH_GSSAPI_INIT requests                             │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112323                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-119079     │          │              │                        │               │ krb5: MIT krb5 KDC unauthenticated CPU DoS via quadratic     │
+│                    │                     │          │              │                        │               │ ASN.1 SEQUENCE OF...                                         │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-119079                  │
+│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-107708     │ MEDIUM   │ fix_deferred │                        │               │ krb5: krb5: Denial of Service via malformed PAC in S4U2Proxy │
+│                    │                     │          │              │                        │               │ requests                                                     │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107708                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-107778     │          │              │                        │               │ krb5: krb5: Denial of Service via crafted forwarded          │
+│                    │                     │          │              │                        │               │ credentials                                                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107778                  │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112314     │          │ affected     │                        │               │ krb5: MIT krb5 GSS-RPC client memory leak on XID mismatch    │
+│                    │                     │          │              │                        │               │ retries                                                      │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112314                  │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2018-5709       │ LOW      │              │                        │               │ krb5: integer overflow in dbentry->n_key_data in             │
+│                    │                     │          │              │                        │               │ kadmin/dbutil/dump.c                                         │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2018-5709                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2024-26458      │          │              │                        │               │ krb5: Memory leak at /krb5/src/lib/rpc/pmap_rmt.c            │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-26458                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2024-26461      │          │              │                        │               │ krb5: Memory leak at /krb5/src/lib/gssapi/krb5/k5sealv3.c    │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-26461                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-11850      │          │              │                        │               │ krb5: krb5: integer underflow in berval2tl_data() leads to   │
+│                    │                     │          │              │                        │               │ heap out-of-bounds read                                      │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-11850                   │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-107364     │ UNKNOWN  │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107364                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-107884     │          │              │                        │               │ [Check for the lockdown_keys attribute when processing       │
+│                    │                     │          │              │                        │               │ password change protocol requests in...                      │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107884                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-111423     │          │              │                        │               │ [Fix a logic error when checking PAC server checksums]       │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-111423                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-118380     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-118380                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-71199      │          │              │                        │               │ [Check for unkeyed checksums when validating CAMMAC          │
+│                    │                     │          │              │                        │               │ verifiers]                                                   │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-71199                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-71200      │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-71200                   │
+├────────────────────┼─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│ libk5crypto3       │ CVE-2026-112315     │ HIGH     │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated memory leak DoS in    │
+│                    │                     │          │              │                        │               │ RPCSEC_GSS buffer decode...                                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112315                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112316     │          │              │                        │               │ krb5: MIT krb5 kadmind authenticated memory leak DoS in      │
+│                    │                     │          │              │                        │               │ xdr_krb5_tl_data() decode failure...                         │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112316                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112317     │          │              │                        │               │ krb5: MIT krb5 KDC unauthenticated memory leak DoS in KDB    │
+│                    │                     │          │              │                        │               │ keytab key...                                                │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112317                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112318     │          │              │                        │               │ krb5: MIT krb5 kadmind authenticated DoS exploiting          │
+│                    │                     │          │              │                        │               │ dereference of null policy name...                           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112318                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112319     │          │              │                        │               │ krb5: MIT krb5 kadmind authenticated memory exhaustion DoS   │
+│                    │                     │          │              │                        │               │ via unbounded RPC XDR...                                     │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112319                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112320     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated memory leak DoS via   │
+│                    │                     │          │              │                        │               │ GSS-RPC auth flavor...                                       │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112320                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112321     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated memory leak DoS via   │
+│                    │                     │          │              │                        │               │ AUTH_GSSAPI_INIT error paths...                              │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112321                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112322     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated CPU DoS via           │
+│                    │                     │          │              │                        │               │ AUTH_GSSAPI client states cleanup...                         │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112322                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112323     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated memory exhaustion via │
+│                    │                     │          │              │                        │               │ failed AUTH_GSSAPI_INIT requests                             │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112323                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-119079     │          │              │                        │               │ krb5: MIT krb5 KDC unauthenticated CPU DoS via quadratic     │
+│                    │                     │          │              │                        │               │ ASN.1 SEQUENCE OF...                                         │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-119079                  │
+│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-107708     │ MEDIUM   │ fix_deferred │                        │               │ krb5: krb5: Denial of Service via malformed PAC in S4U2Proxy │
+│                    │                     │          │              │                        │               │ requests                                                     │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107708                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-107778     │          │              │                        │               │ krb5: krb5: Denial of Service via crafted forwarded          │
+│                    │                     │          │              │                        │               │ credentials                                                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107778                  │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112314     │          │ affected     │                        │               │ krb5: MIT krb5 GSS-RPC client memory leak on XID mismatch    │
+│                    │                     │          │              │                        │               │ retries                                                      │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112314                  │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2018-5709       │ LOW      │              │                        │               │ krb5: integer overflow in dbentry->n_key_data in             │
+│                    │                     │          │              │                        │               │ kadmin/dbutil/dump.c                                         │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2018-5709                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2024-26458      │          │              │                        │               │ krb5: Memory leak at /krb5/src/lib/rpc/pmap_rmt.c            │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-26458                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2024-26461      │          │              │                        │               │ krb5: Memory leak at /krb5/src/lib/gssapi/krb5/k5sealv3.c    │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-26461                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-11850      │          │              │                        │               │ krb5: krb5: integer underflow in berval2tl_data() leads to   │
+│                    │                     │          │              │                        │               │ heap out-of-bounds read                                      │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-11850                   │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-107364     │ UNKNOWN  │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107364                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-107884     │          │              │                        │               │ [Check for the lockdown_keys attribute when processing       │
+│                    │                     │          │              │                        │               │ password change protocol requests in...                      │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107884                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-111423     │          │              │                        │               │ [Fix a logic error when checking PAC server checksums]       │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-111423                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-118380     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-118380                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-71199      │          │              │                        │               │ [Check for unkeyed checksums when validating CAMMAC          │
+│                    │                     │          │              │                        │               │ verifiers]                                                   │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-71199                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-71200      │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-71200                   │
+├────────────────────┼─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│ libkrb5-3          │ CVE-2026-112315     │ HIGH     │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated memory leak DoS in    │
+│                    │                     │          │              │                        │               │ RPCSEC_GSS buffer decode...                                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112315                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112316     │          │              │                        │               │ krb5: MIT krb5 kadmind authenticated memory leak DoS in      │
+│                    │                     │          │              │                        │               │ xdr_krb5_tl_data() decode failure...                         │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112316                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112317     │          │              │                        │               │ krb5: MIT krb5 KDC unauthenticated memory leak DoS in KDB    │
+│                    │                     │          │              │                        │               │ keytab key...                                                │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112317                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112318     │          │              │                        │               │ krb5: MIT krb5 kadmind authenticated DoS exploiting          │
+│                    │                     │          │              │                        │               │ dereference of null policy name...                           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112318                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112319     │          │              │                        │               │ krb5: MIT krb5 kadmind authenticated memory exhaustion DoS   │
+│                    │                     │          │              │                        │               │ via unbounded RPC XDR...                                     │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112319                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112320     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated memory leak DoS via   │
+│                    │                     │          │              │                        │               │ GSS-RPC auth flavor...                                       │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112320                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112321     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated memory leak DoS via   │
+│                    │                     │          │              │                        │               │ AUTH_GSSAPI_INIT error paths...                              │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112321                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112322     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated CPU DoS via           │
+│                    │                     │          │              │                        │               │ AUTH_GSSAPI client states cleanup...                         │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112322                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112323     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated memory exhaustion via │
+│                    │                     │          │              │                        │               │ failed AUTH_GSSAPI_INIT requests                             │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112323                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-119079     │          │              │                        │               │ krb5: MIT krb5 KDC unauthenticated CPU DoS via quadratic     │
+│                    │                     │          │              │                        │               │ ASN.1 SEQUENCE OF...                                         │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-119079                  │
+│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-107708     │ MEDIUM   │ fix_deferred │                        │               │ krb5: krb5: Denial of Service via malformed PAC in S4U2Proxy │
+│                    │                     │          │              │                        │               │ requests                                                     │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107708                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-107778     │          │              │                        │               │ krb5: krb5: Denial of Service via crafted forwarded          │
+│                    │                     │          │              │                        │               │ credentials                                                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107778                  │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112314     │          │ affected     │                        │               │ krb5: MIT krb5 GSS-RPC client memory leak on XID mismatch    │
+│                    │                     │          │              │                        │               │ retries                                                      │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112314                  │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2018-5709       │ LOW      │              │                        │               │ krb5: integer overflow in dbentry->n_key_data in             │
+│                    │                     │          │              │                        │               │ kadmin/dbutil/dump.c                                         │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2018-5709                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2024-26458      │          │              │                        │               │ krb5: Memory leak at /krb5/src/lib/rpc/pmap_rmt.c            │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-26458                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2024-26461      │          │              │                        │               │ krb5: Memory leak at /krb5/src/lib/gssapi/krb5/k5sealv3.c    │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-26461                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-11850      │          │              │                        │               │ krb5: krb5: integer underflow in berval2tl_data() leads to   │
+│                    │                     │          │              │                        │               │ heap out-of-bounds read                                      │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-11850                   │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-107364     │ UNKNOWN  │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107364                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-107884     │          │              │                        │               │ [Check for the lockdown_keys attribute when processing       │
+│                    │                     │          │              │                        │               │ password change protocol requests in...                      │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107884                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-111423     │          │              │                        │               │ [Fix a logic error when checking PAC server checksums]       │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-111423                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-118380     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-118380                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-71199      │          │              │                        │               │ [Check for unkeyed checksums when validating CAMMAC          │
+│                    │                     │          │              │                        │               │ verifiers]                                                   │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-71199                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-71200      │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-71200                   │
+├────────────────────┼─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│ libkrb5support0    │ CVE-2026-112315     │ HIGH     │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated memory leak DoS in    │
+│                    │                     │          │              │                        │               │ RPCSEC_GSS buffer decode...                                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112315                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112316     │          │              │                        │               │ krb5: MIT krb5 kadmind authenticated memory leak DoS in      │
+│                    │                     │          │              │                        │               │ xdr_krb5_tl_data() decode failure...                         │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112316                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112317     │          │              │                        │               │ krb5: MIT krb5 KDC unauthenticated memory leak DoS in KDB    │
+│                    │                     │          │              │                        │               │ keytab key...                                                │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112317                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112318     │          │              │                        │               │ krb5: MIT krb5 kadmind authenticated DoS exploiting          │
+│                    │                     │          │              │                        │               │ dereference of null policy name...                           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112318                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112319     │          │              │                        │               │ krb5: MIT krb5 kadmind authenticated memory exhaustion DoS   │
+│                    │                     │          │              │                        │               │ via unbounded RPC XDR...                                     │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112319                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112320     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated memory leak DoS via   │
+│                    │                     │          │              │                        │               │ GSS-RPC auth flavor...                                       │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112320                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112321     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated memory leak DoS via   │
+│                    │                     │          │              │                        │               │ AUTH_GSSAPI_INIT error paths...                              │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112321                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112322     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated CPU DoS via           │
+│                    │                     │          │              │                        │               │ AUTH_GSSAPI client states cleanup...                         │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112322                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112323     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated memory exhaustion via │
+│                    │                     │          │              │                        │               │ failed AUTH_GSSAPI_INIT requests                             │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112323                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-119079     │          │              │                        │               │ krb5: MIT krb5 KDC unauthenticated CPU DoS via quadratic     │
+│                    │                     │          │              │                        │               │ ASN.1 SEQUENCE OF...                                         │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-119079                  │
+│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-107708     │ MEDIUM   │ fix_deferred │                        │               │ krb5: krb5: Denial of Service via malformed PAC in S4U2Proxy │
+│                    │                     │          │              │                        │               │ requests                                                     │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107708                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-107778     │          │              │                        │               │ krb5: krb5: Denial of Service via crafted forwarded          │
+│                    │                     │          │              │                        │               │ credentials                                                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107778                  │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-112314     │          │ affected     │                        │               │ krb5: MIT krb5 GSS-RPC client memory leak on XID mismatch    │
+│                    │                     │          │              │                        │               │ retries                                                      │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112314                  │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2018-5709       │ LOW      │              │                        │               │ krb5: integer overflow in dbentry->n_key_data in             │
+│                    │                     │          │              │                        │               │ kadmin/dbutil/dump.c                                         │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2018-5709                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2024-26458      │          │              │                        │               │ krb5: Memory leak at /krb5/src/lib/rpc/pmap_rmt.c            │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-26458                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2024-26461      │          │              │                        │               │ krb5: Memory leak at /krb5/src/lib/gssapi/krb5/k5sealv3.c    │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-26461                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-11850      │          │              │                        │               │ krb5: krb5: integer underflow in berval2tl_data() leads to   │
+│                    │                     │          │              │                        │               │ heap out-of-bounds read                                      │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-11850                   │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-107364     │ UNKNOWN  │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107364                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-107884     │          │              │                        │               │ [Check for the lockdown_keys attribute when processing       │
+│                    │                     │          │              │                        │               │ password change protocol requests in...                      │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107884                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-111423     │          │              │                        │               │ [Fix a logic error when checking PAC server checksums]       │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-111423                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-118380     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-118380                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-71199      │          │              │                        │               │ [Check for unkeyed checksums when validating CAMMAC          │
+│                    │                     │          │              │                        │               │ verifiers]                                                   │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-71199                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-71200      │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-71200                   │
+├────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libldap-2.5-0      │ CVE-2023-2953       │ HIGH     │              │ 2.5.13+dfsg-5          │               │ openldap: null pointer dereference in ber_memalloc_x         │
+│                    │                     │          │              │                        │               │ function                                                     │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-2953                    │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2015-3276       │ LOW      │              │                        │               │ openldap: incorrect multi-keyword mode cipherstring parsing  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2015-3276                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2017-14159      │          │              │                        │               │ openldap: Privilege escalation via PID file manipulation     │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2017-14159                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2017-17740      │          │              │                        │               │ openldap: contrib/slapd-modules/nops/nops.c attempts to free │
+│                    │                     │          │              │                        │               │ stack buffer allowing remote attackers to cause...           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2017-17740                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2020-15719      │          │              │                        │               │ openldap: Certificate validation incorrectly matches name    │
+│                    │                     │          │              │                        │               │ against CN-ID                                                │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2020-15719                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-22185      │          │              │                        │               │ OpenLDAP: OpenLDAP LMDB: Denial of Service and Information   │
+│                    │                     │          │              │                        │               │ Disclosure via Heap Buffer...                                │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-22185                   │
+├────────────────────┼─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│ libldap-common     │ CVE-2023-2953       │ HIGH     │              │                        │               │ openldap: null pointer dereference in ber_memalloc_x         │
+│                    │                     │          │              │                        │               │ function                                                     │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-2953                    │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2015-3276       │ LOW      │              │                        │               │ openldap: incorrect multi-keyword mode cipherstring parsing  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2015-3276                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2017-14159      │          │              │                        │               │ openldap: Privilege escalation via PID file manipulation     │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2017-14159                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2017-17740      │          │              │                        │               │ openldap: contrib/slapd-modules/nops/nops.c attempts to free │
+│                    │                     │          │              │                        │               │ stack buffer allowing remote attackers to cause...           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2017-17740                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2020-15719      │          │              │                        │               │ openldap: Certificate validation incorrectly matches name    │
+│                    │                     │          │              │                        │               │ against CN-ID                                                │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2020-15719                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-22185      │          │              │                        │               │ OpenLDAP: OpenLDAP LMDB: Denial of Service and Information   │
+│                    │                     │          │              │                        │               │ Disclosure via Heap Buffer...                                │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-22185                   │
+├────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libmount1          │ CVE-2026-53613      │ HIGH     │              │ 2.38.1-5+deb12u3       │               │ util-linux: TOCTOU in the mount program via ancestor         │
+│                    │                     │          │              │                        │               │ directory swap on target...                                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53613                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-53615      │          │              │                        │               │ util-linux: util-linux: Partition metadata compromise via    │
+│                    │                     │          │              │                        │               │ integer overflow in DOS partition parser...                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53615                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-78410      │          │              │                        │               │ util-linux: util-linux: restricted bind mounts do not pin    │
+│                    │                     │          │              │                        │               │ the source, allowing X-mount.owner/group/mode...             │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78410                   │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-13595      │ MEDIUM   │              │                        │               │ util-linux: util-linux: heap use-after-free in libblkid      │
+│                    │                     │          │              │                        │               │ nested partition probing                                     │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-13595                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-27456      │          │              │                        │               │ util-linux: TOCTOU in the mount program when setting up loop │
+│                    │                     │          │              │                        │               │ devices                                                      │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-27456                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-3184       │          │ will_not_fix │                        │               │ util-linux: util-linux: Access control bypass due to         │
+│                    │                     │          │              │                        │               │ improper hostname canonicalization                           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-3184                    │
+│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2022-0563       │ LOW      │ affected     │                        │               │ util-linux: partial disclosure of arbitrary files in chfn    │
+│                    │                     │          │              │                        │               │ and chsh when compiled...                                    │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2022-0563                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2025-14104      │          │              │                        │               │ util-linux: util-linux: Heap buffer overread in setpwnam()   │
+│                    │                     │          │              │                        │               │ when processing 256-byte usernames                           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-14104                   │
+├────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libnghttp2-14      │ CVE-2026-58055      │ MEDIUM   │ fix_deferred │ 1.52.0-1+deb12u3       │               │ nghttp2: nghttp2: HTTP Request/Response Smuggling and        │
+│                    │                     │          │              │                        │               │ Response-Queue Poisoning via ambiguous HTTP/1.1 Upgrade...   │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-58055                   │
+├────────────────────┼─────────────────────┤          │              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libp11-kit0        │ CVE-2026-13757      │          │              │ 0.24.1-2               │               │ p11-kit: Stack exhaustion via unbounded recursion in RPC     │
+│                    │                     │          │              │                        │               │ attribute parsing                                            │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-13757                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-18938      │          │              │                        │               │ p11-kit: Integer overflow in RPC attribute-array length      │
+│                    │                     │          │              │                        │               │ calculation can under-allocate nested attribute...           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-18938                   │
+├────────────────────┼─────────────────────┤          ├──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libpam-modules     │ CVE-2024-10041      │          │ will_not_fix │ 1.5.2-6+deb12u2        │               │ pam: libpam: Libpam vulnerable to read hashed password       │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-10041                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-54411      │          │ fix_deferred │                        │               │ linux-pam: Plaintext password recovery via timing            │
+│                    │                     │          │              │                        │               │ discrepancy in pam_userdb module                             │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-54411                   │
+├────────────────────┼─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│ libpam-modules-bin │ CVE-2024-10041      │          │ will_not_fix │                        │               │ pam: libpam: Libpam vulnerable to read hashed password       │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-10041                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-54411      │          │ fix_deferred │                        │               │ linux-pam: Plaintext password recovery via timing            │
+│                    │                     │          │              │                        │               │ discrepancy in pam_userdb module                             │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-54411                   │
+├────────────────────┼─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│ libpam-runtime     │ CVE-2024-10041      │          │ will_not_fix │                        │               │ pam: libpam: Libpam vulnerable to read hashed password       │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-10041                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-54411      │          │ fix_deferred │                        │               │ linux-pam: Plaintext password recovery via timing            │
+│                    │                     │          │              │                        │               │ discrepancy in pam_userdb module                             │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-54411                   │
+├────────────────────┼─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│ libpam0g           │ CVE-2024-10041      │          │ will_not_fix │                        │               │ pam: libpam: Libpam vulnerable to read hashed password       │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-10041                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-54411      │          │ fix_deferred │                        │               │ linux-pam: Plaintext password recovery via timing            │
+│                    │                     │          │              │                        │               │ discrepancy in pam_userdb module                             │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-54411                   │
+├────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libsmartcols1      │ CVE-2026-53613      │ HIGH     │ affected     │ 2.38.1-5+deb12u3       │               │ util-linux: TOCTOU in the mount program via ancestor         │
+│                    │                     │          │              │                        │               │ directory swap on target...                                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53613                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-53615      │          │              │                        │               │ util-linux: util-linux: Partition metadata compromise via    │
+│                    │                     │          │              │                        │               │ integer overflow in DOS partition parser...                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53615                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-78410      │          │              │                        │               │ util-linux: util-linux: restricted bind mounts do not pin    │
+│                    │                     │          │              │                        │               │ the source, allowing X-mount.owner/group/mode...             │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78410                   │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-13595      │ MEDIUM   │              │                        │               │ util-linux: util-linux: heap use-after-free in libblkid      │
+│                    │                     │          │              │                        │               │ nested partition probing                                     │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-13595                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-27456      │          │              │                        │               │ util-linux: TOCTOU in the mount program when setting up loop │
+│                    │                     │          │              │                        │               │ devices                                                      │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-27456                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-3184       │          │ will_not_fix │                        │               │ util-linux: util-linux: Access control bypass due to         │
+│                    │                     │          │              │                        │               │ improper hostname canonicalization                           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-3184                    │
+│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2022-0563       │ LOW      │ affected     │                        │               │ util-linux: partial disclosure of arbitrary files in chfn    │
+│                    │                     │          │              │                        │               │ and chsh when compiled...                                    │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2022-0563                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2025-14104      │          │              │                        │               │ util-linux: util-linux: Heap buffer overread in setpwnam()   │
+│                    │                     │          │              │                        │               │ when processing 256-byte usernames                           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-14104                   │
+├────────────────────┼─────────────────────┤          │              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libssl3            │ CVE-2025-27587      │          │              │ 3.0.22-1~deb12u2       │               │ OpenSSL 3.0.0 through 3.3.2 on the PowerPC architecture is   │
+│                    │                     │          │              │                        │               │ vulnerable ......                                            │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-27587                   │
+├────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libstdc++6         │ CVE-2026-102010     │ MEDIUM   │ will_not_fix │ 12.2.0-14+deb12u1      │               │ gcc-toolset-15-gcc: gcc: gcc-toolset-16: gcc: Denial of      │
+│                    │                     │          │              │                        │               │ Service via use-after-free in binary heap...                 │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-102010                  │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-114690     │          │ affected     │                        │               │ gcc: Confirmed out-of-bounds read/write in libstdc++         │
+│                    │                     │          │              │                        │               │ parallel `std                                                │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-114690                  │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-114691     │          │              │                        │               │ gcc: Integer wrap in `std                                    │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-114691                  │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-95619      │          │ fix_deferred │                        │               │ gcc: libstdc++ integer overflow in `new` operator            │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-95619                   │
+│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2022-27943      │ LOW      │ affected     │                        │               │ binutils: libiberty/rust-demangle.c in GNU GCC 11.2 allows   │
+│                    │                     │          │              │                        │               │ stack exhaustion in demangle_const                           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2022-27943                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-115456     │          │              │                        │               │ gcc: Out-of-bounds read in std::from_chars                   │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-115456                  │
+├────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libsystemd0        │ CVE-2026-16742      │ HIGH     │ fix_deferred │ 252.39-1~deb12u2       │               │ systemd: systemd-homed: Local privilege escalation via       │
+│                    │                     │          │              │                        │               │ missing home-record signature verification                   │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-16742                   │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-15059      │ MEDIUM   │              │                        │               │ systemd: systemd-oomd: Unprivileged users can terminate      │
+│                    │                     │          │              │                        │               │ arbitrary processes via IPC API                              │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-15059                   │
+│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2013-4392       │ LOW      │ affected     │                        │               │ systemd: TOCTOU race condition when updating file            │
+│                    │                     │          │              │                        │               │ permissions and SELinux security contexts...                 │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2013-4392                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2023-31437      │          │              │                        │               │ An issue was discovered in systemd 253. An attacker can      │
+│                    │                     │          │              │                        │               │ modify a...                                                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-31437                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2023-31438      │          │              │                        │               │ An issue was discovered in systemd 253. An attacker can      │
+│                    │                     │          │              │                        │               │ truncate a...                                                │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-31438                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2023-31439      │          │              │                        │               │ An issue was discovered in systemd 253. An attacker can      │
+│                    │                     │          │              │                        │               │ modify the...                                                │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-31439                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-40228      │          │              │                        │               │ systemd: systemd-journald: Unintended output to user         │
+│                    │                     │          │              │                        │               │ terminals via logger command                                 │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-40228                   │
+├────────────────────┼─────────────────────┤          │              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libtasn1-6         │ CVE-2025-13151      │          │              │ 4.19.0-2+deb12u1       │               │ libtasn1: libtasn1: Denial of Service via stack-based buffer │
+│                    │                     │          │              │                        │               │ overflow in asn1_expend_octet_string                         │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-13151                   │
+├────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libtinfo6          │ CVE-2025-69720      │ HIGH     │              │ 6.4-4                  │               │ ncurses: ncurses: Buffer overflow vulnerability may lead to  │
+│                    │                     │          │              │                        │               │ arbitrary code execution.                                    │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-69720                   │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2023-50495      │ MEDIUM   │              │                        │               │ ncurses: segmentation fault via _nc_wrap_entry()             │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-50495                   │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2025-6141       │ LOW      │              │                        │               │ gnu-ncurses: ncurses Stack Buffer Overflow                   │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-6141                    │
+├────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libudev1           │ CVE-2026-16742      │ HIGH     │ fix_deferred │ 252.39-1~deb12u2       │               │ systemd: systemd-homed: Local privilege escalation via       │
+│                    │                     │          │              │                        │               │ missing home-record signature verification                   │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-16742                   │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-15059      │ MEDIUM   │              │                        │               │ systemd: systemd-oomd: Unprivileged users can terminate      │
+│                    │                     │          │              │                        │               │ arbitrary processes via IPC API                              │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-15059                   │
+│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2013-4392       │ LOW      │ affected     │                        │               │ systemd: TOCTOU race condition when updating file            │
+│                    │                     │          │              │                        │               │ permissions and SELinux security contexts...                 │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2013-4392                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2023-31437      │          │              │                        │               │ An issue was discovered in systemd 253. An attacker can      │
+│                    │                     │          │              │                        │               │ modify a...                                                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-31437                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2023-31438      │          │              │                        │               │ An issue was discovered in systemd 253. An attacker can      │
+│                    │                     │          │              │                        │               │ truncate a...                                                │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-31438                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2023-31439      │          │              │                        │               │ An issue was discovered in systemd 253. An attacker can      │
+│                    │                     │          │              │                        │               │ modify the...                                                │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-31439                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-40228      │          │              │                        │               │ systemd: systemd-journald: Unintended output to user         │
+│                    │                     │          │              │                        │               │ terminals via logger command                                 │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-40228                   │
+├────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libuuid1           │ CVE-2026-53613      │ HIGH     │              │ 2.38.1-5+deb12u3       │               │ util-linux: TOCTOU in the mount program via ancestor         │
+│                    │                     │          │              │                        │               │ directory swap on target...                                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53613                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-53615      │          │              │                        │               │ util-linux: util-linux: Partition metadata compromise via    │
+│                    │                     │          │              │                        │               │ integer overflow in DOS partition parser...                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53615                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-78410      │          │              │                        │               │ util-linux: util-linux: restricted bind mounts do not pin    │
+│                    │                     │          │              │                        │               │ the source, allowing X-mount.owner/group/mode...             │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78410                   │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-13595      │ MEDIUM   │              │                        │               │ util-linux: util-linux: heap use-after-free in libblkid      │
+│                    │                     │          │              │                        │               │ nested partition probing                                     │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-13595                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-27456      │          │              │                        │               │ util-linux: TOCTOU in the mount program when setting up loop │
+│                    │                     │          │              │                        │               │ devices                                                      │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-27456                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-3184       │          │ will_not_fix │                        │               │ util-linux: util-linux: Access control bypass due to         │
+│                    │                     │          │              │                        │               │ improper hostname canonicalization                           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-3184                    │
+│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2022-0563       │ LOW      │ affected     │                        │               │ util-linux: partial disclosure of arbitrary files in chfn    │
+│                    │                     │          │              │                        │               │ and chsh when compiled...                                    │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2022-0563                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2025-14104      │          │              │                        │               │ util-linux: util-linux: Heap buffer overread in setpwnam()   │
+│                    │                     │          │              │                        │               │ when processing 256-byte usernames                           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-14104                   │
+├────────────────────┼─────────────────────┤          │              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ login              │ CVE-2007-5686       │          │              │ 1:4.13+dfsg1-1+deb12u2 │               │ initscripts in rPath Linux 1 sets insecure permissions for   │
+│                    │                     │          │              │                        │               │ the /var/lo ......                                           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2007-5686                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2024-56433      │          │              │                        │               │ shadow-utils: Default subordinate ID configuration in        │
+│                    │                     │          │              │                        │               │ /etc/login.defs could lead to compromise                     │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-56433                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ TEMP-0628843-DBAD28 │          │              │                        │               │ [more related to CVE-2005-4890]                              │
+│                    │                     │          │              │                        │               │ https://security-tracker.debian.org/tracker/TEMP-0628843-DB- │
+│                    │                     │          │              │                        │               │ AD28                                                         │
+├────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ mount              │ CVE-2026-53613      │ HIGH     │              │ 2.38.1-5+deb12u3       │               │ util-linux: TOCTOU in the mount program via ancestor         │
+│                    │                     │          │              │                        │               │ directory swap on target...                                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53613                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-53615      │          │              │                        │               │ util-linux: util-linux: Partition metadata compromise via    │
+│                    │                     │          │              │                        │               │ integer overflow in DOS partition parser...                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53615                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-78410      │          │              │                        │               │ util-linux: util-linux: restricted bind mounts do not pin    │
+│                    │                     │          │              │                        │               │ the source, allowing X-mount.owner/group/mode...             │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78410                   │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-13595      │ MEDIUM   │              │                        │               │ util-linux: util-linux: heap use-after-free in libblkid      │
+│                    │                     │          │              │                        │               │ nested partition probing                                     │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-13595                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-27456      │          │              │                        │               │ util-linux: TOCTOU in the mount program when setting up loop │
+│                    │                     │          │              │                        │               │ devices                                                      │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-27456                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-3184       │          │ will_not_fix │                        │               │ util-linux: util-linux: Access control bypass due to         │
+│                    │                     │          │              │                        │               │ improper hostname canonicalization                           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-3184                    │
+│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2022-0563       │ LOW      │ affected     │                        │               │ util-linux: partial disclosure of arbitrary files in chfn    │
+│                    │                     │          │              │                        │               │ and chsh when compiled...                                    │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2022-0563                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2025-14104      │          │              │                        │               │ util-linux: util-linux: Heap buffer overread in setpwnam()   │
+│                    │                     │          │              │                        │               │ when processing 256-byte usernames                           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-14104                   │
+├────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ ncurses-base       │ CVE-2025-69720      │ HIGH     │              │ 6.4-4                  │               │ ncurses: ncurses: Buffer overflow vulnerability may lead to  │
+│                    │                     │          │              │                        │               │ arbitrary code execution.                                    │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-69720                   │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2023-50495      │ MEDIUM   │              │                        │               │ ncurses: segmentation fault via _nc_wrap_entry()             │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-50495                   │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2025-6141       │ LOW      │              │                        │               │ gnu-ncurses: ncurses Stack Buffer Overflow                   │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-6141                    │
+├────────────────────┼─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│ ncurses-bin        │ CVE-2025-69720      │ HIGH     │              │                        │               │ ncurses: ncurses: Buffer overflow vulnerability may lead to  │
+│                    │                     │          │              │                        │               │ arbitrary code execution.                                    │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-69720                   │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2023-50495      │ MEDIUM   │              │                        │               │ ncurses: segmentation fault via _nc_wrap_entry()             │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-50495                   │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2025-6141       │ LOW      │              │                        │               │ gnu-ncurses: ncurses Stack Buffer Overflow                   │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-6141                    │
+├────────────────────┼─────────────────────┤          │              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ openssl            │ CVE-2025-27587      │          │              │ 3.0.22-1~deb12u2       │               │ OpenSSL 3.0.0 through 3.3.2 on the PowerPC architecture is   │
+│                    │                     │          │              │                        │               │ vulnerable ......                                            │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-27587                   │
+├────────────────────┼─────────────────────┤          │              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ passwd             │ CVE-2007-5686       │          │              │ 1:4.13+dfsg1-1+deb12u2 │               │ initscripts in rPath Linux 1 sets insecure permissions for   │
+│                    │                     │          │              │                        │               │ the /var/lo ......                                           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2007-5686                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2024-56433      │          │              │                        │               │ shadow-utils: Default subordinate ID configuration in        │
+│                    │                     │          │              │                        │               │ /etc/login.defs could lead to compromise                     │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-56433                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ TEMP-0628843-DBAD28 │          │              │                        │               │ [more related to CVE-2005-4890]                              │
+│                    │                     │          │              │                        │               │ https://security-tracker.debian.org/tracker/TEMP-0628843-DB- │
+│                    │                     │          │              │                        │               │ AD28                                                         │
+├────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ perl-base          │ CVE-2026-9538       │ HIGH     │ fix_deferred │ 5.36.0-7+deb12u4       │               │ perl-Archive-Tar: perl-Archive-Tar: Denial of Service via    │
+│                    │                     │          │              │                        │               │ crafted tar header with large entry...                       │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-9538                    │
+│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-15534      │ MEDIUM   │ affected     │                        │               │ perl: Perl: Arbitrary code execution via out-of-bounds       │
+│                    │                     │          │              │                        │               │ memory access in regular expression...                       │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-15534                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-82560      │          │              │                        │               │ Pod::Text versions before 6.1.1 for Perl allow CPU and       │
+│                    │                     │          │              │                        │               │ memory exhausti ......                                       │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-82560                   │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2011-4116       │ LOW      │              │                        │               │ perl: File:: Temp insecure temporary file handling           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2011-4116                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2023-31486      │          │              │                        │               │ http-tiny: perl: insecure TLS cert default                   │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-31486                   │
+├────────────────────┼─────────────────────┤          │              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ sysvinit-utils     │ TEMP-0517018-A83CE6 │          │              │ 3.06-4                 │               │ [sysvinit: no-root option in expert installer exposes        │
+│                    │                     │          │              │                        │               │ locally exploitable security flaw]                           │
+│                    │                     │          │              │                        │               │ https://security-tracker.debian.org/tracker/TEMP-0517018-A8- │
+│                    │                     │          │              │                        │               │ 3CE6                                                         │
+├────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ tar                │ CVE-2026-18477      │ MEDIUM   │ fix_deferred │ 1.34+dfsg-1.2+deb12u1  │               │ tar: tar: TOCTOU in incremental dumpdir 'X' rename handling  │
+│                    │                     │          │              │                        │               │ allows restore path...                                       │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-18477                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-18508      │          │              │                        │               │ tar: tar: --one-top-level hardlink targets not confined to   │
+│                    │                     │          │              │                        │               │ top-level directory enabling arbitrary...                    │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-18508                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-5704       │          │ affected     │                        │               │ tar: tar: Hidden file injection via crafted archives         │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-5704                    │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2005-2541       │ LOW      │              │                        │               │ tar: does not properly warn the user when extracting setuid  │
+│                    │                     │          │              │                        │               │ or setgid...                                                 │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2005-2541                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ TEMP-0290435-0B57B5 │          │              │                        │               │ [tar's rmt command may have undesired side effects]          │
+│                    │                     │          │              │                        │               │ https://security-tracker.debian.org/tracker/TEMP-0290435-0B- │
+│                    │                     │          │              │                        │               │ 57B5                                                         │
+├────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ util-linux         │ CVE-2026-53613      │ HIGH     │              │ 2.38.1-5+deb12u3       │               │ util-linux: TOCTOU in the mount program via ancestor         │
+│                    │                     │          │              │                        │               │ directory swap on target...                                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53613                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-53615      │          │              │                        │               │ util-linux: util-linux: Partition metadata compromise via    │
+│                    │                     │          │              │                        │               │ integer overflow in DOS partition parser...                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53615                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-78410      │          │              │                        │               │ util-linux: util-linux: restricted bind mounts do not pin    │
+│                    │                     │          │              │                        │               │ the source, allowing X-mount.owner/group/mode...             │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78410                   │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-13595      │ MEDIUM   │              │                        │               │ util-linux: util-linux: heap use-after-free in libblkid      │
+│                    │                     │          │              │                        │               │ nested partition probing                                     │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-13595                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-27456      │          │              │                        │               │ util-linux: TOCTOU in the mount program when setting up loop │
+│                    │                     │          │              │                        │               │ devices                                                      │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-27456                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-3184       │          │ will_not_fix │                        │               │ util-linux: util-linux: Access control bypass due to         │
+│                    │                     │          │              │                        │               │ improper hostname canonicalization                           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-3184                    │
+│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2022-0563       │ LOW      │ affected     │                        │               │ util-linux: partial disclosure of arbitrary files in chfn    │
+│                    │                     │          │              │                        │               │ and chsh when compiled...                                    │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2022-0563                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2025-14104      │          │              │                        │               │ util-linux: util-linux: Heap buffer overread in setpwnam()   │
+│                    │                     │          │              │                        │               │ when processing 256-byte usernames                           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-14104                   │
+├────────────────────┼─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│ util-linux-extra   │ CVE-2026-53613      │ HIGH     │              │                        │               │ util-linux: TOCTOU in the mount program via ancestor         │
+│                    │                     │          │              │                        │               │ directory swap on target...                                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53613                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-53615      │          │              │                        │               │ util-linux: util-linux: Partition metadata compromise via    │
+│                    │                     │          │              │                        │               │ integer overflow in DOS partition parser...                  │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53615                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-78410      │          │              │                        │               │ util-linux: util-linux: restricted bind mounts do not pin    │
+│                    │                     │          │              │                        │               │ the source, allowing X-mount.owner/group/mode...             │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78410                   │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-13595      │ MEDIUM   │              │                        │               │ util-linux: util-linux: heap use-after-free in libblkid      │
+│                    │                     │          │              │                        │               │ nested partition probing                                     │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-13595                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-27456      │          │              │                        │               │ util-linux: TOCTOU in the mount program when setting up loop │
+│                    │                     │          │              │                        │               │ devices                                                      │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-27456                   │
+│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-3184       │          │ will_not_fix │                        │               │ util-linux: util-linux: Access control bypass due to         │
+│                    │                     │          │              │                        │               │ improper hostname canonicalization                           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-3184                    │
+│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2022-0563       │ LOW      │ affected     │                        │               │ util-linux: partial disclosure of arbitrary files in chfn    │
+│                    │                     │          │              │                        │               │ and chsh when compiled...                                    │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2022-0563                    │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2025-14104      │          │              │                        │               │ util-linux: util-linux: Heap buffer overread in setpwnam()   │
+│                    │                     │          │              │                        │               │ when processing 256-byte usernames                           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-14104                   │
+├────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ zlib1g             │ CVE-2023-45853      │ CRITICAL │ will_not_fix │ 1:1.2.13.dfsg-1        │               │ zlib: integer overflow and resultant heap-based buffer       │
+│                    │                     │          │              │                        │               │ overflow in zipOpenNewFileInZip4_6                           │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-45853                   │
+│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-76844      │ HIGH     │ affected     │                        │               │ webpack-dev-middleware: webpack-dev-middleware: Information  │
+│                    │                     │          │              │                        │               │ Disclosure via Path Traversal                                │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-76844                   │
+│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-85091      │          │              │                        │               │ zlib: zlib: Heap buffer overflow in gz_vacate() allows       │
+│                    │                     │          │              │                        │               │ arbitrary code execution                                     │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-85091                   │
+│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                    │ CVE-2026-27171      │ MEDIUM   │              │                        │               │ zlib: zlib: Denial of Service via infinite loop in CRC32     │
+│                    │                     │          │              │                        │               │ combine functions...                                         │
+│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-27171                   │
+└────────────────────┴─────────────────────┴──────────┴──────────────┴────────────────────────┴───────────────┴──────────────────────────────────────────────────────────────┘
 
 app/stoa-gateway (rustbinary)
 =============================
@@ -1483,17 +1710,17 @@ Total: 1 (UNKNOWN: 0, LOW: 0, MEDIUM: 1, HIGH: 0, CRITICAL: 0)
 
 ## SBOM
 
-CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.tar --format cyclonedx`. 414 components, including `pkg:cargo/quick-xml@0.39.4`. Same bytes as `deploy/standalone/stoa-gateway-standalone.cdx.json` (gitignored) and the agent-store copy.
+CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.tar --format cyclonedx`, on the image of 2026-11-10. 414 components, including `pkg:cargo/quick-xml@0.39.4` and `pkg:cargo/tokio@1.54.1`. Same bytes as `deploy/standalone/stoa-gateway-standalone.cdx.json` (not committed).
 
 ```json
 {
   "$schema": "http://cyclonedx.org/schema/bom-1.6.schema.json",
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:e67f44ab-ee21-4faf-a88e-60f04d0f20cd",
+  "serialNumber": "urn:uuid:5f1bd2ae-48af-4cb5-84f5-f9e2ed1300e7",
   "version": 1,
   "metadata": {
-    "timestamp": "2026-10-21T18:33:32+00:00",
+    "timestamp": "2026-11-10T17:08:32+00:00",
     "tools": {
       "components": [
         {
@@ -1505,41 +1732,41 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       ]
     },
     "component": {
-      "bom-ref": "561a48d6-ff71-4e99-b54a-a5a3a932007a",
+      "bom-ref": "bddee12f-29b2-467a-bfb1-704af28caa85",
       "type": "container",
-      "name": "/workspace/deploy/standalone/stoa-gateway-standalone.tar",
+      "name": "/tmp/claude-stoa/wt-build/deploy/standalone/stoa-gateway-standalone.tar",
       "properties": [
         {
           "name": "aquasecurity:trivy:DiffID",
-          "value": "sha256:041fa36e7b553df7512e26cdd7928c7b0d6bd791c9548f15bb7cd65e1bf263dc"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:DiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:DiffID",
-          "value": "sha256:60992be8344f4aa87e8d369bfb6fa4e963c774eacb2f0480b307d1f07f7b8656"
+          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
         },
         {
           "name": "aquasecurity:trivy:DiffID",
-          "value": "sha256:7382b2d6f195cd4e5db720b0914e21cbc5530ac4ed578ddd8d5f0b083615cc50"
+          "value": "sha256:dbadba57e25b4b353985581d462cb3ac30a04e5a411e9f4f7656771d8dd4874a"
         },
         {
           "name": "aquasecurity:trivy:DiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
+          "value": "sha256:e882c97afbf110e2b9fa918a55d9f57cd9103400ef8974e49b06dfe24893fdc4"
         },
         {
           "name": "aquasecurity:trivy:DiffID",
-          "value": "sha256:c06b6e4fdc187fb3f5b2743b4e0142e4b7a2e189cecce7ffa477180bf74dbf9d"
+          "value": "sha256:f457a501348cd770cb3ea1ededc32a4143182f57a787e09a0d147ff5fc88ac90"
         },
         {
           "name": "aquasecurity:trivy:ImageID",
-          "value": "sha256:9b576aa9740f1b9b416ae3a5817ee73b97162a1396eb415123a0b74f7e46a3ff"
+          "value": "sha256:ca6a3c050cfb5026344efdb3d80b93a98c5ec935cd08fff9fd59f03a1cb59547"
         },
         {
           "name": "aquasecurity:trivy:Labels:org.opencontainers.image.revision",
-          "value": "6d23399e4d1a1f4c54a03122640c0469c8b4829c"
+          "value": "4e84fae718a14dd6d1e75504cfe6f031cb76ea9d"
         },
         {
           "name": "aquasecurity:trivy:Labels:org.opencontainers.image.source",
@@ -1558,7 +1785,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
   },
   "components": [
     {
-      "bom-ref": "73b8ee98-806e-4cfc-aa7d-0f5ef5be186e",
+      "bom-ref": "0c760edd-5140-4020-b57c-6fc9f535b69b",
       "type": "application",
       "name": "app/stoa-gateway",
       "properties": [
@@ -1573,7 +1800,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       ]
     },
     {
-      "bom-ref": "974623ae-e50a-448f-b4ea-8c4ebe104cfe",
+      "bom-ref": "da0e1874-e847-4d6c-b66b-b25063be3b1e",
       "type": "operating-system",
       "name": "debian",
       "version": "12.15",
@@ -1597,11 +1824,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -1622,11 +1845,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -1647,11 +1866,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -1672,11 +1887,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -1697,11 +1908,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -1722,11 +1929,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -1747,11 +1950,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -1772,11 +1971,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -1797,11 +1992,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -1822,11 +2013,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -1847,11 +2034,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -1872,11 +2055,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -1897,11 +2076,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -1922,11 +2097,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -1947,11 +2118,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -1972,11 +2139,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -1997,11 +2160,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2022,11 +2181,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2047,11 +2202,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2072,11 +2223,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2097,11 +2244,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2122,11 +2265,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2147,11 +2286,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2172,11 +2307,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2197,11 +2328,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2222,11 +2349,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2247,11 +2370,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2272,11 +2391,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2297,11 +2412,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2322,11 +2433,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2347,11 +2454,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2372,11 +2475,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2397,11 +2496,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2422,11 +2517,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2447,11 +2538,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2472,11 +2559,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2497,11 +2580,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2522,11 +2601,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2547,11 +2622,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2572,11 +2643,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2597,11 +2664,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2622,11 +2685,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2647,11 +2706,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2672,11 +2727,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2697,11 +2748,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2722,11 +2769,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2747,11 +2790,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2772,11 +2811,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2797,11 +2832,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2822,11 +2853,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2847,11 +2874,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2872,11 +2895,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2897,11 +2916,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2922,11 +2937,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2947,11 +2958,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2972,11 +2979,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2997,11 +3000,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3022,11 +3021,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3047,11 +3042,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3072,11 +3063,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3097,11 +3084,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3122,11 +3105,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3147,11 +3126,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3172,11 +3147,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3197,11 +3168,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3222,11 +3189,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3247,11 +3210,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3272,11 +3231,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3297,11 +3252,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3322,11 +3273,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3347,11 +3294,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3372,11 +3315,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3397,11 +3336,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3422,11 +3357,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3447,11 +3378,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3472,11 +3399,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3497,11 +3420,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3522,11 +3441,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3547,11 +3462,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3572,11 +3483,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3597,11 +3504,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3622,11 +3525,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3647,11 +3546,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3672,11 +3567,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3697,11 +3588,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3722,11 +3609,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3747,11 +3630,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3772,11 +3651,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3797,11 +3672,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3822,11 +3693,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3847,11 +3714,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3872,11 +3735,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3897,11 +3756,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3922,11 +3777,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3947,11 +3798,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3972,11 +3819,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3997,11 +3840,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4022,11 +3861,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4047,11 +3882,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4072,11 +3903,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4097,11 +3924,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4122,11 +3945,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4147,11 +3966,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4172,11 +3987,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4197,11 +4008,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4222,11 +4029,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4247,11 +4050,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4272,11 +4071,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4297,11 +4092,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4322,11 +4113,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4347,11 +4134,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4372,11 +4155,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4397,11 +4176,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4422,11 +4197,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4447,11 +4218,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4472,11 +4239,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4497,11 +4260,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4522,11 +4281,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4547,11 +4302,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4572,11 +4323,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4597,11 +4344,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4622,11 +4365,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4647,11 +4386,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4672,11 +4407,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4697,11 +4428,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4722,11 +4449,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4747,11 +4470,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4772,11 +4491,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4797,11 +4512,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4822,11 +4533,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4847,11 +4554,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4872,11 +4575,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4897,11 +4596,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4922,11 +4617,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4947,11 +4638,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4972,11 +4659,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4997,11 +4680,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5022,11 +4701,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5047,11 +4722,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5072,11 +4743,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5097,11 +4764,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5122,11 +4785,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5147,11 +4806,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5172,11 +4827,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5197,11 +4848,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5222,11 +4869,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5247,11 +4890,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5272,11 +4911,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5297,11 +4932,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5322,11 +4953,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5347,11 +4974,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5372,11 +4995,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5397,11 +5016,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5422,11 +5037,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5447,11 +5058,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5472,11 +5079,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5497,11 +5100,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5522,11 +5121,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5547,11 +5142,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5572,11 +5163,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5597,11 +5184,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5622,11 +5205,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5647,11 +5226,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5672,11 +5247,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5697,11 +5268,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5722,11 +5289,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5747,11 +5310,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5772,11 +5331,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5797,11 +5352,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5822,11 +5373,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5847,11 +5394,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5872,11 +5415,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5897,11 +5436,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5922,11 +5457,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5947,11 +5478,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5972,11 +5499,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5997,11 +5520,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6022,11 +5541,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6047,11 +5562,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6072,11 +5583,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6097,11 +5604,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6122,11 +5625,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6147,11 +5646,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6172,11 +5667,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6197,11 +5688,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6222,11 +5709,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6247,11 +5730,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6272,11 +5751,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6297,11 +5772,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6322,11 +5793,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6347,11 +5814,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6372,11 +5835,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6397,11 +5856,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6422,11 +5877,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6447,11 +5898,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6472,11 +5919,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6497,11 +5940,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6522,11 +5961,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6547,11 +5982,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6572,11 +6003,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6597,11 +6024,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6622,11 +6045,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6647,11 +6066,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6672,11 +6087,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6697,11 +6108,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6722,11 +6129,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6747,11 +6150,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6772,11 +6171,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6797,11 +6192,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6822,11 +6213,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6847,11 +6234,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6872,11 +6255,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6897,11 +6276,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6922,11 +6297,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6947,11 +6318,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6972,11 +6339,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6997,11 +6360,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7022,11 +6381,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7047,11 +6402,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7072,11 +6423,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7097,11 +6444,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7122,11 +6465,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7147,11 +6486,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7172,11 +6507,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7197,11 +6528,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7222,11 +6549,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7247,11 +6570,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7272,11 +6591,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7297,11 +6612,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7322,11 +6633,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7347,11 +6654,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7372,11 +6675,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7397,11 +6696,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7422,11 +6717,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7447,11 +6738,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7472,11 +6759,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7497,11 +6780,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7522,11 +6801,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7547,11 +6822,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7572,11 +6843,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7597,11 +6864,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7622,11 +6885,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7647,11 +6906,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7672,11 +6927,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7697,11 +6948,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7722,11 +6969,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7747,11 +6990,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7772,11 +7011,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7797,11 +7032,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7822,11 +7053,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7839,23 +7066,19 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       ]
     },
     {
-      "bom-ref": "pkg:cargo/tokio@1.54.0",
+      "bom-ref": "pkg:cargo/tokio@1.54.1",
       "type": "library",
       "name": "tokio",
-      "version": "1.54.0",
-      "purl": "pkg:cargo/tokio@1.54.0",
+      "version": "1.54.1",
+      "purl": "pkg:cargo/tokio@1.54.1",
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
-          "value": "tokio@1.54.0"
+          "value": "tokio@1.54.1"
         },
         {
           "name": "aquasecurity:trivy:PkgType",
@@ -7872,11 +7095,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7897,11 +7116,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7922,11 +7137,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7947,11 +7158,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7972,11 +7179,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7997,11 +7200,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8022,11 +7221,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8047,11 +7242,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8072,11 +7263,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8097,11 +7284,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8122,11 +7305,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8147,11 +7326,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8172,11 +7347,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8197,11 +7368,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8222,11 +7389,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8247,11 +7410,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8272,11 +7431,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8297,11 +7452,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8322,11 +7473,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8347,11 +7494,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8372,11 +7515,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8397,11 +7536,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8422,11 +7557,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8447,11 +7578,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8472,11 +7599,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8497,11 +7620,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8522,11 +7641,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8547,11 +7662,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8572,11 +7683,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8597,11 +7704,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8622,11 +7725,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8647,11 +7746,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8672,11 +7767,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8697,11 +7788,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8722,11 +7809,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8747,11 +7830,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8772,11 +7851,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8797,11 +7872,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8822,11 +7893,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8847,11 +7914,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8872,11 +7935,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8897,11 +7956,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8922,11 +7977,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8947,11 +7998,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8972,11 +8019,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8997,11 +8040,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -9022,11 +8061,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -9047,11 +8082,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -9072,11 +8103,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -9097,11 +8124,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -9122,11 +8145,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:214299c189fd087fddd7b2f28d5a162659b1b30e4be503f246cc0337662b2f44"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:1760ed7a439f41a0ba073d1626865d4c6b840fdc33ed1165b6c488dece89b679"
+          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -9162,11 +8181,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -9187,13 +8202,13 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       ]
     },
     {
-      "bom-ref": "pkg:deb/debian/apt@2.6.1?arch=amd64&distro=debian-12.15",
+      "bom-ref": "pkg:deb/debian/apt@2.6.2?arch=amd64&distro=debian-12.15",
       "type": "library",
       "supplier": {
         "name": "APT Development Team <deity@lists.debian.org>"
       },
       "name": "apt",
-      "version": "2.6.1",
+      "version": "2.6.2",
       "licenses": [
         {
           "license": {
@@ -9216,19 +8231,15 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
           }
         }
       ],
-      "purl": "pkg:deb/debian/apt@2.6.1?arch=amd64&distro=debian-12.15",
+      "purl": "pkg:deb/debian/apt@2.6.2?arch=amd64&distro=debian-12.15",
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
-          "value": "apt@2.6.1"
+          "value": "apt@2.6.2"
         },
         {
           "name": "aquasecurity:trivy:PkgType",
@@ -9240,7 +8251,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         },
         {
           "name": "aquasecurity:trivy:SrcVersion",
-          "value": "2.6.1"
+          "value": "2.6.2"
         }
       ]
     },
@@ -9263,11 +8274,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -9311,11 +8318,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -9404,11 +8407,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -9521,11 +8520,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -9578,11 +8573,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:041fa36e7b553df7512e26cdd7928c7b0d6bd791c9548f15bb7cd65e1bf263dc"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:5681027ac9bb5e47b5b9e1164dbd199959488b99838037e2ebc3ade3250ff736"
+          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -9651,11 +8642,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -9748,11 +8735,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:041fa36e7b553df7512e26cdd7928c7b0d6bd791c9548f15bb7cd65e1bf263dc"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:5681027ac9bb5e47b5b9e1164dbd199959488b99838037e2ebc3ade3250ff736"
+          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -9810,11 +8793,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -9857,11 +8836,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -9900,11 +8875,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -9958,11 +8929,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -10090,11 +9057,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -10156,11 +9119,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -10244,11 +9203,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -10406,11 +9361,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -10478,11 +9429,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -10580,11 +9527,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -10632,11 +9575,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -10699,11 +9638,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -10746,11 +9681,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -10799,11 +9730,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -10842,11 +9769,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:041fa36e7b553df7512e26cdd7928c7b0d6bd791c9548f15bb7cd65e1bf263dc"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:5681027ac9bb5e47b5b9e1164dbd199959488b99838037e2ebc3ade3250ff736"
+          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -10904,11 +9827,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -10933,13 +9852,13 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       ]
     },
     {
-      "bom-ref": "pkg:deb/debian/libapt-pkg6.0@2.6.1?arch=amd64&distro=debian-12.15",
+      "bom-ref": "pkg:deb/debian/libapt-pkg6.0@2.6.2?arch=amd64&distro=debian-12.15",
       "type": "library",
       "supplier": {
         "name": "APT Development Team <deity@lists.debian.org>"
       },
       "name": "libapt-pkg6.0",
-      "version": "2.6.1",
+      "version": "2.6.2",
       "licenses": [
         {
           "license": {
@@ -10962,19 +9881,15 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
           }
         }
       ],
-      "purl": "pkg:deb/debian/libapt-pkg6.0@2.6.1?arch=amd64&distro=debian-12.15",
+      "purl": "pkg:deb/debian/libapt-pkg6.0@2.6.2?arch=amd64&distro=debian-12.15",
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
-          "value": "libapt-pkg6.0@2.6.1"
+          "value": "libapt-pkg6.0@2.6.2"
         },
         {
           "name": "aquasecurity:trivy:PkgType",
@@ -10986,7 +9901,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         },
         {
           "name": "aquasecurity:trivy:SrcVersion",
-          "value": "2.6.1"
+          "value": "2.6.2"
         }
       ]
     },
@@ -11024,11 +9939,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -11085,11 +9996,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -11146,11 +10053,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -11267,11 +10170,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -11296,13 +10195,13 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       ]
     },
     {
-      "bom-ref": "pkg:deb/debian/libbrotli1@1.0.9-2%2Bb6?arch=amd64&distro=debian-12.15",
+      "bom-ref": "pkg:deb/debian/libbrotli1@1.0.9-2%2Bdeb12u1?arch=amd64&distro=debian-12.15",
       "type": "library",
       "supplier": {
         "name": "Tomasz Buchert <tomasz@debian.org>"
       },
       "name": "libbrotli1",
-      "version": "1.0.9-2+b6",
+      "version": "1.0.9-2+deb12u1",
       "licenses": [
         {
           "license": {
@@ -11310,19 +10209,15 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
           }
         }
       ],
-      "purl": "pkg:deb/debian/libbrotli1@1.0.9-2%2Bb6?arch=amd64&distro=debian-12.15",
+      "purl": "pkg:deb/debian/libbrotli1@1.0.9-2%2Bdeb12u1?arch=amd64&distro=debian-12.15",
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:041fa36e7b553df7512e26cdd7928c7b0d6bd791c9548f15bb7cd65e1bf263dc"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:5681027ac9bb5e47b5b9e1164dbd199959488b99838037e2ebc3ade3250ff736"
+          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
-          "value": "libbrotli1@1.0.9-2+b6"
+          "value": "libbrotli1@1.0.9-2+deb12u1"
         },
         {
           "name": "aquasecurity:trivy:PkgType",
@@ -11334,7 +10229,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         },
         {
           "name": "aquasecurity:trivy:SrcRelease",
-          "value": "2"
+          "value": "2+deb12u1"
         },
         {
           "name": "aquasecurity:trivy:SrcVersion",
@@ -11366,11 +10261,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -11418,11 +10309,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -11470,11 +10357,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -11537,11 +10420,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -11594,11 +10473,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -11690,11 +10565,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -11730,11 +10601,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -11831,11 +10698,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:041fa36e7b553df7512e26cdd7928c7b0d6bd791c9548f15bb7cd65e1bf263dc"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:5681027ac9bb5e47b5b9e1164dbd199959488b99838037e2ebc3ade3250ff736"
+          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -11928,11 +10791,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -11985,11 +10844,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -12073,11 +10928,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -12150,11 +11001,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -12190,11 +11037,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -12242,11 +11085,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -12319,11 +11158,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -12430,11 +11265,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -12502,11 +11333,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -12549,11 +11376,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:041fa36e7b553df7512e26cdd7928c7b0d6bd791c9548f15bb7cd65e1bf263dc"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:5681027ac9bb5e47b5b9e1164dbd199959488b99838037e2ebc3ade3250ff736"
+          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -12641,11 +11464,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -12718,11 +11537,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -12765,11 +11580,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:041fa36e7b553df7512e26cdd7928c7b0d6bd791c9548f15bb7cd65e1bf263dc"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:5681027ac9bb5e47b5b9e1164dbd199959488b99838037e2ebc3ade3250ff736"
+          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -12827,11 +11638,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:041fa36e7b553df7512e26cdd7928c7b0d6bd791c9548f15bb7cd65e1bf263dc"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:5681027ac9bb5e47b5b9e1164dbd199959488b99838037e2ebc3ade3250ff736"
+          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -12874,11 +11681,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:041fa36e7b553df7512e26cdd7928c7b0d6bd791c9548f15bb7cd65e1bf263dc"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:5681027ac9bb5e47b5b9e1164dbd199959488b99838037e2ebc3ade3250ff736"
+          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -12921,11 +11724,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:041fa36e7b553df7512e26cdd7928c7b0d6bd791c9548f15bb7cd65e1bf263dc"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:5681027ac9bb5e47b5b9e1164dbd199959488b99838037e2ebc3ade3250ff736"
+          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -13083,11 +11882,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:041fa36e7b553df7512e26cdd7928c7b0d6bd791c9548f15bb7cd65e1bf263dc"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:5681027ac9bb5e47b5b9e1164dbd199959488b99838037e2ebc3ade3250ff736"
+          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -13245,11 +12040,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:041fa36e7b553df7512e26cdd7928c7b0d6bd791c9548f15bb7cd65e1bf263dc"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:5681027ac9bb5e47b5b9e1164dbd199959488b99838037e2ebc3ade3250ff736"
+          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -13302,11 +12093,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -13419,11 +12206,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -13506,11 +12289,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -13623,11 +12402,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -13715,11 +12490,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -13782,11 +12553,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:041fa36e7b553df7512e26cdd7928c7b0d6bd791c9548f15bb7cd65e1bf263dc"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:5681027ac9bb5e47b5b9e1164dbd199959488b99838037e2ebc3ade3250ff736"
+          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -13864,11 +12631,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -13956,11 +12719,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -14048,11 +12807,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -14140,11 +12895,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -14232,11 +12983,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -14299,11 +13046,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -14356,11 +13099,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:041fa36e7b553df7512e26cdd7928c7b0d6bd791c9548f15bb7cd65e1bf263dc"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:5681027ac9bb5e47b5b9e1164dbd199959488b99838037e2ebc3ade3250ff736"
+          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -14408,11 +13147,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:041fa36e7b553df7512e26cdd7928c7b0d6bd791c9548f15bb7cd65e1bf263dc"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:5681027ac9bb5e47b5b9e1164dbd199959488b99838037e2ebc3ade3250ff736"
+          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -14437,13 +13172,13 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       ]
     },
     {
-      "bom-ref": "pkg:deb/debian/libsasl2-2@2.1.28%2Bdfsg-10?arch=amd64&distro=debian-12.15",
+      "bom-ref": "pkg:deb/debian/libsasl2-2@2.1.28%2Bdfsg-10%2Bdeb12u1?arch=amd64&distro=debian-12.15",
       "type": "library",
       "supplier": {
         "name": "Debian Cyrus Team <team+cyrus@tracker.debian.org>"
       },
       "name": "libsasl2-2",
-      "version": "2.1.28+dfsg-10",
+      "version": "2.1.28+dfsg-10+deb12u1",
       "licenses": [
         {
           "license": {
@@ -14546,19 +13281,15 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
           }
         }
       ],
-      "purl": "pkg:deb/debian/libsasl2-2@2.1.28%2Bdfsg-10?arch=amd64&distro=debian-12.15",
+      "purl": "pkg:deb/debian/libsasl2-2@2.1.28%2Bdfsg-10%2Bdeb12u1?arch=amd64&distro=debian-12.15",
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:041fa36e7b553df7512e26cdd7928c7b0d6bd791c9548f15bb7cd65e1bf263dc"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:5681027ac9bb5e47b5b9e1164dbd199959488b99838037e2ebc3ade3250ff736"
+          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
-          "value": "libsasl2-2@2.1.28+dfsg-10"
+          "value": "libsasl2-2@2.1.28+dfsg-10+deb12u1"
         },
         {
           "name": "aquasecurity:trivy:PkgType",
@@ -14570,7 +13301,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         },
         {
           "name": "aquasecurity:trivy:SrcRelease",
-          "value": "10"
+          "value": "10+deb12u1"
         },
         {
           "name": "aquasecurity:trivy:SrcVersion",
@@ -14579,13 +13310,13 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       ]
     },
     {
-      "bom-ref": "pkg:deb/debian/libsasl2-modules-db@2.1.28%2Bdfsg-10?arch=amd64&distro=debian-12.15",
+      "bom-ref": "pkg:deb/debian/libsasl2-modules-db@2.1.28%2Bdfsg-10%2Bdeb12u1?arch=amd64&distro=debian-12.15",
       "type": "library",
       "supplier": {
         "name": "Debian Cyrus Team <team+cyrus@tracker.debian.org>"
       },
       "name": "libsasl2-modules-db",
-      "version": "2.1.28+dfsg-10",
+      "version": "2.1.28+dfsg-10+deb12u1",
       "licenses": [
         {
           "license": {
@@ -14688,19 +13419,15 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
           }
         }
       ],
-      "purl": "pkg:deb/debian/libsasl2-modules-db@2.1.28%2Bdfsg-10?arch=amd64&distro=debian-12.15",
+      "purl": "pkg:deb/debian/libsasl2-modules-db@2.1.28%2Bdfsg-10%2Bdeb12u1?arch=amd64&distro=debian-12.15",
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:041fa36e7b553df7512e26cdd7928c7b0d6bd791c9548f15bb7cd65e1bf263dc"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:5681027ac9bb5e47b5b9e1164dbd199959488b99838037e2ebc3ade3250ff736"
+          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
-          "value": "libsasl2-modules-db@2.1.28+dfsg-10"
+          "value": "libsasl2-modules-db@2.1.28+dfsg-10+deb12u1"
         },
         {
           "name": "aquasecurity:trivy:PkgType",
@@ -14712,7 +13439,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         },
         {
           "name": "aquasecurity:trivy:SrcRelease",
-          "value": "10"
+          "value": "10+deb12u1"
         },
         {
           "name": "aquasecurity:trivy:SrcVersion",
@@ -14721,13 +13448,13 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       ]
     },
     {
-      "bom-ref": "pkg:deb/debian/libsasl2-modules@2.1.28%2Bdfsg-10?arch=amd64&distro=debian-12.15",
+      "bom-ref": "pkg:deb/debian/libsasl2-modules@2.1.28%2Bdfsg-10%2Bdeb12u1?arch=amd64&distro=debian-12.15",
       "type": "library",
       "supplier": {
         "name": "Debian Cyrus Team <team+cyrus@tracker.debian.org>"
       },
       "name": "libsasl2-modules",
-      "version": "2.1.28+dfsg-10",
+      "version": "2.1.28+dfsg-10+deb12u1",
       "licenses": [
         {
           "license": {
@@ -14830,19 +13557,15 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
           }
         }
       ],
-      "purl": "pkg:deb/debian/libsasl2-modules@2.1.28%2Bdfsg-10?arch=amd64&distro=debian-12.15",
+      "purl": "pkg:deb/debian/libsasl2-modules@2.1.28%2Bdfsg-10%2Bdeb12u1?arch=amd64&distro=debian-12.15",
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:041fa36e7b553df7512e26cdd7928c7b0d6bd791c9548f15bb7cd65e1bf263dc"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:5681027ac9bb5e47b5b9e1164dbd199959488b99838037e2ebc3ade3250ff736"
+          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
-          "value": "libsasl2-modules@2.1.28+dfsg-10"
+          "value": "libsasl2-modules@2.1.28+dfsg-10+deb12u1"
         },
         {
           "name": "aquasecurity:trivy:PkgType",
@@ -14854,7 +13577,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         },
         {
           "name": "aquasecurity:trivy:SrcRelease",
-          "value": "10"
+          "value": "10+deb12u1"
         },
         {
           "name": "aquasecurity:trivy:SrcVersion",
@@ -14881,11 +13604,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -14933,11 +13652,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -14985,11 +13700,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -15037,11 +13748,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -15104,11 +13811,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -15221,11 +13924,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -15313,11 +14012,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -15360,11 +14055,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:041fa36e7b553df7512e26cdd7928c7b0d6bd791c9548f15bb7cd65e1bf263dc"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:5681027ac9bb5e47b5b9e1164dbd199959488b99838037e2ebc3ade3250ff736"
+          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -15389,13 +14080,13 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       ]
     },
     {
-      "bom-ref": "pkg:deb/debian/libssl3@3.0.22-1~deb12u1?arch=amd64&distro=debian-12.15",
+      "bom-ref": "pkg:deb/debian/libssl3@3.0.22-1~deb12u2?arch=amd64&distro=debian-12.15",
       "type": "library",
       "supplier": {
         "name": "Debian OpenSSL Team <pkg-openssl-devel@alioth-lists.debian.net>"
       },
       "name": "libssl3",
-      "version": "3.0.22-1~deb12u1",
+      "version": "3.0.22-1~deb12u2",
       "licenses": [
         {
           "license": {
@@ -15418,19 +14109,15 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
           }
         }
       ],
-      "purl": "pkg:deb/debian/libssl3@3.0.22-1~deb12u1?arch=amd64&distro=debian-12.15",
+      "purl": "pkg:deb/debian/libssl3@3.0.22-1~deb12u2?arch=amd64&distro=debian-12.15",
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:041fa36e7b553df7512e26cdd7928c7b0d6bd791c9548f15bb7cd65e1bf263dc"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:5681027ac9bb5e47b5b9e1164dbd199959488b99838037e2ebc3ade3250ff736"
+          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
-          "value": "libssl3@3.0.22-1~deb12u1"
+          "value": "libssl3@3.0.22-1~deb12u2"
         },
         {
           "name": "aquasecurity:trivy:PkgType",
@@ -15442,7 +14129,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         },
         {
           "name": "aquasecurity:trivy:SrcRelease",
-          "value": "1~deb12u1"
+          "value": "1~deb12u2"
         },
         {
           "name": "aquasecurity:trivy:SrcVersion",
@@ -15462,11 +14149,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -15544,11 +14227,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -15606,11 +14285,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -15663,11 +14338,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -15745,11 +14416,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -15842,11 +14509,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -15959,11 +14622,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -16011,11 +14670,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -16073,11 +14728,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -16140,11 +14791,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -16236,11 +14883,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -16293,11 +14936,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -16410,11 +15049,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -16467,11 +15102,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -16524,11 +15155,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -16553,13 +15180,13 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       ]
     },
     {
-      "bom-ref": "pkg:deb/debian/openssl@3.0.22-1~deb12u1?arch=amd64&distro=debian-12.15",
+      "bom-ref": "pkg:deb/debian/openssl@3.0.22-1~deb12u2?arch=amd64&distro=debian-12.15",
       "type": "library",
       "supplier": {
         "name": "Debian OpenSSL Team <pkg-openssl-devel@alioth-lists.debian.net>"
       },
       "name": "openssl",
-      "version": "3.0.22-1~deb12u1",
+      "version": "3.0.22-1~deb12u2",
       "licenses": [
         {
           "license": {
@@ -16582,19 +15209,15 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
           }
         }
       ],
-      "purl": "pkg:deb/debian/openssl@3.0.22-1~deb12u1?arch=amd64&distro=debian-12.15",
+      "purl": "pkg:deb/debian/openssl@3.0.22-1~deb12u2?arch=amd64&distro=debian-12.15",
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:041fa36e7b553df7512e26cdd7928c7b0d6bd791c9548f15bb7cd65e1bf263dc"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:5681027ac9bb5e47b5b9e1164dbd199959488b99838037e2ebc3ade3250ff736"
+          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
-          "value": "openssl@3.0.22-1~deb12u1"
+          "value": "openssl@3.0.22-1~deb12u2"
         },
         {
           "name": "aquasecurity:trivy:PkgType",
@@ -16606,7 +15229,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         },
         {
           "name": "aquasecurity:trivy:SrcRelease",
-          "value": "1~deb12u1"
+          "value": "1~deb12u2"
         },
         {
           "name": "aquasecurity:trivy:SrcVersion",
@@ -16653,11 +15276,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -16824,11 +15443,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -16876,11 +15491,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:041fa36e7b553df7512e26cdd7928c7b0d6bd791c9548f15bb7cd65e1bf263dc"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:5681027ac9bb5e47b5b9e1164dbd199959488b99838037e2ebc3ade3250ff736"
+          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -16963,11 +15574,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -17020,11 +15627,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -17097,11 +15700,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -17126,13 +15725,13 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       ]
     },
     {
-      "bom-ref": "pkg:deb/debian/tzdata@2026c-0%2Bdeb12u1?arch=all&distro=debian-12.15",
+      "bom-ref": "pkg:deb/debian/tzdata@2026f-0%2Bdeb12u1?arch=all&distro=debian-12.15",
       "type": "library",
       "supplier": {
         "name": "GNU Libc Maintainers <debian-glibc@lists.debian.org>"
       },
       "name": "tzdata",
-      "version": "2026c-0+deb12u1",
+      "version": "2026f-0+deb12u1",
       "licenses": [
         {
           "license": {
@@ -17140,19 +15739,15 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
           }
         }
       ],
-      "purl": "pkg:deb/debian/tzdata@2026c-0%2Bdeb12u1?arch=all&distro=debian-12.15",
+      "purl": "pkg:deb/debian/tzdata@2026f-0%2Bdeb12u1?arch=all&distro=debian-12.15",
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
-          "value": "tzdata@2026c-0+deb12u1"
+          "value": "tzdata@2026f-0+deb12u1"
         },
         {
           "name": "aquasecurity:trivy:PkgType",
@@ -17168,7 +15763,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         },
         {
           "name": "aquasecurity:trivy:SrcVersion",
-          "value": "2026c"
+          "value": "2026f"
         }
       ]
     },
@@ -17196,11 +15791,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -17309,11 +15900,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -17426,11 +16013,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -17473,11 +16056,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:9b35de7893378218e365c34c2c735fb0032a859112fb7345ca8ea73f9aa1db70"
-        },
-        {
-          "name": "aquasecurity:trivy:LayerDigest",
-          "value": "sha256:11422d7ca1a44390a32bd8d8d9dc5946b4d053b3bbd9507d682e35584ba84a26"
+          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -17508,22 +16087,22 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
   ],
   "dependencies": [
     {
-      "ref": "561a48d6-ff71-4e99-b54a-a5a3a932007a",
-      "dependsOn": [
-        "73b8ee98-806e-4cfc-aa7d-0f5ef5be186e",
-        "974623ae-e50a-448f-b4ea-8c4ebe104cfe"
-      ]
-    },
-    {
-      "ref": "73b8ee98-806e-4cfc-aa7d-0f5ef5be186e",
+      "ref": "0c760edd-5140-4020-b57c-6fc9f535b69b",
       "dependsOn": [
         "pkg:cargo/stoa-gateway@0.9.25"
       ]
     },
     {
-      "ref": "974623ae-e50a-448f-b4ea-8c4ebe104cfe",
+      "ref": "bddee12f-29b2-467a-bfb1-704af28caa85",
       "dependsOn": [
-        "pkg:deb/debian/apt@2.6.1?arch=amd64&distro=debian-12.15",
+        "0c760edd-5140-4020-b57c-6fc9f535b69b",
+        "da0e1874-e847-4d6c-b66b-b25063be3b1e"
+      ]
+    },
+    {
+      "ref": "da0e1874-e847-4d6c-b66b-b25063be3b1e",
+      "dependsOn": [
+        "pkg:deb/debian/apt@2.6.2?arch=amd64&distro=debian-12.15",
         "pkg:deb/debian/base-passwd@3.6.1?arch=amd64&distro=debian-12.15",
         "pkg:deb/debian/bash@5.2.15-2%2Bb13?arch=amd64&distro=debian-12.15",
         "pkg:deb/debian/bsdutils@2.38.1-5%2Bdeb12u3?arch=amd64&distro=debian-12.15&epoch=1",
@@ -17548,7 +16127,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         "pkg:deb/debian/libmount1@2.38.1-5%2Bdeb12u3?arch=amd64&distro=debian-12.15",
         "pkg:deb/debian/libpam-modules-bin@1.5.2-6%2Bdeb12u2?arch=amd64&distro=debian-12.15",
         "pkg:deb/debian/libpam-runtime@1.5.2-6%2Bdeb12u2?arch=all&distro=debian-12.15",
-        "pkg:deb/debian/libsasl2-modules@2.1.28%2Bdfsg-10?arch=amd64&distro=debian-12.15",
+        "pkg:deb/debian/libsasl2-modules@2.1.28%2Bdfsg-10%2Bdeb12u1?arch=amd64&distro=debian-12.15",
         "pkg:deb/debian/libss2@1.47.0-2%2Bb2?arch=amd64&distro=debian-12.15",
         "pkg:deb/debian/libtinfo6@6.4-4?arch=amd64&distro=debian-12.15",
         "pkg:deb/debian/libuuid1@2.38.1-5%2Bdeb12u3?arch=amd64&distro=debian-12.15",
@@ -17561,7 +16140,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         "pkg:deb/debian/publicsuffix@20230209.2326-1?arch=all&distro=debian-12.15",
         "pkg:deb/debian/sed@4.9-1%2Bdeb12u1?arch=amd64&distro=debian-12.15",
         "pkg:deb/debian/sysvinit-utils@3.06-4?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/tzdata@2026c-0%2Bdeb12u1?arch=all&distro=debian-12.15",
+        "pkg:deb/debian/tzdata@2026f-0%2Bdeb12u1?arch=all&distro=debian-12.15",
         "pkg:deb/debian/util-linux@2.38.1-5%2Bdeb12u3?arch=amd64&distro=debian-12.15"
       ]
     },
@@ -17663,7 +16242,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         "pkg:cargo/sha1@0.10.7",
         "pkg:cargo/sync_wrapper@1.0.2",
         "pkg:cargo/tokio-tungstenite@0.24.0",
-        "pkg:cargo/tokio@1.54.0",
+        "pkg:cargo/tokio@1.54.1",
         "pkg:cargo/tower-layer@0.3.3",
         "pkg:cargo/tower-service@0.3.3",
         "pkg:cargo/tower@0.5.3",
@@ -18133,7 +16712,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         "pkg:cargo/indexmap@2.14.2",
         "pkg:cargo/slab@0.4.12",
         "pkg:cargo/tokio-util@0.7.20",
-        "pkg:cargo/tokio@1.54.0",
+        "pkg:cargo/tokio@1.54.1",
         "pkg:cargo/tracing@0.1.44"
       ]
     },
@@ -18210,7 +16789,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         "pkg:cargo/hyper@1.12.0",
         "pkg:cargo/rustls@0.23.46",
         "pkg:cargo/tokio-rustls@0.26.6",
-        "pkg:cargo/tokio@1.54.0",
+        "pkg:cargo/tokio@1.54.1",
         "pkg:cargo/tower-service@0.3.3",
         "pkg:cargo/webpki-roots@1.0.10"
       ]
@@ -18221,7 +16800,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         "pkg:cargo/hyper-util@0.1.21",
         "pkg:cargo/hyper@1.12.0",
         "pkg:cargo/pin-project-lite@0.2.17",
-        "pkg:cargo/tokio@1.54.0",
+        "pkg:cargo/tokio@1.54.1",
         "pkg:cargo/tower-service@0.3.3"
       ]
     },
@@ -18241,7 +16820,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         "pkg:cargo/percent-encoding@2.3.2",
         "pkg:cargo/pin-project-lite@0.2.17",
         "pkg:cargo/socket2@0.6.5",
-        "pkg:cargo/tokio@1.54.0",
+        "pkg:cargo/tokio@1.54.1",
         "pkg:cargo/tower-service@0.3.3",
         "pkg:cargo/tracing@0.1.44"
       ]
@@ -18261,7 +16840,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         "pkg:cargo/itoa@1.0.18",
         "pkg:cargo/pin-project-lite@0.2.17",
         "pkg:cargo/smallvec@1.16.3",
-        "pkg:cargo/tokio@1.54.0",
+        "pkg:cargo/tokio@1.54.1",
         "pkg:cargo/want@0.3.2"
       ]
     },
@@ -18620,7 +17199,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         "pkg:cargo/opentelemetry_sdk@0.27.1",
         "pkg:cargo/prost@0.13.5",
         "pkg:cargo/thiserror@1.0.69",
-        "pkg:cargo/tokio@1.54.0",
+        "pkg:cargo/tokio@1.54.1",
         "pkg:cargo/tonic@0.12.3"
       ]
     },
@@ -18657,7 +17236,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         "pkg:cargo/serde_json@1.0.154",
         "pkg:cargo/thiserror@1.0.69",
         "pkg:cargo/tokio-stream@0.1.19",
-        "pkg:cargo/tokio@1.54.0",
+        "pkg:cargo/tokio@1.54.1",
         "pkg:cargo/tracing@0.1.44"
       ]
     },
@@ -18852,7 +17431,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         "pkg:cargo/rustls@0.23.46",
         "pkg:cargo/socket2@0.6.5",
         "pkg:cargo/thiserror@2.0.21",
-        "pkg:cargo/tokio@1.54.0",
+        "pkg:cargo/tokio@1.54.1",
         "pkg:cargo/tracing@0.1.44"
       ]
     },
@@ -19022,7 +17601,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         "pkg:cargo/sync_wrapper@1.0.2",
         "pkg:cargo/tokio-rustls@0.26.6",
         "pkg:cargo/tokio-util@0.7.20",
-        "pkg:cargo/tokio@1.54.0",
+        "pkg:cargo/tokio@1.54.1",
         "pkg:cargo/tower-http@0.6.11",
         "pkg:cargo/tower-service@0.3.3",
         "pkg:cargo/tower@0.5.3",
@@ -19311,7 +17890,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         "pkg:cargo/thiserror@2.0.21",
         "pkg:cargo/tokio-stream@0.1.19",
         "pkg:cargo/tokio-tungstenite@0.29.0",
-        "pkg:cargo/tokio@1.54.0",
+        "pkg:cargo/tokio@1.54.1",
         "pkg:cargo/toml@1.1.8%2Bspec-1.1.0",
         "pkg:cargo/tracing-opentelemetry@0.28.0",
         "pkg:cargo/tracing-subscriber@0.3.23",
@@ -19411,7 +17990,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "ref": "pkg:cargo/tokio-rustls@0.26.6",
       "dependsOn": [
         "pkg:cargo/rustls@0.23.46",
-        "pkg:cargo/tokio@1.54.0"
+        "pkg:cargo/tokio@1.54.1"
       ]
     },
     {
@@ -19419,7 +17998,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "dependsOn": [
         "pkg:cargo/futures-core@0.3.34",
         "pkg:cargo/pin-project-lite@0.2.17",
-        "pkg:cargo/tokio@1.54.0"
+        "pkg:cargo/tokio@1.54.1"
       ]
     },
     {
@@ -19427,7 +18006,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "dependsOn": [
         "pkg:cargo/futures-util@0.3.34",
         "pkg:cargo/log@0.4.34",
-        "pkg:cargo/tokio@1.54.0",
+        "pkg:cargo/tokio@1.54.1",
         "pkg:cargo/tungstenite@0.24.0"
       ]
     },
@@ -19439,7 +18018,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         "pkg:cargo/rustls-pki-types@1.15.1",
         "pkg:cargo/rustls@0.23.46",
         "pkg:cargo/tokio-rustls@0.26.6",
-        "pkg:cargo/tokio@1.54.0",
+        "pkg:cargo/tokio@1.54.1",
         "pkg:cargo/tungstenite@0.29.0",
         "pkg:cargo/webpki-roots@0.26.11"
       ]
@@ -19452,11 +18031,11 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         "pkg:cargo/futures-sink@0.3.34",
         "pkg:cargo/libc@0.2.191",
         "pkg:cargo/pin-project-lite@0.2.17",
-        "pkg:cargo/tokio@1.54.0"
+        "pkg:cargo/tokio@1.54.1"
       ]
     },
     {
-      "ref": "pkg:cargo/tokio@1.54.0",
+      "ref": "pkg:cargo/tokio@1.54.1",
       "dependsOn": [
         "pkg:cargo/bytes@1.12.1",
         "pkg:cargo/libc@0.2.191",
@@ -19515,7 +18094,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         "pkg:cargo/prost@0.13.5",
         "pkg:cargo/socket2@0.5.10",
         "pkg:cargo/tokio-stream@0.1.19",
-        "pkg:cargo/tokio@1.54.0",
+        "pkg:cargo/tokio@1.54.1",
         "pkg:cargo/tower-layer@0.3.3",
         "pkg:cargo/tower-service@0.3.3",
         "pkg:cargo/tower@0.4.13",
@@ -19556,7 +18135,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         "pkg:cargo/rand@0.8.8",
         "pkg:cargo/slab@0.4.12",
         "pkg:cargo/tokio-util@0.7.20",
-        "pkg:cargo/tokio@1.54.0",
+        "pkg:cargo/tokio@1.54.1",
         "pkg:cargo/tower-layer@0.3.3",
         "pkg:cargo/tower-service@0.3.3",
         "pkg:cargo/tracing@0.1.44"
@@ -19569,7 +18148,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         "pkg:cargo/futures-util@0.3.34",
         "pkg:cargo/pin-project-lite@0.2.17",
         "pkg:cargo/sync_wrapper@1.0.2",
-        "pkg:cargo/tokio@1.54.0",
+        "pkg:cargo/tokio@1.54.1",
         "pkg:cargo/tower-layer@0.3.3",
         "pkg:cargo/tower-service@0.3.3",
         "pkg:cargo/tracing@0.1.44"
@@ -19864,12 +18443,12 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       ]
     },
     {
-      "ref": "pkg:deb/debian/apt@2.6.1?arch=amd64&distro=debian-12.15",
+      "ref": "pkg:deb/debian/apt@2.6.2?arch=amd64&distro=debian-12.15",
       "dependsOn": [
         "pkg:deb/debian/adduser@3.134?arch=all&distro=debian-12.15",
         "pkg:deb/debian/debian-archive-keyring@2023.3%2Bdeb12u2?arch=all&distro=debian-12.15",
         "pkg:deb/debian/gpgv@2.2.40-1.1%2Bdeb12u2?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libapt-pkg6.0@2.6.1?arch=amd64&distro=debian-12.15",
+        "pkg:deb/debian/libapt-pkg6.0@2.6.2?arch=amd64&distro=debian-12.15",
         "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
         "pkg:deb/debian/libgcc-s1@12.2.0-14%2Bdeb12u1?arch=amd64&distro=debian-12.15",
         "pkg:deb/debian/libgnutls30@3.7.9-2%2Bdeb12u7?arch=amd64&distro=debian-12.15",
@@ -19905,7 +18484,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "ref": "pkg:deb/debian/ca-certificates@20250419~deb12u2?arch=all&distro=debian-12.15",
       "dependsOn": [
         "pkg:deb/debian/debconf@1.5.82?arch=all&distro=debian-12.15",
-        "pkg:deb/debian/openssl@3.0.22-1~deb12u1?arch=amd64&distro=debian-12.15"
+        "pkg:deb/debian/openssl@3.0.22-1~deb12u2?arch=amd64&distro=debian-12.15"
       ]
     },
     {
@@ -20006,7 +18585,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       ]
     },
     {
-      "ref": "pkg:deb/debian/libapt-pkg6.0@2.6.1?arch=amd64&distro=debian-12.15",
+      "ref": "pkg:deb/debian/libapt-pkg6.0@2.6.2?arch=amd64&distro=debian-12.15",
       "dependsOn": [
         "pkg:deb/debian/libbz2-1.0@1.0.8-5%2Bb1?arch=amd64&distro=debian-12.15",
         "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
@@ -20047,7 +18626,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       ]
     },
     {
-      "ref": "pkg:deb/debian/libbrotli1@1.0.9-2%2Bb6?arch=amd64&distro=debian-12.15",
+      "ref": "pkg:deb/debian/libbrotli1@1.0.9-2%2Bdeb12u1?arch=amd64&distro=debian-12.15",
       "dependsOn": [
         "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
       ]
@@ -20097,7 +18676,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
     {
       "ref": "pkg:deb/debian/libcurl4@7.88.1-10%2Bdeb12u15?arch=amd64&distro=debian-12.15",
       "dependsOn": [
-        "pkg:deb/debian/libbrotli1@1.0.9-2%2Bb6?arch=amd64&distro=debian-12.15",
+        "pkg:deb/debian/libbrotli1@1.0.9-2%2Bdeb12u1?arch=amd64&distro=debian-12.15",
         "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
         "pkg:deb/debian/libgssapi-krb5-2@1.20.1-2%2Bdeb12u5?arch=amd64&distro=debian-12.15",
         "pkg:deb/debian/libidn2-0@2.3.3-1%2Bb1?arch=amd64&distro=debian-12.15",
@@ -20106,7 +18685,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         "pkg:deb/debian/libpsl5@0.21.2-1?arch=amd64&distro=debian-12.15",
         "pkg:deb/debian/librtmp1@2.4%2B20151223.gitfa8646d.1-2%2Bb2?arch=amd64&distro=debian-12.15",
         "pkg:deb/debian/libssh2-1@1.10.0-3%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libssl3@3.0.22-1~deb12u1?arch=amd64&distro=debian-12.15",
+        "pkg:deb/debian/libssl3@3.0.22-1~deb12u2?arch=amd64&distro=debian-12.15",
         "pkg:deb/debian/libzstd1@1.5.4%2Bdfsg2-5?arch=amd64&distro=debian-12.15",
         "pkg:deb/debian/zlib1g@1.2.13.dfsg-1?arch=amd64&distro=debian-12.15&epoch=1"
       ]
@@ -20220,7 +18799,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         "pkg:deb/debian/libk5crypto3@1.20.1-2%2Bdeb12u5?arch=amd64&distro=debian-12.15",
         "pkg:deb/debian/libkeyutils1@1.6.3-2?arch=amd64&distro=debian-12.15",
         "pkg:deb/debian/libkrb5support0@1.20.1-2%2Bdeb12u5?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libssl3@3.0.22-1~deb12u1?arch=amd64&distro=debian-12.15"
+        "pkg:deb/debian/libssl3@3.0.22-1~deb12u2?arch=amd64&distro=debian-12.15"
       ]
     },
     {
@@ -20234,7 +18813,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "dependsOn": [
         "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
         "pkg:deb/debian/libgnutls30@3.7.9-2%2Bdeb12u7?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libsasl2-2@2.1.28%2Bdfsg-10?arch=amd64&distro=debian-12.15"
+        "pkg:deb/debian/libsasl2-2@2.1.28%2Bdfsg-10%2Bdeb12u1?arch=amd64&distro=debian-12.15"
       ]
     },
     {
@@ -20341,24 +18920,24 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       ]
     },
     {
-      "ref": "pkg:deb/debian/libsasl2-2@2.1.28%2Bdfsg-10?arch=amd64&distro=debian-12.15",
+      "ref": "pkg:deb/debian/libsasl2-2@2.1.28%2Bdfsg-10%2Bdeb12u1?arch=amd64&distro=debian-12.15",
       "dependsOn": [
         "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libsasl2-modules-db@2.1.28%2Bdfsg-10?arch=amd64&distro=debian-12.15"
+        "pkg:deb/debian/libsasl2-modules-db@2.1.28%2Bdfsg-10%2Bdeb12u1?arch=amd64&distro=debian-12.15"
       ]
     },
     {
-      "ref": "pkg:deb/debian/libsasl2-modules-db@2.1.28%2Bdfsg-10?arch=amd64&distro=debian-12.15",
+      "ref": "pkg:deb/debian/libsasl2-modules-db@2.1.28%2Bdfsg-10%2Bdeb12u1?arch=amd64&distro=debian-12.15",
       "dependsOn": [
         "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
         "pkg:deb/debian/libdb5.3@5.3.28%2Bdfsg2-1?arch=amd64&distro=debian-12.15"
       ]
     },
     {
-      "ref": "pkg:deb/debian/libsasl2-modules@2.1.28%2Bdfsg-10?arch=amd64&distro=debian-12.15",
+      "ref": "pkg:deb/debian/libsasl2-modules@2.1.28%2Bdfsg-10%2Bdeb12u1?arch=amd64&distro=debian-12.15",
       "dependsOn": [
         "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libssl3@3.0.22-1~deb12u1?arch=amd64&distro=debian-12.15"
+        "pkg:deb/debian/libssl3@3.0.22-1~deb12u2?arch=amd64&distro=debian-12.15"
       ]
     },
     {
@@ -20412,12 +18991,12 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "ref": "pkg:deb/debian/libssh2-1@1.10.0-3%2Bdeb12u1?arch=amd64&distro=debian-12.15",
       "dependsOn": [
         "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libssl3@3.0.22-1~deb12u1?arch=amd64&distro=debian-12.15",
+        "pkg:deb/debian/libssl3@3.0.22-1~deb12u2?arch=amd64&distro=debian-12.15",
         "pkg:deb/debian/zlib1g@1.2.13.dfsg-1?arch=amd64&distro=debian-12.15&epoch=1"
       ]
     },
     {
-      "ref": "pkg:deb/debian/libssl3@3.0.22-1~deb12u1?arch=amd64&distro=debian-12.15",
+      "ref": "pkg:deb/debian/libssl3@3.0.22-1~deb12u2?arch=amd64&distro=debian-12.15",
       "dependsOn": [
         "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
       ]
@@ -20512,10 +19091,10 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "dependsOn": []
     },
     {
-      "ref": "pkg:deb/debian/openssl@3.0.22-1~deb12u1?arch=amd64&distro=debian-12.15",
+      "ref": "pkg:deb/debian/openssl@3.0.22-1~deb12u2?arch=amd64&distro=debian-12.15",
       "dependsOn": [
         "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libssl3@3.0.22-1~deb12u1?arch=amd64&distro=debian-12.15"
+        "pkg:deb/debian/libssl3@3.0.22-1~deb12u2?arch=amd64&distro=debian-12.15"
       ]
     },
     {
@@ -20553,7 +19132,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "dependsOn": []
     },
     {
-      "ref": "pkg:deb/debian/tzdata@2026c-0%2Bdeb12u1?arch=all&distro=debian-12.15",
+      "ref": "pkg:deb/debian/tzdata@2026f-0%2Bdeb12u1?arch=all&distro=debian-12.15",
       "dependsOn": [
         "pkg:deb/debian/debconf@1.5.82?arch=all&distro=debian-12.15"
       ]

@@ -15,6 +15,9 @@
 //!   in the registry and the handler returns `500`.
 //! - **counts**: `routes_generated` / `tools_generated` come from the
 //!   real `BindingOutput` length, never from `contract.endpoints.len()`.
+//! - **one at a time**: a publication or deletion holds
+//!   `ContractRegistry::lock_mutations` until it answers, so two of them
+//!   never interleave their binder steps.
 //!
 //! The `ContractBinders` trait is a local abstraction used to inject
 //! test doubles; the production path wraps `RestBinder` + `McpBinder`
@@ -179,6 +182,10 @@ pub(crate) async fn perform_upsert(
         .clone()
         .unwrap_or_else(|| format!("{}:{}", contract.tenant_id, contract.name));
 
+    // One publication or deletion at a time, from the snapshot below to the
+    // response (see `ContractRegistry::lock_mutations`).
+    let _mutation = registry.lock_mutations().await;
+
     // Snapshot the previous contract (if this is an update) so any binder
     // failure after bind_rest has started mutating the route/tool registries
     // can be rolled back to the old state. `bind_rest` and `bind_mcp` both
@@ -279,6 +286,9 @@ pub(crate) async fn perform_delete(
     binders: &dyn ContractBinders,
     key: String,
 ) -> Response {
+    // Same lock as `perform_upsert`, held to the response.
+    let _mutation = registry.lock_mutations().await;
+
     // Snapshot the contract up-front: if `unbind_mcp` fails after
     // `unbind_rest` succeeded, we need the contract spec in hand to
     // restore REST bindings (GW-1 P1-2 partial-state extension).

@@ -875,6 +875,85 @@ async fn path_or_backend_url_the_binders_cannot_serve_is_400_and_changes_nothing
     }
 }
 
+/// Publications that rename the contract's tool and deletions of the same
+/// contract, sent together on several worker threads. Whatever order they
+/// run in, every contract tool left in the registry is one the contract
+/// records, and a final DELETE removes them all. The order itself is pinned
+/// by the `transactional` tests with gated binders.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn concurrent_publications_and_deletes_leave_every_tool_tracked() {
+    let state = create_test_state(Some("secret"));
+    let app = build_full_admin_router(state.clone());
+    let version = |tool: &str| {
+        customer_contract_json(
+            "demo",
+            "customers",
+            vec![llm_endpoint("/customers/{id}", "GET", Some(tool))],
+        )
+    };
+    let contract_tools = |state: &crate::state::AppState| {
+        state
+            .tool_registry
+            .names()
+            .into_iter()
+            .filter(|name| name.starts_with("get_customer_"))
+            .collect::<Vec<_>>()
+    };
+
+    let mut tasks = Vec::new();
+    for round in 0..20 {
+        for tool in ["get_customer_a", "get_customer_b"] {
+            let (app, body) = (app.clone(), version(tool));
+            tasks.push(tokio::spawn(async move {
+                app.oneshot(auth_json_req("POST", "/contracts", body))
+                    .await
+                    .unwrap()
+                    .status()
+            }));
+        }
+        if round % 4 == 0 {
+            let app = app.clone();
+            tasks.push(tokio::spawn(async move {
+                app.oneshot(auth_req("DELETE", "/contracts/demo:customers"))
+                    .await
+                    .unwrap()
+                    .status()
+            }));
+        }
+    }
+    for task in tasks {
+        let status = task.await.unwrap();
+        assert!(
+            status == StatusCode::OK
+                || status == StatusCode::CREATED
+                || status == StatusCode::NOT_FOUND,
+            "{status}"
+        );
+    }
+
+    let tracked = state.contract_registry.tool_names("demo:customers");
+    for name in contract_tools(&state) {
+        assert!(
+            tracked.contains(&name),
+            "{name} registered, not tracked: {tracked:?}"
+        );
+    }
+    assert!(contract_tools(&state).len() <= 1);
+
+    let (status, _) = post_contract(&app, version("get_customer_a")).await;
+    assert!(status == StatusCode::OK || status == StatusCode::CREATED);
+    let response = app
+        .oneshot(auth_req("DELETE", "/contracts/demo:customers"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(contract_tools(&state).is_empty());
+    assert!(state
+        .contract_registry
+        .tool_names("demo:customers")
+        .is_empty());
+}
+
 // =============================================================================
 // GW-1 P1-1 / P1-2 / P2-2: transactional invariants
 // =============================================================================
@@ -1311,5 +1390,150 @@ mod transactional {
             "expected REST restore after MCP unbind failure, got {:?}",
             calls
         );
+    }
+
+    // ── contract mutations run one at a time ───────────────────────────
+    //
+    // `GatedBinders` stops the first call to `gated` until the test opens the
+    // gate, and logs every step with the contract version. On the
+    // current-thread test runtime, `yield_now` lets a spawned mutation run
+    // until it waits: on the gate, or on the mutation lock.
+
+    struct GatedBinders {
+        gated: &'static str,
+        gate: tokio::sync::Mutex<Option<tokio::sync::oneshot::Receiver<()>>>,
+        log: Mutex<Vec<String>>,
+    }
+
+    impl GatedBinders {
+        fn new(gated: &'static str) -> (Arc<Self>, tokio::sync::oneshot::Sender<()>) {
+            let (open, gate) = tokio::sync::oneshot::channel();
+            let binders = Arc::new(Self {
+                gated,
+                gate: tokio::sync::Mutex::new(Some(gate)),
+                log: Mutex::new(vec![]),
+            });
+            (binders, open)
+        }
+        async fn step(&self, what: &'static str, version: &str) {
+            self.log.lock().unwrap().push(format!("{what} {version}"));
+            if what == self.gated {
+                let gate = self.gate.lock().await.take();
+                if let Some(gate) = gate {
+                    let _ = gate.await;
+                }
+            }
+        }
+        fn log(&self) -> Vec<String> {
+            self.log.lock().unwrap().clone()
+        }
+    }
+
+    #[async_trait]
+    impl ContractBinders for GatedBinders {
+        async fn bind_rest(&self, c: &UacContractSpec) -> Result<usize, String> {
+            self.step("bind_rest", &c.version).await;
+            Ok(1)
+        }
+        async fn bind_mcp(&self, c: &UacContractSpec) -> Result<usize, String> {
+            self.step("bind_mcp", &c.version).await;
+            Ok(1)
+        }
+        async fn unbind_rest(&self, _: &str) -> Result<usize, String> {
+            self.step("unbind_rest", "-").await;
+            Ok(1)
+        }
+        async fn unbind_mcp(&self, _: &str) -> Result<usize, String> {
+            self.step("unbind_mcp", "-").await;
+            Ok(1)
+        }
+    }
+
+    fn versioned(version: &str) -> UacContractSpec {
+        let mut contract = valid_contract("orders", "acme");
+        contract.version = version.to_string();
+        contract
+    }
+
+    fn spawn_upsert(
+        registry: &Arc<ContractRegistry>,
+        binders: &Arc<GatedBinders>,
+        version: &str,
+    ) -> tokio::task::JoinHandle<StatusCode> {
+        let (registry, binders, contract) = (registry.clone(), binders.clone(), versioned(version));
+        tokio::spawn(async move {
+            perform_upsert(registry, binders.as_ref(), false, contract)
+                .await
+                .status()
+        })
+    }
+
+    async fn let_spawned_tasks_run() {
+        for _ in 0..8 {
+            tokio::task::yield_now().await;
+        }
+    }
+
+    #[tokio::test]
+    async fn regression_two_publications_of_one_contract_do_not_interleave() {
+        let registry = Arc::new(ContractRegistry::new());
+        let (binders, open) = GatedBinders::new("bind_rest");
+
+        let first = spawn_upsert(&registry, &binders, "1");
+        let_spawned_tasks_run().await;
+        assert_eq!(
+            binders.log(),
+            ["bind_rest 1"],
+            "first publication at the gate"
+        );
+
+        let second = spawn_upsert(&registry, &binders, "2");
+        let_spawned_tasks_run().await;
+        assert_eq!(
+            binders.log(),
+            ["bind_rest 1"],
+            "second publication entered the binders while the first was in them"
+        );
+
+        open.send(()).unwrap();
+        assert_eq!(first.await.unwrap(), StatusCode::CREATED);
+        assert_eq!(second.await.unwrap(), StatusCode::OK);
+        assert_eq!(
+            binders.log(),
+            ["bind_rest 1", "bind_mcp 1", "bind_rest 2", "bind_mcp 2"]
+        );
+        assert_eq!(registry.get("acme:orders").unwrap().version, "2");
+    }
+
+    #[tokio::test]
+    async fn delete_waits_for_a_publication_in_progress() {
+        let registry = Arc::new(ContractRegistry::new());
+        registry.upsert(versioned("1"));
+        let (binders, open) = GatedBinders::new("bind_mcp");
+
+        let publish = spawn_upsert(&registry, &binders, "2");
+        let_spawned_tasks_run().await;
+        assert_eq!(binders.log(), ["bind_rest 2", "bind_mcp 2"]);
+
+        let delete = {
+            let (registry, binders) = (registry.clone(), binders.clone());
+            tokio::spawn(async move {
+                perform_delete(registry, binders.as_ref(), "acme:orders".into())
+                    .await
+                    .status()
+            })
+        };
+        let_spawned_tasks_run().await;
+        assert_eq!(binders.log(), ["bind_rest 2", "bind_mcp 2"]);
+
+        open.send(()).unwrap();
+        assert_eq!(publish.await.unwrap(), StatusCode::OK);
+        assert_eq!(delete.await.unwrap(), StatusCode::OK);
+        assert_eq!(
+            binders.log(),
+            ["bind_rest 2", "bind_mcp 2", "unbind_rest -", "unbind_mcp -"]
+        );
+        // The delete removed the version the publication committed.
+        assert!(registry.get("acme:orders").is_none());
     }
 }

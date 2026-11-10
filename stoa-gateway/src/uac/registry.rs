@@ -15,6 +15,8 @@ pub struct ContractRegistry {
     /// The MCP binder replaces and removes a contract's tools from this list,
     /// whatever their names, and refuses a name another contract holds.
     tool_names: RwLock<HashMap<String, Vec<String>>>,
+    /// Held for a whole publication or deletion: see [`Self::lock_mutations`].
+    mutations: tokio::sync::Mutex<()>,
 }
 
 impl Default for ContractRegistry {
@@ -29,7 +31,21 @@ impl ContractRegistry {
         Self {
             contracts: RwLock::new(HashMap::new()),
             tool_names: RwLock::new(HashMap::new()),
+            mutations: tokio::sync::Mutex::new(()),
         }
+    }
+
+    /// Take the lock that runs contract publications and deletions one at
+    /// a time.
+    ///
+    /// The admin handler holds it from the snapshot of the previous contract
+    /// to the response: REST bind, MCP bind, restore on failure, commit. A
+    /// publication claims its tool names and then registers the tools; two
+    /// publications of one contract (or a publication and a deletion) left
+    /// to interleave could leave a tool registered that the contract no
+    /// longer records. One lock for all contracts: publications are rare.
+    pub async fn lock_mutations(&self) -> tokio::sync::MutexGuard<'_, ()> {
+        self.mutations.lock().await
     }
 
     /// MCP tool names recorded for a contract key.
@@ -43,7 +59,10 @@ impl ContractRegistry {
     /// Fails without recording anything when a name belongs to another
     /// contract, or when `registered_elsewhere(name)` says a tool that is not
     /// this contract's already has it. The check and the record happen under
-    /// one lock, so two publications cannot both take a name.
+    /// one lock, so two contracts cannot both claim a name. Registering the
+    /// tools comes after this call: two publications of the same contract
+    /// stay consistent only because the caller runs them one at a time
+    /// ([`Self::lock_mutations`]).
     pub fn claim_tool_names(
         &self,
         key: &str,

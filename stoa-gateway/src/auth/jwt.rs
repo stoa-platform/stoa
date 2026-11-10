@@ -420,16 +420,9 @@ p9F8dBQBt/cb1sBl3ammY8HSmaAq+k/vDAR5BTSi6lxo7z+D6Inf65nCqHAygbuN\n\
         aud: Option<String>,
     }
 
-    pub(crate) async fn validator_against_test_key(
-        config: JwtValidatorConfig,
-    ) -> (JwtValidator, String) {
-        let (validator, issuer, _server) = validator_with_mock_server(config).await;
-        (validator, issuer)
-    }
-
-    /// Same validator, returned with the mock OIDC server it fetches from.
-    /// wiremock hands a dropped server back to its pool, where another test
-    /// can reuse it: hold the server until the last validation.
+    /// A validator against the test key, returned with the mock OIDC server it
+    /// fetches from. wiremock hands a dropped server back to its pool, where
+    /// another test can reuse it: hold the server until the last validation.
     pub(crate) async fn validator_with_mock_server(
         config: JwtValidatorConfig,
     ) -> (JwtValidator, String, wiremock::MockServer) {

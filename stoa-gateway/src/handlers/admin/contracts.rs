@@ -15,6 +15,9 @@
 //!   in the registry and the handler returns `500`.
 //! - **counts**: `routes_generated` / `tools_generated` come from the
 //!   real `BindingOutput` length, never from `contract.endpoints.len()`.
+//! - **one at a time**: a publication or deletion holds
+//!   `ContractRegistry::lock_mutations` until it answers, so two of them
+//!   never interleave their binder steps.
 //!
 //! The `ContractBinders` trait is a local abstraction used to inject
 //! test doubles; the production path wraps `RestBinder` + `McpBinder`
@@ -32,7 +35,9 @@ use axum::{
 use tracing::warn;
 
 use crate::state::AppState;
-use crate::uac::binders::{mcp::McpBinder, rest::RestBinder, BindingOutput, ProtocolBinder};
+use crate::uac::binders::{
+    mcp::McpBinder, rest::RestBinder, BindingOutput, ProtocolBinder, CONTRACT_REJECTED,
+};
 use crate::uac::registry::ContractRegistry;
 use crate::uac::{parse_admin_contract, UacContractSpec};
 
@@ -69,7 +74,12 @@ impl RealBinders {
                         .with_global_audience(state.config.jwt_audience.iter().map(String::as_str))
                 }
             },
-            mcp: McpBinder::new(state.tool_registry.clone()),
+            // Tool names per contract live in the contract registry: this
+            // binder only serves one request.
+            mcp: McpBinder::with_contracts(
+                state.tool_registry.clone(),
+                state.contract_registry.clone(),
+            ),
         }
     }
 }
@@ -172,6 +182,10 @@ pub(crate) async fn perform_upsert(
         .clone()
         .unwrap_or_else(|| format!("{}:{}", contract.tenant_id, contract.name));
 
+    // One publication or deletion at a time, from the snapshot below to the
+    // response (see `ContractRegistry::lock_mutations`).
+    let _mutation = registry.lock_mutations().await;
+
     // Snapshot the previous contract (if this is an update) so any binder
     // failure after bind_rest has started mutating the route/tool registries
     // can be rolled back to the old state. `bind_rest` and `bind_mcp` both
@@ -272,6 +286,9 @@ pub(crate) async fn perform_delete(
     binders: &dyn ContractBinders,
     key: String,
 ) -> Response {
+    // Same lock as `perform_upsert`, held to the response.
+    let _mutation = registry.lock_mutations().await;
+
     // Snapshot the contract up-front: if `unbind_mcp` fails after
     // `unbind_rest` succeeded, we need the contract spec in hand to
     // restore REST bindings (GW-1 P1-2 partial-state extension).
@@ -341,9 +358,13 @@ async fn restore_previous_bindings(
 }
 
 fn binder_failure_response(key: &str, which: &str, err: &str) -> Response {
-    // The standalone inbound-auth refusal is a caller error. Other binder
-    // failures stay generic; the detail is already in `tracing::warn!`.
-    if err.contains("no inbound auth") || err.contains("no audience") {
+    // The standalone inbound-auth refusal and a contract the binders reject
+    // are caller errors. Other binder failures stay generic; the detail is
+    // already in `tracing::warn!`.
+    if err.contains("no inbound auth")
+        || err.contains("no audience")
+        || err.starts_with(CONTRACT_REJECTED)
+    {
         return (
             StatusCode::BAD_REQUEST,
             Json(serde_json::json!({

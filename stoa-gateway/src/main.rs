@@ -269,25 +269,9 @@ async fn register_tools(state: &AppState, registrar: Option<std::sync::Arc<Gatew
     // startup and do not spawn the 60s discovery/refresh loops.
     if !state.config.control_plane_configured() {
         info!("STOA_CONTROL_PLANE_URL unset — control-plane discovery and refresh loops are not started");
-        if state.config.native_tools_enabled {
-            let http_client = stoa_gateway::mcp::tools::native_tool::create_http_client();
-            stoa_gateway::mcp::tools::native_tool::register_native_tools(
-                &state.tool_registry,
-                http_client,
-                state.control_plane.base_url(),
-                state.tool_registry.clone(),
-                Some(state.session_manager.clone()),
-                Some(state.circuit_breakers.clone()),
-                Some(state.prompt_cache.clone()),
-            );
-            info!(
-                tools = state.tool_registry.count(),
-                "Builtin tools registered without control-plane discovery"
-            );
-        } else {
-            info!("Native tools disabled — static proxy tools only, no control-plane refresh");
-            stoa_tools::register_static_tools(&state.tool_registry, state.control_plane.clone());
-        }
+        // Native tools when enabled; otherwise no `stoa_*` relay tools, as
+        // there is no control plane for them to call.
+        stoa_tools::register_builtin_tools_without_control_plane(state);
         return;
     }
 

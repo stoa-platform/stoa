@@ -317,14 +317,12 @@ async fn test_contract_upsert_generates_routes() {
     let route = state.route_registry.get("uac:acme:payment-api:0");
     assert!(route.is_some());
     let route = route.unwrap();
-    assert_eq!(route.path_prefix, "/apis/acme/payment-api/payments/{id}");
+    assert_eq!(route.path_prefix, "/apis/acme/payment-api/payments/");
     assert_eq!(route.contract_key.as_deref(), Some("acme:payment-api"));
 
     // Verify MCP tool is in the tool registry (no operation_id → fallback name)
     assert_eq!(state.tool_registry.count(), 1);
-    assert!(state
-        .tool_registry
-        .exists("uac:acme:payment-api:payment-api-0"));
+    assert!(state.tool_registry.exists("acme_payment-api_0"));
 }
 
 #[tokio::test]
@@ -408,6 +406,53 @@ async fn test_contract_re_upsert_replaces_routes() {
 }
 
 #[tokio::test]
+async fn same_rest_prefix_with_two_backends_is_400_and_stores_nothing() {
+    let state = create_test_state(Some("secret"));
+    let app = build_full_admin_router(state.clone());
+
+    let contract = serde_json::json!({
+        "name": "customers",
+        "version": "1.0.0",
+        "tenant_id": "demo",
+        "classification": "H",
+        "endpoints": [
+            {
+                "path": "/customers/{id}",
+                "methods": ["GET"],
+                "backend_url": "https://backend.test/customers/"
+            },
+            {
+                "path": "/customers/{id}/segment",
+                "methods": ["GET"],
+                "backend_url": "https://segments.test/segments/"
+            }
+        ],
+        "status": "published"
+    });
+
+    let response = app
+        .oneshot(auth_json_req("POST", "/contracts", contract))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+        .await
+        .unwrap();
+    let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(data["status"], "rejected");
+    let message = data["message"].as_str().unwrap();
+    assert!(message.contains("different backend_url"), "{message}");
+    assert!(
+        message.contains("/apis/demo/customers/customers/"),
+        "{message}"
+    );
+    assert_eq!(state.contract_registry.count(), 0);
+    assert_eq!(state.route_registry.count(), 0);
+    assert_eq!(state.tool_registry.count(), 0);
+}
+
+#[tokio::test]
 async fn test_contract_routes_have_classification() {
     let state = create_test_state(Some("secret"));
     let app = build_full_admin_router(state.clone());
@@ -478,8 +523,8 @@ async fn test_contract_upsert_generates_mcp_tools() {
 
     // Both tools registered
     assert_eq!(state.tool_registry.count(), 2);
-    assert!(state.tool_registry.exists("uac:acme:orders:list_orders"));
-    assert!(state.tool_registry.exists("uac:acme:orders:create_order"));
+    assert!(state.tool_registry.exists("acme_orders_list_orders"));
+    assert!(state.tool_registry.exists("acme_orders_create_order"));
 }
 
 #[tokio::test]
@@ -518,8 +563,409 @@ async fn test_mcp_tools_visible_via_list() {
     // Tool should be visible in tool registry
     let tools = state.tool_registry.list(Some("acme"));
     assert_eq!(tools.len(), 1);
-    assert_eq!(tools[0].name, "uac:acme:payment-api:payment-api-0");
+    assert_eq!(tools[0].name, "acme_payment-api_0");
     assert_eq!(tools[0].tenant_id.as_deref(), Some("acme"));
+}
+
+// =============================================================================
+// MCP tool lifecycle across admin requests (one binder per request)
+// =============================================================================
+
+fn llm_endpoint(path: &str, method: &str, tool_name: Option<&str>) -> serde_json::Value {
+    let mut endpoint = serde_json::json!({
+        "path": path,
+        "methods": [method],
+        "backend_url": "https://backend.test/customers/"
+    });
+    if let Some(tool_name) = tool_name {
+        endpoint["llm"] = serde_json::json!({
+            "summary": "Read a customer.",
+            "intent": "Use to look up one customer.",
+            "tool_name": tool_name,
+            "side_effects": "read",
+            "safe_for_agents": true,
+            "requires_human_approval": false,
+            "examples": [{"input": {"id": "C-1001"}}]
+        });
+    }
+    endpoint
+}
+
+fn customer_contract_json(
+    tenant: &str,
+    name: &str,
+    endpoints: Vec<serde_json::Value>,
+) -> serde_json::Value {
+    serde_json::json!({
+        "name": name,
+        "version": "1.0.0",
+        "tenant_id": tenant,
+        "classification": "H",
+        "endpoints": endpoints,
+        "status": "published"
+    })
+}
+
+async fn post_contract(
+    app: &axum::Router,
+    contract: serde_json::Value,
+) -> (StatusCode, serde_json::Value) {
+    let response = app
+        .clone()
+        .oneshot(auth_json_req("POST", "/contracts", contract))
+        .await
+        .unwrap();
+    let status = response.status();
+    let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+        .await
+        .unwrap();
+    (status, serde_json::from_slice(&body).unwrap())
+}
+
+fn sorted_tool_names(state: &crate::state::AppState) -> Vec<String> {
+    let mut names = state.tool_registry.names();
+    names.sort();
+    names
+}
+
+#[tokio::test]
+async fn regression_delete_removes_tools_named_by_llm_tool_name() {
+    let state = create_test_state(Some("secret"));
+    let app = build_full_admin_router(state.clone());
+
+    let (status, data) = post_contract(
+        &app,
+        customer_contract_json(
+            "demo",
+            "customers",
+            vec![
+                llm_endpoint("/customers/{id}", "GET", Some("get_customer")),
+                llm_endpoint("/customers", "POST", None),
+            ],
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(data["tools_generated"], 2);
+    assert_eq!(
+        sorted_tool_names(&state),
+        vec!["demo_customers_1", "get_customer"]
+    );
+
+    let response = app
+        .oneshot(auth_req("DELETE", "/contracts/demo:customers"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+        .await
+        .unwrap();
+    let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(data["tools_removed"], 2);
+    assert_eq!(state.tool_registry.count(), 0);
+}
+
+#[tokio::test]
+async fn republish_drops_the_tools_of_removed_endpoints() {
+    let state = create_test_state(Some("secret"));
+    let app = build_full_admin_router(state.clone());
+
+    let (status, _) = post_contract(
+        &app,
+        customer_contract_json(
+            "demo",
+            "customers",
+            vec![
+                llm_endpoint("/customers/{id}", "GET", Some("get_customer")),
+                llm_endpoint("/customers/{id}/segment", "GET", Some("get_segment")),
+            ],
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+
+    let (status, data) = post_contract(
+        &app,
+        customer_contract_json(
+            "demo",
+            "customers",
+            vec![llm_endpoint(
+                "/customers/{id}",
+                "GET",
+                Some("find_customer"),
+            )],
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(data["tools_generated"], 1);
+    assert_eq!(sorted_tool_names(&state), vec!["find_customer"]);
+}
+
+#[tokio::test]
+async fn tool_name_of_another_contract_is_400_and_changes_nothing() {
+    let state = create_test_state(Some("secret"));
+    let app = build_full_admin_router(state.clone());
+
+    let (status, _) = post_contract(
+        &app,
+        customer_contract_json(
+            "demo",
+            "customers",
+            vec![llm_endpoint("/customers/{id}", "GET", Some("get_customer"))],
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let (status, _) = post_contract(
+        &app,
+        customer_contract_json(
+            "other",
+            "crm",
+            vec![llm_endpoint("/accounts/{id}", "GET", Some("get_account"))],
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let routes_before = state.route_registry.count();
+
+    // Republish of `other:crm` that takes `get_customer`: rejected, and the
+    // previous `other:crm` routes and tools stay.
+    let (status, data) = post_contract(
+        &app,
+        customer_contract_json(
+            "other",
+            "crm",
+            vec![
+                llm_endpoint("/accounts/{id}", "GET", Some("get_account")),
+                llm_endpoint("/customers/{id}", "GET", Some("get_customer")),
+            ],
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(data["status"], "rejected");
+    let message = data["message"].as_str().unwrap();
+    assert!(message.contains("get_customer"), "{message}");
+    assert!(message.contains("demo:customers"), "{message}");
+
+    assert_eq!(
+        sorted_tool_names(&state),
+        vec!["get_account", "get_customer"]
+    );
+    let owner = state.tool_registry.get("get_customer").unwrap();
+    assert_eq!(owner.tenant_id(), Some("demo"));
+    assert_eq!(state.route_registry.count(), routes_before);
+    assert!(state
+        .route_registry
+        .find_by_path("/apis/other/crm/customers/C-1")
+        .is_none());
+    let stored = state.contract_registry.get("other:crm").unwrap();
+    assert_eq!(stored.endpoints.len(), 1);
+
+    // A new contract that takes the name is not stored at all.
+    let (status, _) = post_contract(
+        &app,
+        customer_contract_json(
+            "other",
+            "new-api",
+            vec![llm_endpoint("/x/{id}", "GET", Some("get_customer"))],
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(state.contract_registry.get("other:new-api").is_none());
+    assert!(state
+        .route_registry
+        .find_by_path("/apis/other/new-api/x/1")
+        .is_none());
+}
+
+fn route_snapshot(state: &crate::state::AppState) -> Vec<(String, String, String)> {
+    let mut routes: Vec<(String, String, String)> = state
+        .route_registry
+        .list()
+        .iter()
+        .map(|r| (r.id.clone(), r.path_prefix.clone(), r.backend_url.clone()))
+        .collect();
+    routes.sort();
+    routes
+}
+
+#[tokio::test]
+async fn path_or_backend_url_the_binders_cannot_serve_is_400_and_changes_nothing() {
+    let state = create_test_state(Some("secret"));
+    let app = build_full_admin_router(state.clone());
+
+    let good = llm_endpoint("/customers/{id}", "GET", Some("get_customer"));
+    let (status, _) = post_contract(
+        &app,
+        customer_contract_json("demo", "customers", vec![good.clone()]),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let routes_before = route_snapshot(&state);
+    let tools_before = sorted_tool_names(&state);
+
+    let backend = "https://backend.test/customers/";
+    let cases = [
+        (
+            "/customers/{id}",
+            "https://backend.test/customers/{id}",
+            "backend_url",
+        ),
+        ("/customers/{id}", "https://backend.test/}", "backend_url"),
+        ("customers/{id}", backend, "must start with /"),
+        ("/customers/{id", backend, "unbalanced"),
+        ("/customers/id}", backend, "unbalanced"),
+        ("/a/{}", backend, "empty parameter"),
+        ("/a{id}", backend, "whole segment"),
+        ("/files/f-{id}", backend, "whole segment"),
+        ("/a/{b}{c}", backend, "whole segment"),
+        (
+            "/customers/{id}",
+            "https://backend.test/customers?v=1",
+            "? or #",
+        ),
+        (
+            "/customers/{id}",
+            "https://backend.test/customers#top",
+            "? or #",
+        ),
+        ("/customers//{id}", backend, "empty segment"),
+        ("/customers/../{id}", backend, "dot segment"),
+        ("/customers/./{id}", backend, "dot segment"),
+        ("/customers/{id}/x/{id}", backend, "{id} is used twice"),
+    ];
+    for (path, backend_url, reason) in cases {
+        let bad = serde_json::json!({
+            "path": path,
+            "methods": ["GET"],
+            "backend_url": backend_url
+        });
+
+        // Republish of a stored contract: the previous routes and tools stay.
+        let (status, data) = post_contract(
+            &app,
+            customer_contract_json("demo", "customers", vec![good.clone(), bad.clone()]),
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{path} {backend_url}");
+        assert_eq!(data["status"], "rejected", "{path} {backend_url}");
+        let message = data["message"].as_str().unwrap();
+        assert!(message.contains("endpoints[1]"), "{message}");
+        assert!(message.contains(reason), "{reason}: {message}");
+
+        // A new contract is not stored at all.
+        let (status, data) = post_contract(
+            &app,
+            customer_contract_json("demo", "fresh", vec![bad.clone()]),
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{path} {backend_url}");
+        let message = data["message"].as_str().unwrap();
+        assert!(message.contains("endpoints[0]"), "{message}");
+
+        assert_eq!(
+            route_snapshot(&state),
+            routes_before,
+            "{path} {backend_url}"
+        );
+        assert_eq!(
+            sorted_tool_names(&state),
+            tools_before,
+            "{path} {backend_url}"
+        );
+        assert_eq!(
+            state
+                .contract_registry
+                .get("demo:customers")
+                .unwrap()
+                .endpoints
+                .len(),
+            1
+        );
+        assert!(state.contract_registry.get("demo:fresh").is_none());
+    }
+}
+
+/// Publications that rename the contract's tool and deletions of the same
+/// contract, sent together on several worker threads. Whatever order they
+/// run in, every contract tool left in the registry is one the contract
+/// records, and a final DELETE removes them all. The order itself is pinned
+/// by the `transactional` tests with gated binders.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn concurrent_publications_and_deletes_leave_every_tool_tracked() {
+    let state = create_test_state(Some("secret"));
+    let app = build_full_admin_router(state.clone());
+    let version = |tool: &str| {
+        customer_contract_json(
+            "demo",
+            "customers",
+            vec![llm_endpoint("/customers/{id}", "GET", Some(tool))],
+        )
+    };
+    let contract_tools = |state: &crate::state::AppState| {
+        state
+            .tool_registry
+            .names()
+            .into_iter()
+            .filter(|name| name.starts_with("get_customer_"))
+            .collect::<Vec<_>>()
+    };
+
+    let mut tasks = Vec::new();
+    for round in 0..20 {
+        for tool in ["get_customer_a", "get_customer_b"] {
+            let (app, body) = (app.clone(), version(tool));
+            tasks.push(tokio::spawn(async move {
+                app.oneshot(auth_json_req("POST", "/contracts", body))
+                    .await
+                    .unwrap()
+                    .status()
+            }));
+        }
+        if round % 4 == 0 {
+            let app = app.clone();
+            tasks.push(tokio::spawn(async move {
+                app.oneshot(auth_req("DELETE", "/contracts/demo:customers"))
+                    .await
+                    .unwrap()
+                    .status()
+            }));
+        }
+    }
+    for task in tasks {
+        let status = task.await.unwrap();
+        assert!(
+            status == StatusCode::OK
+                || status == StatusCode::CREATED
+                || status == StatusCode::NOT_FOUND,
+            "{status}"
+        );
+    }
+
+    let tracked = state.contract_registry.tool_names("demo:customers");
+    for name in contract_tools(&state) {
+        assert!(
+            tracked.contains(&name),
+            "{name} registered, not tracked: {tracked:?}"
+        );
+    }
+    assert!(contract_tools(&state).len() <= 1);
+
+    let (status, _) = post_contract(&app, version("get_customer_a")).await;
+    assert!(status == StatusCode::OK || status == StatusCode::CREATED);
+    let response = app
+        .oneshot(auth_req("DELETE", "/contracts/demo:customers"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(contract_tools(&state).is_empty());
+    assert!(state
+        .contract_registry
+        .tool_names("demo:customers")
+        .is_empty());
 }
 
 // =============================================================================
@@ -958,5 +1404,150 @@ mod transactional {
             "expected REST restore after MCP unbind failure, got {:?}",
             calls
         );
+    }
+
+    // ── contract mutations run one at a time ───────────────────────────
+    //
+    // `GatedBinders` stops the first call to `gated` until the test opens the
+    // gate, and logs every step with the contract version. On the
+    // current-thread test runtime, `yield_now` lets a spawned mutation run
+    // until it waits: on the gate, or on the mutation lock.
+
+    struct GatedBinders {
+        gated: &'static str,
+        gate: tokio::sync::Mutex<Option<tokio::sync::oneshot::Receiver<()>>>,
+        log: Mutex<Vec<String>>,
+    }
+
+    impl GatedBinders {
+        fn new(gated: &'static str) -> (Arc<Self>, tokio::sync::oneshot::Sender<()>) {
+            let (open, gate) = tokio::sync::oneshot::channel();
+            let binders = Arc::new(Self {
+                gated,
+                gate: tokio::sync::Mutex::new(Some(gate)),
+                log: Mutex::new(vec![]),
+            });
+            (binders, open)
+        }
+        async fn step(&self, what: &'static str, version: &str) {
+            self.log.lock().unwrap().push(format!("{what} {version}"));
+            if what == self.gated {
+                let gate = self.gate.lock().await.take();
+                if let Some(gate) = gate {
+                    let _ = gate.await;
+                }
+            }
+        }
+        fn log(&self) -> Vec<String> {
+            self.log.lock().unwrap().clone()
+        }
+    }
+
+    #[async_trait]
+    impl ContractBinders for GatedBinders {
+        async fn bind_rest(&self, c: &UacContractSpec) -> Result<usize, String> {
+            self.step("bind_rest", &c.version).await;
+            Ok(1)
+        }
+        async fn bind_mcp(&self, c: &UacContractSpec) -> Result<usize, String> {
+            self.step("bind_mcp", &c.version).await;
+            Ok(1)
+        }
+        async fn unbind_rest(&self, _: &str) -> Result<usize, String> {
+            self.step("unbind_rest", "-").await;
+            Ok(1)
+        }
+        async fn unbind_mcp(&self, _: &str) -> Result<usize, String> {
+            self.step("unbind_mcp", "-").await;
+            Ok(1)
+        }
+    }
+
+    fn versioned(version: &str) -> UacContractSpec {
+        let mut contract = valid_contract("orders", "acme");
+        contract.version = version.to_string();
+        contract
+    }
+
+    fn spawn_upsert(
+        registry: &Arc<ContractRegistry>,
+        binders: &Arc<GatedBinders>,
+        version: &str,
+    ) -> tokio::task::JoinHandle<StatusCode> {
+        let (registry, binders, contract) = (registry.clone(), binders.clone(), versioned(version));
+        tokio::spawn(async move {
+            perform_upsert(registry, binders.as_ref(), false, contract)
+                .await
+                .status()
+        })
+    }
+
+    async fn let_spawned_tasks_run() {
+        for _ in 0..8 {
+            tokio::task::yield_now().await;
+        }
+    }
+
+    #[tokio::test]
+    async fn regression_two_publications_of_one_contract_do_not_interleave() {
+        let registry = Arc::new(ContractRegistry::new());
+        let (binders, open) = GatedBinders::new("bind_rest");
+
+        let first = spawn_upsert(&registry, &binders, "1");
+        let_spawned_tasks_run().await;
+        assert_eq!(
+            binders.log(),
+            ["bind_rest 1"],
+            "first publication at the gate"
+        );
+
+        let second = spawn_upsert(&registry, &binders, "2");
+        let_spawned_tasks_run().await;
+        assert_eq!(
+            binders.log(),
+            ["bind_rest 1"],
+            "second publication entered the binders while the first was in them"
+        );
+
+        open.send(()).unwrap();
+        assert_eq!(first.await.unwrap(), StatusCode::CREATED);
+        assert_eq!(second.await.unwrap(), StatusCode::OK);
+        assert_eq!(
+            binders.log(),
+            ["bind_rest 1", "bind_mcp 1", "bind_rest 2", "bind_mcp 2"]
+        );
+        assert_eq!(registry.get("acme:orders").unwrap().version, "2");
+    }
+
+    #[tokio::test]
+    async fn delete_waits_for_a_publication_in_progress() {
+        let registry = Arc::new(ContractRegistry::new());
+        registry.upsert(versioned("1"));
+        let (binders, open) = GatedBinders::new("bind_mcp");
+
+        let publish = spawn_upsert(&registry, &binders, "2");
+        let_spawned_tasks_run().await;
+        assert_eq!(binders.log(), ["bind_rest 2", "bind_mcp 2"]);
+
+        let delete = {
+            let (registry, binders) = (registry.clone(), binders.clone());
+            tokio::spawn(async move {
+                perform_delete(registry, binders.as_ref(), "acme:orders".into())
+                    .await
+                    .status()
+            })
+        };
+        let_spawned_tasks_run().await;
+        assert_eq!(binders.log(), ["bind_rest 2", "bind_mcp 2"]);
+
+        open.send(()).unwrap();
+        assert_eq!(publish.await.unwrap(), StatusCode::OK);
+        assert_eq!(delete.await.unwrap(), StatusCode::OK);
+        assert_eq!(
+            binders.log(),
+            ["bind_rest 2", "bind_mcp 2", "unbind_rest -", "unbind_mcp -"]
+        );
+        // The delete removed the version the publication committed.
+        assert!(registry.get("acme:orders").is_none());
     }
 }

@@ -1,15 +1,18 @@
 //! REST Protocol Binder
 //!
 //! Transforms a UAC contract into REST routes registered in the RouteRegistry.
-//! Each endpoint in the contract becomes a proxied route with the path pattern:
-//! `/apis/{tenant_id}/{contract_name}{endpoint_path}`
+//! Each endpoint in the contract becomes a proxied route with the path prefix
+//! `/apis/{tenant_id}/{contract_name}{static_path}`, where `static_path` is
+//! the endpoint path up to its first `{param}` segment.
 
 use std::sync::Arc;
 
 use crate::routes::{ApiRoute, PolicyEntry, PolicyRegistry, RouteRegistry};
 use crate::uac::schema::{is_jwt_validation_policy, UacContractSpec};
 
-use super::{BindingOutput, ProtocolBinder};
+use super::{
+    check_endpoint_templates, split_path_template, BindingOutput, ProtocolBinder, CONTRACT_REJECTED,
+};
 
 /// REST protocol binder — generates proxy routes from UAC contracts.
 pub struct RestBinder {
@@ -70,50 +73,87 @@ impl RestBinder {
     }
 
     /// Generate REST routes from a contract (pure function, no side effects).
-    pub fn generate_routes(contract: &UacContractSpec) -> Vec<ApiRoute> {
+    ///
+    /// The route prefix is the static part of the endpoint path: up to the
+    /// first `{param}` segment, trailing `/` included (`/customers/{id}` →
+    /// `/apis/{tenant}/{contract}/customers/`). `backend_url` is the upstream
+    /// URL of that static part; the proxy appends the rest of the request path.
+    /// Endpoints with the same prefix and backend share one route, methods
+    /// merged. Same prefix with another backend is an error, and so is an
+    /// endpoint refused by [`check_endpoint_templates`].
+    ///
+    /// Limit: a route is a prefix, and it allows the methods of every
+    /// endpoint that shares it on every path under it. `GET /customers/{id}`
+    /// and `DELETE /customers/{id}/sessions/{sid}` give one route
+    /// `/apis/{tenant}/{contract}/customers/` with GET and DELETE, so
+    /// `DELETE /apis/{tenant}/{contract}/customers/C-1` reaches the backend.
+    /// Authentication is not widened: every method on the route goes through
+    /// the contract's inbound auth (its JWT policy, when it has one).
+    pub fn generate_routes(contract: &UacContractSpec) -> Result<Vec<ApiRoute>, String> {
+        check_endpoint_templates(contract)?;
         let contract_key = format!("{}:{}", contract.tenant_id, contract.name);
+        let mut routes: Vec<ApiRoute> = Vec::new();
+        // Index of the endpoint that created each route, for error messages.
+        let mut first_endpoint: Vec<usize> = Vec::new();
 
-        contract
-            .endpoints
-            .iter()
-            .enumerate()
-            .map(|(i, endpoint)| {
-                // Route ID: deterministic, derived from contract + endpoint index
-                let route_id = format!("uac:{}:{}", contract_key, i);
+        for (i, endpoint) in contract.endpoints.iter().enumerate() {
+            let (static_path, _) = split_path_template(&endpoint.path);
+            let path_prefix = format!(
+                "/apis/{}/{}{}",
+                contract.tenant_id, contract.name, static_path
+            );
 
-                // Path: /apis/{tenant}/{contract}{endpoint_path}
-                let path_prefix = format!(
-                    "/apis/{}/{}{}",
-                    contract.tenant_id, contract.name, endpoint.path
-                );
-
-                // Route name: from operation_id or "{contract}-{index}"
-                let name = endpoint
-                    .operation_id
-                    .clone()
-                    .unwrap_or_else(|| format!("{}-{}", contract.name, i));
-
-                ApiRoute {
-                    id: route_id,
-                    name,
-                    tenant_id: contract.tenant_id.clone(),
-                    path_prefix,
-                    backend_url: endpoint.backend_url.clone(),
-                    methods: endpoint.methods.clone(),
-                    spec_hash: contract
-                        .spec_hash
-                        .clone()
-                        .unwrap_or_else(|| contract.version.clone()),
-                    activated: true,
-                    classification: Some(contract.classification),
-                    contract_key: Some(contract_key.clone()),
-                    upstream_http_version: Default::default(),
-                    upstreams: vec![],
-                    load_balancer: Default::default(),
-                    trusted_backend: true,
+            if let Some(pos) = routes.iter().position(|r| r.path_prefix == path_prefix) {
+                let route = &mut routes[pos];
+                if !same_backend(&route.backend_url, &endpoint.backend_url) {
+                    return Err(format!(
+                        "{CONTRACT_REJECTED}endpoints[{}] ({}) and endpoints[{}] share the REST prefix {} with different backend_url ({} and {})",
+                        first_endpoint[pos],
+                        contract.endpoints[first_endpoint[pos]].path,
+                        i,
+                        path_prefix,
+                        route.backend_url,
+                        endpoint.backend_url
+                    ));
                 }
-            })
-            .collect()
+                for method in &endpoint.methods {
+                    if !route.methods.contains(method) {
+                        route.methods.push(method.clone());
+                    }
+                }
+                continue;
+            }
+
+            // Route name: from operation_id or "{contract}-{index}"
+            let name = endpoint
+                .operation_id
+                .clone()
+                .unwrap_or_else(|| format!("{}-{}", contract.name, i));
+
+            first_endpoint.push(i);
+            routes.push(ApiRoute {
+                // Deterministic: contract + index of the first endpoint.
+                id: format!("uac:{}:{}", contract_key, i),
+                name,
+                tenant_id: contract.tenant_id.clone(),
+                path_prefix,
+                backend_url: endpoint.backend_url.clone(),
+                methods: endpoint.methods.clone(),
+                spec_hash: contract
+                    .spec_hash
+                    .clone()
+                    .unwrap_or_else(|| contract.version.clone()),
+                activated: true,
+                classification: Some(contract.classification),
+                contract_key: Some(contract_key.clone()),
+                upstream_http_version: Default::default(),
+                upstreams: vec![],
+                load_balancer: Default::default(),
+                trusted_backend: true,
+            });
+        }
+
+        Ok(routes)
     }
 
     fn upsert_jwt_policies(&self, contract: &UacContractSpec, routes: &[ApiRoute]) {
@@ -143,6 +183,12 @@ impl RestBinder {
             self.upsert_jwt_policies(contract, routes);
         }
     }
+}
+
+/// The proxy trims trailing `/` from the backend before joining, so
+/// `http://b/customers/` and `http://b/customers` reach the same URLs.
+fn same_backend(a: &str, b: &str) -> bool {
+    a.trim_end_matches('/') == b.trim_end_matches('/')
 }
 
 fn contract_audience(contract: &UacContractSpec) -> Option<String> {
@@ -219,7 +265,9 @@ impl RestBinder {
 impl ProtocolBinder for RestBinder {
     async fn bind(&self, contract: &UacContractSpec) -> Result<BindingOutput, String> {
         let contract_key = format!("{}:{}", contract.tenant_id, contract.name);
-        let routes = Self::generate_routes(contract);
+        // Before any registry change: a rejected contract leaves the
+        // previous routes and policies in place.
+        let routes = Self::generate_routes(contract)?;
         let count = routes.len();
 
         if self.require_inbound_auth && !contract.requires_jwt_validation() {
@@ -331,22 +379,206 @@ mod tests {
     #[test]
     fn test_generate_routes_count() {
         let contract = sample_contract();
-        let routes = RestBinder::generate_routes(&contract);
+        let routes = RestBinder::generate_routes(&contract).expect("routes");
         assert_eq!(routes.len(), 2);
     }
 
     #[test]
     fn test_generate_routes_path_prefix() {
         let contract = sample_contract();
-        let routes = RestBinder::generate_routes(&contract);
+        let routes = RestBinder::generate_routes(&contract).expect("routes");
         assert_eq!(routes[0].path_prefix, "/apis/acme/payments/payments");
-        assert_eq!(routes[1].path_prefix, "/apis/acme/payments/payments/{id}");
+        assert_eq!(routes[1].path_prefix, "/apis/acme/payments/payments/");
+    }
+
+    fn customer_endpoint(path: &str, method: &str, backend_url: &str) -> UacEndpoint {
+        UacEndpoint {
+            path: path.to_string(),
+            methods: vec![method.to_string()],
+            backend_url: backend_url.to_string(),
+            method: None,
+            description: None,
+            operation_id: None,
+            input_schema: None,
+            output_schema: None,
+            llm: None,
+        }
+    }
+
+    fn customer_contract(endpoints: Vec<UacEndpoint>) -> UacContractSpec {
+        let mut spec = UacContractSpec::new("api", "demo");
+        spec.status = ContractStatus::Published;
+        spec.endpoints = endpoints;
+        spec
+    }
+
+    #[test]
+    fn route_prefix_stops_before_the_first_parameter_segment() {
+        let cases = [
+            ("/customers/{id}", "/apis/demo/api/customers/"),
+            ("/customers/{id}/segment", "/apis/demo/api/customers/"),
+            ("/{id}", "/apis/demo/api/"),
+            ("/customers", "/apis/demo/api/customers"),
+            ("/customers/", "/apis/demo/api/customers/"),
+        ];
+        for (path, expected) in cases {
+            let contract =
+                customer_contract(vec![customer_endpoint(path, "GET", "http://b/customers/")]);
+            let routes = RestBinder::generate_routes(&contract).expect("routes");
+            assert_eq!(routes.len(), 1, "{path}");
+            assert_eq!(routes[0].path_prefix, expected, "{path}");
+        }
+    }
+
+    #[test]
+    fn endpoints_with_the_same_prefix_and_backend_share_one_route() {
+        let contract = customer_contract(vec![
+            customer_endpoint("/customers/{id}", "GET", "http://b/customers/"),
+            customer_endpoint("/customers/{id}/segment", "GET", "http://b/customers/"),
+            customer_endpoint("/customers/{id}", "DELETE", "http://b/customers"),
+            customer_endpoint("/customers", "POST", "http://b/customers"),
+        ]);
+        let routes = RestBinder::generate_routes(&contract).expect("routes");
+        assert_eq!(routes.len(), 2);
+        assert_eq!(routes[0].id, "uac:demo:api:0");
+        assert_eq!(routes[0].path_prefix, "/apis/demo/api/customers/");
+        assert_eq!(routes[0].backend_url, "http://b/customers/");
+        assert_eq!(routes[0].methods, vec!["GET", "DELETE"]);
+        assert_eq!(routes[1].id, "uac:demo:api:3");
+        assert_eq!(routes[1].path_prefix, "/apis/demo/api/customers");
+        assert_eq!(routes[1].methods, vec!["POST"]);
+    }
+
+    #[test]
+    fn same_prefix_with_another_backend_is_rejected() {
+        let contract = customer_contract(vec![
+            customer_endpoint("/customers/{id}", "GET", "http://b/customers/"),
+            customer_endpoint("/customers/{id}/segment", "GET", "http://other/segments/"),
+        ]);
+        let error = RestBinder::generate_routes(&contract).expect_err("conflict");
+        assert!(error.starts_with(CONTRACT_REJECTED), "{error}");
+        assert!(error.contains("endpoints[0]"), "{error}");
+        assert!(error.contains("endpoints[1]"), "{error}");
+        assert!(error.contains("/apis/demo/api/customers/"), "{error}");
+    }
+
+    #[tokio::test]
+    async fn rejected_republish_keeps_the_routes_already_published() {
+        let registry = Arc::new(RouteRegistry::new());
+        let binder = RestBinder::new(registry.clone());
+        binder
+            .bind(&customer_contract(vec![customer_endpoint(
+                "/customers/{id}",
+                "GET",
+                "http://b/customers/",
+            )]))
+            .await
+            .expect("first bind");
+
+        let conflicting = customer_contract(vec![
+            customer_endpoint("/customers/{id}", "GET", "http://b2/customers/"),
+            customer_endpoint("/customers/{id}/x", "GET", "http://other/x/"),
+        ]);
+        binder.bind(&conflicting).await.expect_err("conflict");
+
+        assert_eq!(registry.count(), 1);
+        let route = registry.get("uac:demo:api:0").expect("route kept");
+        assert_eq!(route.backend_url, "http://b/customers/");
+    }
+
+    #[tokio::test]
+    async fn path_or_backend_url_refused_before_any_route_change() {
+        let registry = Arc::new(RouteRegistry::new());
+        let binder = RestBinder::new(registry.clone());
+        binder
+            .bind(&customer_contract(vec![customer_endpoint(
+                "/customers/{id}",
+                "GET",
+                "http://b/customers/",
+            )]))
+            .await
+            .expect("first bind");
+
+        for (path, backend_url) in [
+            ("/customers/{id}", "http://b/customers/{id}"),
+            ("customers/{id}", "http://b/customers/"),
+            ("/customers/{id", "http://b/customers/"),
+            ("/customers/{}", "http://b/customers/"),
+            ("/customers{id}", "http://b/customers/"),
+            ("/files/f-{id}", "http://b/files/"),
+            ("/customers/{id}", "http://b/customers?v=1"),
+            ("/customers/{id}", "http://b/customers#top"),
+            ("/customers//{id}", "http://b/customers/"),
+            ("/customers/../{id}", "http://b/customers/"),
+            ("/customers/./{id}", "http://b/customers/"),
+            ("/customers/{id}/x/{id}", "http://b/customers/"),
+        ] {
+            let error = binder
+                .bind(&customer_contract(vec![customer_endpoint(
+                    path,
+                    "GET",
+                    backend_url,
+                )]))
+                .await
+                .expect_err(path);
+            assert!(error.starts_with(CONTRACT_REJECTED), "{error}");
+            assert!(error.contains("endpoints[0]"), "{error}");
+            assert_eq!(registry.count(), 1, "{path}");
+            let route = registry.get("uac:demo:api:0").expect("route kept");
+            assert_eq!(route.path_prefix, "/apis/demo/api/customers/", "{path}");
+            assert_eq!(route.backend_url, "http://b/customers/", "{path}");
+        }
+    }
+
+    #[tokio::test]
+    async fn regression_parameterised_path_reaches_the_backend_through_the_proxy() {
+        use axum::body::Body;
+        use axum::http::{Request, StatusCode};
+        use tower::ServiceExt;
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        use crate::config::Config;
+        use crate::proxy::dynamic_proxy;
+        use crate::state::AppState;
+
+        let backend = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/customers/C-1001/segment"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("segment"))
+            .mount(&backend)
+            .await;
+
+        let state = AppState::new(Config::default());
+        let binder =
+            RestBinder::with_policies(state.route_registry.clone(), state.policy_registry.clone());
+        let base = format!("{}/customers/", backend.uri());
+        binder
+            .bind(&customer_contract(vec![
+                customer_endpoint("/customers/{id}", "GET", &base),
+                customer_endpoint("/customers/{id}/segment", "GET", &base),
+            ]))
+            .await
+            .expect("bind");
+
+        let response = axum::Router::new()
+            .fallback(dynamic_proxy)
+            .with_state(state)
+            .oneshot(
+                Request::builder()
+                    .uri("/apis/demo/api/customers/C-1001/segment")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
     }
 
     #[test]
     fn test_generate_routes_id_format() {
         let contract = sample_contract();
-        let routes = RestBinder::generate_routes(&contract);
+        let routes = RestBinder::generate_routes(&contract).expect("routes");
         assert_eq!(routes[0].id, "uac:acme:payments:0");
         assert_eq!(routes[1].id, "uac:acme:payments:1");
     }
@@ -354,7 +586,7 @@ mod tests {
     #[test]
     fn test_generate_routes_name_from_operation_id() {
         let contract = sample_contract();
-        let routes = RestBinder::generate_routes(&contract);
+        let routes = RestBinder::generate_routes(&contract).expect("routes");
         assert_eq!(routes[0].name, "list_payments");
         assert_eq!(routes[1].name, "get_payment");
     }
@@ -363,7 +595,7 @@ mod tests {
     fn test_generate_routes_name_fallback() {
         let mut contract = sample_contract();
         contract.endpoints[0].operation_id = None;
-        let routes = RestBinder::generate_routes(&contract);
+        let routes = RestBinder::generate_routes(&contract).expect("routes");
         assert_eq!(routes[0].name, "payments-0");
     }
 
@@ -371,7 +603,7 @@ mod tests {
     fn test_generate_routes_classification_propagated() {
         let mut contract = sample_contract();
         contract.classification = Classification::Vvh;
-        let routes = RestBinder::generate_routes(&contract);
+        let routes = RestBinder::generate_routes(&contract).expect("routes");
         assert_eq!(routes[0].classification, Some(Classification::Vvh));
         assert_eq!(routes[1].classification, Some(Classification::Vvh));
     }
@@ -379,14 +611,14 @@ mod tests {
     #[test]
     fn test_generate_routes_contract_key() {
         let contract = sample_contract();
-        let routes = RestBinder::generate_routes(&contract);
+        let routes = RestBinder::generate_routes(&contract).expect("routes");
         assert_eq!(routes[0].contract_key.as_deref(), Some("acme:payments"));
     }
 
     #[test]
     fn test_generate_routes_methods_preserved() {
         let contract = sample_contract();
-        let routes = RestBinder::generate_routes(&contract);
+        let routes = RestBinder::generate_routes(&contract).expect("routes");
         assert_eq!(routes[0].methods, vec!["GET", "POST"]);
         assert_eq!(routes[1].methods, vec!["GET"]);
     }
@@ -394,7 +626,7 @@ mod tests {
     #[test]
     fn test_generate_routes_backend_url() {
         let contract = sample_contract();
-        let routes = RestBinder::generate_routes(&contract);
+        let routes = RestBinder::generate_routes(&contract).expect("routes");
         assert_eq!(
             routes[0].backend_url,
             "https://backend.acme.com/v1/payments"
@@ -404,7 +636,7 @@ mod tests {
     #[test]
     fn test_generate_routes_activated() {
         let contract = sample_contract();
-        let routes = RestBinder::generate_routes(&contract);
+        let routes = RestBinder::generate_routes(&contract).expect("routes");
         assert!(routes[0].activated);
     }
 

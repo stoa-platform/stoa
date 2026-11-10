@@ -20,6 +20,7 @@ use crate::mcp::session::SessionManager;
 use crate::resilience::{
     retry_with_backoff, CircuitBreaker, CircuitBreakerError, CircuitBreakerRegistry, RetryConfig,
 };
+use crate::state::AppState;
 use crate::uac::Action;
 
 /// Default refresh interval for tool discovery
@@ -365,6 +366,38 @@ pub async fn refresh_tools_for_tenant(
     Ok(new_count)
 }
 
+// ─── No control plane ─────────────────────────────────────────────
+
+/// Register the built-in tools of a gateway that has no control plane.
+///
+/// With `STOA_NATIVE_TOOLS_ENABLED=true`, the native tools are registered.
+/// Without, none: the `stoa_*` proxy tools of [`register_static_tools`] relay
+/// every call to the control plane, so here they would be listed by
+/// `tools/list` and fail on every call. Returns the number of tools added.
+pub fn register_builtin_tools_without_control_plane(state: &AppState) -> usize {
+    let before = state.tool_registry.count();
+    if state.config.native_tools_enabled {
+        register_native_tools(
+            &state.tool_registry,
+            create_http_client(),
+            state.control_plane.base_url(),
+            state.tool_registry.clone(),
+            Some(state.session_manager.clone()),
+            Some(state.circuit_breakers.clone()),
+            Some(state.prompt_cache.clone()),
+        );
+        tracing::info!(
+            tools = state.tool_registry.count(),
+            "Builtin tools registered without control-plane discovery"
+        );
+    } else {
+        tracing::info!(
+            "Native tools disabled and no control plane — no stoa_* platform tools registered; MCP tools come from published contracts"
+        );
+    }
+    state.tool_registry.count().saturating_sub(before)
+}
+
 // ─── Legacy Fallback (kept for compatibility) ─────────────────────
 
 /// Register the 12 STOA tools with ProxyTool (legacy fallback).
@@ -606,6 +639,41 @@ mod tests {
     use crate::control_plane::tool_proxy::{RemoteToolDef, RemoteToolSchema};
     use crate::mcp::tools::ToolRegistry;
     use std::sync::Arc;
+
+    // ─── no control plane ──────────────────────────────────────
+
+    fn state_without_control_plane(native_tools_enabled: bool) -> AppState {
+        AppState::new(crate::config::Config {
+            control_plane_url: None,
+            native_tools_enabled,
+            ..crate::config::Config::default()
+        })
+    }
+
+    #[tokio::test]
+    async fn regression_no_control_plane_and_no_native_tools_registers_no_platform_tool() {
+        let state = state_without_control_plane(false);
+        assert!(!state.config.control_plane_configured());
+        let before = state.tool_registry.count();
+
+        assert_eq!(register_builtin_tools_without_control_plane(&state), 0);
+
+        assert_eq!(state.tool_registry.count(), before);
+        let platform: Vec<String> = state
+            .tool_registry
+            .names()
+            .into_iter()
+            .filter(|name| name.starts_with("stoa_"))
+            .collect();
+        assert!(platform.is_empty(), "relay tools listed: {platform:?}");
+    }
+
+    #[tokio::test]
+    async fn no_control_plane_with_native_tools_still_registers_them() {
+        let state = state_without_control_plane(true);
+        assert!(register_builtin_tools_without_control_plane(&state) > 0);
+        assert!(state.tool_registry.exists("stoa_platform_info"));
+    }
 
     // ─── infer_action ──────────────────────────────────────────
 

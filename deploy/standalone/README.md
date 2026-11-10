@@ -374,18 +374,43 @@ The Dockerfile is the three-stage cargo-chef build in `stoa-gateway/Dockerfile`
 (`rust:1.93-bookworm`, runtime `debian:bookworm-slim`, user 1000). The runtime
 base is still a tag, not a digest. The commitment is to move it to
 `gcr.io/distroless/cc` pinned by digest. `stoa-gateway/.dockerignore` excludes `target/`
-so the context is not the local debug build. The image built for Friday is
-revision `6d23399e4d1a1f4c54a03122640c0469c8b4829c` (`IMAGE-REVISION`).
-Tar sha256 `c714dbf06d0f7e592d47ae3ee706ffec7dfa52603bbf024beec28162c3a52031`.
+so the context is not the local debug build. The image in service since
+2026-11-10 is revision `4e84fae718a14dd6d1e75504cfe6f031cb76ea9d` (`IMAGE-REVISION`).
+Tar sha256 `f1108188dd87822ad5850ec20954c61f3126f387f3d6beb3644c5871223d0635`.
 A later docs commit does not change that binary. The label equals that
-revision; `git diff 6d23399e4d1a1f4c54a03122640c0469c8b4829c HEAD -- stoa-gateway/`
-is empty. The unknown-`inboundAuth` rejection (commit `5b648ef4`) is already in
-this binary. That commit is an ancestor of the revision above, and
-`resembles_inbound_auth_field` is in `stoa-gateway/src/uac/schema.rs` at
-that revision. That is intentional. An earlier local image id
+revision; `git diff 4e84fae718a14dd6d1e75504cfe6f031cb76ea9d HEAD -- stoa-gateway/`
+is empty. It adds, to the image of 2026-10-21 (revision
+`6d23399e4d1a1f4c54a03122640c0469c8b4829c`), the opt-in public MCP surface
+with the transport authentication ("Public MCP" above) and tokio 1.54.1.
+
+Each import replaces the `standalone` tag on worker-3. Tag the image in
+service first, so a rollback is a retag and a restart, with no rebuild:
+
+```bash
+ssh worker-3 'sudo k3s ctr -n k8s.io images tag docker.io/library/stoa-gateway:standalone docker.io/library/stoa-gateway:standalone-prev-<short sha>'
+```
+
+worker-3 holds `standalone-prev-c2e40501` (the first build of 2026-11-10,
+tokio 1.54.0) and `standalone-prev-6d23399e` (2026-10-21). The second one
+has neither the public MCP option nor the transport authentication: with
+it the MCP host answers 404 again, whatever the ConfigMap says. An
+earlier local image id
 `sha256:a8257c8f10341845343c72599aefc87b23a0f52bf38e14136eea4a6641a029fb`
 does not contain audience enforcement, the path guard, or the admin proxy deny.
 Do not import it.
+
+After an import, `python3 deploy/standalone/switch.py preflight` is the
+restart: it confirms the revision on worker-3, runs the volume backup,
+writes the ingress-nginx pod IPs into `STOA_TRUSTED_PROXIES` and restarts
+the Deployment. It does not touch Service `gateway` or Ingress `stoa-api`.
+On 2026-11-10 its image check did not pass on this node before the fix in
+`image_revision_on_node`, and the process that had been running since
+2026-10-21 still had the sentinel.
+
+`build-image.sh` builds for the host architecture. On an arm64 host, set
+`DOCKER_DEFAULT_PLATFORM=linux/amd64`. Its Trivy fallback downloads a Linux
+binary: on macOS, put a `trivy` on `PATH` first (a wrapper around
+`docker run aquasec/trivy:0.58.1` works).
 
 ## Startup without control-plane-api
 

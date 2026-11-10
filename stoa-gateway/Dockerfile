@@ -90,6 +90,9 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
       ca-certificates \
       libssl3t64 \
       curl \
+      zlib1g \
+    && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' zlib1g)" ge \
+         '1:1.3.dfsg+really1.3.1-1+deb13u1' \
     && rm -rf /var/lib/apt/lists/*
 
 # UID 1000 for k8s runAsNonRoot compatibility

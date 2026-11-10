@@ -76,7 +76,7 @@ Commitment: migration to `gcr.io/distroless/cc` pinned by digest by 06/11/2026 a
 | `RUSTSEC-2026-0403`, `RUSTSEC-2026-0398` | zstd-safe 7.3.0 | no | Not linked. Proposed: exception, not in the image. |
 | `RUSTSEC-2026-0418` | libz-sys 1.1.30 | no | Build script issue, crate not linked. Proposed: exception, not in the image. |
 | `RUSTSEC-2026-0388` | pingora-core 0.8.1 | no | Optional `pingora` feature, `FEATURES` is empty. Proposed: exception, not in the image. |
-| `RUSTSEC-2026-0424` | wasmtime 43.0.2 | no | Optional `wasm` feature, like the seven wasmtime exceptions. Proposed: exception, not in the image. |
+| `RUSTSEC-2026-0424` | wasmtime 43.0.2 | no | Optional `wasm` feature, like the eight wasmtime exceptions. Proposed: exception, not in the image. |
 
 The text below is the run of 2026-10-21.
 

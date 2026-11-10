@@ -235,21 +235,32 @@ impl Tool for DynamicTool {
             }
         }
 
-        // Execute request
+        // The backend URL is an internal address, and its path carries the
+        // caller's values: it goes to the log, not into the error returned
+        // to the MCP caller.
         let response = req.send().await.map_err(|e| {
-            warn!(tool = %self.name, error = %e, "Dynamic tool HTTP request failed");
-            ToolError::ExecutionFailed(format!("HTTP request failed: {}", e))
+            warn!(tool = %self.name, url = %final_url, error = %e, "Dynamic tool HTTP request failed");
+            ToolError::ExecutionFailed(format!(
+                "HTTP request to the backend failed: {}",
+                request_failure(&e)
+            ))
         })?;
 
         let status = response.status();
         let body = response.text().await.map_err(|e| {
-            ToolError::ExecutionFailed(format!("Failed to read response body: {}", e))
+            warn!(tool = %self.name, url = %final_url, error = %e, "Dynamic tool response body read failed");
+            ToolError::ExecutionFailed(format!(
+                "Failed to read the backend response body: {}",
+                request_failure(&e)
+            ))
         })?;
 
         if !status.is_success() {
+            warn!(tool = %self.name, url = %final_url, status = %status, "Dynamic tool backend returned an error status");
             return Err(ToolError::ExecutionFailed(format!(
-                "HTTP {} from {}: {}",
-                status, self.endpoint, body
+                "HTTP {} from the backend: {}",
+                status.as_u16(),
+                body
             )));
         }
 
@@ -343,6 +354,39 @@ fn path_value_refusal(value: &str, single_segment: bool) -> Option<&'static str>
     } else {
         None
     }
+}
+
+/// What went wrong with a backend request, in words that carry neither the
+/// backend URL nor the values substituted into its path. `reqwest::Error`
+/// displays the URL; this is what the MCP caller gets instead.
+fn request_failure(error: &reqwest::Error) -> &'static str {
+    if error.is_timeout() {
+        "timed out"
+    } else if error.is_connect() {
+        if io_error_kind(error) == Some(std::io::ErrorKind::ConnectionRefused) {
+            "connection refused"
+        } else {
+            "could not connect"
+        }
+    } else if error.is_redirect() {
+        "redirect error"
+    } else if error.is_body() || error.is_decode() {
+        "invalid response body"
+    } else {
+        "request error"
+    }
+}
+
+/// Kind of the first I/O error in the source chain, if any.
+fn io_error_kind(error: &reqwest::Error) -> Option<std::io::ErrorKind> {
+    let mut source = std::error::Error::source(error);
+    while let Some(cause) = source {
+        if let Some(io) = cause.downcast_ref::<std::io::Error>() {
+            return Some(io.kind());
+        }
+        source = cause.source();
+    }
+    None
 }
 
 /// Extract `{name}` tokens from an OpenAPI path pattern, in document order.
@@ -871,6 +915,126 @@ mod tests {
         let received = mock.received_requests().await.expect("recording");
         assert_eq!(received.len(), 1);
         assert_eq!(received[0].url.path(), "/customers/C-1");
+    }
+
+    fn caller_context() -> ToolContext {
+        ToolContext {
+            tenant_id: "demo".to_string(),
+            user_id: None,
+            user_email: None,
+            request_id: "req-1".to_string(),
+            roles: vec![],
+            scopes: vec![],
+            raw_token: None,
+            skill_instructions: None,
+            progress_token: None,
+            consumer_id: "c".to_string(),
+            from_control_plane: false,
+        }
+    }
+
+    /// The parts of a backend URL that must not reach an MCP caller.
+    fn assert_no_backend_address(message: &str, backend: &str, value: &str) {
+        let url = reqwest::Url::parse(backend).expect("backend url");
+        let host = url.host_str().expect("host");
+        let port = url.port_or_known_default().expect("port").to_string();
+        assert!(!message.contains(host), "host in {message:?}");
+        assert!(!message.contains(&port), "port in {message:?}");
+        assert!(!message.contains(value), "value in {message:?}");
+        assert!(!message.contains("/customers"), "path in {message:?}");
+    }
+
+    #[tokio::test]
+    async fn regression_backend_error_status_does_not_reveal_the_backend_url() {
+        use wiremock::matchers::method;
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(404).set_body_string("no such customer"))
+            .mount(&mock)
+            .await;
+        let tool = DynamicTool::new(
+            "demo_api_get_customer",
+            "Get customer",
+            format!("{}/customers/", mock.uri()),
+            "GET",
+            schema_empty_object(),
+            "demo",
+        )
+        .with_path_pattern("{id}")
+        .with_single_segment_path_parameters();
+
+        let message = tool
+            .execute(json!({"id": "C-4711"}), &caller_context())
+            .await
+            .expect_err("404")
+            .to_string();
+        assert!(
+            message.contains("HTTP 404 from the backend: no such customer"),
+            "{message}"
+        );
+        assert_no_backend_address(&message, &mock.uri(), "C-4711");
+    }
+
+    #[tokio::test]
+    async fn regression_backend_connection_error_does_not_reveal_the_backend_url() {
+        // A port with nothing listening: bind, read the port, close.
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+        let backend = format!("http://{}", listener.local_addr().expect("addr"));
+        drop(listener);
+        let tool = DynamicTool::new(
+            "demo_api_get_customer",
+            "Get customer",
+            format!("{backend}/customers/"),
+            "GET",
+            schema_empty_object(),
+            "demo",
+        )
+        .with_path_pattern("{id}")
+        .with_single_segment_path_parameters();
+
+        let message = tool
+            .execute(json!({"id": "C-4711"}), &caller_context())
+            .await
+            .expect_err("nothing listens")
+            .to_string();
+        assert!(message.contains("connection refused"), "{message}");
+        assert_no_backend_address(&message, &backend, "C-4711");
+    }
+
+    #[tokio::test]
+    async fn regression_backend_timeout_does_not_reveal_the_backend_url() {
+        use wiremock::matchers::method;
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200).set_delay(std::time::Duration::from_secs(5)))
+            .mount(&mock)
+            .await;
+        let mut tool = DynamicTool::new(
+            "demo_api_get_customer",
+            "Get customer",
+            format!("{}/customers/", mock.uri()),
+            "GET",
+            schema_empty_object(),
+            "demo",
+        )
+        .with_path_pattern("{id}")
+        .with_single_segment_path_parameters();
+        tool.client = Client::builder()
+            .timeout(std::time::Duration::from_millis(100))
+            .build()
+            .expect("client");
+
+        let message = tool
+            .execute(json!({"id": "C-4711"}), &caller_context())
+            .await
+            .expect_err("timeout")
+            .to_string();
+        assert!(message.contains("timed out"), "{message}");
+        assert_no_backend_address(&message, &mock.uri(), "C-4711");
     }
 
     #[tokio::test]

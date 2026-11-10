@@ -130,6 +130,30 @@ fn record_proxy_status(code: u16) {
     }
 }
 
+/// Upstream URL for a request: `backend` joined to the path left after the
+/// route prefix, then the query.
+///
+/// A non-empty `rest` is separated from `backend` by exactly one `/`, so a
+/// route prefix that ends with `/` (`/apis/t/api/customers/`) does not glue
+/// `C-1001` onto `http://b/customers`. An empty `rest` keeps the previous
+/// result: `backend` without its trailing `/`. A `rest` of `/` keeps the
+/// caller's trailing slash.
+pub(crate) fn join_upstream_url(backend: &str, rest: &str, query: Option<&str>) -> String {
+    let backend = backend.trim_end_matches('/');
+    let capacity = backend.len() + 1 + rest.len() + query.map_or(0, |q| 1 + q.len());
+    let mut url = String::with_capacity(capacity);
+    url.push_str(backend);
+    if !rest.is_empty() {
+        url.push('/');
+        url.push_str(rest.trim_start_matches('/'));
+    }
+    if let Some(q) = query {
+        url.push('?');
+        url.push_str(q);
+    }
+    url
+}
+
 /// Dynamic proxy handler — catch-all fallback route.
 ///
 /// 1. Look up request path in RouteRegistry (longest prefix match)
@@ -313,18 +337,9 @@ pub async fn dynamic_proxy(State(state): State<AppState>, mut request: Request<B
         None
     };
 
-    // Build target URL: replace path_prefix with backend (pre-allocated)
+    // Build target URL: replace path_prefix with backend
     let remaining_path = path.strip_prefix(&route.path_prefix).unwrap_or("");
-    let backend = selected_backend.trim_end_matches('/');
-    let query = request.uri().query();
-    let capacity = backend.len() + remaining_path.len() + query.map_or(0, |q| 1 + q.len());
-    let mut target_url = String::with_capacity(capacity);
-    target_url.push_str(backend);
-    target_url.push_str(remaining_path);
-    if let Some(q) = query {
-        target_url.push('?');
-        target_url.push_str(q);
-    }
+    let target_url = join_upstream_url(&selected_backend, remaining_path, request.uri().query());
 
     // SSRF protection: block requests to private/internal IP ranges (defense-in-depth).
     // Skip for admin-registered routes (trusted_backend) — URLs are admin-managed (CAB-1893).
@@ -1645,5 +1660,97 @@ mod tests {
         );
         // Different span_ids
         assert_ne!(span1, span2, "each call must generate a unique span_id");
+    }
+
+    #[test]
+    fn upstream_join_puts_one_slash_before_a_non_empty_rest() {
+        // Route prefix ends with `/`: the rest has no leading slash.
+        assert_eq!(
+            join_upstream_url("http://b/customers/", "C-1001", None),
+            "http://b/customers/C-1001"
+        );
+        assert_eq!(
+            join_upstream_url("http://b/customers", "C-1001", None),
+            "http://b/customers/C-1001"
+        );
+        // Route prefix without trailing `/`: the rest starts with one.
+        assert_eq!(
+            join_upstream_url("http://b/customers/", "/C-1001", None),
+            "http://b/customers/C-1001"
+        );
+        assert_eq!(
+            join_upstream_url("http://b/customers", "/C-1001/segment", None),
+            "http://b/customers/C-1001/segment"
+        );
+        assert_eq!(
+            join_upstream_url("http://b/customers//", "//C-1001", None),
+            "http://b/customers/C-1001"
+        );
+    }
+
+    #[test]
+    fn upstream_join_with_empty_rest_keeps_the_backend_without_trailing_slash() {
+        assert_eq!(
+            join_upstream_url("http://b/customers/", "", None),
+            "http://b/customers"
+        );
+        assert_eq!(
+            join_upstream_url("http://b/customers", "", None),
+            "http://b/customers"
+        );
+        assert_eq!(
+            join_upstream_url("http://b/customers", "/", None),
+            "http://b/customers/"
+        );
+    }
+
+    #[test]
+    fn upstream_join_keeps_the_query() {
+        assert_eq!(
+            join_upstream_url("http://b/customers/", "C-1001", Some("expand=a&x=1")),
+            "http://b/customers/C-1001?expand=a&x=1"
+        );
+        assert_eq!(
+            join_upstream_url("http://b/customers/", "", Some("page=2")),
+            "http://b/customers?page=2"
+        );
+    }
+
+    #[tokio::test]
+    async fn prefix_ending_with_slash_reaches_the_backend_sub_path() {
+        use axum::body::Body;
+        use axum::http::Request;
+        use tower::ServiceExt;
+        use wiremock::matchers::{method, path, query_param};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let backend = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/customers/C-1001"))
+            .and(query_param("expand", "accounts"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("customer"))
+            .mount(&backend)
+            .await;
+
+        let state = AppState::new(crate::config::Config::default());
+        let mut route = ping_route();
+        route.path_prefix = "/apis/demo/api/customers/".into();
+        route.backend_url = format!("{}/customers/", backend.uri());
+        state.route_registry.upsert(route);
+
+        let app = axum::Router::new()
+            .fallback(dynamic_proxy)
+            .with_state(state);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/apis/demo/api/customers/C-1001?expand=accounts")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(body_string(response).await, "customer");
     }
 }

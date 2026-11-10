@@ -134,9 +134,11 @@ before expiry using a 30-second margin and the endpoint's `reissue=true` option.
 Cached artifacts are reverified against the loaded trust set. The trust file is
 loaded at startup; changing its keys requires a gateway restart. An absent or invalid artifact or
 trust set denies calls; the unsigned permissions listing is never a fallback.
-The gateway remembers the tenant UUID and highest accepted version and issuance
-time for its process lifetime (at most 10,000 tenants); it refuses rollback or
-replacement under the same tenant name. These checks do not establish an initial
+The gateway remembers the tenant UUID and highest accepted version for its
+process lifetime (at most 10,000 tenants); it refuses version rollback or
+replacement under the same tenant name. Issuance times may differ between
+Control Plane replicas serving the same or a newer version; signed lifetime and
+future clock-skew bounds still apply. These checks do not establish an initial
 version floor and do not survive a restart. Use authenticated transport and
 environment-specific issuer/audience values when connecting to the Control Plane.
 Artifacts are limited to 1 MiB and at most one hour of signed validity.

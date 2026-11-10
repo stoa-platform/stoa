@@ -118,14 +118,11 @@ struct LoadedPolicy {
 struct PolicyIdentity {
     tenant_uuid: uuid::Uuid,
     version: u64,
-    issued_at: DateTime<Utc>,
 }
 
 impl PolicyIdentity {
     fn permits(self, next: Self) -> bool {
-        self.tenant_uuid == next.tenant_uuid
-            && next.version >= self.version
-            && next.issued_at >= self.issued_at
+        self.tenant_uuid == next.tenant_uuid && next.version >= self.version
     }
 }
 
@@ -461,7 +458,6 @@ impl ToolPermissionService {
         Ok(PolicyIdentity {
             tenant_uuid: verified.tenant_uuid,
             version,
-            issued_at,
         })
     }
 
@@ -1088,9 +1084,72 @@ pub(crate) mod tests {
         assert!(service.is_tool_allowed("tenant-a", "allowed").await);
     }
 
+    async fn assert_policies_from_two_replicas(newer_version: bool) {
+        use wiremock::matchers::query_param;
+
+        let replica_a = MockServer::start().await;
+        let replica_b = MockServer::start().await;
+        let mut service = authenticated_service(&replica_b, Duration::from_secs(60)).await;
+        let now = Utc::now();
+        for (replica, age, version) in [
+            (&replica_a, 60, if newer_version { 3 } else { 2 }),
+            (&replica_b, 30, 2),
+        ] {
+            let mut claims = policy::claims(
+                "tenant-a",
+                serde_json::json!([{"mcp_server":"s1", "tool":"allowed", "allowed":true}]),
+            );
+            let issued_at = now - chrono::Duration::seconds(age);
+            claims["version"] = serde_json::json!(version);
+            claims["issued_at"] = serde_json::json!(issued_at.to_rfc3339());
+            claims["expires_at"] =
+                serde_json::json!((issued_at + chrono::Duration::seconds(900)).to_rfc3339());
+            Mock::given(method("GET"))
+                .and(path("/v1/tenants/tenant-a/tool-permissions/artifact"))
+                .and(query_param("reissue", "false"))
+                .respond_with(
+                    ResponseTemplate::new(200)
+                        .set_body_raw(policy::sign(&claims), "application/jose"),
+                )
+                .expect(if newer_version { 1 } else { 2 })
+                .mount(replica)
+                .await;
+        }
+        let replicas = if newer_version {
+            vec![&replica_b, &replica_a]
+        } else {
+            vec![&replica_b, &replica_a, &replica_b, &replica_a]
+        };
+        for replica in replicas {
+            // Route cache misses to each replica while retaining the gateway's
+            // accepted identity and version, as with a load-balanced CP URL.
+            service.base_url = replica.uri();
+            service.cache.invalidate(&"tenant-a".to_owned());
+            service
+                .load_policy("tenant-a")
+                .await
+                .expect("valid policies from either replica must load");
+            assert!(service.is_tool_allowed("tenant-a", "allowed").await);
+            assert!(!service.is_tool_allowed("tenant-a", "unlisted").await);
+            assert_eq!(service.policy_readiness_failure(), None);
+        }
+        replica_a.verify().await;
+        replica_b.verify().await;
+    }
+
+    #[tokio::test]
+    async fn regression_two_replicas_accept_same_version_with_earlier_issuance() {
+        assert_policies_from_two_replicas(false).await;
+    }
+
+    #[tokio::test]
+    async fn regression_two_replicas_accept_newer_version_with_earlier_issuance() {
+        assert_policies_from_two_replicas(true).await;
+    }
+
     #[tokio::test]
     async fn regression_policy_rollback_and_tenant_replacement_are_refused() {
-        for case in ["version", "issued_at", "tenant_uuid"] {
+        for case in ["version", "tenant_uuid"] {
             let server = MockServer::start().await;
             let service = authenticated_service(&server, Duration::from_secs(60)).await;
             let mut claims = policy::claims(
@@ -1115,10 +1174,6 @@ pub(crate) mod tests {
             claims["permissions"][0]["allowed"] = serde_json::json!(true);
             match case {
                 "version" => claims["version"] = serde_json::json!(1),
-                "issued_at" => {
-                    claims["issued_at"] =
-                        serde_json::json!((Utc::now() - chrono::Duration::minutes(1)).to_rfc3339())
-                }
                 _ => {
                     claims["tenant_uuid"] =
                         serde_json::json!("11111111-1111-4111-8111-111111111111")

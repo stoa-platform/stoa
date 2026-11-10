@@ -129,7 +129,19 @@ policy (`GET /v1/tenants/{tenant}/tool-permissions/artifact`). Configure
 `STOA_POLICY_TRUST_JWKS_FILE` with the pinned Ed25519 public keys and use
 `STOA_POLICY_EXPECTED_ISSUER` / `STOA_POLICY_AUDIENCE` to bind the policy to
 this gateway. The signed `expires_at` timestamp is required and must be in the
-future; it also bounds cache validity and policy readiness. Cached artifacts
-are reverified against the current trust set. An absent or invalid artifact or
+future; it also bounds cache validity and policy readiness. Policies are renewed
+before expiry using a 30-second margin and the endpoint's `reissue=true` option.
+Cached artifacts are reverified against the loaded trust set. The trust file is
+loaded at startup; changing its keys requires a gateway restart. An absent or invalid artifact or
 trust set denies calls; the unsigned permissions listing is never a fallback.
-Publish a valid signed policy before rolling out this requirement.
+The gateway remembers the tenant UUID and highest accepted version and issuance
+time for its process lifetime (at most 10,000 tenants); it refuses rollback or
+replacement under the same tenant name. These checks do not establish an initial
+version floor and do not survive a restart. Use authenticated transport and
+environment-specific issuer/audience values when connecting to the Control Plane.
+Artifacts are limited to 1 MiB and at most one hour of signed validity.
+
+Before rollout, provision the Control Plane signing key and key identifier,
+mount the corresponding gateway trust file, and configure startup policy tenants.
+The signing endpoint and an initial signed policy must be available to the gateway.
+Without those inputs the gateway deliberately remains unready and denies calls.

@@ -11,7 +11,7 @@ use tower::ServiceExt;
 use wiremock::matchers::{body_string_contains, header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-use crate::auth::jwt::tests::{mcp_test_jwks, mcp_test_mint, test_signing_pem};
+use crate::auth::jwt::tests::{mcp_test_jwks, mcp_test_mint, policy, test_signing_pem};
 use crate::config::Config;
 use crate::control_plane::tool_permissions::tests::{permissions_response, VALID_JWKS};
 use crate::guardrails::{TenantGuardrailPolicy, TokenBudgetTracker};
@@ -963,7 +963,7 @@ async fn write_operations_require_write_scope() {
 }
 
 #[tokio::test]
-async fn tool_call_requires_complete_permissions() {
+async fn tool_call_requires_available_and_valid_signed_permissions() {
     let fixture = Fixture::new(|c| {
         c.control_plane_url = None;
     })
@@ -976,25 +976,58 @@ async fn tool_call_requires_complete_permissions() {
         assert!(response["error"]["data"].get("httpStatus").is_none());
         assert!(response["error"]["data"].get("result").is_none());
     }
-    let fixture = Fixture::new(|_| {}).await;
-    Mock::given(method("GET"))
-        .and(path("/v1/tenants/tenant-a/tool-permissions/artifact"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-            "items": [{"mcp_server_id": "test-server", "tool_name": "echo_tool", "allowed": true}],
-            "total": 101
-        })))
-        .with_priority(1)
-        .mount(&fixture.server)
-        .await;
-    assert!(
-        !fixture
+    for permissions in [None, Some(json!({"invalid": "entries"}))] {
+        let fixture = Fixture::new(|_| {}).await;
+        fixture
             .state
-            .tool_permissions
-            .as_ref()
-            .unwrap()
-            .is_tool_allowed("tenant-a", "echo_tool")
+            .tool_registry
+            .register(Arc::new(DynamicTool::new(
+                "echo_tool",
+                "permission validation test",
+                format!("{}/backend", fixture.server.uri()),
+                "GET",
+                empty_schema(),
+                "tenant-a",
+            )));
+        let mut claims = policy::claims("tenant-a", json!([]));
+        match permissions {
+            None => {
+                claims.as_object_mut().unwrap().remove("permissions");
+            }
+            Some(value) => claims["permissions"] = value,
+        }
+        Mock::given(method("GET"))
+            .and(path("/v1/tenants/tenant-a/tool-permissions/artifact"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_raw(policy::sign(&claims), "application/jose"),
+            )
+            .with_priority(1)
+            .mount(&fixture.server)
+            .await;
+        let token = fixture.token(json!({"scope": "stoa:admin"}));
+        for batch in [false, true] {
+            assert_denied(
+                &fixture.rpc(&token, batch, json!({})).await,
+                "policy_artifact_invalid",
+            );
+            assert_eq!(
+                fixture
+                    .state
+                    .tool_permissions
+                    .as_ref()
+                    .unwrap()
+                    .readiness_failure_reason(),
+                Some("policy_artifact_invalid")
+            );
+        }
+        assert!(fixture
+            .server
+            .received_requests()
             .await
-    );
+            .unwrap()
+            .iter()
+            .all(|request| request.url.path() != "/backend"));
+    }
 }
 
 #[tokio::test]

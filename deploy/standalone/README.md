@@ -613,15 +613,16 @@ target is still the Debian stage, for compose, Tilt and the e2e tests, whose
 healthchecks run curl in the container; that stage is not deployed here.
 `stoa-gateway/.dockerignore` excludes `target/`
 so the context is not the local debug build. The image in service since
-2026-11-10 is revision `ae6d3b868b399c21a05680268b7a6fdea48b50b7` (`IMAGE-REVISION`),
-the first on the distroless runtime.
-Tar sha256 `76ca7d83d57d93831d35387535782c9daebffa158ad54a54cc4fe7621ebd5fcf`.
+2026-11-10 is revision `254a3f8d01ec48b431c595f3e3ccbf3217d4009e` (`IMAGE-REVISION`).
+Tar sha256 `ecd4c89786a2a9c0b13ee5c8a1a28dc31277dfe698d92fcfe953d782bac85a44`.
 A later docs commit does not change that binary. The label equals that
-revision; `git diff ae6d3b868b399c21a05680268b7a6fdea48b50b7 HEAD -- stoa-gateway/`
-is empty. The gateway is the one of revision
-`36c4c3f934dd709c53e9f270845458b077741743`, the last image on the Debian
-runtime: only the runtime stage differs. It adds, to the image of 2026-10-21 (revision
-`6d23399e4d1a1f4c54a03122640c0469c8b4829c`), the opt-in public MCP surface
+revision; `git diff 254a3f8d01ec48b431c595f3e3ccbf3217d4009e HEAD -- stoa-gateway/`
+is empty. To the previous image (revision
+`ae6d3b868b399c21a05680268b7a6fdea48b50b7`, the first on the distroless
+runtime) it adds the routing of contract paths with parameters and the MCP
+tools of published contracts ("MCP tools from published contracts" above).
+To the image of 2026-10-21 (revision
+`6d23399e4d1a1f4c54a03122640c0469c8b4829c`) it adds, with those, the opt-in public MCP surface
 with the transport authentication ("Public MCP" above), tokio 1.54.1,
 the sign-in metadata for MCP clients ("Sign-in for MCP clients") and the
 distroless runtime.
@@ -633,9 +634,13 @@ service first, so a rollback is a retag and a restart, with no rebuild:
 ssh worker-3 'sudo k3s ctr -n k8s.io images tag docker.io/library/stoa-gateway:standalone docker.io/library/stoa-gateway:standalone-prev-<short sha>'
 ```
 
-worker-3 holds `standalone-prev-36c4c3f9` (the third build of 2026-11-10: the
-same gateway on the Debian runtime, so going back to it changes nothing for
-a client), `standalone-prev-4e84fae7` (the second build),
+worker-3 holds `standalone-prev-ae6d3b86` (the fourth build of 2026-11-10,
+the first on the distroless runtime: with it a contract path with a
+parameter is a literal route again, the tools of a contract take their
+former `uac:` names, which strict MCP clients refuse, and the control-plane relay
+tools are listed again), `standalone-prev-36c4c3f9` (the third build: the
+same gateway as the fourth on the Debian runtime),
+`standalone-prev-4e84fae7` (the second build),
 `standalone-prev-c2e40501` (the first one, tokio 1.54.0) and
 `standalone-prev-6d23399e` (2026-10-21). The second and the first build do not read
 `STOA_OAUTH_AUTHORIZATION_SERVERS` nor `STOA_OAUTH_SCOPES_SUPPORTED`: with

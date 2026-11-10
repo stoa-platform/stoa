@@ -81,6 +81,14 @@ impl RestBinder {
     /// Endpoints with the same prefix and backend share one route, methods
     /// merged. Same prefix with another backend is an error, and so is an
     /// endpoint refused by [`check_endpoint_templates`].
+    ///
+    /// Limit: a route is a prefix, and it allows the methods of every
+    /// endpoint that shares it on every path under it. `GET /customers/{id}`
+    /// and `DELETE /customers/{id}/sessions/{sid}` give one route
+    /// `/apis/{tenant}/{contract}/customers/` with GET and DELETE, so
+    /// `DELETE /apis/{tenant}/{contract}/customers/C-1` reaches the backend.
+    /// Authentication is not widened: every method on the route goes through
+    /// the contract's inbound auth (its JWT policy, when it has one).
     pub fn generate_routes(contract: &UacContractSpec) -> Result<Vec<ApiRoute>, String> {
         check_endpoint_templates(contract)?;
         let contract_key = format!("{}:{}", contract.tenant_id, contract.name);

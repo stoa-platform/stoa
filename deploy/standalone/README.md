@@ -328,6 +328,17 @@ logged.
   `https://backend.example/customers/C-1001`. A given `input_schema` keeps
   its properties and gets the missing path parameters. The other arguments
   go as query string (GET, DELETE) or JSON body (POST, PUT, PATCH).
+- REST routes and methods: a route is a prefix and serves every path under
+  it. Endpoints whose static part is the same share one route, and the
+  methods of all of them are merged on it. `GET /customers/{id}` and
+  `DELETE /customers/{id}/sessions/{sid}` both give
+  `/apis/<tenant>/<name>/customers/`, which then allows GET and DELETE:
+  `DELETE /apis/<tenant>/<name>/customers/C-1` reaches the backend
+  (`https://backend.example/customers/C-1`) although the contract declares
+  no DELETE on `/customers/{id}`. Authentication is not widened: the route
+  keeps the contract's JWT policy and audience, for every method. Two
+  endpoints with the same static part and different `backend_url` are
+  refused (400).
 - Tenant: `tools/list` shows a contract tool only to a caller of the
   contract's tenant, and `tools/call` refuses the others. The caller's
   tenant is the token's `tenant` claim, else its first realm role

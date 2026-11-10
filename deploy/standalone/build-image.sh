@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Reproducible standalone image. FEATURES is empty (no Pingora, Kafka, or
 # the Kubernetes watcher). The git SHA is the OCI revision label.
+# The runtime is the distroless stage of stoa-gateway/Dockerfile
+# (`--target runtime-distroless`): no shell, no package manager, no curl.
 #
 # Writes, next to the working directory:
 #   stoa-gateway-<tag>.tar
@@ -8,7 +10,8 @@
 #   stoa-gateway-<tag>.cdx.json          CycloneDX SBOM (syft, trivy fallback)
 #   stoa-gateway-<tag>.trivy-high.txt    HIGH findings, to be triaged in writing
 #
-# Exits non-zero if Trivy reports any CRITICAL vulnerability.
+# Exits non-zero if Trivy reports any CRITICAL vulnerability, or if the
+# image carries a shell, a package manager or curl.
 # Does not push to a registry and does not talk to the cluster.
 set -euo pipefail
 
@@ -29,6 +32,7 @@ fi
 
 echo "building ${IMAGE} revision ${SHA} FEATURES="
 docker build \
+  --target runtime-distroless \
   --build-arg FEATURES= \
   --build-arg REVISION="${SHA}" \
   --build-arg CACHEBUST="${SHA}" \
@@ -42,6 +46,29 @@ if [[ "$revision" != "$SHA" ]]; then
   exit 1
 fi
 echo "label org.opencontainers.image.revision=${revision}"
+
+# The standalone runtime is the distroless stage. A build that fell back to
+# the Debian stage (a shell, apt, curl) stops here.
+user=$(docker image inspect "${IMAGE}" -f '{{.Config.User}}')
+if [[ "$user" != "1000:1000" ]]; then
+  echo "image user is '${user}', expected 1000:1000" >&2
+  exit 1
+fi
+cid=$(docker create "${IMAGE}")
+# Removed on any exit: a failed export must not leave the container behind.
+trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
+listing=$(docker export "$cid" | tar -tf -)
+docker rm "$cid" >/dev/null
+trap - EXIT
+# By file name, in any directory: the distroless debug variants keep their
+# shell under /busybox.
+if unwanted=$(grep -E '(^|/)(sh|ash|bash|dash|zsh|ksh|busybox|curl|wget|apt|apt-get|dpkg)$' <<<"$listing"); then
+  echo "runtime image is not the distroless stage, it carries:" >&2
+  echo "$unwanted" >&2
+  exit 1
+fi
+grep -Eq '^(\./)?app/stoa-gateway$' <<<"$listing" || { echo "no /app/stoa-gateway in the image" >&2; exit 1; }
+echo "runtime: user ${user}, no shell, no package manager, no curl"
 printf '%s\n' "$SHA" > "$OUT/IMAGE-REVISION"
 echo "wrote $OUT/IMAGE-REVISION"
 

@@ -413,15 +413,25 @@ worker-3, and this script does not run it:
 docker save stoa-gateway:standalone | ssh worker-3 'sudo k3s ctr -n k8s.io images import -'
 ```
 
-The Dockerfile is the three-stage cargo-chef build in `stoa-gateway/Dockerfile`
-(`rust:1.93-bookworm`, runtime `debian:bookworm-slim`, user 1000). The runtime
-base is still a tag, not a digest. The commitment is to move it to
-`gcr.io/distroless/cc` pinned by digest. `stoa-gateway/.dockerignore` excludes `target/`
+The Dockerfile is the cargo-chef build in `stoa-gateway/Dockerfile`
+(builder `rust:1.93-bookworm`). `build-image.sh` builds its
+`runtime-distroless` stage: `gcr.io/distroless/cc-debian13` pinned by digest,
+user `1000:1000`, the binary and nothing to run beside it (no shell, no
+package manager, no curl, no `HEALTHCHECK`; the probes are the Deployment's
+HTTP probes). The script refuses an image that carries a shell or curl.
+`kubectl exec` into the pod therefore has nothing to start: debug from
+outside (logs, the probes, a debug container). The Dockerfile's default
+target is still the Debian stage, for compose, Tilt and the e2e tests, whose
+healthchecks run curl in the container; that stage is not deployed here.
+`stoa-gateway/.dockerignore` excludes `target/`
 so the context is not the local debug build. The image in service since
 2026-11-10 is revision `36c4c3f934dd709c53e9f270845458b077741743` (`IMAGE-REVISION`).
 Tar sha256 `180d061d540d7c1a3c012d9c1e2d27ddd198485c2ec7eb4ab5e38a6a624b3bfe`.
 A later docs commit does not change that binary. The label equals that
-revision; `git diff 36c4c3f934dd709c53e9f270845458b077741743 HEAD -- stoa-gateway/`
+revision. That image was built before the `runtime-distroless` stage existed:
+it is the Debian runtime, and stays in service until the next build is
+imported. Its sources are the current ones:
+`git diff 36c4c3f934dd709c53e9f270845458b077741743 HEAD -- stoa-gateway/src stoa-gateway/Cargo.toml stoa-gateway/Cargo.lock`
 is empty. It adds, to the image of 2026-10-21 (revision
 `6d23399e4d1a1f4c54a03122640c0469c8b4829c`), the opt-in public MCP surface
 with the transport authentication ("Public MCP" above), tokio 1.54.1 and

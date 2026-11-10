@@ -4,10 +4,14 @@
 # STOA Gateway — Optimized Multi-Stage Build with cargo-chef
 # ==============================================================================
 #
-# cargo-chef splits the build into 3 stages:
-#   1. planner  — analyse deps from Cargo.toml/Cargo.lock
-#   2. builder  — build deps (cached), then build app
-#   3. runtime  — minimal image with just the binary
+# cargo-chef splits the build into stages:
+#   1. planner            — analyse deps from Cargo.toml/Cargo.lock
+#   2. builder            — build deps (cached), then build app
+#   3. runtime-distroless — the binary on a distroless base, no shell;
+#                           the standalone production image
+#                           (`--target runtime-distroless`)
+#   4. runtime            — the binary on Debian slim with curl; default
+#                           target, used by compose, Tilt and the e2e tests
 #
 # Dependency layer is rebuilt only when Cargo.toml or Cargo.lock changes.
 # Source-only changes skip dep compilation entirely.
@@ -84,7 +88,40 @@ COPY benches ./benches
 RUN cargo auditable build --release --locked --features "${FEATURES}" \
       && readelf -S target/release/stoa-gateway | grep -q '\.dep-v0'
 
-# --- Stage 3: Runtime (minimal) -----------------------------------------------
+# --- Stage 3: Distroless runtime (standalone production image) ----------------
+# Built by deploy/standalone/build-image.sh with `--target runtime-distroless`.
+# glibc, libgcc and the CA bundle; no shell, no package manager, no curl.
+# The binary links libc, libm and libgcc_s only (TLS is rustls), so nothing
+# else is needed. No HEALTHCHECK: there is nothing in the image to run one
+# with, and the orchestrator probes /health and /ready over HTTP.
+# The base is pinned by digest (gcr.io/distroless/cc-debian13:latest on
+# 2026-11-10). Moving the digest is a rebuild, a scan and a triage.
+FROM gcr.io/distroless/cc-debian13@sha256:e1f5543d45a2cd7c02a5b43dda5f0ff30729b4832113759d01ed39b0b152cddb AS runtime-distroless
+
+WORKDIR /app
+
+COPY --from=builder --chown=1000:1000 /app/target/release/stoa-gateway /app/stoa-gateway
+
+ARG REVISION=unknown
+LABEL org.opencontainers.image.title="stoa-gateway" \
+      org.opencontainers.image.source="https://github.com/stoa-platform/stoa" \
+      org.opencontainers.image.revision="${REVISION}"
+
+# Numeric on purpose: the base has no passwd entry for 1000, and k8s
+# runAsNonRoot checks the number.
+USER 1000:1000
+EXPOSE 8080
+
+ENV STOA_HOST=0.0.0.0 \
+    STOA_PORT=8080 \
+    STOA_LOG_LEVEL=info \
+    STOA_LOG_FORMAT=json
+
+ENTRYPOINT ["/app/stoa-gateway"]
+
+# --- Stage 4: Debian runtime (default target: compose, Tilt, e2e) --------------
+# Keeps a shell and curl: the compose and e2e healthchecks run curl inside the
+# container. Not the image deployed by deploy/standalone.
 FROM debian:bookworm-slim AS runtime
 
 RUN apt-get update && apt-get install -y \

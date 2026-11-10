@@ -23,8 +23,13 @@ Previous images, kept on worker-3 for rollback:
 This triage commit does not touch the docker context (`stoa-gateway/`, including `Dockerfile` and `Cargo.lock`). Proof, empty at this commit and after it:
 
 ```text
-git diff 36c4c3f934dd709c53e9f270845458b077741743 HEAD -- stoa-gateway/
+git diff 36c4c3f934dd709c53e9f270845458b077741743 HEAD -- stoa-gateway/src stoa-gateway/Cargo.toml stoa-gateway/Cargo.lock
 ```
+
+`stoa-gateway/Dockerfile` has since gained a `runtime-distroless` stage, which
+`build-image.sh` now builds. The image described in this file was built before
+that change, on the Debian runtime, and is the one in service until the next
+build is imported. That build gets its own scan and its own triage here.
 
 ## Disposition
 

@@ -14,6 +14,10 @@ Changes merged to `main` since the component releases of 2026-05-13. Earlier
 changes are covered by the version sections below and by the per-component
 `CHANGELOG.md` files.
 
+### Changed
+
+- Clarify the public README with the API and agent gateway positioning, a focused access-control quickstart, deployment limits, and current CAB/Labs links.
+
 ### Added
 
 - Signed tool-policy artifacts: the control plane publishes per-tenant tool policy snapshots with a monotonic version, a compact signature, validated policy bounds, and the issuer, audience and tenant identity bound into the artifact (#3026, #3030, #3031, #3036, #3038, #3040).

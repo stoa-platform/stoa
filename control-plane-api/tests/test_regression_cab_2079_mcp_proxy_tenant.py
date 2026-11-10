@@ -24,8 +24,13 @@ Harness = tuple[TestClient, list[User], list[httpx.Request]]
 
 
 def persona(role: str = "viewer", tenant: str | None = "tenant-a") -> User:
-    return User(id="identity-canary", email="person-canary@example.invalid", username="name-canary",
-                roles=[role], tenant_id=tenant)
+    return User(
+        id="identity-canary",
+        email="person-canary@example.invalid",
+        username="name-canary",
+        roles=[role],
+        tenant_id=tenant,
+    )
 
 
 @pytest.fixture
@@ -49,12 +54,16 @@ async def tenant_proxy(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Harness
 @pytest.mark.parametrize("role", ["viewer", "tenant-admin", "devops", "cpi-admin"])
 @pytest.mark.parametrize("requested", ["tenant-b", None, "", "   "])
 def test_regression_cab_2079_scope_before_pagination_and_tags(
-    tenant_proxy: Harness, role: str, requested: str | None,
+    tenant_proxy: Harness,
+    role: str,
+    requested: str | None,
 ) -> None:
     client, users, requests = tenant_proxy
     users[0] = persona(role)
     params = {} if requested is None else {"tenant_id": requested}
-    effective = "tenant-b" if role == "cpi-admin" and requested == "tenant-b" else None if role == "cpi-admin" else "tenant-a"
+    effective = (
+        "tenant-b" if role == "cpi-admin" and requested == "tenant-b" else None if role == "cpi-admin" else "tenant-a"
+    )
     expected = [tool for tool in TOOLS if effective is None or tool.get("tenant_id") in (None, effective)]
     response = client.get("/v1/mcp/tools", params={**params, "limit": 1}, headers=AUTH)
     assert response.status_code == 200
@@ -78,7 +87,9 @@ def test_regression_cab_2079_scope_before_pagination_and_tags(
 @pytest.mark.parametrize("tenant", [None, "", "   "])
 @pytest.mark.parametrize("endpoint", ["", "/tags", "/categories"])
 def test_regression_cab_2079_missing_tenant_refuses_before_gateway(
-    tenant_proxy: Harness, tenant: str | None, endpoint: str,
+    tenant_proxy: Harness,
+    tenant: str | None,
+    endpoint: str,
 ) -> None:
     client, users, requests = tenant_proxy
     users[0] = persona(tenant=tenant)
@@ -88,15 +99,28 @@ def test_regression_cab_2079_missing_tenant_refuses_before_gateway(
 
 
 def test_regression_cab_2079_divergence_warning_is_value_blind(
-    tenant_proxy: Harness, caplog: pytest.LogCaptureFixture,
+    tenant_proxy: Harness,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     client, _, _ = tenant_proxy
     with caplog.at_level(logging.WARNING, logger="src.auth.rbac"):
         response = client.get("/v1/mcp/tools", params={"tenant_id": "requested-canary\nline-canary"}, headers=AUTH)
     assert response.status_code == 200
-    assert [tool["name"] for tool in response.json()["tools"]] == ["a-first", "a-second", "global-absent", "global-null"]
+    assert [tool["name"] for tool in response.json()["tools"]] == [
+        "a-first",
+        "a-second",
+        "global-absent",
+        "global-null",
+    ]
     assert any(record.name == "src.auth.rbac" for record in caplog.records)
-    for value in ["requested-canary", "line-canary", "identity-canary", "person-canary", "name-canary", "synthetic-auth-canary"]:
+    for value in [
+        "requested-canary",
+        "line-canary",
+        "identity-canary",
+        "person-canary",
+        "name-canary",
+        "synthetic-auth-canary",
+    ]:
         assert value not in caplog.text
     caplog.clear()
     with caplog.at_level(logging.WARNING, logger="src.auth.rbac"):
@@ -122,7 +146,10 @@ def test_regression_cab_2079_global_tools_follow_gateway_contract(tenant_proxy: 
 @pytest.mark.parametrize("role", ["viewer", "tenant-admin", "devops"])
 @pytest.mark.parametrize("tenant", [None, "", "   "])
 def test_regression_cab_2079_invoke_without_tenant_refuses_before_gateway(
-    tenant_proxy: Harness, monkeypatch: pytest.MonkeyPatch, role: str, tenant: str | None,
+    tenant_proxy: Harness,
+    monkeypatch: pytest.MonkeyPatch,
+    role: str,
+    tenant: str | None,
 ) -> None:
     client, users, requests = tenant_proxy
     users[0] = persona(role=role, tenant=tenant)
@@ -160,7 +187,9 @@ def _record_invoke(monkeypatch: pytest.MonkeyPatch) -> tuple[list[str | None], l
 
 @pytest.mark.parametrize("role", ["viewer", "tenant-admin", "devops"])
 def test_regression_cab_2079_invoke_with_tenant_still_reaches_gateway(
-    tenant_proxy: Harness, monkeypatch: pytest.MonkeyPatch, role: str,
+    tenant_proxy: Harness,
+    monkeypatch: pytest.MonkeyPatch,
+    role: str,
 ) -> None:
     client, users, _ = tenant_proxy
     users[0] = persona(role=role, tenant="tenant-a")
@@ -173,15 +202,27 @@ def test_regression_cab_2079_invoke_with_tenant_still_reaches_gateway(
     assert proxied == [("POST", "/mcp/tools/call", "a-first")]
 
 
-@pytest.mark.parametrize(("tenant", "effective"), [(None, "default"), ("", "default"), ("tenant-b", "tenant-b")])
-def test_regression_cab_2079_invoke_cpi_admin_keeps_default_fallback(
-    tenant_proxy: Harness, monkeypatch: pytest.MonkeyPatch, tenant: str | None, effective: str,
+@pytest.mark.parametrize(
+    ("tenant", "status", "effective"),
+    [(None, 403, None), ("", 403, None), ("   ", 403, None), ("tenant-b", 200, "tenant-b")],
+)
+def test_regression_cab_2079_invoke_cpi_admin_requires_tenant(
+    tenant_proxy: Harness,
+    monkeypatch: pytest.MonkeyPatch,
+    tenant: str | None,
+    status: int,
+    effective: str | None,
 ) -> None:
+    """A platform admin invokes only with its own tenant. A missing tenant is refused."""
     client, users, _ = tenant_proxy
     users[0] = persona(role="cpi-admin", tenant=tenant)
     checked, proxied = _record_invoke(monkeypatch)
     client.app.dependency_overrides[mcp_proxy.get_db] = lambda: None
     response = client.post("/v1/mcp/tools/a-first/invoke", json={"arguments": {}}, headers=AUTH)
-    assert response.status_code == 200
+    assert response.status_code == status
+    if status == 403:
+        assert checked == []
+        assert proxied == []
+        return
     assert checked == [effective]
     assert proxied == [("POST", "/mcp/tools/call", "a-first")]

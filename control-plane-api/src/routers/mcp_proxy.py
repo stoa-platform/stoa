@@ -222,7 +222,8 @@ async def list_tools(
     # Match ToolRegistry.list(Some(tenant)): global tools plus the effective tenant, before pagination.
     filtered = (
         [tool for tool in all_tools if tool.get("tenant_id") in (None, effective_tenant)]
-        if effective_tenant else all_tools
+        if effective_tenant
+        else all_tools
     )
     if search:
         q = search.lower()
@@ -338,8 +339,17 @@ async def invoke_tool(
     # Defense-in-depth: check permissions here too (gateway is the primary enforcer)
     from .tenant_tool_permissions import check_tool_allowed
 
-    # Non-admin callers must carry a tenant; only cpi-admin keeps the "default" fallback.
-    tenant_id = (user.tenant_id or "default") if Role.CPI_ADMIN in user.roles else resolve_effective_tenant(user)
+    # A missing tenant is a deny for every role. Do not substitute "default":
+    # that shared id would honor allows that were never granted to this caller.
+    if Role.CPI_ADMIN in user.roles:
+        tenant_id = (user.tenant_id or "").strip()
+        if not tenant_id:
+            raise HTTPException(status_code=403, detail="Authenticated tenant is required")
+    else:
+        resolved = resolve_effective_tenant(user)
+        if not resolved:
+            raise HTTPException(status_code=403, detail="Authenticated tenant is required")
+        tenant_id = resolved
     if not await check_tool_allowed(tenant_id, tool_name, db):
         logger.warning(
             "Tool invocation denied: tenant=%s tool=%s user=%s",

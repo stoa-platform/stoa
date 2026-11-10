@@ -12,7 +12,7 @@ OS packages (14): base-files 13.8+deb13u7, ca-certificates 20250419+deb13u1, gcc
 Size: 63 MB (160 MB on the Debian runtime).
 Build: `cargo chef cook --release --locked` and `cargo auditable build --release --locked` (cargo-auditable 0.7.5). The binary is not stripped; `readelf` finds `.dep-v0`.
 Build host: macOS arm64, Docker Desktop 29.6.1, `DOCKER_DEFAULT_PLATFORM=linux/amd64`. The image is `linux/amd64`. Trivy 0.58.1 ran from the `aquasec/trivy:0.58.1` container: the script's fallback downloads a Linux binary.
-Built, scanned and imported on worker-3 on 2026-11-10, in service since 20:23 UTC. Config digest on the node: `sha256:8cff54bde6d618a26e3476ee2e0ee53d7674910d1d651720efaf42d3cac0f798`.
+Built and scanned on the build host, then imported on worker-3, on 2026-11-10. In service since 20:23 UTC. Config digest on the node: `sha256:8cff54bde6d618a26e3476ee2e0ee53d7674910d1d651720efaf42d3cac0f798`.
 
 Previous images, kept on worker-3 for rollback:
 
@@ -46,7 +46,7 @@ Moving the base digest is a rebuild, a scan and a new triage here.
 
 ### Record: the Debian runtime (images until 2026-11-10, 20:23 UTC)
 
-The text below is the triage of the images built on `debian:bookworm-slim`, kept as written. It does not describe the image in service.
+The text below is the triage of the images built on `debian:bookworm-slim`, kept as written but for one heading level. It does not describe the image in service: where it says "this image", "still" or "the commitment below", it speaks of revision `36c4c3f9` and of the state before this build.
 
 `trivy image --ignore-unfixed=false` on the tar (Trivy 0.58.1, exit 0, database of 2026-11-10) reports Debian 12.15: 421 findings (1 CRITICAL, 96 HIGH, 133 MEDIUM, 161 LOW, 30 UNKNOWN) and the Rust binary: 1 MEDIUM. With `--ignore-unfixed`, the build gate, both CRITICAL and HIGH are 0: no finding has a fixed package in bookworm. The scan of 2026-10-21 on revision `6d23399e` reported 364 findings (1 CRITICAL, 70 HIGH, 131 MEDIUM, 161 LOW, 1 UNKNOWN). The rows below are that triage; the changes since are listed under "Rebuild of 2026-11-10". Those counts were first taken on revision `4e84fae7`, built the same day; the scan of this image is the same finding for finding (same base image digest, same `Cargo.lock`). `quick-xml` 0.39.4 is not in that Rust report. RustSec still lists two HIGH advisories on it. >= 0.41.0 avant tout câblage SOAP.
 
@@ -79,6 +79,10 @@ Reported at HIGH and absent from the triage above. The dispositions were written
 | CVE-2026-76844 HIGH, affected | zlib1g | Heap overflow in `gz_write` after a failed `write()` (the `gz*` file API). The gateway binary does not link the system zlib (no `libz-sys` in the SBOM) and nothing in the container writes gzip files. In the table below Trivy prints another advisory's title for this identifier ("webpack-dev-middleware ... Path Traversal"); the description it carries for it, and the package, are the zlib ones. Accepted on 2026-11-10. |
 
 Rust binary: the first rebuild of the day (revision `c2e40501`) carried `CVE-2026-115567`, a race in tokio 1.54.0 timer handling, fixed in 1.54.1. It was in the image of 2026-10-21 as well; Trivy's database did not list it then. This image links tokio 1.54.1 and the finding is gone. `CVE-2026-48504` (opentelemetry_sdk 0.27.1, MEDIUM) is unchanged and accepted above.
+
+The commitment below gives 06/11/2026 for the move to `gcr.io/distroless/cc` pinned by digest. On 2026-11-10 the runtime base is still `debian:bookworm-slim`: that date has passed.
+
+Commitment: migration to `gcr.io/distroless/cc` pinned by digest by 06/11/2026 at the latest. The runtime base is still `debian:bookworm-slim` (a tag, not a digest). That move removes the zlib/MiniZip package and the other Debian rows above. This image is not that base.
 
 ## cargo audit
 

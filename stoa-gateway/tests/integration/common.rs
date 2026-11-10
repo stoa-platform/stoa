@@ -8,6 +8,12 @@ use tower::ServiceExt;
 use stoa_gateway::config::Config;
 use stoa_gateway::state::AppState;
 
+// The common signing fixture also contains RSA material used by other harnesses.
+#[allow(dead_code)]
+mod signing {
+    include!("../fixtures/signing.rs");
+}
+
 /// A test application wrapping the gateway router.
 ///
 /// Provides convenience methods for making HTTP requests.
@@ -118,11 +124,12 @@ impl TestApp {
             })))
             .mount(&oidc)
             .await;
-        Mock::given(method("GET")).and(path("/v1/tenants/contract-tenant/tool-permissions"))
+        Mock::given(method("GET")).and(path("/v1/tenants/contract-tenant/tool-permissions/artifact"))
             .and(wiremock::matchers::header("Authorization", "Bearer fixture-service-access"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "items": [{"mcp_server_id": "fixture", "tool_name": "phase62_echo", "allowed": true}], "total": 1
-            }))).mount(&oidc).await;
+            .respond_with(ResponseTemplate::new(200).set_body_string(signing::policy::artifact(
+                "contract-tenant",
+                serde_json::json!([{"mcp_server": "fixture", "tool": "phase62_echo", "allowed": true}]),
+            ))).mount(&oidc).await;
         config.keycloak_url = Some(oidc.uri());
         config.keycloak_realm = Some("stoa".into());
         config.keycloak_client_id = Some("stoa-mcp-gateway".into());
@@ -131,6 +138,9 @@ impl TestApp {
         let key_path = key_dir.path().join("service-key.pem");
         std::fs::write(&key_path, &pem).unwrap();
         config.keycloak_client_key_path = Some(key_path.display().to_string());
+        let trust_path = key_dir.path().join("policy-trust.json");
+        std::fs::write(&trust_path, signing::policy::JWKS).unwrap();
+        config.policy_trust_jwks_file = Some(trust_path.display().to_string());
         config.mcp_audience = Some("control-plane-api".into());
         config.control_plane_url = Some(oidc.uri());
         let mut app = Self::with_config(config);

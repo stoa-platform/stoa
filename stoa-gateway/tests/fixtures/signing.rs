@@ -29,3 +29,40 @@ p9F8dBQBt/cb1sBl3ammY8HSmaAq+k/vDAR5BTSi6lxo7z+D6Inf65nCqHAygbuN\n\
 -----END PRIVATE KEY-----\n";
 
 const TEST_N: &str = "xVmDOoSPg8_J-DotlN4hhZphhwDOkKdmLabfMkDN26CXOiGvcOowPu_B3U9QJITI5aKQesbLa09-liwMyw6eb9BQ-Lgg_pYuakgGP8txsepOFm0QioJTLveqoPvc6WhrJcoNqJnxNyphUg5jMlr2qxCO82e_1O37FDjA3MbyAhkVEEACe_d5IBZkwAJgct7ojfBJlono-fjVZxbrHL3sHsgStucgPOZ4P-F0o23sSjuysdrFjcoELt3h0HBarXn3Hg4TP3YjSM-dW5dZE6sb9jRQIAK8BrF_k-cYiwlbyyIV1nHjSsKCzNYgpqEH8AvIoUeUtPgrrJ6VGT2X7F-vfw";
+
+// Each test harness includes this file, but only permission tests need these helpers.
+#[allow(dead_code)]
+pub(crate) mod policy {
+    use base64::Engine;
+    use serde_json::{json, Value};
+
+    // Published RFC 8032 section 7.1 vector, never a production signing key.
+    pub const KEY_DER: &str = "MC4CAQAwBQYDK2VwBCIEIJ1hsZ3v_VpguoRK9JLsLMREScVpezJpGXA7rAMcrn9g";
+    pub const JWKS: &str = r#"{"keys":[{"kty":"OKP","crv":"Ed25519","alg":"EdDSA","kid":"cp-policy-202611-1","x":"11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo"}]}"#;
+
+    pub fn claims(tenant: &str, permissions: Value) -> Value {
+        let now = chrono::Utc::now();
+        json!({
+            "iss": "stoa-control-plane", "aud": "stoa-gateway", "tenant_id": tenant,
+            "tenant_uuid": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "version": 1,
+            "issued_at": now.to_rfc3339(),
+            "expires_at": (now + chrono::Duration::minutes(15)).to_rfc3339(),
+            "permissions": permissions
+        })
+    }
+
+    pub fn artifact(tenant: &str, permissions: Value) -> String {
+        sign(&claims(tenant, permissions))
+    }
+
+    pub fn sign(payload: &Value) -> String {
+        let mut header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::EdDSA);
+        header.typ = Some("stoa-tool-policy+jws".into());
+        header.kid = Some("cp-policy-202611-1".into());
+        let der = base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(KEY_DER)
+            .unwrap();
+        jsonwebtoken::encode(&header, payload, &jsonwebtoken::EncodingKey::from_ed_der(&der))
+            .unwrap()
+    }
+}

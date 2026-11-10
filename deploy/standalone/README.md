@@ -425,17 +425,18 @@ target is still the Debian stage, for compose, Tilt and the e2e tests, whose
 healthchecks run curl in the container; that stage is not deployed here.
 `stoa-gateway/.dockerignore` excludes `target/`
 so the context is not the local debug build. The image in service since
-2026-11-10 is revision `36c4c3f934dd709c53e9f270845458b077741743` (`IMAGE-REVISION`).
-Tar sha256 `180d061d540d7c1a3c012d9c1e2d27ddd198485c2ec7eb4ab5e38a6a624b3bfe`.
+2026-11-10 is revision `ae6d3b868b399c21a05680268b7a6fdea48b50b7` (`IMAGE-REVISION`),
+the first on the distroless runtime.
+Tar sha256 `76ca7d83d57d93831d35387535782c9daebffa158ad54a54cc4fe7621ebd5fcf`.
 A later docs commit does not change that binary. The label equals that
-revision. That image was built before the `runtime-distroless` stage existed:
-it is the Debian runtime, and stays in service until the next build is
-imported. Its sources are the current ones:
-`git diff 36c4c3f934dd709c53e9f270845458b077741743 HEAD -- stoa-gateway/src stoa-gateway/Cargo.toml stoa-gateway/Cargo.lock`
-is empty. It adds, to the image of 2026-10-21 (revision
+revision; `git diff ae6d3b868b399c21a05680268b7a6fdea48b50b7 HEAD -- stoa-gateway/`
+is empty. The gateway is the one of revision
+`36c4c3f934dd709c53e9f270845458b077741743`, the last image on the Debian
+runtime: only the runtime stage differs. It adds, to the image of 2026-10-21 (revision
 `6d23399e4d1a1f4c54a03122640c0469c8b4829c`), the opt-in public MCP surface
-with the transport authentication ("Public MCP" above), tokio 1.54.1 and
-the sign-in metadata for MCP clients ("Sign-in for MCP clients").
+with the transport authentication ("Public MCP" above), tokio 1.54.1,
+the sign-in metadata for MCP clients ("Sign-in for MCP clients") and the
+distroless runtime.
 
 Each import replaces the `standalone` tag on worker-3. Tag the image in
 service first, so a rollback is a retag and a restart, with no rebuild:
@@ -444,9 +445,11 @@ service first, so a rollback is a retag and a restart, with no rebuild:
 ssh worker-3 'sudo k3s ctr -n k8s.io images tag docker.io/library/stoa-gateway:standalone docker.io/library/stoa-gateway:standalone-prev-<short sha>'
 ```
 
-worker-3 holds `standalone-prev-4e84fae7` (the second build of 2026-11-10),
+worker-3 holds `standalone-prev-36c4c3f9` (the third build of 2026-11-10: the
+same gateway on the Debian runtime, so going back to it changes nothing for
+a client), `standalone-prev-4e84fae7` (the second build),
 `standalone-prev-c2e40501` (the first one, tokio 1.54.0) and
-`standalone-prev-6d23399e` (2026-10-21). The first two do not read
+`standalone-prev-6d23399e` (2026-10-21). The second and the first build do not read
 `STOA_OAUTH_AUTHORIZATION_SERVERS` nor `STOA_OAUTH_SCOPES_SUPPORTED`: with
 them the 401 challenge is relative again and the documents name the
 gateway, so an MCP client cannot sign in. The last one

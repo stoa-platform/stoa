@@ -161,7 +161,8 @@ https://api.gostoa.dev/apis/demo/live-api/ping
 ```
 
 `/mcp`, `/.well-known`, `/oauth`, `/health`, and `/ready` are not on the
-public Ingress. Admin stays on the ClusterIP, which has no Ingress rule:
+`api.gostoa.dev` Ingress. The MCP endpoint has its own host, see "Public
+MCP" below. Admin stays on the ClusterIP, which has no Ingress rule:
 
 ```text
 http://stoa-gateway-admin.stoa.svc:8080/admin/contracts
@@ -183,7 +184,55 @@ unless the path is `/apis` or `/apis/...`. ingress-nginx sets both headers.
 A direct ClusterIP or `kubectl port-forward` call does not, so kubelet probes
 and in-cluster stoactl still reach `/health` and `/admin`. A proxied call to
 `/admin`, `/metrics`, `/mcp`, `/oauth/register`, or `/v1/messages` is 404,
-not 401.
+not 401. `STOA_PUBLIC_MCP_ENABLED=true` takes `/mcp` out of that list and
+nothing else.
+
+## Public MCP
+
+`STOA_PUBLIC_MCP_ENABLED` is `false` in the binary and `true` in this
+ConfigMap. When it is set, a request that carries `X-Forwarded-For` or
+`X-Forwarded-Host` is also delivered for:
+
+```text
+/mcp and /mcp/...
+/.well-known/oauth-protected-resource
+/.well-known/oauth-authorization-server
+/.well-known/openid-configuration
+/health  /health/ready  /health/live  /ready
+```
+
+The list is exact. `/admin`, `/metrics`, `/oauth/token`, `/oauth/par`,
+`/oauth/register`, `/v1/messages`, `/a2a`, `/.well-known/agent.json` and any
+other path are still 404 behind a proxy, with or without a valid admin
+bearer. An ambiguous path (`/mcp/../admin`, `/mcp/%2e%2e/metrics`) is still
+400. A direct ClusterIP or port-forward call is not affected.
+
+The option does not change MCP authentication. `initialize` and `ping` are
+anonymous. `tools/list`, `tools/call` and the REST routes under `/mcp/`
+need a bearer the JWT validator accepts (issuer `STOA_KEYCLOAK_URL`,
+audience `STOA_JWT_AUDIENCE`). Without `STOA_KEYCLOAK_URL` there is no
+validator and the `/mcp` auth gate lets every request through, so
+`Config::validate` refuses to boot with the option set, and the router
+keeps the surface closed if a state is built without that check.
+
+The OAuth proxy (`/oauth/...`) is not public. The discovery documents
+advertise `STOA_GATEWAY_EXTERNAL_URL` as the authorization server, and that
+host does not serve `/oauth` either, so an interactive MCP client cannot
+register or fetch a token through the gateway. A caller gets its token
+from Keycloak (`https://auth.gostoa.dev/realms/stoa`) and sends it as a
+bearer. Opening dynamic client registration to the internet is a separate
+decision.
+
+Routing is outside this tree: DNS `mcp.gostoa.dev` and the tunnel route
+are in stoa-labs (`deploy/bootstrap/edge/cloudflared/config.yaml`), the
+Ingress `stoa-mcp` is in stoa-v2 (`deploy/k3s/ingress-mcp.yaml`) and sends
+only `/mcp`, `/oauth`, `/.well-known`, `/health` and `/ready` to Service
+`stoa-gateway`. The gateway answers 404 on `/oauth` there.
+
+Anonymous `initialize` creates an MCP session kept for
+`STOA_MCP_SESSION_TTL_MINUTES`. The session map has no size cap; the
+memory backpressure line (`STOA_MEMORY_LIMIT_MB`) is the only bound in the
+process. Rate limiting for the public host belongs on the Ingress.
 
 Unset or empty `STOA_ADMIN_API_TOKEN` makes a direct `/admin` call return 503.
 A missing or wrong bearer returns 401. There is no default token.
@@ -355,6 +404,7 @@ end. Secrets are never given a default.
 | `STOA_GATEWAY_EXTERNAL_URL` | `http://localhost:8080` | Advertised OAuth base. |
 | `STOA_ADMIN_API_TOKEN` | unset | Unset → admin 503. Wrong bearer → 401. |
 | `STOA_TRUSTED_PROXIES` | empty | CSV/JSON CIDRs for client IP and scheme. |
+| `STOA_PUBLIC_MCP_ENABLED` | `false` | Lets a proxied request reach `/mcp`, the OAuth discovery documents and the health probes. Needs `STOA_KEYCLOAK_URL`. See "Public MCP". |
 
 ### Control plane and audit
 

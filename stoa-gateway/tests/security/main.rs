@@ -9,4 +9,5 @@ mod admin;
 mod auth;
 mod common;
 mod headers;
+mod public_surface;
 mod ssrf;

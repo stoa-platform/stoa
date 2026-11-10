@@ -86,6 +86,14 @@ pub fn build_router(state: AppState) -> Router {
     use mode::GatewayMode;
 
     let access_log_enabled = state.config.access_log_enabled;
+    // The MCP surface is published only when a JWT validator exists: without
+    // one, `mcp_jwt_required` lets every request through. `Config::validate`
+    // already refuses that combination at boot; this keeps the guard closed
+    // for a state built without it.
+    let public_mcp_enabled = state.config.public_mcp_enabled && state.jwt_validator.is_some();
+    if state.config.public_mcp_enabled && !public_mcp_enabled {
+        warn!("STOA_PUBLIC_MCP_ENABLED ignored: no JWT validator (STOA_KEYCLOAK_URL is not set)");
+    }
     let memory_monitor = state.memory_monitor.clone();
 
     // Build TCP filter early (before state is moved into with_state)
@@ -518,11 +526,12 @@ pub fn build_router(state: AppState) -> Router {
         with_security
     };
 
-    // Outermost: a public proxy may only deliver /apis. Ambiguous paths
-    // (traversal, encoded dots) are 400 and never reach /admin.
-    routed.layer(axum::middleware::from_fn(
-        proxy::path_guard::public_surface_middleware,
-    ))
+    // Outermost: a public proxy may only deliver /apis, plus the MCP surface
+    // when STOA_PUBLIC_MCP_ENABLED is set. Ambiguous paths (traversal,
+    // encoded dots) are 400 and never reach /admin.
+    routed.layer(axum::middleware::from_fn(move |request, next| {
+        proxy::path_guard::public_surface_middleware(public_mcp_enabled, request, next)
+    }))
 }
 
 // === HTTP Metrics Middleware ===

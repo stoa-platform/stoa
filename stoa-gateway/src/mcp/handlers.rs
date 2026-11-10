@@ -115,10 +115,11 @@ async fn extract_auth_context(state: &AppState, headers: &HeaderMap) -> AuthCont
                         return AuthContext {
                             user_id: Some(claims.sub.clone()),
                             user_email: claims.email.clone(),
+                            // The tenant of a verified caller comes from its
+                            // token, never from the `X-Tenant-ID` header.
                             tenant_id: claims
                                 .tenant_id()
                                 .map(|s| s.to_string())
-                                .or(tenant_from_header)
                                 .unwrap_or_else(|| "default".to_string()),
                             roles,
                             scopes,
@@ -139,7 +140,24 @@ async fn extract_auth_context(state: &AppState, headers: &HeaderMap) -> AuthCont
         }
     }
 
-    // Fallback: unauthenticated with default read scope
+    // With a validator, the routes that call this sit behind
+    // `mcp_jwt_required`: this point is reached only if the bearer stopped
+    // validating in between. No header identity and no scope then.
+    if state.jwt_validator.is_some() {
+        return AuthContext {
+            user_id: None,
+            user_email: None,
+            tenant_id: "default".to_string(),
+            roles: vec![],
+            scopes: vec![],
+            consumer_id: "unknown".to_string(),
+            raw_token: None,
+            sub_account_id: None,
+            master_account_id: None,
+        };
+    }
+
+    // Development (no validator): unauthenticated with default read scope
     AuthContext {
         user_id: user_from_header,
         user_email: None,

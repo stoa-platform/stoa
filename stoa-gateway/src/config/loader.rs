@@ -75,6 +75,17 @@ pub enum ConfigError {
          and tokens with no aud. STOA_JWT_AUDIENCES is not read."
     )]
     StandaloneRequiresJwtAudience,
+
+    /// `public_mcp_enabled=true` lets a reverse proxy deliver `/mcp`. Without
+    /// `keycloak_url` there is no JWT validator and `mcp_jwt_required` lets
+    /// every request through, so the option would publish the MCP tools
+    /// without authentication.
+    #[error(
+        "public_mcp_enabled=true requires STOA_KEYCLOAK_URL: with no JWT \
+         validator the /mcp auth gate is bypassed and the public MCP surface \
+         would be unauthenticated"
+    )]
+    PublicMcpRequiresJwtValidator,
 }
 
 impl Config {
@@ -189,6 +200,15 @@ impl Config {
             if !rate.is_finite() || rate <= 0.0 {
                 return Err(ConfigError::TcpRateLimitNotFinite(rate));
             }
+        }
+
+        if self.public_mcp_enabled
+            && !self
+                .keycloak_url
+                .as_ref()
+                .is_some_and(|url| !url.trim().is_empty())
+        {
+            return Err(ConfigError::PublicMcpRequiresJwtValidator);
         }
 
         // Routes are published after boot. Without a global audience, a JWT
@@ -352,6 +372,35 @@ mod tests {
             Err(ConfigError::InvalidPort(0)) => {}
             other => panic!("expected InvalidPort(0), got {:?}", other),
         }
+    }
+
+    #[test]
+    fn test_validate_rejects_public_mcp_without_jwt_validator() {
+        for keycloak_url in [None, Some(String::new()), Some("  ".to_string())] {
+            let config = Config {
+                jwt_audience: vec!["stoa-gateway".into()],
+                public_mcp_enabled: true,
+                keycloak_url: keycloak_url.clone(),
+                ..Config::default()
+            };
+            match config.validate() {
+                Err(ConfigError::PublicMcpRequiresJwtValidator) => {}
+                other => panic!(
+                    "expected PublicMcpRequiresJwtValidator for {keycloak_url:?}, got {other:?}"
+                ),
+            }
+        }
+    }
+
+    #[test]
+    fn test_validate_accepts_public_mcp_with_jwt_validator() {
+        let config = Config {
+            jwt_audience: vec!["stoa-gateway".into()],
+            public_mcp_enabled: true,
+            keycloak_url: Some("https://auth.example.test".into()),
+            ..Config::default()
+        };
+        config.validate().expect("public MCP with a JWT validator");
     }
 
     #[test]

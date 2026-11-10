@@ -880,6 +880,18 @@ pub struct Config {
     #[serde(default, deserialize_with = "self::deserializers::string_list")]
     pub trusted_proxies: Vec<String>,
 
+    /// Let a reverse proxy deliver the MCP surface in addition to `/apis`:
+    /// `/mcp` and `/mcp/...`, the three OAuth discovery documents under
+    /// `/.well-known/`, and the health and readiness probes. `/admin`,
+    /// `/metrics`, `/oauth/...`, `/v1/messages` and every other route stay
+    /// reachable only without `X-Forwarded-For` / `X-Forwarded-Host`.
+    /// Off by default: a proxied request is public only under `/apis`.
+    /// Requires `keycloak_url`: with no JWT validator the `/mcp` auth gate is
+    /// bypassed, so boot is refused rather than publishing open tools.
+    /// Env: STOA_PUBLIC_MCP_ENABLED
+    #[serde(default)]
+    pub public_mcp_enabled: bool,
+
     /// Accepted JWT `aud` values for published routes and MCP. Empty disables
     /// audience checks (issuer + RS256 only) when a control plane is configured.
     /// Standalone boot refuses an empty list: a published route with no
@@ -1140,6 +1152,7 @@ impl fmt::Debug for Config {
             .field("ip_blocklist_file", &self.ip_blocklist_file)
             .field("tcp_rate_limit_per_ip", &self.tcp_rate_limit_per_ip)
             .field("trusted_proxies", &self.trusted_proxies)
+            .field("public_mcp_enabled", &self.public_mcp_enabled)
             .field("jwt_audience", &self.jwt_audience)
             .field("memory_limit_mb", &self.memory_limit_mb)
             .field("snapshot_enabled", &self.snapshot_enabled)

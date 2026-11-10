@@ -53,3 +53,8 @@ data:
   # The compiled default is 512, which OOM-killed the v1 gateway.
   STOA_MEMORY_LIMIT_MB: "768"
   STOA_TRUSTED_PROXIES: "REPLACE_WITH_INGRESS_NGINX_POD_IPS"
+  # Public MCP endpoint (mcp.gostoa.dev, decided 2026-11-10). Behind the
+  # proxy this opens /mcp, the three OAuth discovery documents and the
+  # health probes. /admin, /metrics, /oauth and /v1/messages stay 404.
+  # Boot is refused without STOA_KEYCLOAK_URL. See README, "Public MCP".
+  STOA_PUBLIC_MCP_ENABLED: "true"

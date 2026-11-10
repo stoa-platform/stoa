@@ -110,6 +110,161 @@ const PUBLIC_METHODS: &[&str] = &[
     "notifications/cancelled",
 ];
 
+/// Who sent a request, once its `Authorization` header has been checked.
+///
+/// A caller is authenticated only when it presented a bearer and that bearer
+/// was accepted: validated when a JWT validator is configured, taken as is
+/// when none is (development only: `STOA_PUBLIC_MCP_ENABLED` refuses to boot
+/// without a validator). A header with another scheme, or an empty bearer,
+/// leaves the caller anonymous. Every transport (single request, batch,
+/// event stream, WebSocket) resolves its caller here.
+pub(crate) struct Caller {
+    pub(crate) tenant_id: String,
+    user_id: Option<String>,
+    user_email: Option<String>,
+    roles: Vec<String>,
+    scopes: Vec<String>,
+    /// The bearer, only when it was accepted.
+    token: Option<String>,
+}
+
+impl Caller {
+    /// No verified identity. `tenant_header` is honoured only in development
+    /// (no validator); with a validator an anonymous caller is in `default`.
+    fn unverified(tenant_header: Option<String>, token: Option<String>) -> Self {
+        Self {
+            tenant_id: tenant_header.unwrap_or_else(|| "default".to_string()),
+            user_id: None,
+            user_email: None,
+            roles: vec![],
+            scopes: vec![],
+            token,
+        }
+    }
+
+    pub(crate) fn is_authenticated(&self) -> bool {
+        self.token.is_some()
+    }
+
+    /// Anonymous callers reach `PUBLIC_METHODS` only.
+    fn may_call(&self, method: &str) -> bool {
+        PUBLIC_METHODS.contains(&method) || self.is_authenticated()
+    }
+
+    fn tool_context(&self, request_id: String) -> ToolContext {
+        ToolContext {
+            tenant_id: self.tenant_id.clone(),
+            user_id: self.user_id.clone(),
+            user_email: self.user_email.clone(),
+            request_id,
+            roles: self.roles.clone(),
+            scopes: self.scopes.clone(),
+            raw_token: self.token.clone(),
+            skill_instructions: None, // skills resolved per-tool in handler
+            progress_token: None,     // no progress push (half-duplex)
+            consumer_id: "unknown".to_string(), // azp not yet extracted on this path
+            from_control_plane: false,
+        }
+    }
+}
+
+/// Resolve the caller of a request.
+///
+/// `Err` carries the validator's message for a bearer that was presented and
+/// rejected. With a validator, the tenant comes from the token (or
+/// `default`), never from the `X-Tenant-ID` header.
+pub(crate) async fn resolve_caller(
+    state: &AppState,
+    headers: &HeaderMap,
+) -> Result<Caller, String> {
+    let token = extract_bearer_token(headers).filter(|token| !token.is_empty());
+    let Some(ref validator) = state.jwt_validator else {
+        if token.is_some() {
+            debug!("JWT validator not configured — skipping token validation");
+        }
+        return Ok(Caller::unverified(extract_tenant(headers), token));
+    };
+    let Some(token) = token else {
+        return Ok(Caller::unverified(None, None));
+    };
+    match validator.validate(&token).await {
+        Ok(claims) => {
+            let caller = Caller {
+                tenant_id: claims
+                    .tenant_id()
+                    .map(|tenant| tenant.to_string())
+                    .unwrap_or_else(|| "default".to_string()),
+                user_id: Some(claims.user_id().to_string()),
+                user_email: claims.email.clone(),
+                roles: claims.realm_roles().iter().map(|s| s.to_string()).collect(),
+                // OAuth scopes from the JWT (ADR-012 12-Scope Model)
+                scopes: claims.scopes().iter().map(|s| s.to_string()).collect(),
+                token: Some(token),
+            };
+            debug!(
+                user_id = ?caller.user_id,
+                tenant_id = %caller.tenant_id,
+                scopes = ?caller.scopes,
+                "JWT validated — user authenticated"
+            );
+            Ok(caller)
+        }
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+/// Whether `caller` may use the session `id`.
+///
+/// With a validator, a session that belongs to a tenant is used only by that
+/// tenant. A session opened anonymously is in `default` and stays usable by
+/// the client that holds its id, before and after it authenticates. An
+/// unknown id is not an existing session and is left to the handlers.
+async fn session_open_to(state: &AppState, caller: &Caller, id: &str) -> bool {
+    // `get` also refreshes the session's activity, with or without a validator.
+    let session = state.session_manager.get(id).await;
+    if state.jwt_validator.is_none() {
+        return true;
+    }
+    match session {
+        Some(session) => session.tenant_id == caller.tenant_id || session.tenant_id == "default",
+        None => true,
+    }
+}
+
+/// 401 for a bearer the validator rejected.
+fn invalid_token_response(id: Option<Value>, error: &str) -> Response {
+    (
+        StatusCode::UNAUTHORIZED,
+        [(
+            "WWW-Authenticate",
+            r#"Bearer error="invalid_token", resource_metadata="/.well-known/oauth-protected-resource""#,
+        )],
+        Json(JsonRpcResponse::error(
+            id,
+            -32001,
+            format!("Invalid token: {}", error),
+        )),
+    )
+        .into_response()
+}
+
+/// 401 challenge for a request that needs an authenticated caller.
+fn authentication_required_response(id: Option<Value>) -> Response {
+    (
+        StatusCode::UNAUTHORIZED,
+        [(
+            "WWW-Authenticate",
+            r#"Bearer resource_metadata="/.well-known/oauth-protected-resource""#,
+        )],
+        Json(JsonRpcResponse::error(
+            id,
+            -32001,
+            "Authentication required",
+        )),
+    )
+        .into_response()
+}
+
 // ============================================
 // MCP Protocol Version Negotiation (2025-11-25)
 // ============================================
@@ -233,131 +388,52 @@ pub async fn handle_sse_post(
         .into_response();
     }
 
-    // === OAuth 2.1 Auth Challenge (RFC 9728) ===
-    // Public methods = the MCP capability-negotiation / discovery surface;
-    // see `PUBLIC_METHODS` for the rationale. Tool invocation is gated by
-    // the UAC / OPA layer in `handle_tools_call`, not here.
-    let has_auth = headers.get(header::AUTHORIZATION).is_some();
+    // === Authentication (OAuth 2.1 challenge, RFC 9728) ===
+    // A bearer that is presented must validate, whatever the method. A
+    // protected method needs an accepted bearer; a header with another
+    // scheme does not count. See `PUBLIC_METHODS` for the anonymous surface.
+    // Tool invocation is further gated by UAC / OPA in `handle_tools_call`.
+    let caller = match resolve_caller(&state, &headers).await {
+        Ok(caller) => caller,
+        Err(e) => {
+            warn!(error = %e, "JWT validation failed");
+            return invalid_token_response(request.id, &e);
+        }
+    };
 
-    if !PUBLIC_METHODS.contains(&request.method.as_str()) && !has_auth {
+    if !caller.may_call(&request.method) {
         debug!(
             method = %request.method,
             "Unauthenticated request to protected method — returning 401"
         );
-        return (
-            StatusCode::UNAUTHORIZED,
-            [(
-                "WWW-Authenticate",
-                r#"Bearer resource_metadata="/.well-known/oauth-protected-resource""#,
-            )],
-            Json(JsonRpcResponse::error(
-                request.id,
-                -32001,
-                "Authentication required",
-            )),
-        )
-            .into_response();
+        return authentication_required_response(request.id);
     }
-
-    // === JWT Validation & Identity Extraction ===
-    // Extract Bearer token from Authorization header
-    let raw_token = headers
-        .get(header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|auth| {
-            let parts: Vec<&str> = auth.splitn(2, ' ').collect();
-            if parts.len() == 2 && parts[0].to_lowercase() == "bearer" {
-                Some(parts[1].trim().to_string())
-            } else {
-                None
-            }
-        });
-
-    // Validate JWT and extract user identity (including scopes for OPA policy evaluation)
-    let (tenant_id, user_id, user_email, roles, scopes, validated_token) = if let Some(ref token) =
-        raw_token
-    {
-        if let Some(ref validator) = state.jwt_validator {
-            match validator.validate(token).await {
-                Ok(claims) => {
-                    let tenant = claims
-                        .tenant_id()
-                        .map(|t| t.to_string())
-                        .or_else(|| extract_tenant(&headers))
-                        .unwrap_or_else(|| "default".to_string());
-                    let uid = Some(claims.user_id().to_string());
-                    let email = claims.email.clone();
-                    let r: Vec<String> =
-                        claims.realm_roles().iter().map(|s| s.to_string()).collect();
-                    // Extract OAuth scopes from JWT (ADR-012 12-Scope Model)
-                    let s: Vec<String> = claims.scopes().iter().map(|s| s.to_string()).collect();
-                    debug!(
-                        user_id = ?uid,
-                        tenant_id = %tenant,
-                        scopes = ?s,
-                        "JWT validated — user authenticated"
-                    );
-                    (tenant, uid, email, r, s, Some(token.clone()))
-                }
-                Err(e) => {
-                    warn!(error = %e, "JWT validation failed");
-                    return (
-                            StatusCode::UNAUTHORIZED,
-                            [(
-                                "WWW-Authenticate",
-                                r#"Bearer error="invalid_token", resource_metadata="/.well-known/oauth-protected-resource""#,
-                            )],
-                            Json(JsonRpcResponse::error(
-                                request.id,
-                                -32001,
-                                format!("Invalid token: {}", e),
-                            )),
-                        )
-                            .into_response();
-                }
-            }
-        } else {
-            // No JWT validator configured — accept token but don't validate
-            debug!("JWT validator not configured — skipping token validation");
-            let tenant = extract_tenant(&headers).unwrap_or_else(|| "default".to_string());
-            (tenant, None, None, vec![], vec![], Some(token.clone()))
-        }
-    } else {
-        // No token present (public methods only reach here)
-        let tenant = extract_tenant(&headers).unwrap_or_else(|| "default".to_string());
-        (tenant, None, None, vec![], vec![], None)
-    };
 
     // Resolve or create session
     let session_id = match params.session_id {
         Some(ref id) => {
-            // Touch existing session
-            let _ = state.session_manager.get(id).await;
+            // Touch existing session (`session_open_to` reads it)
+            if !session_open_to(&state, &caller, id).await {
+                return Json(JsonRpcResponse::error(
+                    request.id,
+                    -32003,
+                    "Session tenant mismatch",
+                ))
+                .into_response();
+            }
             id.clone()
         }
         None => {
             // First request (initialize) — create a session
             let id = Uuid::new_v4().to_string();
-            let session = Session::new(id.clone(), tenant_id.clone());
+            let session = Session::new(id.clone(), caller.tenant_id.clone());
             state.session_manager.create(session).await;
             metrics::update_session_count(state.session_manager.count());
             id
         }
     };
 
-    let ctx = ToolContext {
-        tenant_id,
-        user_id,
-        user_email,
-        request_id: request_id.clone(),
-        roles,
-        scopes,
-        raw_token: validated_token,
-        skill_instructions: None, // SSE: skills resolved per-tool in handler
-        progress_token: None,     // SSE: no progress push (half-duplex)
-        consumer_id: "unknown".to_string(), // SSE: azp not yet extracted in SSE path
-        from_control_plane: false,
-    };
+    let ctx = caller.tool_context(request_id.clone());
 
     // Route to handler
     let response = match request.method.as_str() {
@@ -489,15 +565,35 @@ pub async fn handle_streamable_http_post(
 /// GET /mcp/sse - Establish SSE connection (legacy/streaming)
 ///
 /// Opens a persistent SSE connection for real-time updates.
+///
+/// With a JWT validator, the stream needs an authenticated caller, and an
+/// existing `sessionId` can only be reopened by the tenant that owns it.
 pub async fn handle_sse_get(
     State(state): State<AppState>,
     headers: HeaderMap,
     Query(params): Query<SseQueryParams>,
-) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+) -> Response {
+    let caller = match resolve_caller(&state, &headers).await {
+        Ok(caller) => caller,
+        Err(e) => return invalid_token_response(None, &e),
+    };
+    if state.jwt_validator.is_some() {
+        if !caller.is_authenticated() {
+            return authentication_required_response(None);
+        }
+        if let Some(ref id) = params.session_id {
+            if let Some(existing) = state.session_manager.get(id).await {
+                if existing.tenant_id != caller.tenant_id {
+                    return StatusCode::NOT_FOUND.into_response();
+                }
+            }
+        }
+    }
+
     let session_id = params
         .session_id
         .unwrap_or_else(|| Uuid::new_v4().to_string());
-    let tenant_id = extract_tenant(&headers).unwrap_or_else(|| "default".to_string());
+    let tenant_id = caller.tenant_id.clone();
 
     info!(
         session_id = %session_id,
@@ -561,20 +657,42 @@ pub async fn handle_sse_get(
     });
 
     // Convert to stream
-    let stream = ReceiverStream::new(rx).map(Ok);
+    let stream = ReceiverStream::new(rx).map(Ok::<_, Infallible>);
 
-    Sse::new(stream).keep_alive(
-        axum::response::sse::KeepAlive::new()
-            .interval(Duration::from_secs(15))
-            .text("ping"),
-    )
+    Sse::new(stream)
+        .keep_alive(
+            axum::response::sse::KeepAlive::new()
+                .interval(Duration::from_secs(15))
+                .text("ping"),
+        )
+        .into_response()
 }
 
 /// DELETE /mcp/sse - Close session
+///
+/// With a JWT validator, only an authenticated caller of the owning tenant
+/// can close a session. Another tenant's session answers like a missing one.
 pub async fn handle_sse_delete(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Query(params): Query<SseQueryParams>,
-) -> impl IntoResponse {
+) -> Response {
+    let caller = match resolve_caller(&state, &headers).await {
+        Ok(caller) => caller,
+        Err(e) => return invalid_token_response(None, &e),
+    };
+    if state.jwt_validator.is_some() {
+        if !caller.is_authenticated() {
+            return authentication_required_response(None);
+        }
+        if let Some(ref id) = params.session_id {
+            match state.session_manager.get(id).await {
+                Some(existing) if existing.tenant_id == caller.tenant_id => {}
+                _ => return StatusCode::NOT_FOUND.into_response(),
+            }
+        }
+    }
+
     if let Some(session_id) = params.session_id {
         // Unregister NotificationBus channel before removing session (CAB-1178)
         state.session_manager.unregister_channel(&session_id);
@@ -582,12 +700,12 @@ pub async fn handle_sse_delete(
         if state.session_manager.remove(&session_id).await {
             info!(session_id = %session_id, "Session closed");
             metrics::update_session_count(state.session_manager.count());
-            StatusCode::NO_CONTENT
+            StatusCode::NO_CONTENT.into_response()
         } else {
-            StatusCode::NOT_FOUND
+            StatusCode::NOT_FOUND.into_response()
         }
     } else {
-        StatusCode::BAD_REQUEST
+        StatusCode::BAD_REQUEST.into_response()
     }
 }
 
@@ -624,12 +742,23 @@ async fn handle_batch_request(
 
     debug!(count = requests.len(), "Processing batch request");
 
+    // One caller for the whole batch, resolved the same way as for a single
+    // request: a rejected bearer refuses the batch, and each element is then
+    // checked against that caller.
+    let caller = match resolve_caller(&state, &headers).await {
+        Ok(caller) => std::sync::Arc::new(caller),
+        Err(e) => {
+            warn!(error = %e, "JWT validation failed (batch)");
+            return invalid_token_response(None, &e);
+        }
+    };
+
     // Process all requests concurrently
     let futures: Vec<_> = requests
         .into_iter()
         .map(|req_value| {
             let state = state.clone();
-            let headers = headers.clone();
+            let caller = caller.clone();
             let params_clone = SseQueryParams {
                 session_id: params.session_id.clone(),
             };
@@ -650,7 +779,7 @@ async fn handle_batch_request(
                 };
 
                 // Route to appropriate handler
-                process_single_request(&state, &headers, &params_clone, request).await
+                process_request_as(&state, &params_clone, request, &caller).await
             }
         })
         .collect();
@@ -667,46 +796,53 @@ async fn handle_batch_request(
     resp
 }
 
-/// Process a single JSON-RPC request (used by both single and batch handlers)
+/// Process one JSON-RPC message for a transport that carries its own
+/// `Authorization` header per message (WebSocket). The caller is resolved
+/// from that header, exactly as for `POST /mcp`.
 pub async fn process_single_request(
     state: &AppState,
     headers: &HeaderMap,
     params: &SseQueryParams,
     request: JsonRpcRequest,
 ) -> JsonRpcResponse {
+    match resolve_caller(state, headers).await {
+        Ok(caller) => process_request_as(state, params, request, &caller).await,
+        Err(e) => {
+            warn!(error = %e, "JWT validation failed");
+            JsonRpcResponse::error(request.id, -32001, format!("Invalid token: {}", e))
+        }
+    }
+}
+
+/// Process one JSON-RPC request for an already resolved caller (batch
+/// elements and WebSocket messages).
+async fn process_request_as(
+    state: &AppState,
+    params: &SseQueryParams,
+    request: JsonRpcRequest,
+    caller: &Caller,
+) -> JsonRpcResponse {
     // Validate JSON-RPC version
     if request.jsonrpc != "2.0" {
         return JsonRpcResponse::error(request.id, INVALID_REQUEST, "Invalid JSON-RPC version");
     }
 
-    // For batch processing, we need simplified auth check
-    // Full auth is handled in the main handler for single requests
-    let has_auth = headers.get(header::AUTHORIZATION).is_some();
-
-    if !PUBLIC_METHODS.contains(&request.method.as_str()) && !has_auth {
+    if !caller.may_call(&request.method) {
         return JsonRpcResponse::error(request.id, -32001, "Authentication required");
     }
 
-    // Extract tenant and create minimal context
-    let tenant_id = extract_tenant(headers).unwrap_or_else(|| "default".to_string());
+    if let Some(ref id) = params.session_id {
+        if !session_open_to(state, caller, id).await {
+            return JsonRpcResponse::error(request.id, -32003, "Session tenant mismatch");
+        }
+    }
+
     let session_id = params
         .session_id
         .clone()
         .unwrap_or_else(|| Uuid::new_v4().to_string());
 
-    let ctx = ToolContext {
-        tenant_id,
-        user_id: None,
-        user_email: None,
-        request_id: Uuid::new_v4().to_string(),
-        roles: vec![],
-        scopes: vec![],
-        raw_token: None,
-        skill_instructions: None,
-        progress_token: None,
-        consumer_id: "unknown".to_string(),
-        from_control_plane: false,
-    };
+    let ctx = caller.tool_context(Uuid::new_v4().to_string());
 
     // Route to handler
     match request.method.as_str() {
@@ -1606,5 +1742,365 @@ mod tests {
     #[test]
     fn test_accepts_event_stream_rejects_unrelated_types() {
         assert!(!accepts_event_stream(&accept("text/plain, text/html")));
+    }
+}
+
+/// Authentication of the MCP transports through the real router, with a JWT
+/// validator that accepts tokens signed by the test key.
+#[cfg(test)]
+mod caller_tests {
+    use super::*;
+    use crate::auth::jwt::tests::{issuer_only, mint, validator_with_mock_server};
+    use crate::config::Config;
+    use axum::body::Body;
+    use axum::http::{Method, Request};
+    use axum::Router;
+    use std::sync::Arc;
+    use tower::ServiceExt;
+
+    /// Headers a caller without an accepted bearer can send.
+    const REJECTED: &[Option<&str>] = &[
+        None,
+        Some("Basic eDp5"),
+        Some("Token abc"),
+        Some("Bearer"),
+        Some("Bearer "),
+        Some("Bearer nope"),
+        Some("bearer nope"),
+    ];
+
+    const PROTECTED_METHODS: &[&str] = &[
+        "tools/list",
+        "tools/call",
+        "resources/list",
+        "resources/read",
+        "resources/templates/list",
+        "prompts/list",
+        "logging/setLevel",
+        "completion/complete",
+        "roots/list",
+    ];
+
+    struct Fixture {
+        router: Router,
+        state: AppState,
+        bearer: String,
+        /// Kept alive: the validator fetches discovery and JWKS from it.
+        _oidc: wiremock::MockServer,
+    }
+
+    async fn fixture() -> Fixture {
+        let (validator, issuer, oidc) = validator_with_mock_server(issuer_only()).await;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        let bearer = format!("Bearer {}", mint(&issuer, now + 300, None));
+        let mut state = AppState::new(Config::default());
+        state.jwt_validator = Some(Arc::new(validator));
+        Fixture {
+            router: crate::build_router(state.clone()),
+            state,
+            bearer,
+            _oidc: oidc,
+        }
+    }
+
+    fn request(method: Method, uri: &str, auth: Option<&str>, body: String) -> Request<Body> {
+        let mut request = Request::builder()
+            .method(method)
+            .uri(uri)
+            .header("content-type", "application/json")
+            .header("x-tenant-id", "acme");
+        if let Some(auth) = auth {
+            request = request.header("authorization", auth);
+        }
+        request.body(Body::from(body)).unwrap()
+    }
+
+    async fn status(router: &Router, request: Request<Body>) -> StatusCode {
+        router.clone().oneshot(request).await.unwrap().status()
+    }
+
+    async fn post(
+        router: &Router,
+        uri: &str,
+        auth: Option<&str>,
+        body: String,
+    ) -> (StatusCode, String) {
+        let response = router
+            .clone()
+            .oneshot(request(Method::POST, uri, auth, body))
+            .await
+            .unwrap();
+        let status = response.status();
+        let bytes = axum::body::to_bytes(response.into_body(), 4 * 1024 * 1024)
+            .await
+            .unwrap();
+        (status, String::from_utf8_lossy(&bytes).into_owned())
+    }
+
+    fn rpc(method: &str) -> String {
+        format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"{method}","params":{{"name":"x","uri":"stoa://x","level":"info"}}}}"#
+        )
+    }
+
+    #[tokio::test]
+    async fn accepted_bearer_lists_tools_single_and_batch() {
+        let fx = fixture().await;
+        for uri in ["/mcp", "/mcp/sse"] {
+            let (status, body) = post(&fx.router, uri, Some(&fx.bearer), rpc("tools/list")).await;
+            assert_eq!(status, StatusCode::OK, "{uri} {body}");
+            assert!(body.contains(r#""tools""#), "{uri} {body}");
+
+            let batch = format!("[{}]", rpc("tools/list"));
+            let (status, body) = post(&fx.router, uri, Some(&fx.bearer), batch).await;
+            assert_eq!(status, StatusCode::OK, "{uri} {body}");
+            assert!(body.contains(r#""tools""#), "{uri} {body}");
+        }
+    }
+
+    #[tokio::test]
+    async fn protected_methods_need_an_accepted_bearer() {
+        let fx = fixture().await;
+        for auth in REJECTED {
+            for uri in ["/mcp", "/mcp/sse"] {
+                for method in PROTECTED_METHODS {
+                    let (status, body) = post(&fx.router, uri, *auth, rpc(method)).await;
+                    assert_eq!(
+                        status,
+                        StatusCode::UNAUTHORIZED,
+                        "{auth:?} {uri} {method} {body}"
+                    );
+                    assert!(
+                        !body.contains(r#""result""#),
+                        "{auth:?} {uri} {method} {body}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn batch_elements_need_an_accepted_bearer() {
+        let fx = fixture().await;
+        let batch = format!(
+            "[{}]",
+            PROTECTED_METHODS
+                .iter()
+                .map(|method| rpc(method))
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+        for auth in REJECTED {
+            for uri in ["/mcp", "/mcp/sse"] {
+                let (status, body) = post(&fx.router, uri, *auth, batch.clone()).await;
+                assert!(
+                    status == StatusCode::UNAUTHORIZED || status == StatusCode::OK,
+                    "{auth:?} {uri} {status}"
+                );
+                assert!(!body.contains(r#""result""#), "{auth:?} {uri} {body}");
+                assert!(!body.contains(r#""tools""#), "{auth:?} {uri} {body}");
+            }
+        }
+        // A rejected bearer refuses the whole batch, public methods included.
+        let mixed = format!("[{},{}]", rpc("ping"), rpc("tools/list"));
+        let (status, _) = post(&fx.router, "/mcp", Some("Bearer nope"), mixed.clone()).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        // No bearer: the public element answers, the protected one does not.
+        let (status, body) = post(&fx.router, "/mcp", Some("Basic eDp5"), mixed).await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(body.contains("Authentication required"), "{body}");
+        assert!(!body.contains(r#""tools""#), "{body}");
+    }
+
+    #[tokio::test]
+    async fn public_methods_stay_anonymous() {
+        let fx = fixture().await;
+        let initialize = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}"#;
+        for auth in [None, Some("Basic eDp5")] {
+            let (status, body) = post(&fx.router, "/mcp", auth, initialize.to_string()).await;
+            assert_eq!(status, StatusCode::OK, "{auth:?} {body}");
+            assert!(body.contains(r#""result""#), "{auth:?} {body}");
+            let (status, _) = post(&fx.router, "/mcp", auth, rpc("ping")).await;
+            assert_eq!(status, StatusCode::OK, "{auth:?}");
+        }
+        // A bearer that is presented must validate, even for a public method.
+        let (status, _) = post(&fx.router, "/mcp", Some("Bearer nope"), rpc("ping")).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn tenant_comes_from_the_token_when_a_validator_exists() {
+        let fx = fixture().await;
+        let mut headers = HeaderMap::new();
+        headers.insert("x-tenant-id", "acme".parse().unwrap());
+
+        let anonymous = resolve_caller(&fx.state, &headers).await.unwrap();
+        assert!(!anonymous.is_authenticated());
+        assert_eq!(
+            anonymous.tenant_id, "default",
+            "header must not pick the tenant"
+        );
+
+        headers.insert(header::AUTHORIZATION, fx.bearer.parse().unwrap());
+        let caller = resolve_caller(&fx.state, &headers).await.unwrap();
+        assert!(caller.is_authenticated());
+        assert_eq!(
+            caller.tenant_id, "default",
+            "header must not pick the tenant"
+        );
+
+        headers.insert(header::AUTHORIZATION, "Bearer nope".parse().unwrap());
+        assert!(resolve_caller(&fx.state, &headers).await.is_err());
+
+        // Development mode, no validator: the bearer is taken as is.
+        let mut dev = fx.state.clone();
+        dev.jwt_validator = None;
+        let caller = resolve_caller(&dev, &headers).await.unwrap();
+        assert!(caller.is_authenticated());
+        assert_eq!(caller.tenant_id, "acme");
+    }
+
+    #[tokio::test]
+    async fn a_tenant_session_is_closed_to_other_callers() {
+        let fx = fixture().await;
+        fx.state
+            .session_manager
+            .create(Session::new("theirs".into(), "other".into()))
+            .await;
+        fx.state
+            .session_manager
+            .create(Session::new("anonymous".into(), "default".into()))
+            .await;
+        let initialize = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"intruder","version":"0"}}}"#;
+
+        for auth in [None, Some(fx.bearer.as_str())] {
+            for body in [
+                initialize.to_string(),
+                format!("[{initialize}]"),
+                rpc("ping"),
+            ] {
+                let (_, text) = post(&fx.router, "/mcp/sse?sessionId=theirs", auth, body).await;
+                assert!(text.contains("Session tenant mismatch"), "{auth:?} {text}");
+                assert!(!text.contains(r#""result""#), "{auth:?} {text}");
+            }
+            // A session opened anonymously stays usable by whoever holds its id.
+            let (status, text) = post(
+                &fx.router,
+                "/mcp/sse?sessionId=anonymous",
+                auth,
+                rpc("ping"),
+            )
+            .await;
+            assert_eq!(status, StatusCode::OK, "{auth:?} {text}");
+            assert!(text.contains(r#""result""#), "{auth:?} {text}");
+        }
+        assert!(
+            fx.state
+                .session_manager
+                .get_metadata("theirs", "protocol_version")
+                .await
+                .is_none(),
+            "a refused initialize must not write to the session"
+        );
+    }
+
+    /// The path of a client that initializes anonymously, then authenticates
+    /// as a tenant, and the reverse cases that must stay closed.
+    #[tokio::test]
+    async fn session_ownership_follows_the_tenant() {
+        let fx = fixture().await;
+        for (id, tenant) in [
+            ("anonymous", "default"),
+            ("demo", "demo"),
+            ("other", "other"),
+        ] {
+            fx.state
+                .session_manager
+                .create(Session::new(id.into(), tenant.into()))
+                .await;
+        }
+        let demo = Caller {
+            tenant_id: "demo".into(),
+            ..Caller::unverified(None, Some("accepted".into()))
+        };
+        let anonymous = Caller::unverified(None, None);
+
+        assert!(session_open_to(&fx.state, &demo, "anonymous").await);
+        assert!(session_open_to(&fx.state, &demo, "demo").await);
+        assert!(!session_open_to(&fx.state, &demo, "other").await);
+        assert!(session_open_to(&fx.state, &anonymous, "anonymous").await);
+        assert!(!session_open_to(&fx.state, &anonymous, "demo").await);
+        assert!(session_open_to(&fx.state, &demo, "unknown").await);
+
+        // Development mode (no validator): no ownership check.
+        let mut dev = fx.state.clone();
+        dev.jwt_validator = None;
+        assert!(session_open_to(&dev, &anonymous, "other").await);
+    }
+
+    #[tokio::test]
+    async fn event_stream_needs_an_authenticated_owner() {
+        let fx = fixture().await;
+        fx.state
+            .session_manager
+            .create(Session::new("mine".into(), "default".into()))
+            .await;
+        fx.state
+            .session_manager
+            .create(Session::new("theirs".into(), "other".into()))
+            .await;
+
+        for auth in REJECTED {
+            for (method, uri) in [
+                (Method::GET, "/mcp/sse"),
+                (Method::GET, "/mcp/sse?sessionId=mine"),
+                (Method::DELETE, "/mcp/sse?sessionId=mine"),
+            ] {
+                assert_eq!(
+                    status(
+                        &fx.router,
+                        request(method.clone(), uri, *auth, String::new())
+                    )
+                    .await,
+                    StatusCode::UNAUTHORIZED,
+                    "{auth:?} {method} {uri}"
+                );
+            }
+        }
+        assert!(fx.state.session_manager.get("mine").await.is_some());
+
+        let bearer = Some(fx.bearer.as_str());
+        let call = |method: Method, uri: &'static str| {
+            status(&fx.router, request(method, uri, bearer, String::new()))
+        };
+        assert_eq!(
+            call(Method::GET, "/mcp/sse?sessionId=theirs").await,
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            call(Method::DELETE, "/mcp/sse?sessionId=theirs").await,
+            StatusCode::NOT_FOUND
+        );
+        assert!(fx.state.session_manager.get("theirs").await.is_some());
+        assert_eq!(
+            call(Method::DELETE, "/mcp/sse?sessionId=missing").await,
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            call(Method::DELETE, "/mcp/sse").await,
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            call(Method::GET, "/mcp/sse?sessionId=mine").await,
+            StatusCode::OK
+        );
+        assert_eq!(
+            call(Method::DELETE, "/mcp/sse?sessionId=mine").await,
+            StatusCode::NO_CONTENT
+        );
+        assert!(fx.state.session_manager.get("mine").await.is_none());
     }
 }

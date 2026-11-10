@@ -34,9 +34,14 @@ pub const CONTRACT_REJECTED: &str = "contract rejected: ";
 /// path. Refused:
 /// - a `backend_url` with `{` or `}`: it is the upstream URL of the static
 ///   part of the path, not a template;
+/// - a `backend_url` with `?` or `#`: the rest of the path is appended to
+///   it, and would land in the query or the fragment;
 /// - a path that does not start with `/`;
+/// - an empty segment (`/a//b`) or a dot segment (`/a/./b`, `/a/../b`); a
+///   final `/` (`/customers/`) is kept;
 /// - unmatched braces (`/customers/{id`) or an empty parameter (`/a/{}`);
-/// - a parameter that is not a whole segment (`/a{id}`, `/files/f-{id}`).
+/// - a parameter that is not a whole segment (`/a{id}`, `/files/f-{id}`);
+/// - a parameter name used twice (`/a/{id}/b/{id}`).
 pub fn check_endpoint_templates(contract: &UacContractSpec) -> Result<(), String> {
     for (index, endpoint) in contract.endpoints.iter().enumerate() {
         if let Err(reason) = check_endpoint_template(endpoint) {
@@ -56,16 +61,40 @@ fn check_endpoint_template(endpoint: &UacEndpoint) -> Result<(), String> {
                 .to_string(),
         );
     }
-    if !endpoint.path.starts_with('/') {
-        return Err("path must start with /".to_string());
+    if endpoint.backend_url.contains(['?', '#']) {
+        return Err(
+            "backend_url must not contain ? or #: the rest of the path is appended to it, and would land in the query or the fragment"
+                .to_string(),
+        );
     }
-    endpoint.path.split('/').try_for_each(check_path_segment)
+    let Some(segments) = endpoint.path.strip_prefix('/') else {
+        return Err("path must start with /".to_string());
+    };
+    let segments: Vec<&str> = segments.split('/').collect();
+    let last = segments.len() - 1;
+    let mut names: Vec<&str> = Vec::new();
+    for (position, segment) in segments.iter().enumerate() {
+        match *segment {
+            "" if position == last => {}
+            "" => return Err("path must not have an empty segment (//)".to_string()),
+            "." | ".." => return Err(format!("path must not have a dot segment ({segment:?})")),
+            _ => {}
+        }
+        if let Some(name) = check_path_segment(segment)? {
+            if names.contains(&name) {
+                return Err(format!("parameter {{{name}}} is used twice in the path"));
+            }
+            names.push(name);
+        }
+    }
+    Ok(())
 }
 
 /// A segment is static (no brace) or exactly one `{name}` parameter.
-fn check_path_segment(segment: &str) -> Result<(), String> {
+/// Returns the parameter name, if the segment is one.
+fn check_path_segment(segment: &str) -> Result<Option<&str>, String> {
     if !segment.contains(['{', '}']) {
-        return Ok(());
+        return Ok(None);
     }
     let mut open = false;
     for c in segment.chars() {
@@ -85,7 +114,7 @@ fn check_path_segment(segment: &str) -> Result<(), String> {
         .and_then(|rest| rest.strip_suffix('}'))
     {
         Some("") => Err(format!("segment {segment:?} has an empty parameter name")),
-        Some(name) if !name.contains(['{', '}']) => Ok(()),
+        Some(name) if !name.contains(['{', '}']) => Ok(Some(name)),
         _ => Err(format!(
             "segment {segment:?}: a parameter must be the whole segment, as in /{{id}}"
         )),
@@ -159,9 +188,39 @@ mod tests {
             "/customers/{id}/segment",
             "/{id}",
             "/a/{x}/c/{y}",
+            "/v1.2/.well-known/...",
+            "/a/{id}/b/{other}",
         ] {
             check_endpoint_templates(&contract_with(path, "http://b/customers/"))
                 .unwrap_or_else(|e| panic!("{path}: {e}"));
+        }
+    }
+
+    #[test]
+    fn query_fragment_empty_or_dot_segment_and_repeated_parameter_are_rejected() {
+        let backend = "http://b/customers/";
+        for (path, backend_url, reason) in [
+            ("/customers/{id}", "http://b/customers?v=1", "? or #"),
+            ("/customers", "http://b/customers/?", "? or #"),
+            ("/customers/{id}", "http://b/customers#top", "? or #"),
+            ("/a//b", backend, "empty segment"),
+            ("//", backend, "empty segment"),
+            ("/a/{id}//", backend, "empty segment"),
+            ("/a/../b", backend, "dot segment"),
+            ("/a/./b", backend, "dot segment"),
+            ("/a/{id}/..", backend, "dot segment"),
+            ("/.", backend, "dot segment"),
+            ("/a/{id}/b/{id}", backend, "{id} is used twice"),
+            ("/{id}/{id}", backend, "{id} is used twice"),
+        ] {
+            let error = check_endpoint_templates(&contract_with(path, backend_url))
+                .expect_err(&format!("{path} {backend_url}"));
+            assert!(error.starts_with(CONTRACT_REJECTED), "{error}");
+            assert!(
+                error.contains(&format!("endpoints[1] ({path:?})")),
+                "{error}"
+            );
+            assert!(error.contains(reason), "{reason}: {error}");
         }
     }
 

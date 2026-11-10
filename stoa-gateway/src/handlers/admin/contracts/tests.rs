@@ -822,6 +822,20 @@ async fn path_or_backend_url_the_binders_cannot_serve_is_400_and_changes_nothing
         ("/a{id}", backend, "whole segment"),
         ("/files/f-{id}", backend, "whole segment"),
         ("/a/{b}{c}", backend, "whole segment"),
+        (
+            "/customers/{id}",
+            "https://backend.test/customers?v=1",
+            "? or #",
+        ),
+        (
+            "/customers/{id}",
+            "https://backend.test/customers#top",
+            "? or #",
+        ),
+        ("/customers//{id}", backend, "empty segment"),
+        ("/customers/../{id}", backend, "dot segment"),
+        ("/customers/./{id}", backend, "dot segment"),
+        ("/customers/{id}/x/{id}", backend, "{id} is used twice"),
     ];
     for (path, backend_url, reason) in cases {
         let bad = serde_json::json!({

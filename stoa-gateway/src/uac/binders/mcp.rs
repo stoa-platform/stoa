@@ -988,6 +988,15 @@ mod tests {
             ("/payments/{id", "https://backend.acme.com/v1/payments"),
             ("/payments/{}", "https://backend.acme.com/v1/payments"),
             ("/payments/p-{id}", "https://backend.acme.com/v1/payments"),
+            ("/payments/{id}", "https://backend.acme.com/v1/payments?v=1"),
+            ("/payments/{id}", "https://backend.acme.com/v1/payments#top"),
+            ("/payments//{id}", "https://backend.acme.com/v1/payments"),
+            ("/payments/../{id}", "https://backend.acme.com/v1/payments"),
+            ("/payments/./{id}", "https://backend.acme.com/v1/payments"),
+            (
+                "/payments/{id}/x/{id}",
+                "https://backend.acme.com/v1/payments",
+            ),
         ] {
             let mut contract = sample_contract();
             contract.endpoints[1].path = path.to_string();

@@ -506,6 +506,12 @@ mod tests {
             ("/customers/{}", "http://b/customers/"),
             ("/customers{id}", "http://b/customers/"),
             ("/files/f-{id}", "http://b/files/"),
+            ("/customers/{id}", "http://b/customers?v=1"),
+            ("/customers/{id}", "http://b/customers#top"),
+            ("/customers//{id}", "http://b/customers/"),
+            ("/customers/../{id}", "http://b/customers/"),
+            ("/customers/./{id}", "http://b/customers/"),
+            ("/customers/{id}/x/{id}", "http://b/customers/"),
         ] {
             let error = binder
                 .bind(&customer_contract(vec![customer_endpoint(

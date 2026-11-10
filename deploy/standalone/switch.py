@@ -535,8 +535,40 @@ def _ctr_json(host: str, script: str) -> dict:
         raise PreflightError(f"ctr on {host} did not return JSON: {exc}") from exc
 
 
+def crictl_revision(inspect: dict, ref: str) -> str | None:
+    """Revision label of `ref` in a `crictl inspecti -o json` document.
+
+    The document must be the image tagged `ref` (`status.repoTags`), and the
+    label is read from its config only (`info.imageSpec.config.Labels`).
+    """
+    wanted = ref if ref.startswith("docker.io/") else f"docker.io/library/{ref}"
+    status = inspect.get("status")
+    tags = status.get("repoTags") if isinstance(status, dict) else None
+    if not isinstance(tags, list) or wanted not in tags:
+        return None
+    node = inspect.get("info")
+    for key in ("imageSpec", "config", "Labels"):
+        node = node.get(key) if isinstance(node, dict) else None
+    value = node.get(REVISION_LABEL) if isinstance(node, dict) else None
+    return value if isinstance(value, str) and value else None
+
+
 def image_revision_on_node(host: str) -> str:
-    """Read org.opencontainers.image.revision from the imported image."""
+    """Read org.opencontainers.image.revision from the imported image.
+
+    `crictl inspecti` returns the image config as JSON. `ctr images inspect`
+    prints a tree on the containerd that k3s 1.34 ships, so the manifest walk
+    below only serves a node where crictl gives no label.
+    """
+    for ref in IMAGE_REFS:
+        try:
+            found = crictl_revision(
+                _ctr_json(host, f"sudo k3s crictl inspecti -o json {ref}"), ref
+            )
+        except PreflightError:
+            continue
+        if found:
+            return found
     inspect = None
     chosen = None
     for ref in IMAGE_REFS:
@@ -889,6 +921,37 @@ def self_test() -> None:
     }
     assert find_revision(doc) == label
     assert find_revision({"info": json.dumps(doc)}) == label
+    # Shape of `crictl inspecti -o json`: the config sits under info.imageSpec.
+    crictl_doc = {
+        "status": {"repoTags": ["docker.io/library/stoa-gateway:standalone"]},
+        "info": {"imageSpec": {"config": {"Labels": {REVISION_LABEL: label}}}},
+    }
+    for ref in IMAGE_REFS:
+        assert crictl_revision(crictl_doc, ref) == label
+    # Another image, a label outside the config, or a missing part: no revision.
+    assert crictl_revision(crictl_doc, "docker.io/library/other:standalone") is None
+    assert (
+        crictl_revision(
+            {
+                "status": {"repoTags": ["docker.io/library/other:standalone"]},
+                "info": crictl_doc["info"],
+            },
+            IMAGE_REFS[0],
+        )
+        is None
+    )
+    assert (
+        crictl_revision(
+            {
+                "status": dict(crictl_doc["status"], Labels={REVISION_LABEL: label}),
+                "info": {"imageSpec": {"config": {}}},
+            },
+            IMAGE_REFS[0],
+        )
+        is None
+    )
+    for broken in ({}, {"status": None, "info": None}, {"status": {"repoTags": "x"}}):
+        assert crictl_revision(broken, IMAGE_REFS[0]) is None
     assert (
         manifest_digest({"Target": {"digest": "sha256:" + "ab" * 32}})
         == "sha256:" + "ab" * 32

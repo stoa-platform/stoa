@@ -130,26 +130,21 @@ fn record_proxy_status(code: u16) {
     }
 }
 
-/// Upstream URL for a proxied request: `backend`, then the path left after
-/// the route prefix as the caller sent it, then the query.
+/// Upstream URL for a proxied request: `backend` without its trailing `/`,
+/// then the path left after the route prefix, then the query.
 ///
-/// A route prefix that ends with `/` (`/apis/t/api/customers/`) has consumed
-/// the separator, so it is put back: `C-1001` goes to
-/// `http://b/customers/C-1001`, not `http://b/customersC-1001`. Nothing else
-/// in the rest is rewritten, so a route whose prefix has no trailing `/`
-/// forwards exactly what it forwarded before. An empty rest gives `backend`
+/// A non-empty rest that does not start with `/` gets one in front: `C-1001`
+/// (after the prefix `/apis/t/api/customers/`) goes to
+/// `http://b/customers/C-1001`. Without it, a rest such as `@evil.example/x`
+/// glued to `http://b:8080` would move the request to another host. The rest
+/// is not otherwise rewritten: `//` stays `//`. An empty rest gives `backend`
 /// without its trailing `/`.
-pub(crate) fn proxy_upstream_url(
-    backend: &str,
-    route_prefix: &str,
-    rest: &str,
-    query: Option<&str>,
-) -> String {
+pub(crate) fn proxy_upstream_url(backend: &str, rest: &str, query: Option<&str>) -> String {
     let backend = backend.trim_end_matches('/');
-    let separator = if !rest.is_empty() && route_prefix.ends_with('/') {
-        "/"
-    } else {
+    let separator = if rest.is_empty() || rest.starts_with('/') {
         ""
+    } else {
+        "/"
     };
     let capacity = backend.len() + separator.len() + rest.len() + query.map_or(0, |q| 1 + q.len());
     let mut url = String::with_capacity(capacity);
@@ -370,12 +365,7 @@ pub async fn dynamic_proxy(State(state): State<AppState>, mut request: Request<B
 
     // Build target URL: replace path_prefix with backend
     let remaining_path = path.strip_prefix(&route.path_prefix).unwrap_or("");
-    let target_url = proxy_upstream_url(
-        &selected_backend,
-        &route.path_prefix,
-        remaining_path,
-        request.uri().query(),
-    );
+    let target_url = proxy_upstream_url(&selected_backend, remaining_path, request.uri().query());
 
     // SSRF protection: block requests to private/internal IP ranges (defense-in-depth).
     // Skip for admin-registered routes (trusted_backend) — URLs are admin-managed (CAB-1893).
@@ -1699,74 +1689,82 @@ mod tests {
     }
 
     #[test]
-    fn proxy_url_puts_back_the_slash_a_prefix_ending_with_slash_consumed() {
+    fn proxy_url_inserts_a_slash_before_a_rest_that_has_none() {
+        // A prefix ending with `/` consumed the separator.
         assert_eq!(
-            proxy_upstream_url(
-                "http://b/customers/",
-                "/apis/t/api/customers/",
-                "C-1001",
-                None
-            ),
+            proxy_upstream_url("http://b/customers/", "C-1001", None),
             "http://b/customers/C-1001"
         );
         assert_eq!(
-            proxy_upstream_url(
-                "http://b/customers",
-                "/apis/t/api/customers/",
-                "C-1001/segment",
-                Some("expand=a&x=1")
-            ),
+            proxy_upstream_url("http://b/customers", "C-1001/segment", Some("expand=a&x=1")),
             "http://b/customers/C-1001/segment?expand=a&x=1"
         );
-        // The exact prefix: the backend without its trailing slash, as before.
+        // Whatever the route prefix, a rest that does not start with `/`
+        // stays under the backend path.
         assert_eq!(
-            proxy_upstream_url("http://b/customers/", "/apis/t/api/customers/", "", None),
-            "http://b/customers"
-        );
-        assert_eq!(
-            proxy_upstream_url(
-                "http://b/customers/",
-                "/apis/t/api/customers/",
-                "",
-                Some("page=2")
-            ),
-            "http://b/customers?page=2"
+            proxy_upstream_url("http://b/customers", "-old", None),
+            "http://b/customers/-old"
         );
     }
 
     #[test]
-    fn proxy_url_forwards_the_rest_as_received_when_the_prefix_has_no_trailing_slash() {
+    fn proxy_url_keeps_a_rest_that_starts_with_a_slash_as_received() {
         assert_eq!(
-            proxy_upstream_url(
-                "http://b/customers",
-                "/apis/t/api/customers",
-                "/C-1001",
-                None
-            ),
+            proxy_upstream_url("http://b/customers", "/C-1001", None),
             "http://b/customers/C-1001"
         );
         assert_eq!(
-            proxy_upstream_url("http://b/customers/", "/apis/t/api/customers", "/", None),
+            proxy_upstream_url("http://b/customers/", "/", None),
             "http://b/customers/"
         );
-        // Not rewritten: repeated slashes and a rest that does not start at a
-        // segment boundary reach the backend as they did before this function.
+        // Repeated slashes are not merged.
         assert_eq!(
-            proxy_upstream_url(
-                "http://b/customers",
-                "/apis/t/api/customers",
-                "//C-1001",
-                None
-            ),
+            proxy_upstream_url("http://b/customers", "//C-1001", None),
             "http://b/customers//C-1001"
         );
         assert_eq!(
-            proxy_upstream_url("http://b/customers", "/apis/t/api/customers", "-old", None),
-            "http://b/customers-old"
+            proxy_upstream_url("http://b/customers/", "//C-1001", None),
+            "http://b/customers//C-1001"
+        );
+    }
+
+    #[test]
+    fn proxy_url_with_an_empty_rest_is_the_backend_without_trailing_slash() {
+        assert_eq!(
+            proxy_upstream_url("http://b/customers/", "", None),
+            "http://b/customers"
         );
         assert_eq!(
-            proxy_upstream_url("http://b/customers", "/apis/t/api/customers", "", None),
+            proxy_upstream_url("http://b/customers", "", None),
             "http://b/customers"
+        );
+        assert_eq!(
+            proxy_upstream_url("http://b/customers/", "", Some("page=2")),
+            "http://b/customers?page=2"
+        );
+    }
+
+    /// A route prefix with no trailing `/` (`/apis/t/n/status`) and the
+    /// request `/apis/t/n/status@evil.example/x` leave the rest
+    /// `@evil.example/x`. Glued to a backend with no path, it made
+    /// `http://b:8080@evil.example/x`: user info `b:8080`, host `evil.example`.
+    #[test]
+    fn regression_rest_without_leading_slash_cannot_change_the_upstream_host() {
+        for (backend, rest) in [
+            ("http://b:8080", "@evil.example/x"),
+            ("http://b:8080/", "@evil.example/x"),
+            ("http://b", "@evil.example"),
+            ("http://b", ":1@evil.example/x"),
+        ] {
+            let url = proxy_upstream_url(backend, rest, Some("q=1"));
+            let parsed = reqwest::Url::parse(&url).unwrap_or_else(|e| panic!("{url}: {e}"));
+            assert_eq!(parsed.host_str(), Some("b"), "{url}");
+            assert_eq!(parsed.username(), "", "{url}");
+            assert_eq!(parsed.query(), Some("q=1"), "{url}");
+        }
+        assert_eq!(
+            proxy_upstream_url("http://b:8080", "@evil.example/x", None),
+            "http://b:8080/@evil.example/x"
         );
     }
 

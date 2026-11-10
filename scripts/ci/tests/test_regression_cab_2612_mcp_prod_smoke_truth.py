@@ -120,8 +120,9 @@ def test_workflow_keeps_the_probe_honest_and_does_not_republish():
     doc = yaml.safe_load(text)
     if True in doc and "on" not in doc:
         doc["on"] = doc.pop(True)
-    required = doc["on"]["workflow_dispatch"]["inputs"]["MCP_PROD_SMOKE_REQUIRED"]
-    assert required["type"] == "boolean" and required["default"] is True
+    target = doc["on"]["workflow_dispatch"]["inputs"]["target"]
+    assert target["type"] == "choice" and target["default"] == "prod"
+    assert target["options"] == ["prod", "local"]
     pre, post = doc["jobs"]["pre-merge"], doc["jobs"]["post-deploy"]
     assert any("local_mcp_sdk_smoke.py" in step.get("run", "") for step in pre["steps"])
     assert "continue-on-error" not in pre
@@ -138,7 +139,7 @@ def test_workflow_keeps_the_probe_honest_and_does_not_republish():
     assert 'echo "ran=true"' in smoke["run"] and "exit_code" in smoke["run"]
     assert truth["if"] == "success() || failure()"
     assert "bash scripts/ci/mcp_prod_smoke_truth.sh" in truth["run"]
-    assert truth["env"]["MCP_SMOKE_REQUIRED_INPUT"] == "${{ inputs.MCP_PROD_SMOKE_REQUIRED }}"
-    assert truth["env"]["MCP_SMOKE_REQUIRED_VAR"] == "${{ vars.MCP_PROD_SMOKE_REQUIRED }}"
+    assert truth["env"]["MCP_SMOKE_REQUIRED_INPUT"] == "true"
+    assert "MCP_SMOKE_REQUIRED_VAR" not in truth["env"]
     assert truth["env"]["MCP_COMMIT"] == "${{ github.sha }}"
     assert truth["env"]["MCP_ENVIRONMENT"] == "prod"

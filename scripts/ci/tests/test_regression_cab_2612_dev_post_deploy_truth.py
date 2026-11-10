@@ -143,9 +143,10 @@ def test_workflows_record_the_verdict_without_weakening_guards():
     assert "ok=false" in wait["run"]
     assert "Endpoint not healthy after ${TIMEOUT}s (last: HTTP ${HTTP_CODE})" in wait["run"]
     assert "::warning::" not in wait["run"] and "exit 1" not in wait["run"]
-    assert truth["if"] == "always() && steps.wait.outcome == 'success'"
+    assert truth["if"] == "always()"
     assert "bash scripts/ci/dev_post_deploy_truth.sh" in truth["run"]
     assert truth["env"]["POST_DEPLOY_REQUIRED_VAR"] == "${{ vars.DEV_POST_DEPLOY_REQUIRED }}"
+    assert truth["env"]["POST_DEPLOY_REQUIRED_INPUT"] == "true"
     assert truth["env"]["POST_DEPLOY_COMMIT"] == "${{ github.sha }}"
     assert truth["env"]["POST_DEPLOY_ENVIRONMENT"] == "${{ inputs.environment }}"
     assert truth["env"]["POST_DEPLOY_RAN"] == "${{ steps.wait.outputs.ran }}"
@@ -168,10 +169,11 @@ def test_workflows_record_the_verdict_without_weakening_guards():
     assert checks["if"] == "steps.resolve.outputs.skip != 'true'"
     assert '[ "$FAIL" -eq 0 ] || exit 1' in checks["run"]
     assert "ran=true" in checks["run"] and "ok=false" in checks["run"]
-    assert htruth["if"] == "always() && steps.resolve.outcome == 'success'"
+    assert htruth["if"] == "always()"
     assert "SKIPPED, no dev target" in htruth["run"]
     assert "bash scripts/ci/dev_post_deploy_truth.sh" in htruth["run"]
     assert htruth["env"]["POST_DEPLOY_REQUIRED_VAR"] == "${{ vars.DEV_POST_DEPLOY_REQUIRED }}"
+    assert htruth["env"]["POST_DEPLOY_REQUIRED_INPUT"] == "true"
     assert htruth["env"]["POST_DEPLOY_ENVIRONMENT"] == "${{ inputs.environment }}"
     assert htruth["env"]["POST_DEPLOY_COMMIT"] == "${{ github.sha }}"
 

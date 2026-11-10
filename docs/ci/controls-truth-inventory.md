@@ -5,9 +5,11 @@ Run conclusions and step conclusions come from `gh run list` / `gh run view` (re
 Repository variable values were not readable (Actions variables API returned 403); a
 kill-switch is cited only when the step that runs solely under that `if` actually ran.
 
-This pull request does not change workflow behavior. The prod MCP smoke case (job
-green, probe skipped) is already proposed in
-[PR 3150](https://github.com/stoa-platform/stoa/pull/3150) and is not reimplemented here.
+This is the historical inventory, not a fresh service-health claim. See
+[CAB-2618 required checks](cab-2618-required-checks.md) for the subsequent
+enforcement of MCP, health-smoke and GitOps endpoint checks. The original
+MCP classification is corrected below: missing DNS does not establish an
+approved retirement or non-applicability decision.
 
 Status values:
 
@@ -19,7 +21,7 @@ Status values:
 | NON PUBLIÉ / NA | The target is not published, or the control does not apply to that environment. |
 | NON VÉRIFIÉ | No current run shows the check executing. |
 
-Counts in the table below: **PASS réel 14**, **FAIL 1**, **SKIP 6**, **NON PUBLIÉ / NA 1**, **NON VÉRIFIÉ 10**.
+Counts in the historical table below: **PASS réel 14**, **FAIL 1**, **SKIP 7**, **NON PUBLIÉ / NA 0**, **NON VÉRIFIÉ 10**.
 
 `scripts/ci/audit_masked_controls.py` finds the same motifs statically. It always
 exits 0 and is not called from any workflow.
@@ -28,7 +30,7 @@ exits 0 and is not called from any workflow.
 
 | Control | Workflow | Target | Critical | Status | Proof | Proposed fix |
 | --- | --- | --- | --- | --- | --- | --- |
-| MCP SDK prod probe | `mcp-sdk-smoke.yml` `post-deploy` | prod `mcp.gostoa.dev` | yes | NON PUBLIÉ / NA | [42583971143](https://github.com/stoa-platform/stoa/actions/runs/42583971143) success, schedule, 2026-11-09, `c4b1ea7bc801`. Notice `prod MCP non publiée`; smoke step skipped. Pre-merge job skipped on the cron. | Leave to PR 3150. Do not copy that change here. |
+| MCP SDK prod probe | `mcp-sdk-smoke.yml` `post-deploy` | prod `mcp.gostoa.dev` | yes | SKIP | [42583971143](https://github.com/stoa-platform/stoa/actions/runs/42583971143) success, schedule, 2026-11-09, `c4b1ea7bc801`. Smoke step skipped; availability NON VÉRIFIÉ. Pre-merge job not applicable to the cron event. | Fail closed in CAB-2618. Public-service scope remains a human decision. |
 | MCP SDK pre-merge | `mcp-sdk-smoke.yml` `pre-merge` | local gateway from HEAD | yes | PASS réel | [42173378226](https://github.com/stoa-platform/stoa/actions/runs/42173378226) push, 2026-11-06, `1a327342c188`. Step `Run authenticated MCP SDK smoke` success. | None. Prod probe stays on the schedule job. |
 | Dev health smoke | `reusable-health-smoke.yml` via gateway, portal, console CI | dev | yes | SKIP | Gateway [42173378271](https://github.com/stoa-platform/stoa/actions/runs/42173378271) 2026-11-06 `1a327342c188`; portal [42591211264](https://github.com/stoa-platform/stoa/actions/runs/42591211264) 2026-11-09 `303010db9877`; console [42067952395](https://github.com/stoa-platform/stoa/actions/runs/42067952395) 2026-11-05 `b3b26485db7f`. Job success. `Health checks` skipped. Warning: `SKIPPED, no dev target`. | Keep CAB-2362 (do not probe prod for a dev deploy). A `skip=true` result must not be a successful smoke job. |
 | Dev GitOps endpoint verify | `reusable-gitops-deploy.yml` | dev gateway, portal, console | yes | FAIL | Same three runs. `Wait for ArgoCD sync` success after `Endpoint not healthy after 300s/180s (last: HTTP 000)`. The step has no `exit 1`. | `exit 1` when the deadline passes without HTTP 200. |

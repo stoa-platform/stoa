@@ -6,8 +6,8 @@
 # the environment that was actually deployed: input `base-domain`, else repo
 # variable SMOKE_BASE_DOMAIN_<ENV>, else the derived public prod default.
 # Dev has no public default: the smoke is SKIP / NON VÉRIFIÉ, not a pass.
-# DEV_POST_DEPLOY_REQUIRED (default false) fails that skip; otherwise the
-# job stays green and warns. A probe that ran and saw failures still exits 1.
+# CAB-2618: the selected post-deploy checks are mandatory. A missing target
+# fails the job; a dev deployment must never fall back to production.
 # Zero auth required, runs in ~30s, catches real deploy failures:
 #   pod crash, ingress misconfiguration, Keycloak down, image pull error.
 #
@@ -174,13 +174,14 @@ jobs:
 
       - name: Record health smoke verdict
         id: truth
-        if: always() && steps.resolve.outcome == 'success'
+        if: always()
         env:
           SMOKE_SKIP: ${{ steps.resolve.outputs.skip }}
           CHECKS_RAN: ${{ steps.checks.outputs.ran }}
           CHECKS_OK: ${{ steps.checks.outputs.ok }}
           CHECKS_DETAIL: ${{ steps.checks.outputs.detail }}
           POST_DEPLOY_CONTROL: Health checks
+          POST_DEPLOY_REQUIRED_INPUT: 'true'
           POST_DEPLOY_REQUIRED_VAR: ${{ vars.DEV_POST_DEPLOY_REQUIRED }}
           POST_DEPLOY_COMMIT: ${{ github.sha }}
           POST_DEPLOY_ENVIRONMENT: ${{ inputs.environment }}

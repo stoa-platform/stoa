@@ -170,7 +170,7 @@ graph LR
   A[Import or define an API] --> B[Attach auth, quotas, policies]
   B --> C[Publish REST + MCP]
   C --> D[Agents discover tools]
-  C --> E[Humans keep using REST]
+  C --> E[Applications keep using REST]
   D --> F[Audit, metrics, traces]
   E --> F
 ```

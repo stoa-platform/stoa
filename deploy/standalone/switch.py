@@ -536,7 +536,21 @@ def _ctr_json(host: str, script: str) -> dict:
 
 
 def image_revision_on_node(host: str) -> str:
-    """Read org.opencontainers.image.revision from the imported image."""
+    """Read org.opencontainers.image.revision from the imported image.
+
+    `crictl inspecti` returns the image config as JSON. `ctr images inspect`
+    prints a tree on the containerd that k3s 1.34 ships, so the manifest walk
+    below only serves a node where crictl gives no label.
+    """
+    for ref in IMAGE_REFS:
+        try:
+            found = find_revision(
+                _ctr_json(host, f"sudo k3s crictl inspecti -o json {ref}")
+            )
+        except PreflightError:
+            continue
+        if found:
+            return found
     inspect = None
     chosen = None
     for ref in IMAGE_REFS:
@@ -889,6 +903,13 @@ def self_test() -> None:
     }
     assert find_revision(doc) == label
     assert find_revision({"info": json.dumps(doc)}) == label
+    # Shape of `crictl inspecti -o json`: the config sits under info.imageSpec.
+    crictl_doc = {
+        "status": {"repoTags": ["docker.io/library/stoa-gateway:standalone"]},
+        "info": {"imageSpec": {"config": {"Labels": {REVISION_LABEL: label}}}},
+    }
+    assert find_revision(crictl_doc) == label
+    assert find_revision({"status": {"repoTags": []}, "info": {}}) is None
     assert (
         manifest_digest({"Target": {"digest": "sha256:" + "ab" * 32}})
         == "sha256:" + "ab" * 32

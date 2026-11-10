@@ -379,9 +379,10 @@ the fixture address already in the script. At request time each entry is a
 CIDR: a host prefix contains only that one address.
 
 `networkpolicy.yaml` (`stoa-gateway-ingress`) allows TCP 8080 only from
-ingress-nginx pods and from a pod in `stoa` labelled
-`app.kubernetes.io/name=reconciler`. A pod in `default` calling the Service
-should time out.
+ingress-nginx pods and from the two pods in `stoa` that call the admin API
+with the admin token, labelled `app.kubernetes.io/name=reconciler` and
+`app.kubernetes.io/name=console`. Any other pod calling the Service should
+time out, in `stoa` as in `default`.
 
 ## Image
 

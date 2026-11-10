@@ -428,7 +428,10 @@ so the context is not the local debug build. The image in service since
 2026-11-10 is revision `36c4c3f934dd709c53e9f270845458b077741743` (`IMAGE-REVISION`).
 Tar sha256 `180d061d540d7c1a3c012d9c1e2d27ddd198485c2ec7eb4ab5e38a6a624b3bfe`.
 A later docs commit does not change that binary. The label equals that
-revision; `git diff 36c4c3f934dd709c53e9f270845458b077741743 HEAD -- stoa-gateway/`
+revision. That image was built before the `runtime-distroless` stage existed:
+it is the Debian runtime, and stays in service until the next build is
+imported. Its sources are the current ones:
+`git diff 36c4c3f934dd709c53e9f270845458b077741743 HEAD -- stoa-gateway/src stoa-gateway/Cargo.toml stoa-gateway/Cargo.lock`
 is empty. It adds, to the image of 2026-10-21 (revision
 `6d23399e4d1a1f4c54a03122640c0469c8b4829c`), the opt-in public MCP surface
 with the transport authentication ("Public MCP" above), tokio 1.54.1 and

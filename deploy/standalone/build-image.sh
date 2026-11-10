@@ -55,9 +55,14 @@ if [[ "$user" != "1000:1000" ]]; then
   exit 1
 fi
 cid=$(docker create "${IMAGE}")
+# Removed on any exit: a failed export must not leave the container behind.
+trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
 listing=$(docker export "$cid" | tar -tf -)
 docker rm "$cid" >/dev/null
-if unwanted=$(grep -E '^(\./)?(usr/)?s?bin/(sh|bash|dash|busybox|curl|wget|apt|apt-get|dpkg)$' <<<"$listing"); then
+trap - EXIT
+# By file name, in any directory: the distroless debug variants keep their
+# shell under /busybox.
+if unwanted=$(grep -E '(^|/)(sh|ash|bash|dash|zsh|ksh|busybox|curl|wget|apt|apt-get|dpkg)$' <<<"$listing"); then
   echo "runtime image is not the distroless stage, it carries:" >&2
   echo "$unwanted" >&2
   exit 1

@@ -5,7 +5,9 @@
 # Targets (CAB-2362) are resolved by scripts/ci/resolve-smoke-targets.sh for
 # the environment that was actually deployed: input `base-domain`, else repo
 # variable SMOKE_BASE_DOMAIN_<ENV>, else the derived public prod default.
-# Dev has no public default: the smoke is skipped with a visible warning.
+# Dev has no public default: the smoke is SKIP / NON VÉRIFIÉ, not a pass.
+# DEV_POST_DEPLOY_REQUIRED (default false) fails that skip; otherwise the
+# job stays green and warns. A probe that ran and saw failures still exits 1.
 # Zero auth required, runs in ~30s, catches real deploy failures:
 #   pod crash, ingress misconfiguration, Keycloak down, image pull error.
 #
@@ -31,6 +33,10 @@ on:
         required: false
         type: string
         default: ''
+    outputs:
+      post_deploy_status:
+        description: 'PASS, FAIL, or SKIP for the health smoke'
+        value: ${{ jobs.health-check.outputs.post_deploy_status }}
     secrets:
       cf-access-client-id:
         description: 'Cloudflare Access service token id (console is behind Access)'
@@ -48,6 +54,8 @@ jobs:
     timeout-minutes: 8
     permissions:
       contents: read
+    outputs:
+      post_deploy_status: ${{ steps.truth.outputs.post_deploy_status }}
     env:
       SMOKE_ENV: ${{ inputs.environment }}
       SMOKE_COMPONENT: ${{ inputs.component }}
@@ -61,7 +69,9 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
-          sparse-checkout: scripts/ci/resolve-smoke-targets.sh
+          sparse-checkout: |
+            scripts/ci/resolve-smoke-targets.sh
+            scripts/ci/dev_post_deploy_truth.sh
           sparse-checkout-cone-mode: false
           persist-credentials: false
 
@@ -106,6 +116,7 @@ jobs:
           echo "::warning::$url not ready after 5 min — running checks anyway"
 
       - name: Health checks
+        id: checks
         if: steps.resolve.outputs.skip != 'true'
         env:
           SMOKE_DOMAIN: ${{ steps.resolve.outputs.domain }}
@@ -148,4 +159,44 @@ jobs:
 
           echo "---"
           echo "Results: $PASS passed, $FAIL failed (component: $SMOKE_COMPONENT)"
+          {
+            echo "ran=true"
+            if [ "$FAIL" -eq 0 ]; then
+              echo "ok=true"
+              echo "detail=health checks passed"
+            else
+              echo "ok=false"
+              echo "detail=${FAIL} health check(s) failed"
+            fi
+          } >> "$GITHUB_OUTPUT"
+          # Real probe failures stay red. The truth step does not replace this.
           [ "$FAIL" -eq 0 ] || exit 1
+
+      - name: Record health smoke verdict
+        id: truth
+        if: always() && steps.resolve.outcome == 'success'
+        env:
+          SMOKE_SKIP: ${{ steps.resolve.outputs.skip }}
+          CHECKS_RAN: ${{ steps.checks.outputs.ran }}
+          CHECKS_OK: ${{ steps.checks.outputs.ok }}
+          CHECKS_DETAIL: ${{ steps.checks.outputs.detail }}
+          POST_DEPLOY_CONTROL: Health checks
+          POST_DEPLOY_REQUIRED_VAR: ${{ vars.DEV_POST_DEPLOY_REQUIRED }}
+          POST_DEPLOY_COMMIT: ${{ github.sha }}
+          POST_DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          set -euo pipefail
+          if [ "${SMOKE_SKIP:-}" = "true" ]; then
+            export POST_DEPLOY_RAN=false
+            export POST_DEPLOY_OK=
+            export POST_DEPLOY_REASON="SKIPPED, no dev target"
+          elif [ "${CHECKS_RAN:-}" != "true" ]; then
+            export POST_DEPLOY_RAN=true
+            export POST_DEPLOY_OK=false
+            export POST_DEPLOY_REASON="${CHECKS_DETAIL:-health checks did not report a result}"
+          else
+            export POST_DEPLOY_RAN=true
+            export POST_DEPLOY_OK="${CHECKS_OK:-false}"
+            export POST_DEPLOY_REASON="${CHECKS_DETAIL:-health checks did not report a result}"
+          fi
+          bash scripts/ci/dev_post_deploy_truth.sh

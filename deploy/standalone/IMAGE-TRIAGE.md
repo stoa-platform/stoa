@@ -3,19 +3,22 @@
 ## Identity
 
 Scanned image: `stoa-gateway:standalone`
-Label `org.opencontainers.image.revision`: `36c4c3f934dd709c53e9f270845458b077741743`
-That value is `git rev-parse HEAD` at build time (`deploy/standalone/build-image.sh`, `STOA_REVISION` unset). It is the commit that lets an MCP client find where to sign in (absolute 401 challenge, protected resource metadata per endpoint, the realm as authorization server) and records the audit exceptions, on top of the tokio 1.54.1 image (`4e84fae718a14dd6d1e75504cfe6f031cb76ea9d`).
+Label `org.opencontainers.image.revision`: `ae6d3b868b399c21a05680268b7a6fdea48b50b7`
+That value is `git rev-parse HEAD` at build time (`deploy/standalone/build-image.sh`, `STOA_REVISION` unset). It is the commit that adds the `runtime-distroless` stage to the Dockerfile and builds the standalone image from it. The gateway itself is the one of the previous image (`36c4c3f934dd709c53e9f270845458b077741743`): `git diff 36c4c3f934dd709c53e9f270845458b077741743 ae6d3b868b399c21a05680268b7a6fdea48b50b7 -- stoa-gateway/src stoa-gateway/Cargo.toml stoa-gateway/Cargo.lock` is empty.
 Tar: `deploy/standalone/stoa-gateway-standalone.tar` (not committed)
-Tar sha256: `180d061d540d7c1a3c012d9c1e2d27ddd198485c2ec7eb4ab5e38a6a624b3bfe`
-Base: `debian:bookworm-slim` (Trivy detected Debian 12.15), builder `rust:1.93-bookworm`
+Tar sha256: `76ca7d83d57d93831d35387535782c9daebffa158ad54a54cc4fe7621ebd5fcf`
+Base: `gcr.io/distroless/cc-debian13@sha256:e1f5543d45a2cd7c02a5b43dda5f0ff30729b4832113759d01ed39b0b152cddb` (Trivy detected Debian 13.7), builder `rust:1.93-bookworm`. No shell, no package manager, no curl, no `HEALTHCHECK`; user `1000:1000`. `build-image.sh` checks this on every build.
+OS packages (14): base-files 13.8+deb13u7, ca-certificates 20250419+deb13u1, gcc-14-base 14.2.0-19, libc6 2.41-12+deb13u4, libgcc-s1 14.2.0-19, libgomp1 14.2.0-19, libssl3t64 3.5.7-1~deb13u3, libstdc++6 14.2.0-19, libzstd1 1.5.7+dfsg-1, media-types 13.0.0, netbase 6.5, tzdata 2026f-0+deb13u1, tzdata-legacy 2026f-0+deb13u1, zlib1g 1:1.3.dfsg+really1.3.1-1+deb13u1.
+Size: 63 MB (160 MB on the Debian runtime).
 Build: `cargo chef cook --release --locked` and `cargo auditable build --release --locked` (cargo-auditable 0.7.5). The binary is not stripped; `readelf` finds `.dep-v0`.
 Build host: macOS arm64, Docker Desktop 29.6.1, `DOCKER_DEFAULT_PLATFORM=linux/amd64`. The image is `linux/amd64`. Trivy 0.58.1 ran from the `aquasec/trivy:0.58.1` container: the script's fallback downloads a Linux binary.
-Built, scanned and imported on worker-3 on 2026-11-10, in service since 18:35 UTC. Config digest on the node: `sha256:02d1a1738252e47703469159ac33f754a43939b0723289bf9be15df5ed473abe`.
+Built, scanned and imported on worker-3 on 2026-11-10, in service since 20:23 UTC. Config digest on the node: `sha256:8cff54bde6d618a26e3476ee2e0ee53d7674910d1d651720efaf42d3cac0f798`.
 
 Previous images, kept on worker-3 for rollback:
 
 | Tag on worker-3 | Revision | In service |
 | --- | --- | --- |
+| `stoa-gateway:standalone-prev-36c4c3f9` | `36c4c3f934dd709c53e9f270845458b077741743` | 2026-11-10, 18:35 to 20:23 UTC, the last image on the Debian runtime (`debian:bookworm-slim`), tar sha256 `180d061d540d7c1a3c012d9c1e2d27ddd198485c2ec7eb4ab5e38a6a624b3bfe`, config digest `sha256:02d1a1738252e47703469159ac33f754a43939b0723289bf9be15df5ed473abe` |
 | `stoa-gateway:standalone-prev-4e84fae7` | `4e84fae718a14dd6d1e75504cfe6f031cb76ea9d` | 2026-11-10, 17:11 to 18:35 UTC, tar sha256 `f1108188dd87822ad5850ec20954c61f3126f387f3d6beb3644c5871223d0635`, config digest `sha256:ca6a3c050cfb5026344efdb3d80b93a98c5ec935cd08fff9fd59f03a1cb59547` |
 | `stoa-gateway:standalone-prev-c2e40501` | `c2e40501a5a0ab696f06b308dbb40fab81447b01` | 2026-11-10, about 15 minutes (tokio 1.54.0) |
 | `stoa-gateway:standalone-prev-6d23399e` | `6d23399e4d1a1f4c54a03122640c0469c8b4829c` | 2026-10-21 to 2026-11-10, tar sha256 `c714dbf06d0f7e592d47ae3ee706ffec7dfa52603bbf024beec28162c3a52031` |
@@ -23,15 +26,27 @@ Previous images, kept on worker-3 for rollback:
 This triage commit does not touch the docker context (`stoa-gateway/`, including `Dockerfile` and `Cargo.lock`). Proof, empty at this commit and after it:
 
 ```text
-git diff 36c4c3f934dd709c53e9f270845458b077741743 HEAD -- stoa-gateway/src stoa-gateway/Cargo.toml stoa-gateway/Cargo.lock
+git diff ae6d3b868b399c21a05680268b7a6fdea48b50b7 HEAD -- stoa-gateway/
 ```
 
-`stoa-gateway/Dockerfile` has since gained a `runtime-distroless` stage, which
-`build-image.sh` now builds. The image described in this file was built before
-that change, on the Debian runtime, and is the one in service until the next
-build is imported. That build gets its own scan and its own triage here.
-
 ## Disposition
+
+`trivy image --ignore-unfixed=false` on the tar (Trivy 0.58.1, exit 0, database of 2026-11-10) reports Debian 13.7: 46 findings (34 MEDIUM, 12 LOW), no CRITICAL, no HIGH, none with a fixed package, and the Rust binary: 1 MEDIUM. With `--ignore-unfixed`, the build gate, CRITICAL and HIGH are 0. The same gateway on the Debian runtime (revision `36c4c3f9`) reported 421 OS findings (1 CRITICAL, 96 HIGH, 133 MEDIUM, 161 LOW, 30 UNKNOWN). Every OS row accepted for that image named a package this image does not carry (curl, krb5, util-linux, systemd, OpenLDAP, libacl, gzip, ncurses, perl) or a finding Trivy no longer reports on this base (zlib1g, libssl3). `quick-xml` 0.39.4 is not in the Rust report. RustSec still lists two HIGH advisories on it. >= 0.41.0 avant tout câblage SOAP.
+
+| Vulnerability | Packages | Disposition |
+| --- | --- | --- |
+| RUSTSEC-2026-0194, RUSTSEC-2026-0195 HIGH (not emitted by Trivy 0.58.1) | quick-xml 0.39.4 | DoS in XML attribute checks and `NsReader`. Linked for the SOAP module. `STOA_SOAP_PROXY_ENABLED` and `STOA_SOAP_BRIDGE_ENABLED` stay false, and no SOAP contract is published. Accept only while that stays true. >= 0.41.0 avant tout câblage SOAP. |
+| CVE-2026-48504 MEDIUM, fixed in 0.32.1 | opentelemetry_sdk 0.27.1 | Unbounded allocation in W3C baggage propagation. The binary enables the `trace` feature only; baggage is not used. Accept on this image. The bump crosses five minors and is a separate tracing change. |
+| 22 identifiers, MEDIUM and LOW, affected, no fixed package in trixie | libc6 | glibc. Below the CRITICAL and HIGH line this triage and the build gate work on: listed in the table below, not triaged one by one. Read again when the base digest moves. |
+| 6 identifiers, MEDIUM and LOW, affected, no fixed package in trixie, each reported on four packages | gcc-14-base, libgcc-s1, libgomp1, libstdc++6 | The GCC runtime libraries of the base. The binary links `libgcc_s` only. Same line as glibc. |
+
+Commitment met on 2026-11-10: the runtime base is `gcr.io/distroless/cc-debian13` pinned by digest, which is what `gcr.io/distroless/cc:latest` resolved to that day. The date given was 06/11/2026. `cc-debian12` was scanned the same day and set aside: 65 findings, one of them HIGH with a fixed package (libssl3).
+
+Moving the base digest is a rebuild, a scan and a new triage here.
+
+### Record: the Debian runtime (images until 2026-11-10, 20:23 UTC)
+
+The text below is the triage of the images built on `debian:bookworm-slim`, kept as written. It does not describe the image in service.
 
 `trivy image --ignore-unfixed=false` on the tar (Trivy 0.58.1, exit 0, database of 2026-11-10) reports Debian 12.15: 421 findings (1 CRITICAL, 96 HIGH, 133 MEDIUM, 161 LOW, 30 UNKNOWN) and the Rust binary: 1 MEDIUM. With `--ignore-unfixed`, the build gate, both CRITICAL and HIGH are 0: no finding has a fixed package in bookworm. The scan of 2026-10-21 on revision `6d23399e` reported 364 findings (1 CRITICAL, 70 HIGH, 131 MEDIUM, 161 LOW, 1 UNKNOWN). The rows below are that triage; the changes since are listed under "Rebuild of 2026-11-10". Those counts were first taken on revision `4e84fae7`, built the same day; the scan of this image is the same finding for finding (same base image digest, same `Cargo.lock`). `quick-xml` 0.39.4 is not in that Rust report. RustSec still lists two HIGH advisories on it. >= 0.41.0 avant tout câblage SOAP.
 
@@ -50,7 +65,7 @@ build is imported. That build gets its own scan and its own triage here.
 | CVE-2025-69720 HIGH, affected | ncurses, libtinfo6 | Terminal library overflow. The process does not link ncurses for request handling. Accept. |
 | CVE-2026-9538 HIGH, fix_deferred | perl-base | `Archive::Tar` denial of service. perl is a base-image essential and is not executed. Accept. |
 
-### Rebuild of 2026-11-10
+#### Rebuild of 2026-11-10, Debian runtime
 
 The CRITICAL is unchanged (`CVE-2023-45853`, zlib1g, will_not_fix, accepted above).
 
@@ -64,10 +79,6 @@ Reported at HIGH and absent from the triage above. The dispositions were written
 | CVE-2026-76844 HIGH, affected | zlib1g | Heap overflow in `gz_write` after a failed `write()` (the `gz*` file API). The gateway binary does not link the system zlib (no `libz-sys` in the SBOM) and nothing in the container writes gzip files. In the table below Trivy prints another advisory's title for this identifier ("webpack-dev-middleware ... Path Traversal"); the description it carries for it, and the package, are the zlib ones. Accepted on 2026-11-10. |
 
 Rust binary: the first rebuild of the day (revision `c2e40501`) carried `CVE-2026-115567`, a race in tokio 1.54.0 timer handling, fixed in 1.54.1. It was in the image of 2026-10-21 as well; Trivy's database did not list it then. This image links tokio 1.54.1 and the finding is gone. `CVE-2026-48504` (opentelemetry_sdk 0.27.1, MEDIUM) is unchanged and accepted above.
-
-The commitment below gives 06/11/2026 for the move to `gcr.io/distroless/cc` pinned by digest. On 2026-11-10 the runtime base is still `debian:bookworm-slim`: that date has passed.
-
-Commitment: migration to `gcr.io/distroless/cc` pinned by digest by 06/11/2026 at the latest. The runtime base is still `debian:bookworm-slim` (a tag, not a digest). That move removes the zlib/MiniZip package and the other Debian rows above. This image is not that base.
 
 ## cargo audit
 
@@ -112,1594 +123,187 @@ The 12 exceptions in `stoa-gateway/.cargo/audit.toml`:
 
 ## trivy image --ignore-unfixed=false
 
-Command: `trivy image --input deploy/standalone/stoa-gateway-standalone.tar --ignore-unfixed=false` (Trivy 0.58.1 from `aquasec/trivy:0.58.1`, exit 0), on the image of revision `36c4c3f9`.
+Command: `trivy image --input deploy/standalone/stoa-gateway-standalone.tar --ignore-unfixed=false` (Trivy 0.58.1 from `aquasec/trivy:0.58.1`, exit 0), on the image of revision `ae6d3b86`.
 
 ```text
-2026-11-10T18:37:23Z	INFO	[vuln] Vulnerability scanning is enabled
-2026-11-10T18:37:23Z	INFO	[secret] Secret scanning is enabled
-2026-11-10T18:37:23Z	INFO	[secret] If your scanning is slow, please try '--scanners vuln' to disable secret scanning
-2026-11-10T18:37:23Z	INFO	[secret] Please see also https://aquasecurity.github.io/trivy/v0.58/docs/scanner/secret#recommendation for faster secret detection
-2026-11-10T18:37:23Z	INFO	Detected OS	family="debian" version="12.15"
-2026-11-10T18:37:23Z	INFO	[debian] Detecting vulnerabilities...	os_version="12" pkg_num=110
-2026-11-10T18:37:23Z	INFO	Number of language-specific files	num=1
-2026-11-10T18:37:23Z	INFO	[rustbinary] Detecting vulnerabilities...
-2026-11-10T18:37:23Z	WARN	Using severities from other vendors for some vulnerabilities. Read https://aquasecurity.github.io/trivy/v0.58/docs/scanner/vulnerability#severity-selection for details.
+2026-11-10T20:20:26Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-11-10T20:20:26Z	INFO	[secret] Secret scanning is enabled
+2026-11-10T20:20:26Z	INFO	[secret] If your scanning is slow, please try '--scanners vuln' to disable secret scanning
+2026-11-10T20:20:26Z	INFO	[secret] Please see also https://aquasecurity.github.io/trivy/v0.58/docs/scanner/secret#recommendation for faster secret detection
+2026-11-10T20:20:26Z	INFO	Detected OS	family="debian" version="13.7"
+2026-11-10T20:20:26Z	INFO	[debian] Detecting vulnerabilities...	os_version="13" pkg_num=14
+2026-11-10T20:20:26Z	INFO	Number of language-specific files	num=1
+2026-11-10T20:20:26Z	INFO	[rustbinary] Detecting vulnerabilities...
+2026-11-10T20:20:26Z	WARN	Using severities from other vendors for some vulnerabilities. Read https://aquasecurity.github.io/trivy/v0.58/docs/scanner/vulnerability#severity-selection for details.
 
-/tmp/claude-stoa/wt-build/deploy/standalone/stoa-gateway-standalone.tar (debian 12.15)
-======================================================================================
-Total: 421 (UNKNOWN: 30, LOW: 161, MEDIUM: 133, HIGH: 96, CRITICAL: 1)
+/tmp/claude-stoa/wt-build/deploy/standalone/stoa-gateway-standalone.tar (debian 13.7)
+=====================================================================================
+Total: 46 (UNKNOWN: 0, LOW: 12, MEDIUM: 34, HIGH: 0, CRITICAL: 0)
 
-┌────────────────────┬─────────────────────┬──────────┬──────────────┬────────────────────────┬───────────────┬──────────────────────────────────────────────────────────────┐
-│      Library       │    Vulnerability    │ Severity │    Status    │   Installed Version    │ Fixed Version │                            Title                             │
-├────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ apt                │ CVE-2011-3374       │ LOW      │ affected     │ 2.6.2                  │               │ It was found that apt-key in apt, all versions, do not       │
-│                    │                     │          │              │                        │               │ correctly...                                                 │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2011-3374                    │
-├────────────────────┼─────────────────────┤          │              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ bash               │ TEMP-0841856-B18BAF │          │              │ 5.2.15-2+b13           │               │ [Privilege escalation possible to other user than root]      │
-│                    │                     │          │              │                        │               │ https://security-tracker.debian.org/tracker/TEMP-0841856-B1- │
-│                    │                     │          │              │                        │               │ 8BAF                                                         │
-├────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ bsdutils           │ CVE-2026-53613      │ HIGH     │              │ 1:2.38.1-5+deb12u3     │               │ util-linux: TOCTOU in the mount program via ancestor         │
-│                    │                     │          │              │                        │               │ directory swap on target...                                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53613                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-53615      │          │              │                        │               │ util-linux: util-linux: Partition metadata compromise via    │
-│                    │                     │          │              │                        │               │ integer overflow in DOS partition parser...                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53615                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-78410      │          │              │                        │               │ util-linux: util-linux: restricted bind mounts do not pin    │
-│                    │                     │          │              │                        │               │ the source, allowing X-mount.owner/group/mode...             │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78410                   │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-13595      │ MEDIUM   │              │                        │               │ util-linux: util-linux: heap use-after-free in libblkid      │
-│                    │                     │          │              │                        │               │ nested partition probing                                     │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-13595                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-27456      │          │              │                        │               │ util-linux: TOCTOU in the mount program when setting up loop │
-│                    │                     │          │              │                        │               │ devices                                                      │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-27456                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-3184       │          │ will_not_fix │                        │               │ util-linux: util-linux: Access control bypass due to         │
-│                    │                     │          │              │                        │               │ improper hostname canonicalization                           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-3184                    │
-│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2022-0563       │ LOW      │ affected     │                        │               │ util-linux: partial disclosure of arbitrary files in chfn    │
-│                    │                     │          │              │                        │               │ and chsh when compiled...                                    │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2022-0563                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2025-14104      │          │              │                        │               │ util-linux: util-linux: Heap buffer overread in setpwnam()   │
-│                    │                     │          │              │                        │               │ when processing 256-byte usernames                           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-14104                   │
-├────────────────────┼─────────────────────┤          ├──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ coreutils          │ CVE-2016-2781       │          │ will_not_fix │ 9.1-1                  │               │ coreutils: Non-privileged session can escape to the parent   │
-│                    │                     │          │              │                        │               │ session in chroot                                            │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2016-2781                    │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2017-18018      │          │ affected     │                        │               │ coreutils: race condition vulnerability in chown and chgrp   │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2017-18018                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2025-5278       │          │              │                        │               │ coreutils: Heap Buffer Under-Read in GNU Coreutils sort via  │
-│                    │                     │          │              │                        │               │ Key Specification                                            │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-5278                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-56391      │          │              │                        │               │ coreutils: GNU coreutils uniq: Denial of Service and         │
-│                    │                     │          │              │                        │               │ information disclosure via out-of-bounds...                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-56391                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-56392      │          │              │                        │               │ coreutils: GNU coreutils unexpand: Denial of Service via     │
-│                    │                     │          │              │                        │               │ crafted tab stop values...                                   │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-56392                   │
-├────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ curl               │ CVE-2026-12064      │ HIGH     │ fix_deferred │ 7.88.1-10+deb12u15     │               │ curl: curl: SSH host verification bypass when using          │
-│                    │                     │          │              │                        │               │ schemeless URLs with SFTP/SCP...                             │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-12064                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-6276       │          │ affected     │                        │               │ curl: libcurl: Information disclosure due to cookie leak     │
-│                    │                     │          │              │                        │               │ when reusing connections with...                             │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-6276                    │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-8286       │          │ fix_deferred │                        │               │ curl: curl: Insecure connection establishment due to TLS     │
-│                    │                     │          │              │                        │               │ configuration mismatch                                       │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-8286                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-8458       │          │              │                        │               │ curl: libcurl: Unauthorized connection reuse due to a        │
-│                    │                     │          │              │                        │               │ logical error                                                │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-8458                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-8927       │          │              │                        │               │ curl: Information disclosure due to uncleared proxy          │
-│                    │                     │          │              │                        │               │ authentication state                                         │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-8927                    │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-10536      │ MEDIUM   │              │                        │               │ libcurl: libcurl: Use-after-free vulnerability leading to    │
-│                    │                     │          │              │                        │               │ Denial of Service                                            │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-10536                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-11856      │          │              │                        │               │ curl: curl: Information disclosure via incorrect Digest      │
-│                    │                     │          │              │                        │               │ authentication header reuse                                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-11856                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-1965       │          │ affected     │                        │               │ curl: curl: Authentication bypass due to incorrect           │
-│                    │                     │          │              │                        │               │ connection reuse with Negotiate authentication...            │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-1965                    │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-19931      │          │ fix_deferred │                        │               │ curl: libcurl: Information disclosure via incorrect          │
-│                    │                     │          │              │                        │               │ connection reuse with Negotiate authentication               │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-19931                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-4873       │          │ affected     │                        │               │ curl: curl: Information disclosure due to incorrect TLS      │
-│                    │                     │          │              │                        │               │ connection reuse                                             │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-4873                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-5545       │          │              │                        │               │ curl: libcurl: Authentication bypass due to incorrect HTTP   │
-│                    │                     │          │              │                        │               │ Negotiate connection reuse                                   │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-5545                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-6253       │          │              │                        │               │ curl: curl: Proxy credential disclosure via redirects to     │
-│                    │                     │          │              │                        │               │ unauthenticated proxies                                      │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-6253                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-6429       │          │              │                        │               │ curl: libcurl: Credential leak via reused proxy connection   │
-│                    │                     │          │              │                        │               │ during HTTP redirects                                        │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-6429                    │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-8924       │          │ fix_deferred │                        │               │ curl: curl: Cookie injection via malicious HTTP server using │
-│                    │                     │          │              │                        │               │ super cookies                                                │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-8924                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-8932       │          │              │                        │               │ libcurl: libcurl: Security feature bypass due to improper    │
-│                    │                     │          │              │                        │               │ mTLS connection reuse                                        │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-8932                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-92388      │          │              │                        │               │ curl: curl: FTP wildcard write callback mixup                │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-92388                   │
-│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2024-2379       │ LOW      │ affected     │                        │               │ curl: QUIC certificate check bypass with wolfSSL             │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-2379                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2025-0725       │          │              │                        │               │ libcurl: Buffer Overflow in libcurl via zlib Integer         │
-│                    │                     │          │              │                        │               │ Overflow                                                     │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-0725                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2025-10966      │          │              │                        │               │ curl: Curl missing SFTP host verification with wolfSSH       │
-│                    │                     │          │              │                        │               │ backend                                                      │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-10966                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2025-14017      │          │              │                        │               │ curl: curl: Security bypass due to global TLS option changes │
-│                    │                     │          │              │                        │               │ in multi-threaded...                                         │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-14017                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2025-15079      │          │              │                        │               │ curl: Host verification bypass during SSH transfers          │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-15079                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2025-15224      │          │              │                        │               │ curl: libssh key passphrase bypass without agent set         │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-15224                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-107928     │          │              │                        │               │ curl: curl: info leak uploading over WebSockets with GnuTLS  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107928                  │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-13608      │          │ fix_deferred │                        │               │ curl: curl: Authentication bypass in OpenLDAP SASL           │
-│                    │                     │          │              │                        │               │ negotiation via Man-in-the-Middle (MITM) attack...           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-13608                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-18924      │          │              │                        │               │ curl: libcurl: Use-after-free in HTTP/2 Server Push with     │
-│                    │                     │          │              │                        │               │ shared connections                                           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-18924                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-80230      │          │              │                        │               │ curl: curl: Public key pinning bypass allows unauthenticated │
-│                    │                     │          │              │                        │               │ connections                                                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-80230                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-82209      │          │              │                        │               │ curl: libcurl: Information disclosure via improper Public    │
-│                    │                     │          │              │                        │               │ Suffix List boundary check                                   │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-82209                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-86409      │          │ affected     │                        │               │ curl: curl: stale SigV4 headers sent unintended              │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-86409                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-86410      │          │              │                        │               │ curl: curl: redirect to SFTP or SCP bypasses host            │
-│                    │                     │          │              │                        │               │ verification                                                 │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-86410                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-86414      │          │              │                        │               │ curl: curl: leaking host credentials to HTTP proxy           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-86414                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-87864      │          │ fix_deferred │                        │               │ curl: IMAP APPEND plus CRLF conversion command injection     │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-87864                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-87865      │          │              │                        │               │ curl: curl: knownhost callback mismatches key as missing     │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-87865                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-87866      │          │ affected     │                        │               │ curl: curl: wolfSSL public-key pinning bypass                │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-87866                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-92389      │          │ fix_deferred │                        │               │ curl: curl: TFTP direction confusion                         │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-92389                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-92390      │          │              │                        │               │ curl: curl: -J no-clobber guarantee bypassed with 103 early  │
-│                    │                     │          │              │                        │               │ hints                                                        │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-92390                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-92391      │          │ affected     │                        │               │ curl: curl: curl_mime_free stack overflow by recursion       │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-92391                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-94266      │          │              │                        │               │ curl: curl: password leak in CURLINFO_EFFECTIVE_URL          │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-94266                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-9547       │          │              │                        │               │ curl: curl: Man-in-the-middle attack via SSH host key bypass │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-9547                    │
-├────────────────────┼─────────────────────┤          │              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ dash               │ CVE-2026-102473     │          │              │ 0.5.12-2               │               │ dash: dash: Super-polynomial backtracking in pmatch when     │
-│                    │                     │          │              │                        │               │ libc fnmatch is disabled                                     │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-102473                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-102474     │          │              │                        │               │ dash: dash: Heap out-of-bounds write in conv_escape via      │
-│                    │                     │          │              │                        │               │ undersized Unicode escape reservation...                     │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-102474                  │
-├────────────────────┼─────────────────────┤          │              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ diffutils          │ CVE-2026-53910      │          │              │ 1:3.8-4                │               │ diffutils: heap‑based buffer overflow due to multiple signed │
-│                    │                     │          │              │                        │               │ integer overflows in line‑mapping...                         │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53910                   │
-├────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ gcc-12-base        │ CVE-2026-102010     │ MEDIUM   │ will_not_fix │ 12.2.0-14+deb12u1      │               │ gcc-toolset-15-gcc: gcc: gcc-toolset-16: gcc: Denial of      │
-│                    │                     │          │              │                        │               │ Service via use-after-free in binary heap...                 │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-102010                  │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-114690     │          │ affected     │                        │               │ gcc: Confirmed out-of-bounds read/write in libstdc++         │
-│                    │                     │          │              │                        │               │ parallel `std                                                │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-114690                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-114691     │          │              │                        │               │ gcc: Integer wrap in `std                                    │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-114691                  │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-95619      │          │ fix_deferred │                        │               │ gcc: libstdc++ integer overflow in `new` operator            │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-95619                   │
-│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2022-27943      │ LOW      │ affected     │                        │               │ binutils: libiberty/rust-demangle.c in GNU GCC 11.2 allows   │
-│                    │                     │          │              │                        │               │ stack exhaustion in demangle_const                           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2022-27943                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-115456     │          │              │                        │               │ gcc: Out-of-bounds read in std::from_chars                   │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-115456                  │
-├────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ gpgv               │ CVE-2025-30258      │ MEDIUM   │              │ 2.2.40-1.1+deb12u2     │               │ gnupg: verification DoS due to a malicious subkey in the     │
-│                    │                     │          │              │                        │               │ keyring                                                      │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-30258                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2025-68972      │          │              │                        │               │ gnupg: GnuPG: Signature bypass via form feed character in    │
-│                    │                     │          │              │                        │               │ signed messages                                              │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-68972                   │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2022-3219       │ LOW      │              │                        │               │ gnupg: denial of service issue (resource consumption) using  │
-│                    │                     │          │              │                        │               │ compressed packets                                           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2022-3219                    │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-105712     │          │ fix_deferred │                        │               │ gnupg2: gnupg: Arbitrary file overwrite via symlink          │
-│                    │                     │          │              │                        │               │ traversal in gpgtar                                          │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-105712                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-57062      │          │              │                        │               │ GnuPG: Incorrect cryptographic message parsing               │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-57062                   │
-├────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ gzip               │ CVE-2026-41992      │ HIGH     │              │ 1.12-1                 │               │ gzip: gzip: Information disclosure via global buffer         │
-│                    │                     │          │              │                        │               │ overflow in LZH decompression                                │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-41992                   │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-41991      │ MEDIUM   │              │                        │               │ gzip: gzip: Arbitrary file overwrite via insecure temporary  │
-│                    │                     │          │              │                        │               │ file handling in gzexe...                                    │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-41991                   │
-├────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ krb5-locales       │ CVE-2026-112315     │ HIGH     │ affected     │ 1.20.1-2+deb12u5       │               │ krb5: MIT krb5 kadmind unauthenticated memory leak DoS in    │
-│                    │                     │          │              │                        │               │ RPCSEC_GSS buffer decode...                                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112315                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112316     │          │              │                        │               │ krb5: MIT krb5 kadmind authenticated memory leak DoS in      │
-│                    │                     │          │              │                        │               │ xdr_krb5_tl_data() decode failure...                         │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112316                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112317     │          │              │                        │               │ krb5: MIT krb5 KDC unauthenticated memory leak DoS in KDB    │
-│                    │                     │          │              │                        │               │ keytab key...                                                │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112317                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112318     │          │              │                        │               │ krb5: MIT krb5 kadmind authenticated DoS exploiting          │
-│                    │                     │          │              │                        │               │ dereference of null policy name...                           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112318                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112319     │          │              │                        │               │ krb5: MIT krb5 kadmind authenticated memory exhaustion DoS   │
-│                    │                     │          │              │                        │               │ via unbounded RPC XDR...                                     │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112319                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112320     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated memory leak DoS via   │
-│                    │                     │          │              │                        │               │ GSS-RPC auth flavor...                                       │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112320                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112321     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated memory leak DoS via   │
-│                    │                     │          │              │                        │               │ AUTH_GSSAPI_INIT error paths...                              │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112321                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112322     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated CPU DoS via           │
-│                    │                     │          │              │                        │               │ AUTH_GSSAPI client states cleanup...                         │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112322                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112323     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated memory exhaustion via │
-│                    │                     │          │              │                        │               │ failed AUTH_GSSAPI_INIT requests                             │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112323                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-119079     │          │              │                        │               │ krb5: MIT krb5 KDC unauthenticated CPU DoS via quadratic     │
-│                    │                     │          │              │                        │               │ ASN.1 SEQUENCE OF...                                         │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-119079                  │
-│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-107708     │ MEDIUM   │ fix_deferred │                        │               │ krb5: krb5: Denial of Service via malformed PAC in S4U2Proxy │
-│                    │                     │          │              │                        │               │ requests                                                     │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107708                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-107778     │          │              │                        │               │ krb5: krb5: Denial of Service via crafted forwarded          │
-│                    │                     │          │              │                        │               │ credentials                                                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107778                  │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112314     │          │ affected     │                        │               │ krb5: MIT krb5 GSS-RPC client memory leak on XID mismatch    │
-│                    │                     │          │              │                        │               │ retries                                                      │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112314                  │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2018-5709       │ LOW      │              │                        │               │ krb5: integer overflow in dbentry->n_key_data in             │
-│                    │                     │          │              │                        │               │ kadmin/dbutil/dump.c                                         │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2018-5709                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2024-26458      │          │              │                        │               │ krb5: Memory leak at /krb5/src/lib/rpc/pmap_rmt.c            │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-26458                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2024-26461      │          │              │                        │               │ krb5: Memory leak at /krb5/src/lib/gssapi/krb5/k5sealv3.c    │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-26461                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-11850      │          │              │                        │               │ krb5: krb5: integer underflow in berval2tl_data() leads to   │
-│                    │                     │          │              │                        │               │ heap out-of-bounds read                                      │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-11850                   │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-107364     │ UNKNOWN  │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107364                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-107884     │          │              │                        │               │ [Check for the lockdown_keys attribute when processing       │
-│                    │                     │          │              │                        │               │ password change protocol requests in...                      │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107884                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-111423     │          │              │                        │               │ [Fix a logic error when checking PAC server checksums]       │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-111423                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-118380     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-118380                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-71199      │          │              │                        │               │ [Check for unkeyed checksums when validating CAMMAC          │
-│                    │                     │          │              │                        │               │ verifiers]                                                   │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-71199                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-71200      │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-71200                   │
-├────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libacl1            │ CVE-2026-54369      │ HIGH     │ fix_deferred │ 2.3.1-3                │               │ acl: Symlink traversal privilege escalation via libacl       │
-│                    │                     │          │              │                        │               │ functions                                                    │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-54369                   │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-54370      │ MEDIUM   │              │                        │               │ acl: TOCTOU Symlink Traversal via getfacl/setfacl            │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-54370                   │
-├────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libapt-pkg6.0      │ CVE-2011-3374       │ LOW      │ affected     │ 2.6.2                  │               │ It was found that apt-key in apt, all versions, do not       │
-│                    │                     │          │              │                        │               │ correctly...                                                 │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2011-3374                    │
-├────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libattr1           │ CVE-2026-54371      │ MEDIUM   │ fix_deferred │ 1:2.5.1-4              │               │ attr: attr: Symlink Traversal Privilege Escalation via       │
-│                    │                     │          │              │                        │               │ getfattr and setfattr                                        │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-54371                   │
-├────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libblkid1          │ CVE-2026-53613      │ HIGH     │ affected     │ 2.38.1-5+deb12u3       │               │ util-linux: TOCTOU in the mount program via ancestor         │
-│                    │                     │          │              │                        │               │ directory swap on target...                                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53613                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-53615      │          │              │                        │               │ util-linux: util-linux: Partition metadata compromise via    │
-│                    │                     │          │              │                        │               │ integer overflow in DOS partition parser...                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53615                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-78410      │          │              │                        │               │ util-linux: util-linux: restricted bind mounts do not pin    │
-│                    │                     │          │              │                        │               │ the source, allowing X-mount.owner/group/mode...             │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78410                   │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-13595      │ MEDIUM   │              │                        │               │ util-linux: util-linux: heap use-after-free in libblkid      │
-│                    │                     │          │              │                        │               │ nested partition probing                                     │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-13595                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-27456      │          │              │                        │               │ util-linux: TOCTOU in the mount program when setting up loop │
-│                    │                     │          │              │                        │               │ devices                                                      │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-27456                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-3184       │          │ will_not_fix │                        │               │ util-linux: util-linux: Access control bypass due to         │
-│                    │                     │          │              │                        │               │ improper hostname canonicalization                           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-3184                    │
-│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2022-0563       │ LOW      │ affected     │                        │               │ util-linux: partial disclosure of arbitrary files in chfn    │
-│                    │                     │          │              │                        │               │ and chsh when compiled...                                    │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2022-0563                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2025-14104      │          │              │                        │               │ util-linux: util-linux: Heap buffer overread in setpwnam()   │
-│                    │                     │          │              │                        │               │ when processing 256-byte usernames                           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-14104                   │
-├────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libbz2-1.0         │ CVE-2026-42250      │ MEDIUM   │              │ 1.0.8-5+b1             │               │ bzip2: bzip2: Denial of Service in bzip2recover via a        │
-│                    │                     │          │              │                        │               │ specially crafted file...                                    │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-42250                   │
-├────────────────────┼─────────────────────┤          ├──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libc-bin           │ CVE-2026-18374      │          │ fix_deferred │ 2.36-9+deb12u14        │               │ glibc: glibc: Heap buffer overflow via attacker-controlled   │
-│                    │                     │          │              │                        │               │ fopen mode string                                            │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-18374                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-19499      │          │              │                        │               │ glibc: Buffer Overflow in strfmon right-justification        │
-│                    │                     │          │              │                        │               │ padding                                                      │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-19499                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-19542      │          │              │                        │               │ glibc: Fix out-of-bounds array write in tdelete              │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-19542                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-5435       │          │ affected     │                        │               │ glibc: glibc: Out-of-bounds write via TSIG record processing │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-5435                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-5450       │          │              │                        │               │ glibc: glibc: Heap Buffer Overflow in `scanf` with `%mc`     │
-│                    │                     │          │              │                        │               │ format specifier and...                                      │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-5450                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-5928       │          │              │                        │               │ glibc: glibc: Information disclosure or denial of service    │
-│                    │                     │          │              │                        │               │ via ungetwc function with...                                 │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-5928                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-6238       │          │              │                        │               │ glibc: glibc: Application crash or uninitialized memory read │
-│                    │                     │          │              │                        │               │ via crafted DNS response...                                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-6238                    │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-6368       │          │ fix_deferred │                        │               │ glibc: glibc: Process abort due to invalid memory in wordexp │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-6368                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-6791       │          │              │                        │               │ glibc: Glibc: Denial of Service via stack exhaustion during  │
-│                    │                     │          │              │                        │               │ tilde expansion                                              │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-6791                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-77117      │          │              │                        │               │ glibc: Non-progress DoS in SHIFT_JISX0213 -&gt               │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-77117                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-80489      │          │              │                        │               │ glibc: Non-progress DoS in EUC_JISX0213 -> UCS-4 conversion  │
-│                    │                     │          │              │                        │               │ state                                                        │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-80489                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-84243      │          │ affected     │                        │               │ glibc: glibc: Arbitrary code execution via directory         │
-│                    │                     │          │              │                        │               │ traversal in LANGUAGE environment variable...                │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-84243                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-8674       │          │ fix_deferred │                        │               │ glibc: glibc DNS stub resolver: Denial of Service via long   │
-│                    │                     │          │              │                        │               │ search domain...                                             │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-8674                    │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-86805      │          │ affected     │                        │               │ glibc: glibc: Privilege escalation and arbitrary code        │
-│                    │                     │          │              │                        │               │ execution via TOCTOU race condition...                       │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-86805                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-89092      │          │ fix_deferred │                        │               │ glibc: nscd stack overflow leads to degraded DNS resolution  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-89092                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-95818      │          │ affected     │                        │               │ glibc: glibc: Local attacker can cause denial of service and │
-│                    │                     │          │              │                        │               │ information disclosure...                                    │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-95818                   │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2010-4756       │ LOW      │              │                        │               │ glibc: glob implementation can cause excessive CPU and       │
-│                    │                     │          │              │                        │               │ memory consumption due to...                                 │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2010-4756                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2018-20796      │          │              │                        │               │ glibc: uncontrolled recursion in function                    │
-│                    │                     │          │              │                        │               │ check_dst_limits_calc_pos_1 in posix/regexec.c               │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2018-20796                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2019-1010022    │          │              │                        │               │ glibc: stack guard protection bypass                         │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2019-1010022                 │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2019-1010023    │          │              │                        │               │ glibc: running ldd on malicious ELF leads to code execution  │
-│                    │                     │          │              │                        │               │ because of...                                                │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2019-1010023                 │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2019-1010024    │          │              │                        │               │ glibc: ASLR bypass using cache of thread stack and heap      │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2019-1010024                 │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2019-1010025    │          │              │                        │               │ glibc: information disclosure of heap addresses of           │
-│                    │                     │          │              │                        │               │ pthread_created thread                                       │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2019-1010025                 │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2019-9192       │          │              │                        │               │ glibc: uncontrolled recursion in function                    │
-│                    │                     │          │              │                        │               │ check_dst_limits_calc_pos_1 in posix/regexec.c               │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2019-9192                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-97399      │          │              │                        │               │ glibc: glibc: Denial of Service via out-of-bounds read in    │
-│                    │                     │          │              │                        │               │ strncasecmp                                                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-97399                   │
-├────────────────────┼─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│ libc6              │ CVE-2026-18374      │ MEDIUM   │ fix_deferred │                        │               │ glibc: glibc: Heap buffer overflow via attacker-controlled   │
-│                    │                     │          │              │                        │               │ fopen mode string                                            │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-18374                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-19499      │          │              │                        │               │ glibc: Buffer Overflow in strfmon right-justification        │
-│                    │                     │          │              │                        │               │ padding                                                      │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-19499                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-19542      │          │              │                        │               │ glibc: Fix out-of-bounds array write in tdelete              │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-19542                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-5435       │          │ affected     │                        │               │ glibc: glibc: Out-of-bounds write via TSIG record processing │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-5435                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-5450       │          │              │                        │               │ glibc: glibc: Heap Buffer Overflow in `scanf` with `%mc`     │
-│                    │                     │          │              │                        │               │ format specifier and...                                      │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-5450                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-5928       │          │              │                        │               │ glibc: glibc: Information disclosure or denial of service    │
-│                    │                     │          │              │                        │               │ via ungetwc function with...                                 │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-5928                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-6238       │          │              │                        │               │ glibc: glibc: Application crash or uninitialized memory read │
-│                    │                     │          │              │                        │               │ via crafted DNS response...                                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-6238                    │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-6368       │          │ fix_deferred │                        │               │ glibc: glibc: Process abort due to invalid memory in wordexp │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-6368                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-6791       │          │              │                        │               │ glibc: Glibc: Denial of Service via stack exhaustion during  │
-│                    │                     │          │              │                        │               │ tilde expansion                                              │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-6791                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-77117      │          │              │                        │               │ glibc: Non-progress DoS in SHIFT_JISX0213 -&gt               │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-77117                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-80489      │          │              │                        │               │ glibc: Non-progress DoS in EUC_JISX0213 -> UCS-4 conversion  │
-│                    │                     │          │              │                        │               │ state                                                        │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-80489                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-84243      │          │ affected     │                        │               │ glibc: glibc: Arbitrary code execution via directory         │
-│                    │                     │          │              │                        │               │ traversal in LANGUAGE environment variable...                │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-84243                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-8674       │          │ fix_deferred │                        │               │ glibc: glibc DNS stub resolver: Denial of Service via long   │
-│                    │                     │          │              │                        │               │ search domain...                                             │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-8674                    │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-86805      │          │ affected     │                        │               │ glibc: glibc: Privilege escalation and arbitrary code        │
-│                    │                     │          │              │                        │               │ execution via TOCTOU race condition...                       │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-86805                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-89092      │          │ fix_deferred │                        │               │ glibc: nscd stack overflow leads to degraded DNS resolution  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-89092                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-95818      │          │ affected     │                        │               │ glibc: glibc: Local attacker can cause denial of service and │
-│                    │                     │          │              │                        │               │ information disclosure...                                    │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-95818                   │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2010-4756       │ LOW      │              │                        │               │ glibc: glob implementation can cause excessive CPU and       │
-│                    │                     │          │              │                        │               │ memory consumption due to...                                 │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2010-4756                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2018-20796      │          │              │                        │               │ glibc: uncontrolled recursion in function                    │
-│                    │                     │          │              │                        │               │ check_dst_limits_calc_pos_1 in posix/regexec.c               │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2018-20796                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2019-1010022    │          │              │                        │               │ glibc: stack guard protection bypass                         │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2019-1010022                 │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2019-1010023    │          │              │                        │               │ glibc: running ldd on malicious ELF leads to code execution  │
-│                    │                     │          │              │                        │               │ because of...                                                │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2019-1010023                 │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2019-1010024    │          │              │                        │               │ glibc: ASLR bypass using cache of thread stack and heap      │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2019-1010024                 │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2019-1010025    │          │              │                        │               │ glibc: information disclosure of heap addresses of           │
-│                    │                     │          │              │                        │               │ pthread_created thread                                       │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2019-1010025                 │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2019-9192       │          │              │                        │               │ glibc: uncontrolled recursion in function                    │
-│                    │                     │          │              │                        │               │ check_dst_limits_calc_pos_1 in posix/regexec.c               │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2019-9192                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-97399      │          │              │                        │               │ glibc: glibc: Denial of Service via out-of-bounds read in    │
-│                    │                     │          │              │                        │               │ strncasecmp                                                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-97399                   │
-├────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libcurl4           │ CVE-2026-12064      │ HIGH     │ fix_deferred │ 7.88.1-10+deb12u15     │               │ curl: curl: SSH host verification bypass when using          │
-│                    │                     │          │              │                        │               │ schemeless URLs with SFTP/SCP...                             │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-12064                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-6276       │          │ affected     │                        │               │ curl: libcurl: Information disclosure due to cookie leak     │
-│                    │                     │          │              │                        │               │ when reusing connections with...                             │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-6276                    │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-8286       │          │ fix_deferred │                        │               │ curl: curl: Insecure connection establishment due to TLS     │
-│                    │                     │          │              │                        │               │ configuration mismatch                                       │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-8286                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-8458       │          │              │                        │               │ curl: libcurl: Unauthorized connection reuse due to a        │
-│                    │                     │          │              │                        │               │ logical error                                                │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-8458                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-8927       │          │              │                        │               │ curl: Information disclosure due to uncleared proxy          │
-│                    │                     │          │              │                        │               │ authentication state                                         │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-8927                    │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-10536      │ MEDIUM   │              │                        │               │ libcurl: libcurl: Use-after-free vulnerability leading to    │
-│                    │                     │          │              │                        │               │ Denial of Service                                            │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-10536                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-11856      │          │              │                        │               │ curl: curl: Information disclosure via incorrect Digest      │
-│                    │                     │          │              │                        │               │ authentication header reuse                                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-11856                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-1965       │          │ affected     │                        │               │ curl: curl: Authentication bypass due to incorrect           │
-│                    │                     │          │              │                        │               │ connection reuse with Negotiate authentication...            │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-1965                    │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-19931      │          │ fix_deferred │                        │               │ curl: libcurl: Information disclosure via incorrect          │
-│                    │                     │          │              │                        │               │ connection reuse with Negotiate authentication               │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-19931                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-4873       │          │ affected     │                        │               │ curl: curl: Information disclosure due to incorrect TLS      │
-│                    │                     │          │              │                        │               │ connection reuse                                             │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-4873                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-5545       │          │              │                        │               │ curl: libcurl: Authentication bypass due to incorrect HTTP   │
-│                    │                     │          │              │                        │               │ Negotiate connection reuse                                   │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-5545                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-6253       │          │              │                        │               │ curl: curl: Proxy credential disclosure via redirects to     │
-│                    │                     │          │              │                        │               │ unauthenticated proxies                                      │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-6253                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-6429       │          │              │                        │               │ curl: libcurl: Credential leak via reused proxy connection   │
-│                    │                     │          │              │                        │               │ during HTTP redirects                                        │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-6429                    │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-8924       │          │ fix_deferred │                        │               │ curl: curl: Cookie injection via malicious HTTP server using │
-│                    │                     │          │              │                        │               │ super cookies                                                │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-8924                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-8932       │          │              │                        │               │ libcurl: libcurl: Security feature bypass due to improper    │
-│                    │                     │          │              │                        │               │ mTLS connection reuse                                        │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-8932                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-92388      │          │              │                        │               │ curl: curl: FTP wildcard write callback mixup                │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-92388                   │
-│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2024-2379       │ LOW      │ affected     │                        │               │ curl: QUIC certificate check bypass with wolfSSL             │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-2379                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2025-0725       │          │              │                        │               │ libcurl: Buffer Overflow in libcurl via zlib Integer         │
-│                    │                     │          │              │                        │               │ Overflow                                                     │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-0725                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2025-10966      │          │              │                        │               │ curl: Curl missing SFTP host verification with wolfSSH       │
-│                    │                     │          │              │                        │               │ backend                                                      │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-10966                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2025-14017      │          │              │                        │               │ curl: curl: Security bypass due to global TLS option changes │
-│                    │                     │          │              │                        │               │ in multi-threaded...                                         │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-14017                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2025-15079      │          │              │                        │               │ curl: Host verification bypass during SSH transfers          │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-15079                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2025-15224      │          │              │                        │               │ curl: libssh key passphrase bypass without agent set         │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-15224                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-107928     │          │              │                        │               │ curl: curl: info leak uploading over WebSockets with GnuTLS  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107928                  │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-13608      │          │ fix_deferred │                        │               │ curl: curl: Authentication bypass in OpenLDAP SASL           │
-│                    │                     │          │              │                        │               │ negotiation via Man-in-the-Middle (MITM) attack...           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-13608                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-18924      │          │              │                        │               │ curl: libcurl: Use-after-free in HTTP/2 Server Push with     │
-│                    │                     │          │              │                        │               │ shared connections                                           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-18924                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-80230      │          │              │                        │               │ curl: curl: Public key pinning bypass allows unauthenticated │
-│                    │                     │          │              │                        │               │ connections                                                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-80230                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-82209      │          │              │                        │               │ curl: libcurl: Information disclosure via improper Public    │
-│                    │                     │          │              │                        │               │ Suffix List boundary check                                   │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-82209                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-86409      │          │ affected     │                        │               │ curl: curl: stale SigV4 headers sent unintended              │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-86409                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-86410      │          │              │                        │               │ curl: curl: redirect to SFTP or SCP bypasses host            │
-│                    │                     │          │              │                        │               │ verification                                                 │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-86410                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-86414      │          │              │                        │               │ curl: curl: leaking host credentials to HTTP proxy           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-86414                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-87864      │          │ fix_deferred │                        │               │ curl: IMAP APPEND plus CRLF conversion command injection     │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-87864                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-87865      │          │              │                        │               │ curl: curl: knownhost callback mismatches key as missing     │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-87865                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-87866      │          │ affected     │                        │               │ curl: curl: wolfSSL public-key pinning bypass                │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-87866                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-92389      │          │ fix_deferred │                        │               │ curl: curl: TFTP direction confusion                         │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-92389                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-92390      │          │              │                        │               │ curl: curl: -J no-clobber guarantee bypassed with 103 early  │
-│                    │                     │          │              │                        │               │ hints                                                        │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-92390                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-92391      │          │ affected     │                        │               │ curl: curl: curl_mime_free stack overflow by recursion       │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-92391                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-94266      │          │              │                        │               │ curl: curl: password leak in CURLINFO_EFFECTIVE_URL          │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-94266                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-9547       │          │              │                        │               │ curl: curl: Man-in-the-middle attack via SSH host key bypass │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-9547                    │
-├────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libgcc-s1          │ CVE-2026-102010     │ MEDIUM   │ will_not_fix │ 12.2.0-14+deb12u1      │               │ gcc-toolset-15-gcc: gcc: gcc-toolset-16: gcc: Denial of      │
-│                    │                     │          │              │                        │               │ Service via use-after-free in binary heap...                 │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-102010                  │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-114690     │          │ affected     │                        │               │ gcc: Confirmed out-of-bounds read/write in libstdc++         │
-│                    │                     │          │              │                        │               │ parallel `std                                                │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-114690                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-114691     │          │              │                        │               │ gcc: Integer wrap in `std                                    │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-114691                  │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-95619      │          │ fix_deferred │                        │               │ gcc: libstdc++ integer overflow in `new` operator            │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-95619                   │
-│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2022-27943      │ LOW      │ affected     │                        │               │ binutils: libiberty/rust-demangle.c in GNU GCC 11.2 allows   │
-│                    │                     │          │              │                        │               │ stack exhaustion in demangle_const                           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2022-27943                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-115456     │          │              │                        │               │ gcc: Out-of-bounds read in std::from_chars                   │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-115456                  │
-├────────────────────┼─────────────────────┤          │              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libgcrypt20        │ CVE-2018-6829       │          │              │ 1.10.1-3+deb12u1       │               │ libgcrypt: ElGamal implementation doesn't have semantic      │
-│                    │                     │          │              │                        │               │ security due to incorrectly encoded plaintexts...            │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2018-6829                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2024-2236       │          │              │                        │               │ libgcrypt: vulnerable to Marvin Attack                       │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-2236                    │
-├────────────────────┼─────────────────────┤          │              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libgnutls30        │ CVE-2011-3389       │          │              │ 3.7.9-2+deb12u7        │               │ HTTPS: block-wise chosen-plaintext attack against SSL/TLS    │
-│                    │                     │          │              │                        │               │ (BEAST)                                                      │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2011-3389                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-67693      │          │              │                        │               │ gnutls: gnutls: Information disclosure via contradictory Key │
-│                    │                     │          │              │                        │               │ Usage and Extended Key Usage...                              │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-67693                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-88647      │          │              │                        │               │ gnutls: gnutls: Information disclosure via hostname          │
-│                    │                     │          │              │                        │               │ verification bypass                                          │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-88647                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-88648      │          │              │                        │               │ gnutls: gnutls: Cross-domain certificate restriction bypass  │
-│                    │                     │          │              │                        │               │ via incomplete X.509 validation                              │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-88648                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-95184      │          │              │                        │               │ gnutls: gnutls: legitimate user certificates incorrectly     │
-│                    │                     │          │              │                        │               │ rejected causing denial of service                           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-95184                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-95210      │          │              │                        │               │ gnutls: gnutls: certificates with invalid extensions         │
-│                    │                     │          │              │                        │               │ incorrectly accepted                                         │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-95210                   │
-├────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libgssapi-krb5-2   │ CVE-2026-112315     │ HIGH     │              │ 1.20.1-2+deb12u5       │               │ krb5: MIT krb5 kadmind unauthenticated memory leak DoS in    │
-│                    │                     │          │              │                        │               │ RPCSEC_GSS buffer decode...                                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112315                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112316     │          │              │                        │               │ krb5: MIT krb5 kadmind authenticated memory leak DoS in      │
-│                    │                     │          │              │                        │               │ xdr_krb5_tl_data() decode failure...                         │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112316                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112317     │          │              │                        │               │ krb5: MIT krb5 KDC unauthenticated memory leak DoS in KDB    │
-│                    │                     │          │              │                        │               │ keytab key...                                                │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112317                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112318     │          │              │                        │               │ krb5: MIT krb5 kadmind authenticated DoS exploiting          │
-│                    │                     │          │              │                        │               │ dereference of null policy name...                           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112318                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112319     │          │              │                        │               │ krb5: MIT krb5 kadmind authenticated memory exhaustion DoS   │
-│                    │                     │          │              │                        │               │ via unbounded RPC XDR...                                     │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112319                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112320     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated memory leak DoS via   │
-│                    │                     │          │              │                        │               │ GSS-RPC auth flavor...                                       │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112320                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112321     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated memory leak DoS via   │
-│                    │                     │          │              │                        │               │ AUTH_GSSAPI_INIT error paths...                              │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112321                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112322     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated CPU DoS via           │
-│                    │                     │          │              │                        │               │ AUTH_GSSAPI client states cleanup...                         │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112322                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112323     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated memory exhaustion via │
-│                    │                     │          │              │                        │               │ failed AUTH_GSSAPI_INIT requests                             │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112323                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-119079     │          │              │                        │               │ krb5: MIT krb5 KDC unauthenticated CPU DoS via quadratic     │
-│                    │                     │          │              │                        │               │ ASN.1 SEQUENCE OF...                                         │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-119079                  │
-│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-107708     │ MEDIUM   │ fix_deferred │                        │               │ krb5: krb5: Denial of Service via malformed PAC in S4U2Proxy │
-│                    │                     │          │              │                        │               │ requests                                                     │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107708                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-107778     │          │              │                        │               │ krb5: krb5: Denial of Service via crafted forwarded          │
-│                    │                     │          │              │                        │               │ credentials                                                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107778                  │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112314     │          │ affected     │                        │               │ krb5: MIT krb5 GSS-RPC client memory leak on XID mismatch    │
-│                    │                     │          │              │                        │               │ retries                                                      │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112314                  │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2018-5709       │ LOW      │              │                        │               │ krb5: integer overflow in dbentry->n_key_data in             │
-│                    │                     │          │              │                        │               │ kadmin/dbutil/dump.c                                         │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2018-5709                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2024-26458      │          │              │                        │               │ krb5: Memory leak at /krb5/src/lib/rpc/pmap_rmt.c            │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-26458                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2024-26461      │          │              │                        │               │ krb5: Memory leak at /krb5/src/lib/gssapi/krb5/k5sealv3.c    │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-26461                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-11850      │          │              │                        │               │ krb5: krb5: integer underflow in berval2tl_data() leads to   │
-│                    │                     │          │              │                        │               │ heap out-of-bounds read                                      │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-11850                   │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-107364     │ UNKNOWN  │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107364                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-107884     │          │              │                        │               │ [Check for the lockdown_keys attribute when processing       │
-│                    │                     │          │              │                        │               │ password change protocol requests in...                      │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107884                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-111423     │          │              │                        │               │ [Fix a logic error when checking PAC server checksums]       │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-111423                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-118380     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-118380                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-71199      │          │              │                        │               │ [Check for unkeyed checksums when validating CAMMAC          │
-│                    │                     │          │              │                        │               │ verifiers]                                                   │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-71199                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-71200      │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-71200                   │
-├────────────────────┼─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│ libk5crypto3       │ CVE-2026-112315     │ HIGH     │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated memory leak DoS in    │
-│                    │                     │          │              │                        │               │ RPCSEC_GSS buffer decode...                                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112315                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112316     │          │              │                        │               │ krb5: MIT krb5 kadmind authenticated memory leak DoS in      │
-│                    │                     │          │              │                        │               │ xdr_krb5_tl_data() decode failure...                         │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112316                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112317     │          │              │                        │               │ krb5: MIT krb5 KDC unauthenticated memory leak DoS in KDB    │
-│                    │                     │          │              │                        │               │ keytab key...                                                │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112317                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112318     │          │              │                        │               │ krb5: MIT krb5 kadmind authenticated DoS exploiting          │
-│                    │                     │          │              │                        │               │ dereference of null policy name...                           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112318                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112319     │          │              │                        │               │ krb5: MIT krb5 kadmind authenticated memory exhaustion DoS   │
-│                    │                     │          │              │                        │               │ via unbounded RPC XDR...                                     │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112319                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112320     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated memory leak DoS via   │
-│                    │                     │          │              │                        │               │ GSS-RPC auth flavor...                                       │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112320                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112321     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated memory leak DoS via   │
-│                    │                     │          │              │                        │               │ AUTH_GSSAPI_INIT error paths...                              │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112321                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112322     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated CPU DoS via           │
-│                    │                     │          │              │                        │               │ AUTH_GSSAPI client states cleanup...                         │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112322                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112323     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated memory exhaustion via │
-│                    │                     │          │              │                        │               │ failed AUTH_GSSAPI_INIT requests                             │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112323                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-119079     │          │              │                        │               │ krb5: MIT krb5 KDC unauthenticated CPU DoS via quadratic     │
-│                    │                     │          │              │                        │               │ ASN.1 SEQUENCE OF...                                         │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-119079                  │
-│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-107708     │ MEDIUM   │ fix_deferred │                        │               │ krb5: krb5: Denial of Service via malformed PAC in S4U2Proxy │
-│                    │                     │          │              │                        │               │ requests                                                     │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107708                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-107778     │          │              │                        │               │ krb5: krb5: Denial of Service via crafted forwarded          │
-│                    │                     │          │              │                        │               │ credentials                                                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107778                  │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112314     │          │ affected     │                        │               │ krb5: MIT krb5 GSS-RPC client memory leak on XID mismatch    │
-│                    │                     │          │              │                        │               │ retries                                                      │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112314                  │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2018-5709       │ LOW      │              │                        │               │ krb5: integer overflow in dbentry->n_key_data in             │
-│                    │                     │          │              │                        │               │ kadmin/dbutil/dump.c                                         │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2018-5709                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2024-26458      │          │              │                        │               │ krb5: Memory leak at /krb5/src/lib/rpc/pmap_rmt.c            │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-26458                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2024-26461      │          │              │                        │               │ krb5: Memory leak at /krb5/src/lib/gssapi/krb5/k5sealv3.c    │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-26461                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-11850      │          │              │                        │               │ krb5: krb5: integer underflow in berval2tl_data() leads to   │
-│                    │                     │          │              │                        │               │ heap out-of-bounds read                                      │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-11850                   │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-107364     │ UNKNOWN  │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107364                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-107884     │          │              │                        │               │ [Check for the lockdown_keys attribute when processing       │
-│                    │                     │          │              │                        │               │ password change protocol requests in...                      │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107884                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-111423     │          │              │                        │               │ [Fix a logic error when checking PAC server checksums]       │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-111423                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-118380     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-118380                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-71199      │          │              │                        │               │ [Check for unkeyed checksums when validating CAMMAC          │
-│                    │                     │          │              │                        │               │ verifiers]                                                   │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-71199                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-71200      │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-71200                   │
-├────────────────────┼─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│ libkrb5-3          │ CVE-2026-112315     │ HIGH     │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated memory leak DoS in    │
-│                    │                     │          │              │                        │               │ RPCSEC_GSS buffer decode...                                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112315                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112316     │          │              │                        │               │ krb5: MIT krb5 kadmind authenticated memory leak DoS in      │
-│                    │                     │          │              │                        │               │ xdr_krb5_tl_data() decode failure...                         │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112316                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112317     │          │              │                        │               │ krb5: MIT krb5 KDC unauthenticated memory leak DoS in KDB    │
-│                    │                     │          │              │                        │               │ keytab key...                                                │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112317                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112318     │          │              │                        │               │ krb5: MIT krb5 kadmind authenticated DoS exploiting          │
-│                    │                     │          │              │                        │               │ dereference of null policy name...                           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112318                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112319     │          │              │                        │               │ krb5: MIT krb5 kadmind authenticated memory exhaustion DoS   │
-│                    │                     │          │              │                        │               │ via unbounded RPC XDR...                                     │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112319                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112320     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated memory leak DoS via   │
-│                    │                     │          │              │                        │               │ GSS-RPC auth flavor...                                       │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112320                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112321     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated memory leak DoS via   │
-│                    │                     │          │              │                        │               │ AUTH_GSSAPI_INIT error paths...                              │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112321                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112322     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated CPU DoS via           │
-│                    │                     │          │              │                        │               │ AUTH_GSSAPI client states cleanup...                         │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112322                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112323     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated memory exhaustion via │
-│                    │                     │          │              │                        │               │ failed AUTH_GSSAPI_INIT requests                             │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112323                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-119079     │          │              │                        │               │ krb5: MIT krb5 KDC unauthenticated CPU DoS via quadratic     │
-│                    │                     │          │              │                        │               │ ASN.1 SEQUENCE OF...                                         │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-119079                  │
-│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-107708     │ MEDIUM   │ fix_deferred │                        │               │ krb5: krb5: Denial of Service via malformed PAC in S4U2Proxy │
-│                    │                     │          │              │                        │               │ requests                                                     │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107708                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-107778     │          │              │                        │               │ krb5: krb5: Denial of Service via crafted forwarded          │
-│                    │                     │          │              │                        │               │ credentials                                                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107778                  │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112314     │          │ affected     │                        │               │ krb5: MIT krb5 GSS-RPC client memory leak on XID mismatch    │
-│                    │                     │          │              │                        │               │ retries                                                      │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112314                  │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2018-5709       │ LOW      │              │                        │               │ krb5: integer overflow in dbentry->n_key_data in             │
-│                    │                     │          │              │                        │               │ kadmin/dbutil/dump.c                                         │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2018-5709                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2024-26458      │          │              │                        │               │ krb5: Memory leak at /krb5/src/lib/rpc/pmap_rmt.c            │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-26458                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2024-26461      │          │              │                        │               │ krb5: Memory leak at /krb5/src/lib/gssapi/krb5/k5sealv3.c    │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-26461                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-11850      │          │              │                        │               │ krb5: krb5: integer underflow in berval2tl_data() leads to   │
-│                    │                     │          │              │                        │               │ heap out-of-bounds read                                      │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-11850                   │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-107364     │ UNKNOWN  │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107364                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-107884     │          │              │                        │               │ [Check for the lockdown_keys attribute when processing       │
-│                    │                     │          │              │                        │               │ password change protocol requests in...                      │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107884                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-111423     │          │              │                        │               │ [Fix a logic error when checking PAC server checksums]       │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-111423                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-118380     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-118380                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-71199      │          │              │                        │               │ [Check for unkeyed checksums when validating CAMMAC          │
-│                    │                     │          │              │                        │               │ verifiers]                                                   │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-71199                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-71200      │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-71200                   │
-├────────────────────┼─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│ libkrb5support0    │ CVE-2026-112315     │ HIGH     │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated memory leak DoS in    │
-│                    │                     │          │              │                        │               │ RPCSEC_GSS buffer decode...                                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112315                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112316     │          │              │                        │               │ krb5: MIT krb5 kadmind authenticated memory leak DoS in      │
-│                    │                     │          │              │                        │               │ xdr_krb5_tl_data() decode failure...                         │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112316                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112317     │          │              │                        │               │ krb5: MIT krb5 KDC unauthenticated memory leak DoS in KDB    │
-│                    │                     │          │              │                        │               │ keytab key...                                                │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112317                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112318     │          │              │                        │               │ krb5: MIT krb5 kadmind authenticated DoS exploiting          │
-│                    │                     │          │              │                        │               │ dereference of null policy name...                           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112318                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112319     │          │              │                        │               │ krb5: MIT krb5 kadmind authenticated memory exhaustion DoS   │
-│                    │                     │          │              │                        │               │ via unbounded RPC XDR...                                     │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112319                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112320     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated memory leak DoS via   │
-│                    │                     │          │              │                        │               │ GSS-RPC auth flavor...                                       │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112320                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112321     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated memory leak DoS via   │
-│                    │                     │          │              │                        │               │ AUTH_GSSAPI_INIT error paths...                              │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112321                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112322     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated CPU DoS via           │
-│                    │                     │          │              │                        │               │ AUTH_GSSAPI client states cleanup...                         │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112322                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112323     │          │              │                        │               │ krb5: MIT krb5 kadmind unauthenticated memory exhaustion via │
-│                    │                     │          │              │                        │               │ failed AUTH_GSSAPI_INIT requests                             │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112323                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-119079     │          │              │                        │               │ krb5: MIT krb5 KDC unauthenticated CPU DoS via quadratic     │
-│                    │                     │          │              │                        │               │ ASN.1 SEQUENCE OF...                                         │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-119079                  │
-│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-107708     │ MEDIUM   │ fix_deferred │                        │               │ krb5: krb5: Denial of Service via malformed PAC in S4U2Proxy │
-│                    │                     │          │              │                        │               │ requests                                                     │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107708                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-107778     │          │              │                        │               │ krb5: krb5: Denial of Service via crafted forwarded          │
-│                    │                     │          │              │                        │               │ credentials                                                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107778                  │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-112314     │          │ affected     │                        │               │ krb5: MIT krb5 GSS-RPC client memory leak on XID mismatch    │
-│                    │                     │          │              │                        │               │ retries                                                      │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-112314                  │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2018-5709       │ LOW      │              │                        │               │ krb5: integer overflow in dbentry->n_key_data in             │
-│                    │                     │          │              │                        │               │ kadmin/dbutil/dump.c                                         │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2018-5709                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2024-26458      │          │              │                        │               │ krb5: Memory leak at /krb5/src/lib/rpc/pmap_rmt.c            │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-26458                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2024-26461      │          │              │                        │               │ krb5: Memory leak at /krb5/src/lib/gssapi/krb5/k5sealv3.c    │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-26461                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-11850      │          │              │                        │               │ krb5: krb5: integer underflow in berval2tl_data() leads to   │
-│                    │                     │          │              │                        │               │ heap out-of-bounds read                                      │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-11850                   │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-107364     │ UNKNOWN  │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107364                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-107884     │          │              │                        │               │ [Check for the lockdown_keys attribute when processing       │
-│                    │                     │          │              │                        │               │ password change protocol requests in...                      │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-107884                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-111423     │          │              │                        │               │ [Fix a logic error when checking PAC server checksums]       │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-111423                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-118380     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-118380                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-71199      │          │              │                        │               │ [Check for unkeyed checksums when validating CAMMAC          │
-│                    │                     │          │              │                        │               │ verifiers]                                                   │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-71199                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-71200      │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-71200                   │
-├────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libldap-2.5-0      │ CVE-2023-2953       │ HIGH     │              │ 2.5.13+dfsg-5          │               │ openldap: null pointer dereference in ber_memalloc_x         │
-│                    │                     │          │              │                        │               │ function                                                     │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-2953                    │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2015-3276       │ LOW      │              │                        │               │ openldap: incorrect multi-keyword mode cipherstring parsing  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2015-3276                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2017-14159      │          │              │                        │               │ openldap: Privilege escalation via PID file manipulation     │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2017-14159                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2017-17740      │          │              │                        │               │ openldap: contrib/slapd-modules/nops/nops.c attempts to free │
-│                    │                     │          │              │                        │               │ stack buffer allowing remote attackers to cause...           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2017-17740                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2020-15719      │          │              │                        │               │ openldap: Certificate validation incorrectly matches name    │
-│                    │                     │          │              │                        │               │ against CN-ID                                                │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2020-15719                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-22185      │          │              │                        │               │ OpenLDAP: OpenLDAP LMDB: Denial of Service and Information   │
-│                    │                     │          │              │                        │               │ Disclosure via Heap Buffer...                                │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-22185                   │
-├────────────────────┼─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│ libldap-common     │ CVE-2023-2953       │ HIGH     │              │                        │               │ openldap: null pointer dereference in ber_memalloc_x         │
-│                    │                     │          │              │                        │               │ function                                                     │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-2953                    │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2015-3276       │ LOW      │              │                        │               │ openldap: incorrect multi-keyword mode cipherstring parsing  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2015-3276                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2017-14159      │          │              │                        │               │ openldap: Privilege escalation via PID file manipulation     │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2017-14159                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2017-17740      │          │              │                        │               │ openldap: contrib/slapd-modules/nops/nops.c attempts to free │
-│                    │                     │          │              │                        │               │ stack buffer allowing remote attackers to cause...           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2017-17740                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2020-15719      │          │              │                        │               │ openldap: Certificate validation incorrectly matches name    │
-│                    │                     │          │              │                        │               │ against CN-ID                                                │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2020-15719                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-22185      │          │              │                        │               │ OpenLDAP: OpenLDAP LMDB: Denial of Service and Information   │
-│                    │                     │          │              │                        │               │ Disclosure via Heap Buffer...                                │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-22185                   │
-├────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libmount1          │ CVE-2026-53613      │ HIGH     │              │ 2.38.1-5+deb12u3       │               │ util-linux: TOCTOU in the mount program via ancestor         │
-│                    │                     │          │              │                        │               │ directory swap on target...                                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53613                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-53615      │          │              │                        │               │ util-linux: util-linux: Partition metadata compromise via    │
-│                    │                     │          │              │                        │               │ integer overflow in DOS partition parser...                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53615                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-78410      │          │              │                        │               │ util-linux: util-linux: restricted bind mounts do not pin    │
-│                    │                     │          │              │                        │               │ the source, allowing X-mount.owner/group/mode...             │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78410                   │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-13595      │ MEDIUM   │              │                        │               │ util-linux: util-linux: heap use-after-free in libblkid      │
-│                    │                     │          │              │                        │               │ nested partition probing                                     │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-13595                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-27456      │          │              │                        │               │ util-linux: TOCTOU in the mount program when setting up loop │
-│                    │                     │          │              │                        │               │ devices                                                      │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-27456                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-3184       │          │ will_not_fix │                        │               │ util-linux: util-linux: Access control bypass due to         │
-│                    │                     │          │              │                        │               │ improper hostname canonicalization                           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-3184                    │
-│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2022-0563       │ LOW      │ affected     │                        │               │ util-linux: partial disclosure of arbitrary files in chfn    │
-│                    │                     │          │              │                        │               │ and chsh when compiled...                                    │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2022-0563                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2025-14104      │          │              │                        │               │ util-linux: util-linux: Heap buffer overread in setpwnam()   │
-│                    │                     │          │              │                        │               │ when processing 256-byte usernames                           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-14104                   │
-├────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libnghttp2-14      │ CVE-2026-58055      │ MEDIUM   │ fix_deferred │ 1.52.0-1+deb12u3       │               │ nghttp2: nghttp2: HTTP Request/Response Smuggling and        │
-│                    │                     │          │              │                        │               │ Response-Queue Poisoning via ambiguous HTTP/1.1 Upgrade...   │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-58055                   │
-├────────────────────┼─────────────────────┤          │              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libp11-kit0        │ CVE-2026-13757      │          │              │ 0.24.1-2               │               │ p11-kit: Stack exhaustion via unbounded recursion in RPC     │
-│                    │                     │          │              │                        │               │ attribute parsing                                            │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-13757                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-18938      │          │              │                        │               │ p11-kit: Integer overflow in RPC attribute-array length      │
-│                    │                     │          │              │                        │               │ calculation can under-allocate nested attribute...           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-18938                   │
-├────────────────────┼─────────────────────┤          ├──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libpam-modules     │ CVE-2024-10041      │          │ will_not_fix │ 1.5.2-6+deb12u2        │               │ pam: libpam: Libpam vulnerable to read hashed password       │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-10041                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-54411      │          │ fix_deferred │                        │               │ linux-pam: Plaintext password recovery via timing            │
-│                    │                     │          │              │                        │               │ discrepancy in pam_userdb module                             │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-54411                   │
-├────────────────────┼─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│ libpam-modules-bin │ CVE-2024-10041      │          │ will_not_fix │                        │               │ pam: libpam: Libpam vulnerable to read hashed password       │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-10041                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-54411      │          │ fix_deferred │                        │               │ linux-pam: Plaintext password recovery via timing            │
-│                    │                     │          │              │                        │               │ discrepancy in pam_userdb module                             │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-54411                   │
-├────────────────────┼─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│ libpam-runtime     │ CVE-2024-10041      │          │ will_not_fix │                        │               │ pam: libpam: Libpam vulnerable to read hashed password       │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-10041                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-54411      │          │ fix_deferred │                        │               │ linux-pam: Plaintext password recovery via timing            │
-│                    │                     │          │              │                        │               │ discrepancy in pam_userdb module                             │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-54411                   │
-├────────────────────┼─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│ libpam0g           │ CVE-2024-10041      │          │ will_not_fix │                        │               │ pam: libpam: Libpam vulnerable to read hashed password       │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-10041                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-54411      │          │ fix_deferred │                        │               │ linux-pam: Plaintext password recovery via timing            │
-│                    │                     │          │              │                        │               │ discrepancy in pam_userdb module                             │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-54411                   │
-├────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libsmartcols1      │ CVE-2026-53613      │ HIGH     │ affected     │ 2.38.1-5+deb12u3       │               │ util-linux: TOCTOU in the mount program via ancestor         │
-│                    │                     │          │              │                        │               │ directory swap on target...                                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53613                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-53615      │          │              │                        │               │ util-linux: util-linux: Partition metadata compromise via    │
-│                    │                     │          │              │                        │               │ integer overflow in DOS partition parser...                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53615                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-78410      │          │              │                        │               │ util-linux: util-linux: restricted bind mounts do not pin    │
-│                    │                     │          │              │                        │               │ the source, allowing X-mount.owner/group/mode...             │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78410                   │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-13595      │ MEDIUM   │              │                        │               │ util-linux: util-linux: heap use-after-free in libblkid      │
-│                    │                     │          │              │                        │               │ nested partition probing                                     │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-13595                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-27456      │          │              │                        │               │ util-linux: TOCTOU in the mount program when setting up loop │
-│                    │                     │          │              │                        │               │ devices                                                      │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-27456                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-3184       │          │ will_not_fix │                        │               │ util-linux: util-linux: Access control bypass due to         │
-│                    │                     │          │              │                        │               │ improper hostname canonicalization                           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-3184                    │
-│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2022-0563       │ LOW      │ affected     │                        │               │ util-linux: partial disclosure of arbitrary files in chfn    │
-│                    │                     │          │              │                        │               │ and chsh when compiled...                                    │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2022-0563                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2025-14104      │          │              │                        │               │ util-linux: util-linux: Heap buffer overread in setpwnam()   │
-│                    │                     │          │              │                        │               │ when processing 256-byte usernames                           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-14104                   │
-├────────────────────┼─────────────────────┤          │              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libssl3            │ CVE-2025-27587      │          │              │ 3.0.22-1~deb12u2       │               │ OpenSSL 3.0.0 through 3.3.2 on the PowerPC architecture is   │
-│                    │                     │          │              │                        │               │ vulnerable ......                                            │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-27587                   │
-├────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libstdc++6         │ CVE-2026-102010     │ MEDIUM   │ will_not_fix │ 12.2.0-14+deb12u1      │               │ gcc-toolset-15-gcc: gcc: gcc-toolset-16: gcc: Denial of      │
-│                    │                     │          │              │                        │               │ Service via use-after-free in binary heap...                 │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-102010                  │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-114690     │          │ affected     │                        │               │ gcc: Confirmed out-of-bounds read/write in libstdc++         │
-│                    │                     │          │              │                        │               │ parallel `std                                                │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-114690                  │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-114691     │          │              │                        │               │ gcc: Integer wrap in `std                                    │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-114691                  │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-95619      │          │ fix_deferred │                        │               │ gcc: libstdc++ integer overflow in `new` operator            │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-95619                   │
-│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2022-27943      │ LOW      │ affected     │                        │               │ binutils: libiberty/rust-demangle.c in GNU GCC 11.2 allows   │
-│                    │                     │          │              │                        │               │ stack exhaustion in demangle_const                           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2022-27943                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-115456     │          │              │                        │               │ gcc: Out-of-bounds read in std::from_chars                   │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-115456                  │
-├────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libsystemd0        │ CVE-2026-16742      │ HIGH     │ fix_deferred │ 252.39-1~deb12u2       │               │ systemd: systemd-homed: Local privilege escalation via       │
-│                    │                     │          │              │                        │               │ missing home-record signature verification                   │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-16742                   │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-15059      │ MEDIUM   │              │                        │               │ systemd: systemd-oomd: Unprivileged users can terminate      │
-│                    │                     │          │              │                        │               │ arbitrary processes via IPC API                              │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-15059                   │
-│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2013-4392       │ LOW      │ affected     │                        │               │ systemd: TOCTOU race condition when updating file            │
-│                    │                     │          │              │                        │               │ permissions and SELinux security contexts...                 │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2013-4392                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2023-31437      │          │              │                        │               │ An issue was discovered in systemd 253. An attacker can      │
-│                    │                     │          │              │                        │               │ modify a...                                                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-31437                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2023-31438      │          │              │                        │               │ An issue was discovered in systemd 253. An attacker can      │
-│                    │                     │          │              │                        │               │ truncate a...                                                │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-31438                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2023-31439      │          │              │                        │               │ An issue was discovered in systemd 253. An attacker can      │
-│                    │                     │          │              │                        │               │ modify the...                                                │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-31439                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-40228      │          │              │                        │               │ systemd: systemd-journald: Unintended output to user         │
-│                    │                     │          │              │                        │               │ terminals via logger command                                 │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-40228                   │
-├────────────────────┼─────────────────────┤          │              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libtasn1-6         │ CVE-2025-13151      │          │              │ 4.19.0-2+deb12u1       │               │ libtasn1: libtasn1: Denial of Service via stack-based buffer │
-│                    │                     │          │              │                        │               │ overflow in asn1_expend_octet_string                         │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-13151                   │
-├────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libtinfo6          │ CVE-2025-69720      │ HIGH     │              │ 6.4-4                  │               │ ncurses: ncurses: Buffer overflow vulnerability may lead to  │
-│                    │                     │          │              │                        │               │ arbitrary code execution.                                    │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-69720                   │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2023-50495      │ MEDIUM   │              │                        │               │ ncurses: segmentation fault via _nc_wrap_entry()             │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-50495                   │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2025-6141       │ LOW      │              │                        │               │ gnu-ncurses: ncurses Stack Buffer Overflow                   │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-6141                    │
-├────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libudev1           │ CVE-2026-16742      │ HIGH     │ fix_deferred │ 252.39-1~deb12u2       │               │ systemd: systemd-homed: Local privilege escalation via       │
-│                    │                     │          │              │                        │               │ missing home-record signature verification                   │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-16742                   │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-15059      │ MEDIUM   │              │                        │               │ systemd: systemd-oomd: Unprivileged users can terminate      │
-│                    │                     │          │              │                        │               │ arbitrary processes via IPC API                              │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-15059                   │
-│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2013-4392       │ LOW      │ affected     │                        │               │ systemd: TOCTOU race condition when updating file            │
-│                    │                     │          │              │                        │               │ permissions and SELinux security contexts...                 │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2013-4392                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2023-31437      │          │              │                        │               │ An issue was discovered in systemd 253. An attacker can      │
-│                    │                     │          │              │                        │               │ modify a...                                                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-31437                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2023-31438      │          │              │                        │               │ An issue was discovered in systemd 253. An attacker can      │
-│                    │                     │          │              │                        │               │ truncate a...                                                │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-31438                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2023-31439      │          │              │                        │               │ An issue was discovered in systemd 253. An attacker can      │
-│                    │                     │          │              │                        │               │ modify the...                                                │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-31439                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-40228      │          │              │                        │               │ systemd: systemd-journald: Unintended output to user         │
-│                    │                     │          │              │                        │               │ terminals via logger command                                 │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-40228                   │
-├────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ libuuid1           │ CVE-2026-53613      │ HIGH     │              │ 2.38.1-5+deb12u3       │               │ util-linux: TOCTOU in the mount program via ancestor         │
-│                    │                     │          │              │                        │               │ directory swap on target...                                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53613                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-53615      │          │              │                        │               │ util-linux: util-linux: Partition metadata compromise via    │
-│                    │                     │          │              │                        │               │ integer overflow in DOS partition parser...                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53615                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-78410      │          │              │                        │               │ util-linux: util-linux: restricted bind mounts do not pin    │
-│                    │                     │          │              │                        │               │ the source, allowing X-mount.owner/group/mode...             │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78410                   │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-13595      │ MEDIUM   │              │                        │               │ util-linux: util-linux: heap use-after-free in libblkid      │
-│                    │                     │          │              │                        │               │ nested partition probing                                     │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-13595                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-27456      │          │              │                        │               │ util-linux: TOCTOU in the mount program when setting up loop │
-│                    │                     │          │              │                        │               │ devices                                                      │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-27456                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-3184       │          │ will_not_fix │                        │               │ util-linux: util-linux: Access control bypass due to         │
-│                    │                     │          │              │                        │               │ improper hostname canonicalization                           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-3184                    │
-│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2022-0563       │ LOW      │ affected     │                        │               │ util-linux: partial disclosure of arbitrary files in chfn    │
-│                    │                     │          │              │                        │               │ and chsh when compiled...                                    │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2022-0563                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2025-14104      │          │              │                        │               │ util-linux: util-linux: Heap buffer overread in setpwnam()   │
-│                    │                     │          │              │                        │               │ when processing 256-byte usernames                           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-14104                   │
-├────────────────────┼─────────────────────┤          │              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ login              │ CVE-2007-5686       │          │              │ 1:4.13+dfsg1-1+deb12u2 │               │ initscripts in rPath Linux 1 sets insecure permissions for   │
-│                    │                     │          │              │                        │               │ the /var/lo ......                                           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2007-5686                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2024-56433      │          │              │                        │               │ shadow-utils: Default subordinate ID configuration in        │
-│                    │                     │          │              │                        │               │ /etc/login.defs could lead to compromise                     │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-56433                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ TEMP-0628843-DBAD28 │          │              │                        │               │ [more related to CVE-2005-4890]                              │
-│                    │                     │          │              │                        │               │ https://security-tracker.debian.org/tracker/TEMP-0628843-DB- │
-│                    │                     │          │              │                        │               │ AD28                                                         │
-├────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ mount              │ CVE-2026-53613      │ HIGH     │              │ 2.38.1-5+deb12u3       │               │ util-linux: TOCTOU in the mount program via ancestor         │
-│                    │                     │          │              │                        │               │ directory swap on target...                                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53613                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-53615      │          │              │                        │               │ util-linux: util-linux: Partition metadata compromise via    │
-│                    │                     │          │              │                        │               │ integer overflow in DOS partition parser...                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53615                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-78410      │          │              │                        │               │ util-linux: util-linux: restricted bind mounts do not pin    │
-│                    │                     │          │              │                        │               │ the source, allowing X-mount.owner/group/mode...             │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78410                   │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-13595      │ MEDIUM   │              │                        │               │ util-linux: util-linux: heap use-after-free in libblkid      │
-│                    │                     │          │              │                        │               │ nested partition probing                                     │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-13595                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-27456      │          │              │                        │               │ util-linux: TOCTOU in the mount program when setting up loop │
-│                    │                     │          │              │                        │               │ devices                                                      │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-27456                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-3184       │          │ will_not_fix │                        │               │ util-linux: util-linux: Access control bypass due to         │
-│                    │                     │          │              │                        │               │ improper hostname canonicalization                           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-3184                    │
-│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2022-0563       │ LOW      │ affected     │                        │               │ util-linux: partial disclosure of arbitrary files in chfn    │
-│                    │                     │          │              │                        │               │ and chsh when compiled...                                    │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2022-0563                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2025-14104      │          │              │                        │               │ util-linux: util-linux: Heap buffer overread in setpwnam()   │
-│                    │                     │          │              │                        │               │ when processing 256-byte usernames                           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-14104                   │
-├────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ ncurses-base       │ CVE-2025-69720      │ HIGH     │              │ 6.4-4                  │               │ ncurses: ncurses: Buffer overflow vulnerability may lead to  │
-│                    │                     │          │              │                        │               │ arbitrary code execution.                                    │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-69720                   │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2023-50495      │ MEDIUM   │              │                        │               │ ncurses: segmentation fault via _nc_wrap_entry()             │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-50495                   │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2025-6141       │ LOW      │              │                        │               │ gnu-ncurses: ncurses Stack Buffer Overflow                   │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-6141                    │
-├────────────────────┼─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│ ncurses-bin        │ CVE-2025-69720      │ HIGH     │              │                        │               │ ncurses: ncurses: Buffer overflow vulnerability may lead to  │
-│                    │                     │          │              │                        │               │ arbitrary code execution.                                    │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-69720                   │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2023-50495      │ MEDIUM   │              │                        │               │ ncurses: segmentation fault via _nc_wrap_entry()             │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-50495                   │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2025-6141       │ LOW      │              │                        │               │ gnu-ncurses: ncurses Stack Buffer Overflow                   │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-6141                    │
-├────────────────────┼─────────────────────┤          │              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ openssl            │ CVE-2025-27587      │          │              │ 3.0.22-1~deb12u2       │               │ OpenSSL 3.0.0 through 3.3.2 on the PowerPC architecture is   │
-│                    │                     │          │              │                        │               │ vulnerable ......                                            │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-27587                   │
-├────────────────────┼─────────────────────┤          │              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ passwd             │ CVE-2007-5686       │          │              │ 1:4.13+dfsg1-1+deb12u2 │               │ initscripts in rPath Linux 1 sets insecure permissions for   │
-│                    │                     │          │              │                        │               │ the /var/lo ......                                           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2007-5686                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2024-56433      │          │              │                        │               │ shadow-utils: Default subordinate ID configuration in        │
-│                    │                     │          │              │                        │               │ /etc/login.defs could lead to compromise                     │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2024-56433                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ TEMP-0628843-DBAD28 │          │              │                        │               │ [more related to CVE-2005-4890]                              │
-│                    │                     │          │              │                        │               │ https://security-tracker.debian.org/tracker/TEMP-0628843-DB- │
-│                    │                     │          │              │                        │               │ AD28                                                         │
-├────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ perl-base          │ CVE-2026-9538       │ HIGH     │ fix_deferred │ 5.36.0-7+deb12u4       │               │ perl-Archive-Tar: perl-Archive-Tar: Denial of Service via    │
-│                    │                     │          │              │                        │               │ crafted tar header with large entry...                       │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-9538                    │
-│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-15534      │ MEDIUM   │ affected     │                        │               │ perl: Perl: Arbitrary code execution via out-of-bounds       │
-│                    │                     │          │              │                        │               │ memory access in regular expression...                       │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-15534                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-82560      │          │              │                        │               │ Pod::Text versions before 6.1.1 for Perl allow CPU and       │
-│                    │                     │          │              │                        │               │ memory exhausti ......                                       │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-82560                   │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2011-4116       │ LOW      │              │                        │               │ perl: File:: Temp insecure temporary file handling           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2011-4116                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2023-31486      │          │              │                        │               │ http-tiny: perl: insecure TLS cert default                   │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-31486                   │
-├────────────────────┼─────────────────────┤          │              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ sysvinit-utils     │ TEMP-0517018-A83CE6 │          │              │ 3.06-4                 │               │ [sysvinit: no-root option in expert installer exposes        │
-│                    │                     │          │              │                        │               │ locally exploitable security flaw]                           │
-│                    │                     │          │              │                        │               │ https://security-tracker.debian.org/tracker/TEMP-0517018-A8- │
-│                    │                     │          │              │                        │               │ 3CE6                                                         │
-├────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ tar                │ CVE-2026-18477      │ MEDIUM   │ fix_deferred │ 1.34+dfsg-1.2+deb12u1  │               │ tar: tar: TOCTOU in incremental dumpdir 'X' rename handling  │
-│                    │                     │          │              │                        │               │ allows restore path...                                       │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-18477                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-18508      │          │              │                        │               │ tar: tar: --one-top-level hardlink targets not confined to   │
-│                    │                     │          │              │                        │               │ top-level directory enabling arbitrary...                    │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-18508                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-5704       │          │ affected     │                        │               │ tar: tar: Hidden file injection via crafted archives         │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-5704                    │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2005-2541       │ LOW      │              │                        │               │ tar: does not properly warn the user when extracting setuid  │
-│                    │                     │          │              │                        │               │ or setgid...                                                 │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2005-2541                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ TEMP-0290435-0B57B5 │          │              │                        │               │ [tar's rmt command may have undesired side effects]          │
-│                    │                     │          │              │                        │               │ https://security-tracker.debian.org/tracker/TEMP-0290435-0B- │
-│                    │                     │          │              │                        │               │ 57B5                                                         │
-├────────────────────┼─────────────────────┼──────────┤              ├────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ util-linux         │ CVE-2026-53613      │ HIGH     │              │ 2.38.1-5+deb12u3       │               │ util-linux: TOCTOU in the mount program via ancestor         │
-│                    │                     │          │              │                        │               │ directory swap on target...                                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53613                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-53615      │          │              │                        │               │ util-linux: util-linux: Partition metadata compromise via    │
-│                    │                     │          │              │                        │               │ integer overflow in DOS partition parser...                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53615                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-78410      │          │              │                        │               │ util-linux: util-linux: restricted bind mounts do not pin    │
-│                    │                     │          │              │                        │               │ the source, allowing X-mount.owner/group/mode...             │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78410                   │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-13595      │ MEDIUM   │              │                        │               │ util-linux: util-linux: heap use-after-free in libblkid      │
-│                    │                     │          │              │                        │               │ nested partition probing                                     │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-13595                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-27456      │          │              │                        │               │ util-linux: TOCTOU in the mount program when setting up loop │
-│                    │                     │          │              │                        │               │ devices                                                      │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-27456                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-3184       │          │ will_not_fix │                        │               │ util-linux: util-linux: Access control bypass due to         │
-│                    │                     │          │              │                        │               │ improper hostname canonicalization                           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-3184                    │
-│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2022-0563       │ LOW      │ affected     │                        │               │ util-linux: partial disclosure of arbitrary files in chfn    │
-│                    │                     │          │              │                        │               │ and chsh when compiled...                                    │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2022-0563                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2025-14104      │          │              │                        │               │ util-linux: util-linux: Heap buffer overread in setpwnam()   │
-│                    │                     │          │              │                        │               │ when processing 256-byte usernames                           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-14104                   │
-├────────────────────┼─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│ util-linux-extra   │ CVE-2026-53613      │ HIGH     │              │                        │               │ util-linux: TOCTOU in the mount program via ancestor         │
-│                    │                     │          │              │                        │               │ directory swap on target...                                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53613                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-53615      │          │              │                        │               │ util-linux: util-linux: Partition metadata compromise via    │
-│                    │                     │          │              │                        │               │ integer overflow in DOS partition parser...                  │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-53615                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-78410      │          │              │                        │               │ util-linux: util-linux: restricted bind mounts do not pin    │
-│                    │                     │          │              │                        │               │ the source, allowing X-mount.owner/group/mode...             │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-78410                   │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-13595      │ MEDIUM   │              │                        │               │ util-linux: util-linux: heap use-after-free in libblkid      │
-│                    │                     │          │              │                        │               │ nested partition probing                                     │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-13595                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-27456      │          │              │                        │               │ util-linux: TOCTOU in the mount program when setting up loop │
-│                    │                     │          │              │                        │               │ devices                                                      │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-27456                   │
-│                    ├─────────────────────┤          ├──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-3184       │          │ will_not_fix │                        │               │ util-linux: util-linux: Access control bypass due to         │
-│                    │                     │          │              │                        │               │ improper hostname canonicalization                           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-3184                    │
-│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2022-0563       │ LOW      │ affected     │                        │               │ util-linux: partial disclosure of arbitrary files in chfn    │
-│                    │                     │          │              │                        │               │ and chsh when compiled...                                    │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2022-0563                    │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2025-14104      │          │              │                        │               │ util-linux: util-linux: Heap buffer overread in setpwnam()   │
-│                    │                     │          │              │                        │               │ when processing 256-byte usernames                           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2025-14104                   │
-├────────────────────┼─────────────────────┼──────────┼──────────────┼────────────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
-│ zlib1g             │ CVE-2023-45853      │ CRITICAL │ will_not_fix │ 1:1.2.13.dfsg-1        │               │ zlib: integer overflow and resultant heap-based buffer       │
-│                    │                     │          │              │                        │               │ overflow in zipOpenNewFileInZip4_6                           │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2023-45853                   │
-│                    ├─────────────────────┼──────────┼──────────────┤                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-76844      │ HIGH     │ affected     │                        │               │ webpack-dev-middleware: webpack-dev-middleware: Information  │
-│                    │                     │          │              │                        │               │ Disclosure via Path Traversal                                │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-76844                   │
-│                    ├─────────────────────┤          │              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-85091      │          │              │                        │               │ zlib: zlib: Heap buffer overflow in gz_vacate() allows       │
-│                    │                     │          │              │                        │               │ arbitrary code execution                                     │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-85091                   │
-│                    ├─────────────────────┼──────────┤              │                        ├───────────────┼──────────────────────────────────────────────────────────────┤
-│                    │ CVE-2026-27171      │ MEDIUM   │              │                        │               │ zlib: zlib: Denial of Service via infinite loop in CRC32     │
-│                    │                     │          │              │                        │               │ combine functions...                                         │
-│                    │                     │          │              │                        │               │ https://avd.aquasec.com/nvd/cve-2026-27171                   │
-└────────────────────┴─────────────────────┴──────────┴──────────────┴────────────────────────┴───────────────┴──────────────────────────────────────────────────────────────┘
+┌─────────────┬──────────────────┬──────────┬──────────┬───────────────────┬───────────────┬──────────────────────────────────────────────────────────────┐
+│   Library   │  Vulnerability   │ Severity │  Status  │ Installed Version │ Fixed Version │                            Title                             │
+├─────────────┼──────────────────┼──────────┼──────────┼───────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ gcc-14-base │ CVE-2026-102010  │ MEDIUM   │ affected │ 14.2.0-19         │               │ gcc-toolset-15-gcc: gcc: gcc-toolset-16: gcc: Denial of      │
+│             │                  │          │          │                   │               │ Service via use-after-free in binary heap...                 │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-102010                  │
+│             ├──────────────────┤          │          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2026-114690  │          │          │                   │               │ gcc: Confirmed out-of-bounds read/write in libstdc++         │
+│             │                  │          │          │                   │               │ parallel `std                                                │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-114690                  │
+│             ├──────────────────┤          │          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2026-114691  │          │          │                   │               │ gcc: Integer wrap in `std                                    │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-114691                  │
+│             ├──────────────────┤          │          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2026-115455  │          │          │                   │               │ gcc: Stack overflow in std::bitset on libstdc++              │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-115455                  │
+│             ├──────────────────┤          │          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2026-95619   │          │          │                   │               │ gcc: libstdc++ integer overflow in `new` operator            │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-95619                   │
+│             ├──────────────────┼──────────┤          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2026-115456  │ LOW      │          │                   │               │ gcc: Out-of-bounds read in std::from_chars                   │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-115456                  │
+├─────────────┼──────────────────┼──────────┤          ├───────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libc6       │ CVE-2026-18374   │ MEDIUM   │          │ 2.41-12+deb13u4   │               │ glibc: glibc: Heap buffer overflow via attacker-controlled   │
+│             │                  │          │          │                   │               │ fopen mode string                                            │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-18374                   │
+│             ├──────────────────┤          │          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2026-19499   │          │          │                   │               │ glibc: Buffer Overflow in strfmon right-justification        │
+│             │                  │          │          │                   │               │ padding                                                      │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-19499                   │
+│             ├──────────────────┤          │          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2026-19542   │          │          │                   │               │ glibc: Fix out-of-bounds array write in tdelete              │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-19542                   │
+│             ├──────────────────┤          │          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2026-5435    │          │          │                   │               │ glibc: glibc: Out-of-bounds write via TSIG record processing │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-5435                    │
+│             ├──────────────────┤          │          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2026-6238    │          │          │                   │               │ glibc: glibc: Application crash or uninitialized memory read │
+│             │                  │          │          │                   │               │ via crafted DNS response...                                  │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-6238                    │
+│             ├──────────────────┤          │          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2026-6368    │          │          │                   │               │ glibc: glibc: Process abort due to invalid memory in wordexp │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-6368                    │
+│             ├──────────────────┤          │          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2026-6791    │          │          │                   │               │ glibc: Glibc: Denial of Service via stack exhaustion during  │
+│             │                  │          │          │                   │               │ tilde expansion                                              │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-6791                    │
+│             ├──────────────────┤          │          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2026-77117   │          │          │                   │               │ glibc: Non-progress DoS in SHIFT_JISX0213 -&gt               │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-77117                   │
+│             ├──────────────────┤          │          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2026-80489   │          │          │                   │               │ glibc: Non-progress DoS in EUC_JISX0213 -> UCS-4 conversion  │
+│             │                  │          │          │                   │               │ state                                                        │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-80489                   │
+│             ├──────────────────┤          │          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2026-84243   │          │          │                   │               │ glibc: glibc: Arbitrary code execution via directory         │
+│             │                  │          │          │                   │               │ traversal in LANGUAGE environment variable...                │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-84243                   │
+│             ├──────────────────┤          │          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2026-8674    │          │          │                   │               │ glibc: glibc DNS stub resolver: Denial of Service via long   │
+│             │                  │          │          │                   │               │ search domain...                                             │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-8674                    │
+│             ├──────────────────┤          │          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2026-86805   │          │          │                   │               │ glibc: glibc: Privilege escalation and arbitrary code        │
+│             │                  │          │          │                   │               │ execution via TOCTOU race condition...                       │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-86805                   │
+│             ├──────────────────┤          │          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2026-89092   │          │          │                   │               │ glibc: nscd stack overflow leads to degraded DNS resolution  │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-89092                   │
+│             ├──────────────────┤          │          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2026-95818   │          │          │                   │               │ glibc: glibc: Local attacker can cause denial of service and │
+│             │                  │          │          │                   │               │ information disclosure...                                    │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-95818                   │
+│             ├──────────────────┼──────────┤          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2010-4756    │ LOW      │          │                   │               │ glibc: glob implementation can cause excessive CPU and       │
+│             │                  │          │          │                   │               │ memory consumption due to...                                 │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2010-4756                    │
+│             ├──────────────────┤          │          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2018-20796   │          │          │                   │               │ glibc: uncontrolled recursion in function                    │
+│             │                  │          │          │                   │               │ check_dst_limits_calc_pos_1 in posix/regexec.c               │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2018-20796                   │
+│             ├──────────────────┤          │          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2019-1010022 │          │          │                   │               │ glibc: stack guard protection bypass                         │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2019-1010022                 │
+│             ├──────────────────┤          │          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2019-1010023 │          │          │                   │               │ glibc: running ldd on malicious ELF leads to code execution  │
+│             │                  │          │          │                   │               │ because of...                                                │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2019-1010023                 │
+│             ├──────────────────┤          │          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2019-1010024 │          │          │                   │               │ glibc: ASLR bypass using cache of thread stack and heap      │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2019-1010024                 │
+│             ├──────────────────┤          │          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2019-1010025 │          │          │                   │               │ glibc: information disclosure of heap addresses of           │
+│             │                  │          │          │                   │               │ pthread_created thread                                       │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2019-1010025                 │
+│             ├──────────────────┤          │          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2019-9192    │          │          │                   │               │ glibc: uncontrolled recursion in function                    │
+│             │                  │          │          │                   │               │ check_dst_limits_calc_pos_1 in posix/regexec.c               │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2019-9192                    │
+│             ├──────────────────┤          │          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2026-97399   │          │          │                   │               │ glibc: glibc: Denial of Service via out-of-bounds read in    │
+│             │                  │          │          │                   │               │ strncasecmp                                                  │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-97399                   │
+├─────────────┼──────────────────┼──────────┤          ├───────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ libgcc-s1   │ CVE-2026-102010  │ MEDIUM   │          │ 14.2.0-19         │               │ gcc-toolset-15-gcc: gcc: gcc-toolset-16: gcc: Denial of      │
+│             │                  │          │          │                   │               │ Service via use-after-free in binary heap...                 │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-102010                  │
+│             ├──────────────────┤          │          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2026-114690  │          │          │                   │               │ gcc: Confirmed out-of-bounds read/write in libstdc++         │
+│             │                  │          │          │                   │               │ parallel `std                                                │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-114690                  │
+│             ├──────────────────┤          │          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2026-114691  │          │          │                   │               │ gcc: Integer wrap in `std                                    │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-114691                  │
+│             ├──────────────────┤          │          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2026-115455  │          │          │                   │               │ gcc: Stack overflow in std::bitset on libstdc++              │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-115455                  │
+│             ├──────────────────┤          │          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2026-95619   │          │          │                   │               │ gcc: libstdc++ integer overflow in `new` operator            │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-95619                   │
+│             ├──────────────────┼──────────┤          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2026-115456  │ LOW      │          │                   │               │ gcc: Out-of-bounds read in std::from_chars                   │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-115456                  │
+├─────────────┼──────────────────┼──────────┤          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│ libgomp1    │ CVE-2026-102010  │ MEDIUM   │          │                   │               │ gcc-toolset-15-gcc: gcc: gcc-toolset-16: gcc: Denial of      │
+│             │                  │          │          │                   │               │ Service via use-after-free in binary heap...                 │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-102010                  │
+│             ├──────────────────┤          │          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2026-114690  │          │          │                   │               │ gcc: Confirmed out-of-bounds read/write in libstdc++         │
+│             │                  │          │          │                   │               │ parallel `std                                                │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-114690                  │
+│             ├──────────────────┤          │          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2026-114691  │          │          │                   │               │ gcc: Integer wrap in `std                                    │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-114691                  │
+│             ├──────────────────┤          │          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2026-115455  │          │          │                   │               │ gcc: Stack overflow in std::bitset on libstdc++              │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-115455                  │
+│             ├──────────────────┤          │          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2026-95619   │          │          │                   │               │ gcc: libstdc++ integer overflow in `new` operator            │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-95619                   │
+│             ├──────────────────┼──────────┤          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2026-115456  │ LOW      │          │                   │               │ gcc: Out-of-bounds read in std::from_chars                   │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-115456                  │
+├─────────────┼──────────────────┼──────────┤          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│ libstdc++6  │ CVE-2026-102010  │ MEDIUM   │          │                   │               │ gcc-toolset-15-gcc: gcc: gcc-toolset-16: gcc: Denial of      │
+│             │                  │          │          │                   │               │ Service via use-after-free in binary heap...                 │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-102010                  │
+│             ├──────────────────┤          │          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2026-114690  │          │          │                   │               │ gcc: Confirmed out-of-bounds read/write in libstdc++         │
+│             │                  │          │          │                   │               │ parallel `std                                                │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-114690                  │
+│             ├──────────────────┤          │          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2026-114691  │          │          │                   │               │ gcc: Integer wrap in `std                                    │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-114691                  │
+│             ├──────────────────┤          │          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2026-115455  │          │          │                   │               │ gcc: Stack overflow in std::bitset on libstdc++              │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-115455                  │
+│             ├──────────────────┤          │          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2026-95619   │          │          │                   │               │ gcc: libstdc++ integer overflow in `new` operator            │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-95619                   │
+│             ├──────────────────┼──────────┤          │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│             │ CVE-2026-115456  │ LOW      │          │                   │               │ gcc: Out-of-bounds read in std::from_chars                   │
+│             │                  │          │          │                   │               │ https://avd.aquasec.com/nvd/cve-2026-115456                  │
+└─────────────┴──────────────────┴──────────┴──────────┴───────────────────┴───────────────┴──────────────────────────────────────────────────────────────┘
 
 app/stoa-gateway (rustbinary)
 =============================
@@ -1716,17 +320,17 @@ Total: 1 (UNKNOWN: 0, LOW: 0, MEDIUM: 1, HIGH: 0, CRITICAL: 0)
 
 ## SBOM
 
-CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.tar --format cyclonedx`, on the image of revision `36c4c3f9`. 414 components, including `pkg:cargo/quick-xml@0.39.4` and `pkg:cargo/tokio@1.54.1`. Same bytes as `deploy/standalone/stoa-gateway-standalone.cdx.json` (not committed).
+CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.tar --format cyclonedx`, on the image of revision `ae6d3b86`. 318 components (302 crates, 14 OS packages), including `pkg:cargo/quick-xml@0.39.4` and `pkg:cargo/tokio@1.54.1`. Same bytes as `deploy/standalone/stoa-gateway-standalone.cdx.json` (not committed).
 
 ```json
 {
   "$schema": "http://cyclonedx.org/schema/bom-1.6.schema.json",
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:17de5b2f-3b21-4f1c-b09d-b7172a9db11c",
+  "serialNumber": "urn:uuid:66b2fdcf-a955-4058-89b6-5b0fd6321b44",
   "version": 1,
   "metadata": {
-    "timestamp": "2026-11-10T18:31:42+00:00",
+    "timestamp": "2026-11-10T20:17:36+00:00",
     "tools": {
       "components": [
         {
@@ -1738,41 +342,109 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       ]
     },
     "component": {
-      "bom-ref": "22705df6-81fa-4ac7-a895-3df514d1e93c",
+      "bom-ref": "2ad2370e-a54e-4980-a5ff-0204dd12d475",
       "type": "container",
       "name": "/tmp/claude-stoa/wt-build/deploy/standalone/stoa-gateway-standalone.tar",
       "properties": [
         {
           "name": "aquasecurity:trivy:DiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
+          "value": "sha256:0762a1f6557d1e88a761ab05aa7f65a10dc0e559913ea13befb873d907e1a396"
         },
         {
           "name": "aquasecurity:trivy:DiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:187cfc6d1e3e8a40a5e64653bcd3239c140807dcf1c09e48021178705a5a6139"
         },
         {
           "name": "aquasecurity:trivy:DiffID",
-          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
+          "value": "sha256:1f5d28bd51650f429293f7730ede274b81dc0744aa918bc887133c4ad610258c"
         },
         {
           "name": "aquasecurity:trivy:DiffID",
-          "value": "sha256:a20874e92c40c0814479d6709efd15697c229d781cca669e0127d02d6a5b4906"
+          "value": "sha256:275a30dd8ce958b21daa9ad962c6fbc09f98306ee2f486b65c9075dc257b1412"
         },
         {
           "name": "aquasecurity:trivy:DiffID",
-          "value": "sha256:e882c97afbf110e2b9fa918a55d9f57cd9103400ef8974e49b06dfe24893fdc4"
+          "value": "sha256:2cef49adb7d7902c61ecdd385036e3c7fb7c9f0ada96a41901797c77b7daedd7"
         },
         {
           "name": "aquasecurity:trivy:DiffID",
-          "value": "sha256:f457a501348cd770cb3ea1ededc32a4143182f57a787e09a0d147ff5fc88ac90"
+          "value": "sha256:2e7e048c8b43ab2a1f69ee041025502f890b3faaee2053015a3c3e7256d9ec25"
+        },
+        {
+          "name": "aquasecurity:trivy:DiffID",
+          "value": "sha256:4cde6b0bb6f50a5f255eef7b2a42162c661cf776b803225dcac9a659e396bb6b"
+        },
+        {
+          "name": "aquasecurity:trivy:DiffID",
+          "value": "sha256:4d049f83d9cf21d1f5cc0e11deaf36df02790d0e60c1a3829538fb4b61685368"
+        },
+        {
+          "name": "aquasecurity:trivy:DiffID",
+          "value": "sha256:621c35e751a51a9a9dc3e80aa0b7fe8be2a93402ea6ccd307d30852cd7776cda"
+        },
+        {
+          "name": "aquasecurity:trivy:DiffID",
+          "value": "sha256:6e18ad80f3d64a8cbbcd1ff2e8a0d5ce7282cf664e816b86183a59d30a618e8a"
+        },
+        {
+          "name": "aquasecurity:trivy:DiffID",
+          "value": "sha256:6f1cdceb6a3146f0ccb986521156bef8a422cdbb0863396f7f751f575ba308f4"
+        },
+        {
+          "name": "aquasecurity:trivy:DiffID",
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
+        },
+        {
+          "name": "aquasecurity:trivy:DiffID",
+          "value": "sha256:7db505d90756626f425c6c5468eca565c82f589b144ecaa4f411ad9bbf79e614"
+        },
+        {
+          "name": "aquasecurity:trivy:DiffID",
+          "value": "sha256:8a3b315d45080ecb38e39d42d28e951303c67c2ce7482bcdbbc3b5424be19013"
+        },
+        {
+          "name": "aquasecurity:trivy:DiffID",
+          "value": "sha256:9486261b5a13f63ca6904b36721527ac8f19df53d300560138d69ae9b4c203de"
+        },
+        {
+          "name": "aquasecurity:trivy:DiffID",
+          "value": "sha256:ad51d0769d16ba578106a177987dfe3d2e02c1668c852b795b2f6b024068242a"
+        },
+        {
+          "name": "aquasecurity:trivy:DiffID",
+          "value": "sha256:af5aa97ebe6ce1604747ec1e21af7136ded391bcabe4acef882e718a87c86bcc"
+        },
+        {
+          "name": "aquasecurity:trivy:DiffID",
+          "value": "sha256:b5764396d8d3f88c6c91b8e97022f147ec721afcf85710d96775922e0df881af"
+        },
+        {
+          "name": "aquasecurity:trivy:DiffID",
+          "value": "sha256:b64fe4bb89ff075efc03878811052cbaf4f9dd891aed968e9ed6993fedf1f4a7"
+        },
+        {
+          "name": "aquasecurity:trivy:DiffID",
+          "value": "sha256:bc5152368100eebfc56f31fbca003ccb57f905125668216777be5663724db7be"
+        },
+        {
+          "name": "aquasecurity:trivy:DiffID",
+          "value": "sha256:bd3cdfae1d3fdd83a2231d608969b38b82349777c2fff9a7c12d54f8ac5c9b38"
+        },
+        {
+          "name": "aquasecurity:trivy:DiffID",
+          "value": "sha256:c0e409312adc366898967307565f692bb33d43a439d3de48e27d14b742389725"
+        },
+        {
+          "name": "aquasecurity:trivy:DiffID",
+          "value": "sha256:c16b2ec4b1493bad1b1de23d659c899e60abb166bda756d02792f0a03ba54a43"
         },
         {
           "name": "aquasecurity:trivy:ImageID",
-          "value": "sha256:02d1a1738252e47703469159ac33f754a43939b0723289bf9be15df5ed473abe"
+          "value": "sha256:8cff54bde6d618a26e3476ee2e0ee53d7674910d1d651720efaf42d3cac0f798"
         },
         {
           "name": "aquasecurity:trivy:Labels:org.opencontainers.image.revision",
-          "value": "36c4c3f934dd709c53e9f270845458b077741743"
+          "value": "ae6d3b868b399c21a05680268b7a6fdea48b50b7"
         },
         {
           "name": "aquasecurity:trivy:Labels:org.opencontainers.image.source",
@@ -1791,7 +463,23 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
   },
   "components": [
     {
-      "bom-ref": "1d1528b6-518f-4890-934c-7d54e4eef910",
+      "bom-ref": "d235075e-b4c1-4ff1-9177-69bb39d13535",
+      "type": "operating-system",
+      "name": "debian",
+      "version": "13.7",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:Class",
+          "value": "os-pkgs"
+        },
+        {
+          "name": "aquasecurity:trivy:Type",
+          "value": "debian"
+        }
+      ]
+    },
+    {
+      "bom-ref": "f889d8bb-dd0b-41a2-b7cb-2e7f6fccc20d",
       "type": "application",
       "name": "app/stoa-gateway",
       "properties": [
@@ -1806,22 +494,6 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       ]
     },
     {
-      "bom-ref": "4b100c96-6c22-4f94-b2c4-ae7b15018348",
-      "type": "operating-system",
-      "name": "debian",
-      "version": "12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:Class",
-          "value": "os-pkgs"
-        },
-        {
-          "name": "aquasecurity:trivy:Type",
-          "value": "debian"
-        }
-      ]
-    },
-    {
       "bom-ref": "pkg:cargo/ahash@0.8.12",
       "type": "library",
       "name": "ahash",
@@ -1830,7 +502,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -1851,7 +523,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -1872,7 +544,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -1893,7 +565,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -1914,7 +586,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -1935,7 +607,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -1956,7 +628,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -1977,7 +649,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -1998,7 +670,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2019,7 +691,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2040,7 +712,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2061,7 +733,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2082,7 +754,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2103,7 +775,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2124,7 +796,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2145,7 +817,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2166,7 +838,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2187,7 +859,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2208,7 +880,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2229,7 +901,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2250,7 +922,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2271,7 +943,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2292,7 +964,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2313,7 +985,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2334,7 +1006,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2355,7 +1027,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2376,7 +1048,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2397,7 +1069,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2418,7 +1090,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2439,7 +1111,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2460,7 +1132,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2481,7 +1153,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2502,7 +1174,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2523,7 +1195,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2544,7 +1216,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2565,7 +1237,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2586,7 +1258,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2607,7 +1279,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2628,7 +1300,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2649,7 +1321,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2670,7 +1342,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2691,7 +1363,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2712,7 +1384,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2733,7 +1405,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2754,7 +1426,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2775,7 +1447,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2796,7 +1468,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2817,7 +1489,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2838,7 +1510,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2859,7 +1531,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2880,7 +1552,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2901,7 +1573,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2922,7 +1594,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2943,7 +1615,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2964,7 +1636,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2985,7 +1657,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3006,7 +1678,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3027,7 +1699,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3048,7 +1720,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3069,7 +1741,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3090,7 +1762,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3111,7 +1783,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3132,7 +1804,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3153,7 +1825,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3174,7 +1846,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3195,7 +1867,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3216,7 +1888,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3237,7 +1909,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3258,7 +1930,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3279,7 +1951,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3300,7 +1972,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3321,7 +1993,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3342,7 +2014,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3363,7 +2035,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3384,7 +2056,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3405,7 +2077,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3426,7 +2098,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3447,7 +2119,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3468,7 +2140,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3489,7 +2161,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3510,7 +2182,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3531,7 +2203,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3552,7 +2224,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3573,7 +2245,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3594,7 +2266,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3615,7 +2287,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3636,7 +2308,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3657,7 +2329,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3678,7 +2350,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3699,7 +2371,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3720,7 +2392,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3741,7 +2413,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3762,7 +2434,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3783,7 +2455,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3804,7 +2476,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3825,7 +2497,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3846,7 +2518,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3867,7 +2539,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3888,7 +2560,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3909,7 +2581,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3930,7 +2602,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3951,7 +2623,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3972,7 +2644,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3993,7 +2665,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4014,7 +2686,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4035,7 +2707,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4056,7 +2728,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4077,7 +2749,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4098,7 +2770,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4119,7 +2791,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4140,7 +2812,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4161,7 +2833,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4182,7 +2854,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4203,7 +2875,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4224,7 +2896,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4245,7 +2917,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4266,7 +2938,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4287,7 +2959,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4308,7 +2980,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4329,7 +3001,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4350,7 +3022,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4371,7 +3043,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4392,7 +3064,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4413,7 +3085,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4434,7 +3106,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4455,7 +3127,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4476,7 +3148,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4497,7 +3169,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4518,7 +3190,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4539,7 +3211,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4560,7 +3232,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4581,7 +3253,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4602,7 +3274,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4623,7 +3295,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4644,7 +3316,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4665,7 +3337,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4686,7 +3358,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4707,7 +3379,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4728,7 +3400,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4749,7 +3421,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4770,7 +3442,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4791,7 +3463,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4812,7 +3484,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4833,7 +3505,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4854,7 +3526,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4875,7 +3547,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4896,7 +3568,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4917,7 +3589,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4938,7 +3610,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4959,7 +3631,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4980,7 +3652,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5001,7 +3673,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5022,7 +3694,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5043,7 +3715,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5064,7 +3736,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5085,7 +3757,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5106,7 +3778,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5127,7 +3799,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5148,7 +3820,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5169,7 +3841,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5190,7 +3862,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5211,7 +3883,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5232,7 +3904,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5253,7 +3925,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5274,7 +3946,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5295,7 +3967,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5316,7 +3988,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5337,7 +4009,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5358,7 +4030,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5379,7 +4051,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5400,7 +4072,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5421,7 +4093,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5442,7 +4114,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5463,7 +4135,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5484,7 +4156,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5505,7 +4177,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5526,7 +4198,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5547,7 +4219,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5568,7 +4240,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5589,7 +4261,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5610,7 +4282,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5631,7 +4303,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5652,7 +4324,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5673,7 +4345,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5694,7 +4366,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5715,7 +4387,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5736,7 +4408,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5757,7 +4429,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5778,7 +4450,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5799,7 +4471,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5820,7 +4492,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5841,7 +4513,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5862,7 +4534,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5883,7 +4555,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5904,7 +4576,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5925,7 +4597,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5946,7 +4618,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5967,7 +4639,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5988,7 +4660,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6009,7 +4681,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6030,7 +4702,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6051,7 +4723,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6072,7 +4744,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6093,7 +4765,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6114,7 +4786,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6135,7 +4807,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6156,7 +4828,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6177,7 +4849,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6198,7 +4870,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6219,7 +4891,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6240,7 +4912,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6261,7 +4933,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6282,7 +4954,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6303,7 +4975,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6324,7 +4996,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6345,7 +5017,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6366,7 +5038,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6387,7 +5059,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6408,7 +5080,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6429,7 +5101,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6450,7 +5122,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6471,7 +5143,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6492,7 +5164,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6513,7 +5185,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6534,7 +5206,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6555,7 +5227,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6576,7 +5248,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6597,7 +5269,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6618,7 +5290,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6639,7 +5311,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6660,7 +5332,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6681,7 +5353,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6702,7 +5374,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6723,7 +5395,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6744,7 +5416,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6765,7 +5437,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6786,7 +5458,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6807,7 +5479,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6828,7 +5500,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6849,7 +5521,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6870,7 +5542,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6891,7 +5563,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6912,7 +5584,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6933,7 +5605,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6954,7 +5626,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6975,7 +5647,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6996,7 +5668,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7017,7 +5689,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7038,7 +5710,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7059,7 +5731,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7080,7 +5752,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7101,7 +5773,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7122,7 +5794,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7143,7 +5815,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7164,7 +5836,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7185,7 +5857,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7206,7 +5878,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7227,7 +5899,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7248,7 +5920,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7269,7 +5941,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7290,7 +5962,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7311,7 +5983,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7332,7 +6004,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7353,7 +6025,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7374,7 +6046,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7395,7 +6067,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7416,7 +6088,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7437,7 +6109,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7458,7 +6130,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7479,7 +6151,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7500,7 +6172,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7521,7 +6193,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7542,7 +6214,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7563,7 +6235,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7584,7 +6256,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7605,7 +6277,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7626,7 +6298,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7647,7 +6319,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7668,7 +6340,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7689,7 +6361,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7710,7 +6382,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7731,7 +6403,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7752,7 +6424,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7773,7 +6445,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7794,7 +6466,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7815,7 +6487,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7836,7 +6508,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7857,7 +6529,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7878,7 +6550,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7899,7 +6571,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7920,7 +6592,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7941,7 +6613,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7962,7 +6634,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7983,7 +6655,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8004,7 +6676,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8025,7 +6697,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8046,7 +6718,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8067,7 +6739,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8088,7 +6760,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8109,7 +6781,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8130,7 +6802,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8151,7 +6823,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
+          "value": "sha256:7ce6c266df45578c02b9d7f979ca2eb4a0d85dab99f19f4cb6d9efad8032e7b1"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8164,127 +6836,39 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       ]
     },
     {
-      "bom-ref": "pkg:deb/debian/adduser@3.134?arch=all&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Debian Adduser Developers <adduser@packages.debian.org>"
-      },
-      "name": "adduser",
-      "version": "3.134",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/adduser@3.134?arch=all&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "adduser@3.134"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "adduser"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "3.134"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/apt@2.6.2?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "APT Development Team <deity@lists.debian.org>"
-      },
-      "name": "apt",
-      "version": "2.6.2",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/apt@2.6.2?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "apt@2.6.2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "apt"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "2.6.2"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/base-files@12.4%2Bdeb12u15?arch=amd64&distro=debian-12.15",
+      "bom-ref": "pkg:deb/debian/base-files@13.8%2Bdeb13u7?arch=amd64&distro=debian-13.7",
       "type": "library",
       "supplier": {
         "name": "Santiago Vila <sanvila@debian.org>"
       },
       "name": "base-files",
-      "version": "12.4+deb12u15",
+      "version": "13.8+deb13u7",
       "licenses": [
         {
           "license": {
             "name": "GPL-2.0-or-later"
           }
+        },
+        {
+          "license": {
+            "name": "GPL-2.0-only"
+          }
+        },
+        {
+          "license": {
+            "name": "verbatim"
+          }
         }
       ],
-      "purl": "pkg:deb/debian/base-files@12.4%2Bdeb12u15?arch=amd64&distro=debian-12.15",
+      "purl": "pkg:deb/debian/base-files@13.8%2Bdeb13u7?arch=amd64&distro=debian-13.7",
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
+          "value": "sha256:9486261b5a13f63ca6904b36721527ac8f19df53d300560138d69ae9b4c203de"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
-          "value": "base-files@12.4+deb12u15"
+          "value": "base-files@13.8+deb13u7"
         },
         {
           "name": "aquasecurity:trivy:PkgType",
@@ -8296,268 +6880,18 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         },
         {
           "name": "aquasecurity:trivy:SrcVersion",
-          "value": "12.4+deb12u15"
+          "value": "13.8+deb13u7"
         }
       ]
     },
     {
-      "bom-ref": "pkg:deb/debian/base-passwd@3.6.1?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Colin Watson <cjwatson@debian.org>"
-      },
-      "name": "base-passwd",
-      "version": "3.6.1",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "public-domain"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/base-passwd@3.6.1?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "base-passwd@3.6.1"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "base-passwd"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "3.6.1"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/bash@5.2.15-2%2Bb13?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Matthias Klose <doko@debian.org>"
-      },
-      "name": "bash",
-      "version": "5.2.15-2+b13",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3+ with Bison exception"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GFDL-1.3-no-invariants-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GFDL-1.3-only"
-          }
-        },
-        {
-          "license": {
-            "name": "Latex2e"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-4-Clause-UC"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT"
-          }
-        },
-        {
-          "license": {
-            "name": "permissive"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/bash@5.2.15-2%2Bb13?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "bash@5.2.15-2+b13"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "bash"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "5.2.15"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/bsdutils@2.38.1-5%2Bdeb12u3?arch=amd64&distro=debian-12.15&epoch=1",
-      "type": "library",
-      "supplier": {
-        "name": "util-linux packagers <util-linux@packages.debian.org>"
-      },
-      "name": "bsdutils",
-      "version": "1:2.38.1-5+deb12u3",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "public-domain"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-4-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "BSLA"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-3.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/bsdutils@2.38.1-5%2Bdeb12u3?arch=amd64&distro=debian-12.15&epoch=1",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "bsdutils@1:2.38.1-5+deb12u3"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "util-linux"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "5+deb12u3"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "2.38.1"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/ca-certificates@20250419~deb12u2?arch=all&distro=debian-12.15",
+      "bom-ref": "pkg:deb/debian/ca-certificates@20250419%2Bdeb13u1?arch=all&distro=debian-13.7",
       "type": "library",
       "supplier": {
         "name": "Julien Cristau <jcristau@debian.org>"
       },
       "name": "ca-certificates",
-      "version": "20250419~deb12u2",
+      "version": "20250419+deb13u1",
       "licenses": [
         {
           "license": {
@@ -8575,15 +6909,15 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
           }
         }
       ],
-      "purl": "pkg:deb/debian/ca-certificates@20250419~deb12u2?arch=all&distro=debian-12.15",
+      "purl": "pkg:deb/debian/ca-certificates@20250419%2Bdeb13u1?arch=all&distro=debian-13.7",
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
+          "value": "sha256:0762a1f6557d1e88a761ab05aa7f65a10dc0e559913ea13befb873d907e1a396"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
-          "value": "ca-certificates@20250419~deb12u2"
+          "value": "ca-certificates@20250419+deb13u1"
         },
         {
           "name": "aquasecurity:trivy:PkgType",
@@ -8595,810 +6929,18 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         },
         {
           "name": "aquasecurity:trivy:SrcVersion",
-          "value": "20250419~deb12u2"
+          "value": "20250419+deb13u1"
         }
       ]
     },
     {
-      "bom-ref": "pkg:deb/debian/coreutils@9.1-1?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Michael Stone <mstone@debian.org>"
-      },
-      "name": "coreutils",
-      "version": "9.1-1",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-4-Clause-UC"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "ISC"
-          }
-        },
-        {
-          "license": {
-            "name": "FSFULLR"
-          }
-        },
-        {
-          "license": {
-            "name": "GFDL-1.3-no-invariants-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GFDL-1.3-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/coreutils@9.1-1?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "coreutils@9.1-1"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "coreutils"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "1"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "9.1"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/curl@7.88.1-10%2Bdeb12u15?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Alessandro Ghedini <ghedo@debian.org>"
-      },
-      "name": "curl",
-      "version": "7.88.1-10+deb12u15",
-      "licenses": [
-        {
-          "license": {
-            "name": "curl"
-          }
-        },
-        {
-          "license": {
-            "name": "OLDAP-2.8"
-          }
-        },
-        {
-          "license": {
-            "name": "ISC"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2+ with Autoconf-data exception"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3+ with Autoconf-data exception"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2+ with Libtool exception"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-4-Clause-UC"
-          }
-        },
-        {
-          "license": {
-            "name": "FSFULLR"
-          }
-        },
-        {
-          "license": {
-            "name": "X11"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/curl@7.88.1-10%2Bdeb12u15?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "curl@7.88.1-10+deb12u15"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "curl"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "10+deb12u15"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "7.88.1"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/dash@0.5.12-2?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Andrej Shadura <andrewsh@debian.org>"
-      },
-      "name": "dash",
-      "version": "0.5.12-2",
-      "licenses": [
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "public-domain"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/dash@0.5.12-2?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "dash@0.5.12-2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "dash"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "0.5.12"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/debconf@1.5.82?arch=all&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Debconf Developers <debconf-devel@lists.alioth.debian.org>"
-      },
-      "name": "debconf",
-      "version": "1.5.82",
-      "licenses": [
-        {
-          "license": {
-            "name": "BSD-2-Clause"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/debconf@1.5.82?arch=all&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "debconf@1.5.82"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "debconf"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "1.5.82"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/debian-archive-keyring@2023.3%2Bdeb12u2?arch=all&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Debian Release Team <packages@release.debian.org>"
-      },
-      "name": "debian-archive-keyring",
-      "version": "2023.3+deb12u2",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/debian-archive-keyring@2023.3%2Bdeb12u2?arch=all&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "debian-archive-keyring@2023.3+deb12u2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "debian-archive-keyring"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "2023.3+deb12u2"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/debianutils@5.7-0.5~deb12u1?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Clint Adams <clint@debian.org>"
-      },
-      "name": "debianutils",
-      "version": "5.7-0.5~deb12u1",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "public-domain"
-          }
-        },
-        {
-          "license": {
-            "name": "SMAIL-GPL"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/debianutils@5.7-0.5~deb12u1?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "debianutils@5.7-0.5~deb12u1"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "debianutils"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "0.5~deb12u1"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "5.7"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/diffutils@3.8-4?arch=amd64&distro=debian-12.15&epoch=1",
-      "type": "library",
-      "supplier": {
-        "name": "Santiago Vila <sanvila@debian.org>"
-      },
-      "name": "diffutils",
-      "version": "1:3.8-4",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "FSFULLR"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-with-autoconf-exception+"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3+ with texinfo exception"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "X11"
-          }
-        },
-        {
-          "license": {
-            "name": "FSFAP"
-          }
-        },
-        {
-          "license": {
-            "name": "GFDL-1.3-no-invariants-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-3.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "public-domain"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GFDL-1.3-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/diffutils@3.8-4?arch=amd64&distro=debian-12.15&epoch=1",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "diffutils@1:3.8-4"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcEpoch",
-          "value": "1"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "diffutils"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "4"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "3.8"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/dpkg@1.21.23?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Dpkg Developers <debian-dpkg@lists.debian.org>"
-      },
-      "name": "dpkg",
-      "version": "1.21.23",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-2-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "public-domain-s-s-d"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/dpkg@1.21.23?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "dpkg@1.21.23"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "dpkg"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "1.21.23"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/e2fsprogs@1.47.0-2%2Bb2?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Theodore Y. Ts'o <tytso@mit.edu>"
-      },
-      "name": "e2fsprogs",
-      "version": "1.47.0-2+b2",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "Apache-2.0"
-          }
-        },
-        {
-          "license": {
-            "name": "ISC"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT-US-export"
-          }
-        },
-        {
-          "license": {
-            "name": "Kazlib"
-          }
-        },
-        {
-          "license": {
-            "name": "Latex2e"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2+ with Texinfo exception"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/e2fsprogs@1.47.0-2%2Bb2?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "e2fsprogs@1.47.0-2+b2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "e2fsprogs"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "1.47.0"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/findutils@4.9.0-4?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Andreas Metzler <ametzler@debian.org>"
-      },
-      "name": "findutils",
-      "version": "4.9.0-4",
-      "licenses": [
-        {
-          "license": {
-            "name": "GFDL-1.3-no-invariants-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "FSFAP"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3+ with Autoconf-data exception"
-          }
-        },
-        {
-          "license": {
-            "name": "FSFULLR"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2+ with Autoconf-data exception"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "X11"
-          }
-        },
-        {
-          "license": {
-            "name": "public-domain"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL with automake exception"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-clause and/or GPL-3+"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3+ with Bison-2.2 exception"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-3.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "ISC and/or LGPL-2.1+"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "GFDL-1.3-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "ISC"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/findutils@4.9.0-4?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "findutils@4.9.0-4"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "findutils"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "4"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "4.9.0"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/gcc-12-base@12.2.0-14%2Bdeb12u1?arch=amd64&distro=debian-12.15",
+      "bom-ref": "pkg:deb/debian/gcc-14-base@14.2.0-19?arch=amd64&distro=debian-13.7",
       "type": "library",
       "supplier": {
         "name": "Debian GCC Maintainers <debian-gcc@lists.debian.org>"
       },
-      "name": "gcc-12-base",
-      "version": "12.2.0-14+deb12u1",
+      "name": "gcc-14-base",
+      "version": "14.2.0-19",
       "licenses": [
         {
           "license": {
@@ -9417,11 +6959,6 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         },
         {
           "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
             "name": "Artistic-2.0"
           }
         },
@@ -9431,15 +6968,15 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
           }
         }
       ],
-      "purl": "pkg:deb/debian/gcc-12-base@12.2.0-14%2Bdeb12u1?arch=amd64&distro=debian-12.15",
+      "purl": "pkg:deb/debian/gcc-14-base@14.2.0-19?arch=amd64&distro=debian-13.7",
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
+          "value": "sha256:7db505d90756626f425c6c5468eca565c82f589b144ecaa4f411ad9bbf79e614"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
-          "value": "gcc-12-base@12.2.0-14+deb12u1"
+          "value": "gcc-14-base@14.2.0-19"
         },
         {
           "name": "aquasecurity:trivy:PkgType",
@@ -9447,907 +6984,177 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         },
         {
           "name": "aquasecurity:trivy:SrcName",
-          "value": "gcc-12"
+          "value": "gcc-14"
         },
         {
           "name": "aquasecurity:trivy:SrcRelease",
-          "value": "14+deb12u1"
+          "value": "19"
         },
         {
           "name": "aquasecurity:trivy:SrcVersion",
-          "value": "12.2.0"
+          "value": "14.2.0"
         }
       ]
     },
     {
-      "bom-ref": "pkg:deb/debian/gpgv@2.2.40-1.1%2Bdeb12u2?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Debian GnuPG Maintainers <pkg-gnupg-maint@lists.alioth.debian.org>"
-      },
-      "name": "gpgv",
-      "version": "2.2.40-1.1+deb12u2",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "permissive"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "RFC-Reference"
-          }
-        },
-        {
-          "license": {
-            "name": "TinySCHEME"
-          }
-        },
-        {
-          "license": {
-            "name": "CC0-1.0"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-3.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/gpgv@2.2.40-1.1%2Bdeb12u2?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "gpgv@2.2.40-1.1+deb12u2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "gnupg2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "1.1+deb12u2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "2.2.40"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/grep@3.8-5?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Anibal Monsalve Salazar <anibal@debian.org>"
-      },
-      "name": "grep",
-      "version": "3.8-5",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/grep@3.8-5?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "grep@3.8-5"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "grep"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "5"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "3.8"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/gzip@1.12-1?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Milan Kupcevic <milan@debian.org>"
-      },
-      "name": "gzip",
-      "version": "1.12-1",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GFDL-1.3+-no-invariant"
-          }
-        },
-        {
-          "license": {
-            "name": "FSF-manpages"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GFDL-3"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/gzip@1.12-1?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "gzip@1.12-1"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "gzip"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "1"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "1.12"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/hostname@3.23%2Bnmu1?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Michael Meskes <meskes@debian.org>"
-      },
-      "name": "hostname",
-      "version": "3.23+nmu1",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/hostname@3.23%2Bnmu1?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "hostname@3.23+nmu1"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "hostname"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "3.23+nmu1"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/init-system-helpers@1.65.2%2Bdeb12u1?arch=all&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Debian systemd Maintainers <pkg-systemd-maintainers@lists.alioth.debian.org>"
-      },
-      "name": "init-system-helpers",
-      "version": "1.65.2+deb12u1",
-      "licenses": [
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/init-system-helpers@1.65.2%2Bdeb12u1?arch=all&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "init-system-helpers@1.65.2+deb12u1"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "init-system-helpers"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "1.65.2+deb12u1"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/krb5-locales@1.20.1-2%2Bdeb12u5?arch=all&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Sam Hartman <hartmans@debian.org>"
-      },
-      "name": "krb5-locales",
-      "version": "1.20.1-2+deb12u5",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/krb5-locales@1.20.1-2%2Bdeb12u5?arch=all&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "krb5-locales@1.20.1-2+deb12u5"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "krb5"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "2+deb12u5"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "1.20.1"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libacl1@2.3.1-3?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Guillem Jover <guillem@debian.org>"
-      },
-      "name": "libacl1",
-      "version": "2.3.1-3",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libacl1@2.3.1-3?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libacl1@2.3.1-3"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "acl"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "3"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "2.3.1"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libapt-pkg6.0@2.6.2?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "APT Development Team <deity@lists.debian.org>"
-      },
-      "name": "libapt-pkg6.0",
-      "version": "2.6.2",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libapt-pkg6.0@2.6.2?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libapt-pkg6.0@2.6.2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "apt"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "2.6.2"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libattr1@2.5.1-4?arch=amd64&distro=debian-12.15&epoch=1",
-      "type": "library",
-      "supplier": {
-        "name": "Guillem Jover <guillem@debian.org>"
-      },
-      "name": "libattr1",
-      "version": "1:2.5.1-4",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libattr1@2.5.1-4?arch=amd64&distro=debian-12.15&epoch=1",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libattr1@1:2.5.1-4"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcEpoch",
-          "value": "1"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "attr"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "4"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "2.5.1"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libaudit-common@3.0.9-1?arch=all&distro=debian-12.15&epoch=1",
-      "type": "library",
-      "supplier": {
-        "name": "Laurent Bigonville <bigon@debian.org>"
-      },
-      "name": "libaudit-common",
-      "version": "1:3.0.9-1",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-1.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libaudit-common@3.0.9-1?arch=all&distro=debian-12.15&epoch=1",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libaudit-common@1:3.0.9-1"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcEpoch",
-          "value": "1"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "audit"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "1"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "3.0.9"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libaudit1@3.0.9-1?arch=amd64&distro=debian-12.15&epoch=1",
-      "type": "library",
-      "supplier": {
-        "name": "Laurent Bigonville <bigon@debian.org>"
-      },
-      "name": "libaudit1",
-      "version": "1:3.0.9-1",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-1.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libaudit1@3.0.9-1?arch=amd64&distro=debian-12.15&epoch=1",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libaudit1@1:3.0.9-1"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcEpoch",
-          "value": "1"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "audit"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "1"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "3.0.9"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libblkid1@2.38.1-5%2Bdeb12u3?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "util-linux packagers <util-linux@packages.debian.org>"
-      },
-      "name": "libblkid1",
-      "version": "2.38.1-5+deb12u3",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "public-domain"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-4-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "BSLA"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-3.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libblkid1@2.38.1-5%2Bdeb12u3?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libblkid1@2.38.1-5+deb12u3"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "util-linux"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "5+deb12u3"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "2.38.1"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libbrotli1@1.0.9-2%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Tomasz Buchert <tomasz@debian.org>"
-      },
-      "name": "libbrotli1",
-      "version": "1.0.9-2+deb12u1",
-      "licenses": [
-        {
-          "license": {
-            "name": "MIT"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libbrotli1@1.0.9-2%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libbrotli1@1.0.9-2+deb12u1"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "brotli"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "2+deb12u1"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "1.0.9"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libbz2-1.0@1.0.8-5%2Bb1?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Anibal Monsalve Salazar <anibal@debian.org>"
-      },
-      "name": "libbz2-1.0",
-      "version": "1.0.8-5+b1",
-      "licenses": [
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libbz2-1.0@1.0.8-5%2Bb1?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libbz2-1.0@1.0.8-5+b1"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "bzip2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "5"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "1.0.8"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libc-bin@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "GNU Libc Maintainers <debian-glibc@lists.debian.org>"
-      },
-      "name": "libc-bin",
-      "version": "2.36-9+deb12u14",
-      "licenses": [
-        {
-          "license": {
-            "name": "LGPL-2.1-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libc-bin@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libc-bin@2.36-9+deb12u14"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "glibc"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "9+deb12u14"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "2.36"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
+      "bom-ref": "pkg:deb/debian/libc6@2.41-12%2Bdeb13u4?arch=amd64&distro=debian-13.7",
       "type": "library",
       "supplier": {
         "name": "GNU Libc Maintainers <debian-glibc@lists.debian.org>"
       },
       "name": "libc6",
-      "version": "2.36-9+deb12u14",
+      "version": "2.41-12+deb13u4",
       "licenses": [
+        {
+          "license": {
+            "name": "LGPL-2.1-or-later"
+          }
+        },
+        {
+          "license": {
+            "name": "LGPL-2.0-or-later"
+          }
+        },
+        {
+          "license": {
+            "name": "LGPL-2.1+-with-link-exception"
+          }
+        },
+        {
+          "license": {
+            "name": "LGPL-3.0-or-later"
+          }
+        },
+        {
+          "license": {
+            "name": "GPL-2.0-or-later"
+          }
+        },
+        {
+          "license": {
+            "name": "GPL-2+-with-link-exception"
+          }
+        },
+        {
+          "license": {
+            "name": "GPL-2.0-only"
+          }
+        },
+        {
+          "license": {
+            "name": "GPL-3.0-or-later"
+          }
+        },
+        {
+          "license": {
+            "name": "FSFAP"
+          }
+        },
+        {
+          "license": {
+            "name": "Carnegie"
+          }
+        },
+        {
+          "license": {
+            "name": "Inner-Net"
+          }
+        },
+        {
+          "license": {
+            "name": "MIT-like-Lord"
+          }
+        },
+        {
+          "license": {
+            "name": "BSD-like-Spencer"
+          }
+        },
+        {
+          "license": {
+            "name": "PCRE"
+          }
+        },
+        {
+          "license": {
+            "name": "BSD-3-clause-Carnegie"
+          }
+        },
+        {
+          "license": {
+            "name": "Unicode-DFS-2016"
+          }
+        },
+        {
+          "license": {
+            "name": "BSL-1.0"
+          }
+        },
+        {
+          "license": {
+            "name": "SunPro"
+          }
+        },
+        {
+          "license": {
+            "name": "CORE-MATH"
+          }
+        },
+        {
+          "license": {
+            "name": "BSD-3-clause-Berkeley"
+          }
+        },
+        {
+          "license": {
+            "name": "BSD-3-clause-WIDE"
+          }
+        },
+        {
+          "license": {
+            "name": "BSD-2-Clause"
+          }
+        },
+        {
+          "license": {
+            "name": "BSD-3-clause-Oracle"
+          }
+        },
+        {
+          "license": {
+            "name": "DEC"
+          }
+        },
+        {
+          "license": {
+            "name": "IBM"
+          }
+        },
+        {
+          "license": {
+            "name": "ISC"
+          }
+        },
+        {
+          "license": {
+            "name": "Univ-Coimbra"
+          }
+        },
+        {
+          "license": {
+            "name": "public-domain"
+          }
+        },
+        {
+          "license": {
+            "name": "GPL-3.0-only"
+          }
+        },
+        {
+          "license": {
+            "name": "LGPL-2.0-only"
+          }
+        },
         {
           "license": {
             "name": "LGPL-2.1-only"
@@ -10355,19 +7162,19 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         },
         {
           "license": {
-            "name": "GPL-2.0-only"
+            "name": "LGPL-3.0-only"
           }
         }
       ],
-      "purl": "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
+      "purl": "pkg:deb/debian/libc6@2.41-12%2Bdeb13u4?arch=amd64&distro=debian-13.7",
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
+          "value": "sha256:8a3b315d45080ecb38e39d42d28e951303c67c2ce7482bcdbbc3b5424be19013"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
-          "value": "libc6@2.36-9+deb12u14"
+          "value": "libc6@2.41-12+deb13u4"
         },
         {
           "name": "aquasecurity:trivy:PkgType",
@@ -10379,675 +7186,31 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         },
         {
           "name": "aquasecurity:trivy:SrcRelease",
-          "value": "9+deb12u14"
+          "value": "12+deb13u4"
         },
         {
           "name": "aquasecurity:trivy:SrcVersion",
-          "value": "2.36"
+          "value": "2.41"
         }
       ]
     },
     {
-      "bom-ref": "pkg:deb/debian/libcap-ng0@0.8.3-1%2Bb3?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Håvard F. Aasen <havard.f.aasen@pfft.no>"
-      },
-      "name": "libcap-ng0",
-      "version": "0.8.3-1+b3",
-      "licenses": [
-        {
-          "license": {
-            "name": "LGPL-2.1-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libcap-ng0@0.8.3-1%2Bb3?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libcap-ng0@0.8.3-1+b3"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "libcap-ng"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "1"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "0.8.3"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libcap2@2.66-4%2Bdeb12u3%2Bb1?arch=amd64&distro=debian-12.15&epoch=1",
-      "type": "library",
-      "supplier": {
-        "name": "Christian Kastner <ckk@debian.org>"
-      },
-      "name": "libcap2",
-      "version": "1:2.66-4+deb12u3+b1",
-      "licenses": [
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libcap2@2.66-4%2Bdeb12u3%2Bb1?arch=amd64&distro=debian-12.15&epoch=1",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libcap2@1:2.66-4+deb12u3+b1"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcEpoch",
-          "value": "1"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "libcap2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "4+deb12u3"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "2.66"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libcom-err2@1.47.0-2%2Bb2?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Theodore Y. Ts'o <tytso@mit.edu>"
-      },
-      "name": "libcom-err2",
-      "version": "1.47.0-2+b2",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "Apache-2.0"
-          }
-        },
-        {
-          "license": {
-            "name": "ISC"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT-US-export"
-          }
-        },
-        {
-          "license": {
-            "name": "Kazlib"
-          }
-        },
-        {
-          "license": {
-            "name": "Latex2e"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2+ with Texinfo exception"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libcom-err2@1.47.0-2%2Bb2?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libcom-err2@1.47.0-2+b2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "e2fsprogs"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "1.47.0"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libcrypt1@4.4.33-2?arch=amd64&distro=debian-12.15&epoch=1",
-      "type": "library",
-      "supplier": {
-        "name": "Marco d'Itri <md@linux.it>"
-      },
-      "name": "libcrypt1",
-      "version": "1:4.4.33-2",
-      "purl": "pkg:deb/debian/libcrypt1@4.4.33-2?arch=amd64&distro=debian-12.15&epoch=1",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libcrypt1@1:4.4.33-2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcEpoch",
-          "value": "1"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "libxcrypt"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "4.4.33"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libcurl4@7.88.1-10%2Bdeb12u15?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Alessandro Ghedini <ghedo@debian.org>"
-      },
-      "name": "libcurl4",
-      "version": "7.88.1-10+deb12u15",
-      "licenses": [
-        {
-          "license": {
-            "name": "curl"
-          }
-        },
-        {
-          "license": {
-            "name": "OLDAP-2.8"
-          }
-        },
-        {
-          "license": {
-            "name": "ISC"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2+ with Autoconf-data exception"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3+ with Autoconf-data exception"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2+ with Libtool exception"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-4-Clause-UC"
-          }
-        },
-        {
-          "license": {
-            "name": "FSFULLR"
-          }
-        },
-        {
-          "license": {
-            "name": "X11"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libcurl4@7.88.1-10%2Bdeb12u15?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libcurl4@7.88.1-10+deb12u15"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "curl"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "10+deb12u15"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "7.88.1"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libdb5.3@5.3.28%2Bdfsg2-1?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Bastian Germann <bage@debian.org>"
-      },
-      "name": "libdb5.3",
-      "version": "5.3.28+dfsg2-1",
-      "licenses": [
-        {
-          "license": {
-            "name": "Sleepycat"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "MS-PL"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "Artistic-2.0"
-          }
-        },
-        {
-          "license": {
-            "name": "X11"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT-old"
-          }
-        },
-        {
-          "license": {
-            "name": "TCL-like"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-clause-fjord"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "Zlib"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libdb5.3@5.3.28%2Bdfsg2-1?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libdb5.3@5.3.28+dfsg2-1"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "db5.3"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "1"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "5.3.28+dfsg2"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libdebconfclient0@0.270?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Debian Install System Team <debian-boot@lists.debian.org>"
-      },
-      "name": "libdebconfclient0",
-      "version": "0.270",
-      "licenses": [
-        {
-          "license": {
-            "name": "BSD-2-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libdebconfclient0@0.270?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libdebconfclient0@0.270"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "cdebconf"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "0.270"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libext2fs2@1.47.0-2%2Bb2?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Theodore Y. Ts'o <tytso@mit.edu>"
-      },
-      "name": "libext2fs2",
-      "version": "1.47.0-2+b2",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "Apache-2.0"
-          }
-        },
-        {
-          "license": {
-            "name": "ISC"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT-US-export"
-          }
-        },
-        {
-          "license": {
-            "name": "Kazlib"
-          }
-        },
-        {
-          "license": {
-            "name": "Latex2e"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2+ with Texinfo exception"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libext2fs2@1.47.0-2%2Bb2?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libext2fs2@1.47.0-2+b2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "e2fsprogs"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "1.47.0"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libffi8@3.4.4-1?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Debian GCC Maintainers <debian-gcc@lists.debian.org>"
-      },
-      "name": "libffi8",
-      "version": "3.4.4-1",
-      "licenses": [
-        {
-          "license": {
-            "name": "MIT"
-          }
-        },
-        {
-          "license": {
-            "name": "X11"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "MPL-1.1"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "public-domain"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libffi8@3.4.4-1?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libffi8@3.4.4-1"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "libffi"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "1"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "3.4.4"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libgcc-s1@12.2.0-14%2Bdeb12u1?arch=amd64&distro=debian-12.15",
+      "bom-ref": "pkg:deb/debian/libgcc-s1@14.2.0-19?arch=amd64&distro=debian-13.7",
       "type": "library",
       "supplier": {
         "name": "Debian GCC Maintainers <debian-gcc@lists.debian.org>"
       },
       "name": "libgcc-s1",
-      "version": "12.2.0-14+deb12u1",
-      "purl": "pkg:deb/debian/libgcc-s1@12.2.0-14%2Bdeb12u1?arch=amd64&distro=debian-12.15",
+      "version": "14.2.0-19",
+      "purl": "pkg:deb/debian/libgcc-s1@14.2.0-19?arch=amd64&distro=debian-13.7",
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
+          "value": "sha256:c16b2ec4b1493bad1b1de23d659c899e60abb166bda756d02792f0a03ba54a43"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
-          "value": "libgcc-s1@12.2.0-14+deb12u1"
+          "value": "libgcc-s1@14.2.0-19"
         },
         {
           "name": "aquasecurity:trivy:PkgType",
@@ -11055,47 +7218,35 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         },
         {
           "name": "aquasecurity:trivy:SrcName",
-          "value": "gcc-12"
+          "value": "gcc-14"
         },
         {
           "name": "aquasecurity:trivy:SrcRelease",
-          "value": "14+deb12u1"
+          "value": "19"
         },
         {
           "name": "aquasecurity:trivy:SrcVersion",
-          "value": "12.2.0"
+          "value": "14.2.0"
         }
       ]
     },
     {
-      "bom-ref": "pkg:deb/debian/libgcrypt20@1.10.1-3%2Bdeb12u1?arch=amd64&distro=debian-12.15",
+      "bom-ref": "pkg:deb/debian/libgomp1@14.2.0-19?arch=amd64&distro=debian-13.7",
       "type": "library",
       "supplier": {
-        "name": "Debian GnuTLS Maintainers <pkg-gnutls-maint@lists.alioth.debian.org>"
+        "name": "Debian GCC Maintainers <debian-gcc@lists.debian.org>"
       },
-      "name": "libgcrypt20",
-      "version": "1.10.1-3+deb12u1",
-      "licenses": [
-        {
-          "license": {
-            "name": "LGPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libgcrypt20@1.10.1-3%2Bdeb12u1?arch=amd64&distro=debian-12.15",
+      "name": "libgomp1",
+      "version": "14.2.0-19",
+      "purl": "pkg:deb/debian/libgomp1@14.2.0-19?arch=amd64&distro=debian-13.7",
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
+          "value": "sha256:1f5d28bd51650f429293f7730ede274b81dc0744aa918bc887133c4ad610258c"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
-          "value": "libgcrypt20@1.10.1-3+deb12u1"
+          "value": "libgomp1@14.2.0-19"
         },
         {
           "name": "aquasecurity:trivy:PkgType",
@@ -11103,2996 +7254,26 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         },
         {
           "name": "aquasecurity:trivy:SrcName",
-          "value": "libgcrypt20"
+          "value": "gcc-14"
         },
         {
           "name": "aquasecurity:trivy:SrcRelease",
-          "value": "3+deb12u1"
+          "value": "19"
         },
         {
           "name": "aquasecurity:trivy:SrcVersion",
-          "value": "1.10.1"
+          "value": "14.2.0"
         }
       ]
     },
     {
-      "bom-ref": "pkg:deb/debian/libgmp10@6.2.1%2Bdfsg1-1.1?arch=amd64&distro=debian-12.15&epoch=2",
-      "type": "library",
-      "supplier": {
-        "name": "Debian Science Team <debian-science-maintainers@lists.alioth.debian.org>"
-      },
-      "name": "libgmp10",
-      "version": "2:6.2.1+dfsg1-1.1",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3+ with Bison exception"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-3.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libgmp10@6.2.1%2Bdfsg1-1.1?arch=amd64&distro=debian-12.15&epoch=2",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libgmp10@2:6.2.1+dfsg1-1.1"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcEpoch",
-          "value": "2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "gmp"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "1.1"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "6.2.1+dfsg1"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libgnutls30@3.7.9-2%2Bdeb12u7?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Debian GnuTLS Maintainers <pkg-gnutls-maint@lists.alioth.debian.org>"
-      },
-      "name": "libgnutls30",
-      "version": "3.7.9-2+deb12u7",
-      "licenses": [
-        {
-          "license": {
-            "name": "LGPL-2.1-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-3.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GFDL-1.3-only"
-          }
-        },
-        {
-          "license": {
-            "name": "CC0-1.0"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT"
-          }
-        },
-        {
-          "license": {
-            "name": "Apache-2.0"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libgnutls30@3.7.9-2%2Bdeb12u7?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libgnutls30@3.7.9-2+deb12u7"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "gnutls28"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "2+deb12u7"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "3.7.9"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libgpg-error0@1.46-1?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Debian GnuPG Maintainers <pkg-gnupg-maint@lists.alioth.debian.org>"
-      },
-      "name": "libgpg-error0",
-      "version": "1.46-1",
-      "licenses": [
-        {
-          "license": {
-            "name": "LGPL-2.1-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "g10-permissive"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libgpg-error0@1.46-1?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libgpg-error0@1.46-1"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "libgpg-error"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "1"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "1.46"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libgssapi-krb5-2@1.20.1-2%2Bdeb12u5?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Sam Hartman <hartmans@debian.org>"
-      },
-      "name": "libgssapi-krb5-2",
-      "version": "1.20.1-2+deb12u5",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libgssapi-krb5-2@1.20.1-2%2Bdeb12u5?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libgssapi-krb5-2@1.20.1-2+deb12u5"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "krb5"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "2+deb12u5"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "1.20.1"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libhogweed6@3.8.1-2?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Magnus Holmgren <holmgren@debian.org>"
-      },
-      "name": "libhogweed6",
-      "version": "3.8.1-2",
-      "licenses": [
-        {
-          "license": {
-            "name": "LGPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-with-autoconf-exception+"
-          }
-        },
-        {
-          "license": {
-            "name": "public-domain"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GAP"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libhogweed6@3.8.1-2?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libhogweed6@3.8.1-2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "nettle"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "3.8.1"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libidn2-0@2.3.3-1%2Bb1?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Debian Libidn team <help-libidn@gnu.org>"
-      },
-      "name": "libidn2-0",
-      "version": "2.3.3-1+b1",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "Unicode"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-3.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libidn2-0@2.3.3-1%2Bb1?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libidn2-0@2.3.3-1+b1"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "libidn2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "1"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "2.3.3"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libk5crypto3@1.20.1-2%2Bdeb12u5?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Sam Hartman <hartmans@debian.org>"
-      },
-      "name": "libk5crypto3",
-      "version": "1.20.1-2+deb12u5",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libk5crypto3@1.20.1-2%2Bdeb12u5?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libk5crypto3@1.20.1-2+deb12u5"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "krb5"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "2+deb12u5"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "1.20.1"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libkeyutils1@1.6.3-2?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Christian Kastner <ckk@debian.org>"
-      },
-      "name": "libkeyutils1",
-      "version": "1.6.3-2",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libkeyutils1@1.6.3-2?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libkeyutils1@1.6.3-2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "keyutils"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "1.6.3"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libkrb5-3@1.20.1-2%2Bdeb12u5?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Sam Hartman <hartmans@debian.org>"
-      },
-      "name": "libkrb5-3",
-      "version": "1.20.1-2+deb12u5",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libkrb5-3@1.20.1-2%2Bdeb12u5?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libkrb5-3@1.20.1-2+deb12u5"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "krb5"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "2+deb12u5"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "1.20.1"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libkrb5support0@1.20.1-2%2Bdeb12u5?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Sam Hartman <hartmans@debian.org>"
-      },
-      "name": "libkrb5support0",
-      "version": "1.20.1-2+deb12u5",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libkrb5support0@1.20.1-2%2Bdeb12u5?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libkrb5support0@1.20.1-2+deb12u5"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "krb5"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "2+deb12u5"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "1.20.1"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libldap-2.5-0@2.5.13%2Bdfsg-5?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Debian OpenLDAP Maintainers <pkg-openldap-devel@lists.alioth.debian.org>"
-      },
-      "name": "libldap-2.5-0",
-      "version": "2.5.13+dfsg-5",
-      "licenses": [
-        {
-          "license": {
-            "name": "OpenLDAP-2.8"
-          }
-        },
-        {
-          "license": {
-            "name": "FSF-unlimited"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-with-autoconf-exception+"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-with-autoconf-exception+"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2+ with Libtool exception"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3+ with Libtool exception"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "UMich"
-          }
-        },
-        {
-          "license": {
-            "name": "F5"
-          }
-        },
-        {
-          "license": {
-            "name": "JCG"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT-XC"
-          }
-        },
-        {
-          "license": {
-            "name": "NeoSoft-permissive"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "Beerware"
-          }
-        },
-        {
-          "license": {
-            "name": "public-domain"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-4-clause-California"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-clause-variant"
-          }
-        },
-        {
-          "license": {
-            "name": "Expat-ISC"
-          }
-        },
-        {
-          "license": {
-            "name": "Expat-UNM"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-clause-California"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libldap-2.5-0@2.5.13%2Bdfsg-5?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libldap-2.5-0@2.5.13+dfsg-5"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "openldap"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "5"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "2.5.13+dfsg"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libldap-common@2.5.13%2Bdfsg-5?arch=all&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Debian OpenLDAP Maintainers <pkg-openldap-devel@lists.alioth.debian.org>"
-      },
-      "name": "libldap-common",
-      "version": "2.5.13+dfsg-5",
-      "licenses": [
-        {
-          "license": {
-            "name": "OpenLDAP-2.8"
-          }
-        },
-        {
-          "license": {
-            "name": "FSF-unlimited"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-with-autoconf-exception+"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-with-autoconf-exception+"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2+ with Libtool exception"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3+ with Libtool exception"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "UMich"
-          }
-        },
-        {
-          "license": {
-            "name": "F5"
-          }
-        },
-        {
-          "license": {
-            "name": "JCG"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT-XC"
-          }
-        },
-        {
-          "license": {
-            "name": "NeoSoft-permissive"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "Beerware"
-          }
-        },
-        {
-          "license": {
-            "name": "public-domain"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-4-clause-California"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-clause-variant"
-          }
-        },
-        {
-          "license": {
-            "name": "Expat-ISC"
-          }
-        },
-        {
-          "license": {
-            "name": "Expat-UNM"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-clause-California"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libldap-common@2.5.13%2Bdfsg-5?arch=all&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libldap-common@2.5.13+dfsg-5"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "openldap"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "5"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "2.5.13+dfsg"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/liblz4-1@1.9.4-1?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Nobuhiro Iwamatsu <iwamatsu@debian.org>"
-      },
-      "name": "liblz4-1",
-      "version": "1.9.4-1",
-      "licenses": [
-        {
-          "license": {
-            "name": "BSD-2-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/liblz4-1@1.9.4-1?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "liblz4-1@1.9.4-1"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "lz4"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "1"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "1.9.4"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/liblzma5@5.4.1-1%2Bdeb12u2?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Sebastian Andrzej Siewior <sebastian@breakpoint.cc>"
-      },
-      "name": "liblzma5",
-      "version": "5.4.1-1+deb12u2",
-      "licenses": [
-        {
-          "license": {
-            "name": "PD"
-          }
-        },
-        {
-          "license": {
-            "name": "probably-PD"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "permissive-fsf"
-          }
-        },
-        {
-          "license": {
-            "name": "Autoconf"
-          }
-        },
-        {
-          "license": {
-            "name": "permissive-nowarranty"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "none"
-          }
-        },
-        {
-          "license": {
-            "name": "config-h"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-only"
-          }
-        },
-        {
-          "license": {
-            "name": "noderivs"
-          }
-        },
-        {
-          "license": {
-            "name": "PD-debian"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/liblzma5@5.4.1-1%2Bdeb12u2?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "liblzma5@5.4.1-1+deb12u2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "xz-utils"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "1+deb12u2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "5.4.1"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libmd0@1.0.4-2?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Guillem Jover <guillem@debian.org>"
-      },
-      "name": "libmd0",
-      "version": "1.0.4-2",
-      "licenses": [
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-clause-Aaron-D-Gifford"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-2-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-2-Clause-NetBSD"
-          }
-        },
-        {
-          "license": {
-            "name": "ISC"
-          }
-        },
-        {
-          "license": {
-            "name": "Beerware"
-          }
-        },
-        {
-          "license": {
-            "name": "public-domain-md4"
-          }
-        },
-        {
-          "license": {
-            "name": "public-domain-md5"
-          }
-        },
-        {
-          "license": {
-            "name": "public-domain-sha1"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libmd0@1.0.4-2?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libmd0@1.0.4-2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "libmd"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "1.0.4"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libmount1@2.38.1-5%2Bdeb12u3?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "util-linux packagers <util-linux@packages.debian.org>"
-      },
-      "name": "libmount1",
-      "version": "2.38.1-5+deb12u3",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "public-domain"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-4-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "BSLA"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-3.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libmount1@2.38.1-5%2Bdeb12u3?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libmount1@2.38.1-5+deb12u3"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "util-linux"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "5+deb12u3"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "2.38.1"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libnettle8@3.8.1-2?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Magnus Holmgren <holmgren@debian.org>"
-      },
-      "name": "libnettle8",
-      "version": "3.8.1-2",
-      "licenses": [
-        {
-          "license": {
-            "name": "LGPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-with-autoconf-exception+"
-          }
-        },
-        {
-          "license": {
-            "name": "public-domain"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GAP"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libnettle8@3.8.1-2?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libnettle8@3.8.1-2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "nettle"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "3.8.1"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libnghttp2-14@1.52.0-1%2Bdeb12u3?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Tomasz Buchert <tomasz@debian.org>"
-      },
-      "name": "libnghttp2-14",
-      "version": "1.52.0-1+deb12u3",
-      "licenses": [
-        {
-          "license": {
-            "name": "MIT"
-          }
-        },
-        {
-          "license": {
-            "name": "all-permissive"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-with-autoconf-exception+"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-2-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libnghttp2-14@1.52.0-1%2Bdeb12u3?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libnghttp2-14@1.52.0-1+deb12u3"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "nghttp2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "1+deb12u3"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "1.52.0"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libp11-kit0@0.24.1-2?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Debian GnuTLS Maintainers <pkg-gnutls-maint@lists.alioth.debian.org>"
-      },
-      "name": "libp11-kit0",
-      "version": "0.24.1-2",
-      "licenses": [
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "permissive-like-automake-output"
-          }
-        },
-        {
-          "license": {
-            "name": "ISC"
-          }
-        },
-        {
-          "license": {
-            "name": "ISC+IBM"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "Apache-2.0"
-          }
-        },
-        {
-          "license": {
-            "name": "same-as-rest-of-p11kit"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libp11-kit0@0.24.1-2?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libp11-kit0@0.24.1-2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "p11-kit"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "0.24.1"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libpam-modules-bin@1.5.2-6%2Bdeb12u2?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Sam Hartman <hartmans@debian.org>"
-      },
-      "name": "libpam-modules-bin",
-      "version": "1.5.2-6+deb12u2",
-      "licenses": [
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3+ with Bison exception"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-tcp_wrappers"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "public-domain"
-          }
-        },
-        {
-          "license": {
-            "name": "Beerware"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libpam-modules-bin@1.5.2-6%2Bdeb12u2?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libpam-modules-bin@1.5.2-6+deb12u2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "pam"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "6+deb12u2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "1.5.2"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libpam-modules@1.5.2-6%2Bdeb12u2?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Sam Hartman <hartmans@debian.org>"
-      },
-      "name": "libpam-modules",
-      "version": "1.5.2-6+deb12u2",
-      "licenses": [
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3+ with Bison exception"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-tcp_wrappers"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "public-domain"
-          }
-        },
-        {
-          "license": {
-            "name": "Beerware"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libpam-modules@1.5.2-6%2Bdeb12u2?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libpam-modules@1.5.2-6+deb12u2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "pam"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "6+deb12u2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "1.5.2"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libpam-runtime@1.5.2-6%2Bdeb12u2?arch=all&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Sam Hartman <hartmans@debian.org>"
-      },
-      "name": "libpam-runtime",
-      "version": "1.5.2-6+deb12u2",
-      "licenses": [
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3+ with Bison exception"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-tcp_wrappers"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "public-domain"
-          }
-        },
-        {
-          "license": {
-            "name": "Beerware"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libpam-runtime@1.5.2-6%2Bdeb12u2?arch=all&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libpam-runtime@1.5.2-6+deb12u2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "pam"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "6+deb12u2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "1.5.2"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libpam0g@1.5.2-6%2Bdeb12u2?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Sam Hartman <hartmans@debian.org>"
-      },
-      "name": "libpam0g",
-      "version": "1.5.2-6+deb12u2",
-      "licenses": [
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3+ with Bison exception"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-tcp_wrappers"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "public-domain"
-          }
-        },
-        {
-          "license": {
-            "name": "Beerware"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libpam0g@1.5.2-6%2Bdeb12u2?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libpam0g@1.5.2-6+deb12u2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "pam"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "6+deb12u2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "1.5.2"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libpcre2-8-0@10.42-1%2Bdeb12u2?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Matthew Vernon <matthew@debian.org>"
-      },
-      "name": "libpcre2-8-0",
-      "version": "10.42-1+deb12u2",
-      "licenses": [
-        {
-          "license": {
-            "name": "BSD-3-clause-Cambridge with BINARY LIBRARY-LIKE PACKAGES exception"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "X11"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-2-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "public-domain"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libpcre2-8-0@10.42-1%2Bdeb12u2?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libpcre2-8-0@10.42-1+deb12u2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "pcre2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "1+deb12u2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "10.42"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libpsl5@0.21.2-1?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Tim Rühsen <tim.ruehsen@gmx.de>"
-      },
-      "name": "libpsl5",
-      "version": "0.21.2-1",
-      "licenses": [
-        {
-          "license": {
-            "name": "MIT"
-          }
-        },
-        {
-          "license": {
-            "name": "gnulib"
-          }
-        },
-        {
-          "license": {
-            "name": "Chromium"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libpsl5@0.21.2-1?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libpsl5@0.21.2-1"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "libpsl"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "1"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "0.21.2"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/librtmp1@2.4%2B20151223.gitfa8646d.1-2%2Bb2?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Debian Multimedia Maintainers <debian-multimedia@lists.debian.org>"
-      },
-      "name": "librtmp1",
-      "version": "2.4+20151223.gitfa8646d.1-2+b2",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/librtmp1@2.4%2B20151223.gitfa8646d.1-2%2Bb2?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "librtmp1@2.4+20151223.gitfa8646d.1-2+b2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "rtmpdump"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "2.4+20151223.gitfa8646d.1"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libsasl2-2@2.1.28%2Bdfsg-10%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Debian Cyrus Team <team+cyrus@tracker.debian.org>"
-      },
-      "name": "libsasl2-2",
-      "version": "2.1.28+dfsg-10+deb12u1",
-      "licenses": [
-        {
-          "license": {
-            "name": "BSD-4-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "OpenSSL"
-          }
-        },
-        {
-          "license": {
-            "name": "SSLeay"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-2-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-4-Clause-UC"
-          }
-        },
-        {
-          "license": {
-            "name": "RSA-MD"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-4-clause-KTH"
-          }
-        },
-        {
-          "license": {
-            "name": "text://BSD-4-clause and IBM-as-is"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-clause-JANET"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-clause-PADL"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT-OpenVision"
-          }
-        },
-        {
-          "license": {
-            "name": "OpenLDAP"
-          }
-        },
-        {
-          "license": {
-            "name": "FSFULLR"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT-CMU"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT-Export"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-2.2-clause"
-          }
-        },
-        {
-          "license": {
-            "name": "text://IBM-as-is"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libsasl2-2@2.1.28%2Bdfsg-10%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libsasl2-2@2.1.28+dfsg-10+deb12u1"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "cyrus-sasl2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "10+deb12u1"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "2.1.28+dfsg"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libsasl2-modules-db@2.1.28%2Bdfsg-10%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Debian Cyrus Team <team+cyrus@tracker.debian.org>"
-      },
-      "name": "libsasl2-modules-db",
-      "version": "2.1.28+dfsg-10+deb12u1",
-      "licenses": [
-        {
-          "license": {
-            "name": "BSD-4-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "OpenSSL"
-          }
-        },
-        {
-          "license": {
-            "name": "SSLeay"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-2-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-4-Clause-UC"
-          }
-        },
-        {
-          "license": {
-            "name": "RSA-MD"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-4-clause-KTH"
-          }
-        },
-        {
-          "license": {
-            "name": "text://BSD-4-clause and IBM-as-is"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-clause-JANET"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-clause-PADL"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT-OpenVision"
-          }
-        },
-        {
-          "license": {
-            "name": "OpenLDAP"
-          }
-        },
-        {
-          "license": {
-            "name": "FSFULLR"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT-CMU"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT-Export"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-2.2-clause"
-          }
-        },
-        {
-          "license": {
-            "name": "text://IBM-as-is"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libsasl2-modules-db@2.1.28%2Bdfsg-10%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libsasl2-modules-db@2.1.28+dfsg-10+deb12u1"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "cyrus-sasl2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "10+deb12u1"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "2.1.28+dfsg"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libsasl2-modules@2.1.28%2Bdfsg-10%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Debian Cyrus Team <team+cyrus@tracker.debian.org>"
-      },
-      "name": "libsasl2-modules",
-      "version": "2.1.28+dfsg-10+deb12u1",
-      "licenses": [
-        {
-          "license": {
-            "name": "BSD-4-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "OpenSSL"
-          }
-        },
-        {
-          "license": {
-            "name": "SSLeay"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-2-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-4-Clause-UC"
-          }
-        },
-        {
-          "license": {
-            "name": "RSA-MD"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-4-clause-KTH"
-          }
-        },
-        {
-          "license": {
-            "name": "text://BSD-4-clause and IBM-as-is"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-clause-JANET"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-clause-PADL"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT-OpenVision"
-          }
-        },
-        {
-          "license": {
-            "name": "OpenLDAP"
-          }
-        },
-        {
-          "license": {
-            "name": "FSFULLR"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT-CMU"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT-Export"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-2.2-clause"
-          }
-        },
-        {
-          "license": {
-            "name": "text://IBM-as-is"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libsasl2-modules@2.1.28%2Bdfsg-10%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libsasl2-modules@2.1.28+dfsg-10+deb12u1"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "cyrus-sasl2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "10+deb12u1"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "2.1.28+dfsg"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libseccomp2@2.5.4-1%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Kees Cook <kees@debian.org>"
-      },
-      "name": "libseccomp2",
-      "version": "2.5.4-1+deb12u1",
-      "licenses": [
-        {
-          "license": {
-            "name": "LGPL-2.1-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libseccomp2@2.5.4-1%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libseccomp2@2.5.4-1+deb12u1"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "libseccomp"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "1+deb12u1"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "2.5.4"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libselinux1@3.4-1%2Bb6?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Debian SELinux maintainers <selinux-devel@lists.alioth.debian.org>"
-      },
-      "name": "libselinux1",
-      "version": "3.4-1+b6",
-      "licenses": [
-        {
-          "license": {
-            "name": "LGPL-2.1-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libselinux1@3.4-1%2Bb6?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libselinux1@3.4-1+b6"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "libselinux"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "1"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "3.4"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libsemanage-common@3.4-1?arch=all&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Debian SELinux maintainers <selinux-devel@lists.alioth.debian.org>"
-      },
-      "name": "libsemanage-common",
-      "version": "3.4-1",
-      "licenses": [
-        {
-          "license": {
-            "name": "LGPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libsemanage-common@3.4-1?arch=all&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libsemanage-common@3.4-1"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "libsemanage"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "1"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "3.4"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libsemanage2@3.4-1%2Bb5?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Debian SELinux maintainers <selinux-devel@lists.alioth.debian.org>"
-      },
-      "name": "libsemanage2",
-      "version": "3.4-1+b5",
-      "licenses": [
-        {
-          "license": {
-            "name": "LGPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libsemanage2@3.4-1%2Bb5?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libsemanage2@3.4-1+b5"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "libsemanage"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "1"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "3.4"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libsepol2@3.4-2.1?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Debian SELinux maintainers <selinux-devel@lists.alioth.debian.org>"
-      },
-      "name": "libsepol2",
-      "version": "3.4-2.1",
-      "licenses": [
-        {
-          "license": {
-            "name": "LGPL-2.1-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-only"
-          }
-        },
-        {
-          "license": {
-            "name": "Zlib"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libsepol2@3.4-2.1?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libsepol2@3.4-2.1"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "libsepol"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "2.1"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "3.4"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libsmartcols1@2.38.1-5%2Bdeb12u3?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "util-linux packagers <util-linux@packages.debian.org>"
-      },
-      "name": "libsmartcols1",
-      "version": "2.38.1-5+deb12u3",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "public-domain"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-4-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "BSLA"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-3.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libsmartcols1@2.38.1-5%2Bdeb12u3?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libsmartcols1@2.38.1-5+deb12u3"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "util-linux"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "5+deb12u3"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "2.38.1"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libss2@1.47.0-2%2Bb2?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Theodore Y. Ts'o <tytso@mit.edu>"
-      },
-      "name": "libss2",
-      "version": "1.47.0-2+b2",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "Apache-2.0"
-          }
-        },
-        {
-          "license": {
-            "name": "ISC"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT-US-export"
-          }
-        },
-        {
-          "license": {
-            "name": "Kazlib"
-          }
-        },
-        {
-          "license": {
-            "name": "Latex2e"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2+ with Texinfo exception"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libss2@1.47.0-2%2Bb2?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libss2@1.47.0-2+b2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "e2fsprogs"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "1.47.0"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libssh2-1@1.10.0-3%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Nicolas Mora <babelouest@debian.org>"
-      },
-      "name": "libssh2-1",
-      "version": "1.10.0-3+deb12u1",
-      "licenses": [
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libssh2-1@1.10.0-3%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libssh2-1@1.10.0-3+deb12u1"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "libssh2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "3+deb12u1"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "1.10.0"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libssl3@3.0.22-1~deb12u2?arch=amd64&distro=debian-12.15",
+      "bom-ref": "pkg:deb/debian/libssl3t64@3.5.7-1~deb13u3?arch=amd64&distro=debian-13.7",
       "type": "library",
       "supplier": {
         "name": "Debian OpenSSL Team <pkg-openssl-devel@alioth-lists.debian.net>"
       },
-      "name": "libssl3",
-      "version": "3.0.22-1~deb12u2",
+      "name": "libssl3t64",
+      "version": "3.5.7-1~deb13u3",
       "licenses": [
         {
           "license": {
@@ -14115,15 +7296,15 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
           }
         }
       ],
-      "purl": "pkg:deb/debian/libssl3@3.0.22-1~deb12u2?arch=amd64&distro=debian-12.15",
+      "purl": "pkg:deb/debian/libssl3t64@3.5.7-1~deb13u3?arch=amd64&distro=debian-13.7",
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
+          "value": "sha256:2cef49adb7d7902c61ecdd385036e3c7fb7c9f0ada96a41901797c77b7daedd7"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
-          "value": "libssl3@3.0.22-1~deb12u2"
+          "value": "libssl3t64@3.5.7-1~deb13u3"
         },
         {
           "name": "aquasecurity:trivy:PkgType",
@@ -14135,31 +7316,31 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         },
         {
           "name": "aquasecurity:trivy:SrcRelease",
-          "value": "1~deb12u2"
+          "value": "1~deb13u3"
         },
         {
           "name": "aquasecurity:trivy:SrcVersion",
-          "value": "3.0.22"
+          "value": "3.5.7"
         }
       ]
     },
     {
-      "bom-ref": "pkg:deb/debian/libstdc%2B%2B6@12.2.0-14%2Bdeb12u1?arch=amd64&distro=debian-12.15",
+      "bom-ref": "pkg:deb/debian/libstdc%2B%2B6@14.2.0-19?arch=amd64&distro=debian-13.7",
       "type": "library",
       "supplier": {
         "name": "Debian GCC Maintainers <debian-gcc@lists.debian.org>"
       },
       "name": "libstdc++6",
-      "version": "12.2.0-14+deb12u1",
-      "purl": "pkg:deb/debian/libstdc%2B%2B6@12.2.0-14%2Bdeb12u1?arch=amd64&distro=debian-12.15",
+      "version": "14.2.0-19",
+      "purl": "pkg:deb/debian/libstdc%2B%2B6@14.2.0-19?arch=amd64&distro=debian-13.7",
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
+          "value": "sha256:6e18ad80f3d64a8cbbcd1ff2e8a0d5ce7282cf664e816b86183a59d30a618e8a"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
-          "value": "libstdc++6@12.2.0-14+deb12u1"
+          "value": "libstdc++6@14.2.0-19"
         },
         {
           "name": "aquasecurity:trivy:PkgType",
@@ -14167,547 +7348,26 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         },
         {
           "name": "aquasecurity:trivy:SrcName",
-          "value": "gcc-12"
+          "value": "gcc-14"
         },
         {
           "name": "aquasecurity:trivy:SrcRelease",
-          "value": "14+deb12u1"
+          "value": "19"
         },
         {
           "name": "aquasecurity:trivy:SrcVersion",
-          "value": "12.2.0"
+          "value": "14.2.0"
         }
       ]
     },
     {
-      "bom-ref": "pkg:deb/debian/libsystemd0@252.39-1~deb12u2?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Debian systemd Maintainers <pkg-systemd-maintainers@lists.alioth.debian.org>"
-      },
-      "name": "libsystemd0",
-      "version": "252.39-1~deb12u2",
-      "licenses": [
-        {
-          "license": {
-            "name": "LGPL-2.1-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "CC0-1.0"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2 with Linux-syscall-note exception"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT"
-          }
-        },
-        {
-          "license": {
-            "name": "public-domain"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libsystemd0@252.39-1~deb12u2?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libsystemd0@252.39-1~deb12u2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "systemd"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "1~deb12u2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "252.39"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libtasn1-6@4.19.0-2%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Debian GnuTLS Maintainers <pkg-gnutls-maint@lists.alioth.debian.org>"
-      },
-      "name": "libtasn1-6",
-      "version": "4.19.0-2+deb12u1",
-      "licenses": [
-        {
-          "license": {
-            "name": "LGPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GFDL-1.3-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libtasn1-6@4.19.0-2%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libtasn1-6@4.19.0-2+deb12u1"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "libtasn1-6"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "2+deb12u1"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "4.19.0"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libtinfo6@6.4-4?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Craig Small <csmall@debian.org>"
-      },
-      "name": "libtinfo6",
-      "version": "6.4-4",
-      "licenses": [
-        {
-          "license": {
-            "name": "MIT/X11"
-          }
-        },
-        {
-          "license": {
-            "name": "X11"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libtinfo6@6.4-4?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libtinfo6@6.4-4"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "ncurses"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "4"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "6.4"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libudev1@252.39-1~deb12u2?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Debian systemd Maintainers <pkg-systemd-maintainers@lists.alioth.debian.org>"
-      },
-      "name": "libudev1",
-      "version": "252.39-1~deb12u2",
-      "licenses": [
-        {
-          "license": {
-            "name": "LGPL-2.1-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "CC0-1.0"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2 with Linux-syscall-note exception"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT"
-          }
-        },
-        {
-          "license": {
-            "name": "public-domain"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libudev1@252.39-1~deb12u2?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libudev1@252.39-1~deb12u2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "systemd"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "1~deb12u2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "252.39"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libunistring2@1.0-2?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Jörg Frings-Fürst <debian@jff.email>"
-      },
-      "name": "libunistring2",
-      "version": "1.0-2",
-      "licenses": [
-        {
-          "license": {
-            "name": "LGPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "FreeSoftware"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GFDL-1.2-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2+ with distribution exception"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-3.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GFDL-1.2-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libunistring2@1.0-2?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libunistring2@1.0-2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "libunistring"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "1.0"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libuuid1@2.38.1-5%2Bdeb12u3?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "util-linux packagers <util-linux@packages.debian.org>"
-      },
-      "name": "libuuid1",
-      "version": "2.38.1-5+deb12u3",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "public-domain"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-4-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "BSLA"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-3.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libuuid1@2.38.1-5%2Bdeb12u3?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libuuid1@2.38.1-5+deb12u3"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "util-linux"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "5+deb12u3"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "2.38.1"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libxxhash0@0.8.1-1?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Josue Ortega <josue@debian.org>"
-      },
-      "name": "libxxhash0",
-      "version": "0.8.1-1",
-      "licenses": [
-        {
-          "license": {
-            "name": "BSD-2-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/libxxhash0@0.8.1-1?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "libxxhash0@0.8.1-1"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "xxhash"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "1"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "0.8.1"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/libzstd1@1.5.4%2Bdfsg2-5?arch=amd64&distro=debian-12.15",
+      "bom-ref": "pkg:deb/debian/libzstd1@1.5.7%2Bdfsg-1?arch=amd64&distro=debian-13.7",
       "type": "library",
       "supplier": {
         "name": "RPM packaging team <team+pkg-rpm@tracker.debian.org>"
       },
       "name": "libzstd1",
-      "version": "1.5.4+dfsg2-5",
+      "version": "1.5.7+dfsg-1",
       "licenses": [
         {
           "license": {
@@ -14730,15 +7390,15 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
           }
         }
       ],
-      "purl": "pkg:deb/debian/libzstd1@1.5.4%2Bdfsg2-5?arch=amd64&distro=debian-12.15",
+      "purl": "pkg:deb/debian/libzstd1@1.5.7%2Bdfsg-1?arch=amd64&distro=debian-13.7",
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
+          "value": "sha256:c0e409312adc366898967307565f692bb33d43a439d3de48e27d14b742389725"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
-          "value": "libzstd1@1.5.4+dfsg2-5"
+          "value": "libzstd1@1.5.7+dfsg-1"
         },
         {
           "name": "aquasecurity:trivy:PkgType",
@@ -14750,841 +7410,38 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         },
         {
           "name": "aquasecurity:trivy:SrcRelease",
-          "value": "5"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "1.5.4+dfsg2"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/login@4.13%2Bdfsg1-1%2Bdeb12u2?arch=amd64&distro=debian-12.15&epoch=1",
-      "type": "library",
-      "supplier": {
-        "name": "Shadow package maintainers <pkg-shadow-devel@lists.alioth.debian.org>"
-      },
-      "name": "login",
-      "version": "1:4.13+dfsg1-1+deb12u2",
-      "licenses": [
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-1.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "public-domain"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/login@4.13%2Bdfsg1-1%2Bdeb12u2?arch=amd64&distro=debian-12.15&epoch=1",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "login@1:4.13+dfsg1-1+deb12u2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcEpoch",
-          "value": "1"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "shadow"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "1+deb12u2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "4.13+dfsg1"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/logsave@1.47.0-2%2Bb2?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Theodore Y. Ts'o <tytso@mit.edu>"
-      },
-      "name": "logsave",
-      "version": "1.47.0-2+b2",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "Apache-2.0"
-          }
-        },
-        {
-          "license": {
-            "name": "ISC"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT-US-export"
-          }
-        },
-        {
-          "license": {
-            "name": "Kazlib"
-          }
-        },
-        {
-          "license": {
-            "name": "Latex2e"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2+ with Texinfo exception"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/logsave@1.47.0-2%2Bb2?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "logsave@1.47.0-2+b2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "e2fsprogs"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "1.47.0"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/mawk@1.3.4.20200120-3.1?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Boyuan Yang <byang@debian.org>"
-      },
-      "name": "mawk",
-      "version": "1.3.4.20200120-3.1",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "X11"
-          }
-        },
-        {
-          "license": {
-            "name": "CC-BY-3.0"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/mawk@1.3.4.20200120-3.1?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "mawk@1.3.4.20200120-3.1"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "mawk"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "3.1"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "1.3.4.20200120"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/mount@2.38.1-5%2Bdeb12u3?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "util-linux packagers <util-linux@packages.debian.org>"
-      },
-      "name": "mount",
-      "version": "2.38.1-5+deb12u3",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "public-domain"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-4-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "BSLA"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-3.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/mount@2.38.1-5%2Bdeb12u3?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "mount@2.38.1-5+deb12u3"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "util-linux"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "5+deb12u3"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "2.38.1"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/ncurses-base@6.4-4?arch=all&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Craig Small <csmall@debian.org>"
-      },
-      "name": "ncurses-base",
-      "version": "6.4-4",
-      "licenses": [
-        {
-          "license": {
-            "name": "MIT/X11"
-          }
-        },
-        {
-          "license": {
-            "name": "X11"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/ncurses-base@6.4-4?arch=all&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "ncurses-base@6.4-4"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "ncurses"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "4"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "6.4"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/ncurses-bin@6.4-4?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Craig Small <csmall@debian.org>"
-      },
-      "name": "ncurses-bin",
-      "version": "6.4-4",
-      "licenses": [
-        {
-          "license": {
-            "name": "MIT/X11"
-          }
-        },
-        {
-          "license": {
-            "name": "X11"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/ncurses-bin@6.4-4?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "ncurses-bin@6.4-4"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "ncurses"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "4"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "6.4"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/openssl@3.0.22-1~deb12u2?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Debian OpenSSL Team <pkg-openssl-devel@alioth-lists.debian.net>"
-      },
-      "name": "openssl",
-      "version": "3.0.22-1~deb12u2",
-      "licenses": [
-        {
-          "license": {
-            "name": "Apache-2.0"
-          }
-        },
-        {
-          "license": {
-            "name": "Artistic-2.0"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-1.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-1.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/openssl@3.0.22-1~deb12u2?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "openssl@3.0.22-1~deb12u2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "openssl"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "1~deb12u2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "3.0.22"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/passwd@4.13%2Bdfsg1-1%2Bdeb12u2?arch=amd64&distro=debian-12.15&epoch=1",
-      "type": "library",
-      "supplier": {
-        "name": "Shadow package maintainers <pkg-shadow-devel@lists.alioth.debian.org>"
-      },
-      "name": "passwd",
-      "version": "1:4.13+dfsg1-1+deb12u2",
-      "licenses": [
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-1.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "public-domain"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/passwd@4.13%2Bdfsg1-1%2Bdeb12u2?arch=amd64&distro=debian-12.15&epoch=1",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "passwd@1:4.13+dfsg1-1+deb12u2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcEpoch",
-          "value": "1"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "shadow"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "1+deb12u2"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "4.13+dfsg1"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/perl-base@5.36.0-7%2Bdeb12u4?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Niko Tyni <ntyni@debian.org>"
-      },
-      "name": "perl-base",
-      "version": "5.36.0-7+deb12u4",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-1.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "Artistic-2.0"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT"
-          }
-        },
-        {
-          "license": {
-            "name": "REGCOMP"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-with-bison-exception+"
-          }
-        },
-        {
-          "license": {
-            "name": "Unicode"
-          }
-        },
-        {
-          "license": {
-            "name": "BZIP"
-          }
-        },
-        {
-          "license": {
-            "name": "Zlib"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "RRA-KEEP-THIS-NOTICE"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-clause-with-weird-numbering"
-          }
-        },
-        {
-          "license": {
-            "name": "CC0-1.0"
-          }
-        },
-        {
-          "license": {
-            "name": "TEXT-TABS"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-4-clause-POWERDOG"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-clause-GENERIC"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "SDBM-PUBLIC-DOMAIN"
-          }
-        },
-        {
-          "license": {
-            "name": "DONT-CHANGE-THE-GPL"
-          }
-        },
-        {
-          "license": {
-            "name": "Artistic-dist"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-1.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "Artistic-2"
-          }
-        },
-        {
-          "license": {
-            "name": "HSIEH-DERIVATIVE"
-          }
-        },
-        {
-          "license": {
-            "name": "HSIEH-BSD"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/perl-base@5.36.0-7%2Bdeb12u4?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "perl-base@5.36.0-7+deb12u4"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "perl"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "7+deb12u4"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "5.36.0"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/publicsuffix@20230209.2326-1?arch=all&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Daniel Kahn Gillmor <dkg@fifthhorseman.net>"
-      },
-      "name": "publicsuffix",
-      "version": "20230209.2326-1",
-      "licenses": [
-        {
-          "license": {
-            "name": "MPL-2.0"
-          }
-        },
-        {
-          "license": {
-            "name": "CC0-1.0"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/publicsuffix@20230209.2326-1?arch=all&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:92fadc5f0513ec4a6323eb28dd11fc3b37a24206a11aa78bdb94363484073e70"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "publicsuffix@20230209.2326-1"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "publicsuffix"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
           "value": "1"
         },
         {
           "name": "aquasecurity:trivy:SrcVersion",
-          "value": "20230209.2326"
+          "value": "1.5.7+dfsg"
         }
       ]
     },
     {
-      "bom-ref": "pkg:deb/debian/sed@4.9-1%2Bdeb12u1?arch=amd64&distro=debian-12.15",
+      "bom-ref": "pkg:deb/debian/media-types@13.0.0?arch=all&distro=debian-13.7",
       "type": "library",
       "supplier": {
-        "name": "Clint Adams <clint@debian.org>"
+        "name": "Mime-Support Packagers <team+debian-mimesupport-packagers@tracker.debian.org>"
       },
-      "name": "sed",
-      "version": "4.9-1+deb12u1",
+      "name": "media-types",
+      "version": "13.0.0",
       "licenses": [
         {
           "license": {
-            "name": "GPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "X11"
-          }
-        },
-        {
-          "license": {
-            "name": "GFDL-1.3-no-invariants-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GFDL-1.3-only"
-          }
-        },
-        {
-          "license": {
-            "name": "ISC"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-4-Clause-UC"
-          }
-        },
-        {
-          "license": {
-            "name": "BSL-1"
-          }
-        },
-        {
-          "license": {
-            "name": "pcre"
+            "name": "ad-hoc"
           }
         }
       ],
-      "purl": "pkg:deb/debian/sed@4.9-1%2Bdeb12u1?arch=amd64&distro=debian-12.15",
+      "purl": "pkg:deb/debian/media-types@13.0.0?arch=all&distro=debian-13.7",
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
+          "value": "sha256:275a30dd8ce958b21daa9ad962c6fbc09f98306ee2f486b65c9075dc257b1412"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
-          "value": "sed@4.9-1+deb12u1"
+          "value": "media-types@13.0.0"
         },
         {
           "name": "aquasecurity:trivy:PkgType",
@@ -15592,52 +7449,38 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         },
         {
           "name": "aquasecurity:trivy:SrcName",
-          "value": "sed"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "1+deb12u1"
+          "value": "media-types"
         },
         {
           "name": "aquasecurity:trivy:SrcVersion",
-          "value": "4.9"
+          "value": "13.0.0"
         }
       ]
     },
     {
-      "bom-ref": "pkg:deb/debian/sysvinit-utils@3.06-4?arch=amd64&distro=debian-12.15",
+      "bom-ref": "pkg:deb/debian/netbase@6.5?arch=all&distro=debian-13.7",
       "type": "library",
       "supplier": {
-        "name": "Debian sysvinit maintainers <debian-init-diversity@chiark.greenend.org.uk>"
+        "name": "Marco d'Itri <md@linux.it>"
       },
-      "name": "sysvinit-utils",
-      "version": "3.06-4",
+      "name": "netbase",
+      "version": "6.5",
       "licenses": [
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        },
         {
           "license": {
             "name": "GPL-2.0-only"
           }
         }
       ],
-      "purl": "pkg:deb/debian/sysvinit-utils@3.06-4?arch=amd64&distro=debian-12.15",
+      "purl": "pkg:deb/debian/netbase@6.5?arch=all&distro=debian-13.7",
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
+          "value": "sha256:621c35e751a51a9a9dc3e80aa0b7fe8be2a93402ea6ccd307d30852cd7776cda"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
-          "value": "sysvinit-utils@3.06-4"
+          "value": "netbase@6.5"
         },
         {
           "name": "aquasecurity:trivy:PkgType",
@@ -15645,99 +7488,22 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         },
         {
           "name": "aquasecurity:trivy:SrcName",
-          "value": "sysvinit"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "4"
+          "value": "netbase"
         },
         {
           "name": "aquasecurity:trivy:SrcVersion",
-          "value": "3.06"
+          "value": "6.5"
         }
       ]
     },
     {
-      "bom-ref": "pkg:deb/debian/tar@1.34%2Bdfsg-1.2%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "Janos Lenart <ocsi@debian.org>"
-      },
-      "name": "tar",
-      "version": "1.34+dfsg-1.2+deb12u1",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3+ with Bison exception"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-3.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/tar@1.34%2Bdfsg-1.2%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "tar@1.34+dfsg-1.2+deb12u1"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "tar"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "1.2+deb12u1"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "1.34+dfsg"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/tzdata@2026f-0%2Bdeb12u1?arch=all&distro=debian-12.15",
+      "bom-ref": "pkg:deb/debian/tzdata-legacy@2026f-0%2Bdeb13u1?arch=all&distro=debian-13.7",
       "type": "library",
       "supplier": {
         "name": "GNU Libc Maintainers <debian-glibc@lists.debian.org>"
       },
-      "name": "tzdata",
-      "version": "2026f-0+deb12u1",
+      "name": "tzdata-legacy",
+      "version": "2026f-0+deb13u1",
       "licenses": [
         {
           "license": {
@@ -15745,15 +7511,15 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
           }
         }
       ],
-      "purl": "pkg:deb/debian/tzdata@2026f-0%2Bdeb12u1?arch=all&distro=debian-12.15",
+      "purl": "pkg:deb/debian/tzdata-legacy@2026f-0%2Bdeb13u1?arch=all&distro=debian-13.7",
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
+          "value": "sha256:b5764396d8d3f88c6c91b8e97022f147ec721afcf85710d96775922e0df881af"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
-          "value": "tzdata@2026f-0+deb12u1"
+          "value": "tzdata-legacy@2026f-0+deb13u1"
         },
         {
           "name": "aquasecurity:trivy:PkgType",
@@ -15765,7 +7531,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         },
         {
           "name": "aquasecurity:trivy:SrcRelease",
-          "value": "0+deb12u1"
+          "value": "0+deb13u1"
         },
         {
           "name": "aquasecurity:trivy:SrcVersion",
@@ -15774,143 +7540,29 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       ]
     },
     {
-      "bom-ref": "pkg:deb/debian/usr-is-merged@37~deb12u1?arch=all&distro=debian-12.15",
+      "bom-ref": "pkg:deb/debian/tzdata@2026f-0%2Bdeb13u1?arch=all&distro=debian-13.7",
       "type": "library",
       "supplier": {
-        "name": "Marco d'Itri <md@linux.it>"
+        "name": "GNU Libc Maintainers <debian-glibc@lists.debian.org>"
       },
-      "name": "usr-is-merged",
-      "version": "37~deb12u1",
+      "name": "tzdata",
+      "version": "2026f-0+deb13u1",
       "licenses": [
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/usr-is-merged@37~deb12u1?arch=all&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "usr-is-merged@37~deb12u1"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "usrmerge"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "37~deb12u1"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/util-linux-extra@2.38.1-5%2Bdeb12u3?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "util-linux packagers <util-linux@packages.debian.org>"
-      },
-      "name": "util-linux-extra",
-      "version": "2.38.1-5+deb12u3",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-or-later"
-          }
-        },
         {
           "license": {
             "name": "public-domain"
           }
-        },
-        {
-          "license": {
-            "name": "BSD-4-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "BSLA"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-3.0-only"
-          }
         }
       ],
-      "purl": "pkg:deb/debian/util-linux-extra@2.38.1-5%2Bdeb12u3?arch=amd64&distro=debian-12.15",
+      "purl": "pkg:deb/debian/tzdata@2026f-0%2Bdeb13u1?arch=all&distro=debian-13.7",
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
+          "value": "sha256:b64fe4bb89ff075efc03878811052cbaf4f9dd891aed968e9ed6993fedf1f4a7"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
-          "value": "util-linux-extra@2.38.1-5+deb12u3"
+          "value": "tzdata@2026f-0+deb13u1"
         },
         {
           "name": "aquasecurity:trivy:PkgType",
@@ -15918,139 +7570,26 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         },
         {
           "name": "aquasecurity:trivy:SrcName",
-          "value": "util-linux"
+          "value": "tzdata"
         },
         {
           "name": "aquasecurity:trivy:SrcRelease",
-          "value": "5+deb12u3"
+          "value": "0+deb13u1"
         },
         {
           "name": "aquasecurity:trivy:SrcVersion",
-          "value": "2.38.1"
+          "value": "2026f"
         }
       ]
     },
     {
-      "bom-ref": "pkg:deb/debian/util-linux@2.38.1-5%2Bdeb12u3?arch=amd64&distro=debian-12.15",
-      "type": "library",
-      "supplier": {
-        "name": "util-linux packagers <util-linux@packages.debian.org>"
-      },
-      "name": "util-linux",
-      "version": "2.38.1-5+deb12u3",
-      "licenses": [
-        {
-          "license": {
-            "name": "GPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "public-domain"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-4-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "MIT"
-          }
-        },
-        {
-          "license": {
-            "name": "BSD-3-Clause"
-          }
-        },
-        {
-          "license": {
-            "name": "BSLA"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-3.0-or-later"
-          }
-        },
-        {
-          "license": {
-            "name": "GPL-3.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.0-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-2.1-only"
-          }
-        },
-        {
-          "license": {
-            "name": "LGPL-3.0-only"
-          }
-        }
-      ],
-      "purl": "pkg:deb/debian/util-linux@2.38.1-5%2Bdeb12u3?arch=amd64&distro=debian-12.15",
-      "properties": [
-        {
-          "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgID",
-          "value": "util-linux@2.38.1-5+deb12u3"
-        },
-        {
-          "name": "aquasecurity:trivy:PkgType",
-          "value": "debian"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcName",
-          "value": "util-linux"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcRelease",
-          "value": "5+deb12u3"
-        },
-        {
-          "name": "aquasecurity:trivy:SrcVersion",
-          "value": "2.38.1"
-        }
-      ]
-    },
-    {
-      "bom-ref": "pkg:deb/debian/zlib1g@1.2.13.dfsg-1?arch=amd64&distro=debian-12.15&epoch=1",
+      "bom-ref": "pkg:deb/debian/zlib1g@1.3.dfsg%2Breally1.3.1-1%2Bdeb13u1?arch=amd64&distro=debian-13.7&epoch=1",
       "type": "library",
       "supplier": {
         "name": "Mark Brown <broonie@debian.org>"
       },
       "name": "zlib1g",
-      "version": "1:1.2.13.dfsg-1",
+      "version": "1:1.3.dfsg+really1.3.1-1+deb13u1",
       "licenses": [
         {
           "license": {
@@ -16058,15 +7597,15 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
           }
         }
       ],
-      "purl": "pkg:deb/debian/zlib1g@1.2.13.dfsg-1?arch=amd64&distro=debian-12.15&epoch=1",
+      "purl": "pkg:deb/debian/zlib1g@1.3.dfsg%2Breally1.3.1-1%2Bdeb13u1?arch=amd64&distro=debian-13.7&epoch=1",
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2"
+          "value": "sha256:2e7e048c8b43ab2a1f69ee041025502f890b3faaee2053015a3c3e7256d9ec25"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
-          "value": "zlib1g@1:1.2.13.dfsg-1"
+          "value": "zlib1g@1:1.3.dfsg+really1.3.1-1+deb13u1"
         },
         {
           "name": "aquasecurity:trivy:PkgType",
@@ -16082,72 +7621,46 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         },
         {
           "name": "aquasecurity:trivy:SrcRelease",
-          "value": "1"
+          "value": "1+deb13u1"
         },
         {
           "name": "aquasecurity:trivy:SrcVersion",
-          "value": "1.2.13.dfsg"
+          "value": "1.3.dfsg+really1.3.1"
         }
       ]
     }
   ],
   "dependencies": [
     {
-      "ref": "1d1528b6-518f-4890-934c-7d54e4eef910",
+      "ref": "2ad2370e-a54e-4980-a5ff-0204dd12d475",
+      "dependsOn": [
+        "d235075e-b4c1-4ff1-9177-69bb39d13535",
+        "f889d8bb-dd0b-41a2-b7cb-2e7f6fccc20d"
+      ]
+    },
+    {
+      "ref": "d235075e-b4c1-4ff1-9177-69bb39d13535",
+      "dependsOn": [
+        "pkg:deb/debian/base-files@13.8%2Bdeb13u7?arch=amd64&distro=debian-13.7",
+        "pkg:deb/debian/ca-certificates@20250419%2Bdeb13u1?arch=all&distro=debian-13.7",
+        "pkg:deb/debian/gcc-14-base@14.2.0-19?arch=amd64&distro=debian-13.7",
+        "pkg:deb/debian/libc6@2.41-12%2Bdeb13u4?arch=amd64&distro=debian-13.7",
+        "pkg:deb/debian/libgcc-s1@14.2.0-19?arch=amd64&distro=debian-13.7",
+        "pkg:deb/debian/libgomp1@14.2.0-19?arch=amd64&distro=debian-13.7",
+        "pkg:deb/debian/libssl3t64@3.5.7-1~deb13u3?arch=amd64&distro=debian-13.7",
+        "pkg:deb/debian/libstdc%2B%2B6@14.2.0-19?arch=amd64&distro=debian-13.7",
+        "pkg:deb/debian/libzstd1@1.5.7%2Bdfsg-1?arch=amd64&distro=debian-13.7",
+        "pkg:deb/debian/media-types@13.0.0?arch=all&distro=debian-13.7",
+        "pkg:deb/debian/netbase@6.5?arch=all&distro=debian-13.7",
+        "pkg:deb/debian/tzdata-legacy@2026f-0%2Bdeb13u1?arch=all&distro=debian-13.7",
+        "pkg:deb/debian/tzdata@2026f-0%2Bdeb13u1?arch=all&distro=debian-13.7",
+        "pkg:deb/debian/zlib1g@1.3.dfsg%2Breally1.3.1-1%2Bdeb13u1?arch=amd64&distro=debian-13.7&epoch=1"
+      ]
+    },
+    {
+      "ref": "f889d8bb-dd0b-41a2-b7cb-2e7f6fccc20d",
       "dependsOn": [
         "pkg:cargo/stoa-gateway@0.9.25"
-      ]
-    },
-    {
-      "ref": "22705df6-81fa-4ac7-a895-3df514d1e93c",
-      "dependsOn": [
-        "1d1528b6-518f-4890-934c-7d54e4eef910",
-        "4b100c96-6c22-4f94-b2c4-ae7b15018348"
-      ]
-    },
-    {
-      "ref": "4b100c96-6c22-4f94-b2c4-ae7b15018348",
-      "dependsOn": [
-        "pkg:deb/debian/apt@2.6.2?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/base-passwd@3.6.1?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/bash@5.2.15-2%2Bb13?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/bsdutils@2.38.1-5%2Bdeb12u3?arch=amd64&distro=debian-12.15&epoch=1",
-        "pkg:deb/debian/ca-certificates@20250419~deb12u2?arch=all&distro=debian-12.15",
-        "pkg:deb/debian/coreutils@9.1-1?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/curl@7.88.1-10%2Bdeb12u15?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/dash@0.5.12-2?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/diffutils@3.8-4?arch=amd64&distro=debian-12.15&epoch=1",
-        "pkg:deb/debian/e2fsprogs@1.47.0-2%2Bb2?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/findutils@4.9.0-4?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/grep@3.8-5?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/gzip@1.12-1?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/hostname@3.23%2Bnmu1?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/init-system-helpers@1.65.2%2Bdeb12u1?arch=all&distro=debian-12.15",
-        "pkg:deb/debian/krb5-locales@1.20.1-2%2Bdeb12u5?arch=all&distro=debian-12.15",
-        "pkg:deb/debian/libacl1@2.3.1-3?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libattr1@2.5.1-4?arch=amd64&distro=debian-12.15&epoch=1",
-        "pkg:deb/debian/libc-bin@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libext2fs2@1.47.0-2%2Bb2?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libldap-common@2.5.13%2Bdfsg-5?arch=all&distro=debian-12.15",
-        "pkg:deb/debian/libmd0@1.0.4-2?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libmount1@2.38.1-5%2Bdeb12u3?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libpam-modules-bin@1.5.2-6%2Bdeb12u2?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libpam-runtime@1.5.2-6%2Bdeb12u2?arch=all&distro=debian-12.15",
-        "pkg:deb/debian/libsasl2-modules@2.1.28%2Bdfsg-10%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libss2@1.47.0-2%2Bb2?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libtinfo6@6.4-4?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libuuid1@2.38.1-5%2Bdeb12u3?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/login@4.13%2Bdfsg1-1%2Bdeb12u2?arch=amd64&distro=debian-12.15&epoch=1",
-        "pkg:deb/debian/mawk@1.3.4.20200120-3.1?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/mount@2.38.1-5%2Bdeb12u3?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/ncurses-base@6.4-4?arch=all&distro=debian-12.15",
-        "pkg:deb/debian/ncurses-bin@6.4-4?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/perl-base@5.36.0-7%2Bdeb12u4?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/publicsuffix@20230209.2326-1?arch=all&distro=debian-12.15",
-        "pkg:deb/debian/sed@4.9-1%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/sysvinit-utils@3.06-4?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/tzdata@2026f-0%2Bdeb12u1?arch=all&distro=debian-12.15",
-        "pkg:deb/debian/util-linux@2.38.1-5%2Bdeb12u3?arch=amd64&distro=debian-12.15"
       ]
     },
     {
@@ -18443,729 +9956,60 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "dependsOn": []
     },
     {
-      "ref": "pkg:deb/debian/adduser@3.134?arch=all&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/passwd@4.13%2Bdfsg1-1%2Bdeb12u2?arch=amd64&distro=debian-12.15&epoch=1"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/apt@2.6.2?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/adduser@3.134?arch=all&distro=debian-12.15",
-        "pkg:deb/debian/debian-archive-keyring@2023.3%2Bdeb12u2?arch=all&distro=debian-12.15",
-        "pkg:deb/debian/gpgv@2.2.40-1.1%2Bdeb12u2?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libapt-pkg6.0@2.6.2?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libgcc-s1@12.2.0-14%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libgnutls30@3.7.9-2%2Bdeb12u7?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libseccomp2@2.5.4-1%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libstdc%2B%2B6@12.2.0-14%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libsystemd0@252.39-1~deb12u2?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/base-files@12.4%2Bdeb12u15?arch=amd64&distro=debian-12.15",
+      "ref": "pkg:deb/debian/base-files@13.8%2Bdeb13u7?arch=amd64&distro=debian-13.7",
       "dependsOn": []
     },
     {
-      "ref": "pkg:deb/debian/base-passwd@3.6.1?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libdebconfclient0@0.270?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libselinux1@3.4-1%2Bb6?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/bash@5.2.15-2%2Bb13?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/base-files@12.4%2Bdeb12u15?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/debianutils@5.7-0.5~deb12u1?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/bsdutils@2.38.1-5%2Bdeb12u3?arch=amd64&distro=debian-12.15&epoch=1",
+      "ref": "pkg:deb/debian/ca-certificates@20250419%2Bdeb13u1?arch=all&distro=debian-13.7",
       "dependsOn": []
     },
     {
-      "ref": "pkg:deb/debian/ca-certificates@20250419~deb12u2?arch=all&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/debconf@1.5.82?arch=all&distro=debian-12.15",
-        "pkg:deb/debian/openssl@3.0.22-1~deb12u2?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/coreutils@9.1-1?arch=amd64&distro=debian-12.15",
+      "ref": "pkg:deb/debian/gcc-14-base@14.2.0-19?arch=amd64&distro=debian-13.7",
       "dependsOn": []
     },
     {
-      "ref": "pkg:deb/debian/curl@7.88.1-10%2Bdeb12u15?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libcurl4@7.88.1-10%2Bdeb12u15?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/zlib1g@1.2.13.dfsg-1?arch=amd64&distro=debian-12.15&epoch=1"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/dash@0.5.12-2?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/debianutils@5.7-0.5~deb12u1?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/dpkg@1.21.23?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/debconf@1.5.82?arch=all&distro=debian-12.15",
+      "ref": "pkg:deb/debian/libc6@2.41-12%2Bdeb13u4?arch=amd64&distro=debian-13.7",
       "dependsOn": []
     },
     {
-      "ref": "pkg:deb/debian/debian-archive-keyring@2023.3%2Bdeb12u2?arch=all&distro=debian-12.15",
+      "ref": "pkg:deb/debian/libgcc-s1@14.2.0-19?arch=amd64&distro=debian-13.7",
       "dependsOn": []
     },
     {
-      "ref": "pkg:deb/debian/debianutils@5.7-0.5~deb12u1?arch=amd64&distro=debian-12.15",
+      "ref": "pkg:deb/debian/libgomp1@14.2.0-19?arch=amd64&distro=debian-13.7",
       "dependsOn": []
     },
     {
-      "ref": "pkg:deb/debian/diffutils@3.8-4?arch=amd64&distro=debian-12.15&epoch=1",
+      "ref": "pkg:deb/debian/libssl3t64@3.5.7-1~deb13u3?arch=amd64&distro=debian-13.7",
       "dependsOn": []
     },
     {
-      "ref": "pkg:deb/debian/dpkg@1.21.23?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/tar@1.34%2Bdfsg-1.2%2Bdeb12u1?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/e2fsprogs@1.47.0-2%2Bb2?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/logsave@1.47.0-2%2Bb2?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/findutils@4.9.0-4?arch=amd64&distro=debian-12.15",
+      "ref": "pkg:deb/debian/libstdc%2B%2B6@14.2.0-19?arch=amd64&distro=debian-13.7",
       "dependsOn": []
     },
     {
-      "ref": "pkg:deb/debian/gcc-12-base@12.2.0-14%2Bdeb12u1?arch=amd64&distro=debian-12.15",
+      "ref": "pkg:deb/debian/libzstd1@1.5.7%2Bdfsg-1?arch=amd64&distro=debian-13.7",
       "dependsOn": []
     },
     {
-      "ref": "pkg:deb/debian/gpgv@2.2.40-1.1%2Bdeb12u2?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libbz2-1.0@1.0.8-5%2Bb1?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libgcrypt20@1.10.1-3%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libgpg-error0@1.46-1?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/zlib1g@1.2.13.dfsg-1?arch=amd64&distro=debian-12.15&epoch=1"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/grep@3.8-5?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/dpkg@1.21.23?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/gzip@1.12-1?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/dpkg@1.21.23?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/hostname@3.23%2Bnmu1?arch=amd64&distro=debian-12.15",
+      "ref": "pkg:deb/debian/media-types@13.0.0?arch=all&distro=debian-13.7",
       "dependsOn": []
     },
     {
-      "ref": "pkg:deb/debian/init-system-helpers@1.65.2%2Bdeb12u1?arch=all&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/usr-is-merged@37~deb12u1?arch=all&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/krb5-locales@1.20.1-2%2Bdeb12u5?arch=all&distro=debian-12.15",
+      "ref": "pkg:deb/debian/netbase@6.5?arch=all&distro=debian-13.7",
       "dependsOn": []
     },
     {
-      "ref": "pkg:deb/debian/libacl1@2.3.1-3?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libapt-pkg6.0@2.6.2?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libbz2-1.0@1.0.8-5%2Bb1?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libgcc-s1@12.2.0-14%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libgcrypt20@1.10.1-3%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/liblz4-1@1.9.4-1?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/liblzma5@5.4.1-1%2Bdeb12u2?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libstdc%2B%2B6@12.2.0-14%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libsystemd0@252.39-1~deb12u2?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libudev1@252.39-1~deb12u2?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libxxhash0@0.8.1-1?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libzstd1@1.5.4%2Bdfsg2-5?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/zlib1g@1.2.13.dfsg-1?arch=amd64&distro=debian-12.15&epoch=1"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libattr1@2.5.1-4?arch=amd64&distro=debian-12.15&epoch=1",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libaudit-common@3.0.9-1?arch=all&distro=debian-12.15&epoch=1",
+      "ref": "pkg:deb/debian/tzdata-legacy@2026f-0%2Bdeb13u1?arch=all&distro=debian-13.7",
       "dependsOn": []
     },
     {
-      "ref": "pkg:deb/debian/libaudit1@3.0.9-1?arch=amd64&distro=debian-12.15&epoch=1",
-      "dependsOn": [
-        "pkg:deb/debian/libaudit-common@3.0.9-1?arch=all&distro=debian-12.15&epoch=1",
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libcap-ng0@0.8.3-1%2Bb3?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libblkid1@2.38.1-5%2Bdeb12u3?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libbrotli1@1.0.9-2%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libbz2-1.0@1.0.8-5%2Bb1?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libc-bin@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libgcc-s1@12.2.0-14%2Bdeb12u1?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libcap-ng0@0.8.3-1%2Bb3?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libcap2@2.66-4%2Bdeb12u3%2Bb1?arch=amd64&distro=debian-12.15&epoch=1",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libcom-err2@1.47.0-2%2Bb2?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libcrypt1@4.4.33-2?arch=amd64&distro=debian-12.15&epoch=1",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libcurl4@7.88.1-10%2Bdeb12u15?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libbrotli1@1.0.9-2%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libgssapi-krb5-2@1.20.1-2%2Bdeb12u5?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libidn2-0@2.3.3-1%2Bb1?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libldap-2.5-0@2.5.13%2Bdfsg-5?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libnghttp2-14@1.52.0-1%2Bdeb12u3?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libpsl5@0.21.2-1?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/librtmp1@2.4%2B20151223.gitfa8646d.1-2%2Bb2?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libssh2-1@1.10.0-3%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libssl3@3.0.22-1~deb12u2?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libzstd1@1.5.4%2Bdfsg2-5?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/zlib1g@1.2.13.dfsg-1?arch=amd64&distro=debian-12.15&epoch=1"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libdb5.3@5.3.28%2Bdfsg2-1?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libdebconfclient0@0.270?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libext2fs2@1.47.0-2%2Bb2?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libffi8@3.4.4-1?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libgcc-s1@12.2.0-14%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/gcc-12-base@12.2.0-14%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libgcrypt20@1.10.1-3%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libgpg-error0@1.46-1?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libgmp10@6.2.1%2Bdfsg1-1.1?arch=amd64&distro=debian-12.15&epoch=2",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libgnutls30@3.7.9-2%2Bdeb12u7?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libgmp10@6.2.1%2Bdfsg1-1.1?arch=amd64&distro=debian-12.15&epoch=2",
-        "pkg:deb/debian/libhogweed6@3.8.1-2?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libidn2-0@2.3.3-1%2Bb1?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libnettle8@3.8.1-2?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libp11-kit0@0.24.1-2?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libtasn1-6@4.19.0-2%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libunistring2@1.0-2?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libgpg-error0@1.46-1?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libgssapi-krb5-2@1.20.1-2%2Bdeb12u5?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libcom-err2@1.47.0-2%2Bb2?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libk5crypto3@1.20.1-2%2Bdeb12u5?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libkrb5-3@1.20.1-2%2Bdeb12u5?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libkrb5support0@1.20.1-2%2Bdeb12u5?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libhogweed6@3.8.1-2?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libgmp10@6.2.1%2Bdfsg1-1.1?arch=amd64&distro=debian-12.15&epoch=2",
-        "pkg:deb/debian/libnettle8@3.8.1-2?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libidn2-0@2.3.3-1%2Bb1?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libunistring2@1.0-2?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libk5crypto3@1.20.1-2%2Bdeb12u5?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libkrb5support0@1.20.1-2%2Bdeb12u5?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libkeyutils1@1.6.3-2?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libkrb5-3@1.20.1-2%2Bdeb12u5?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libcom-err2@1.47.0-2%2Bb2?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libk5crypto3@1.20.1-2%2Bdeb12u5?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libkeyutils1@1.6.3-2?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libkrb5support0@1.20.1-2%2Bdeb12u5?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libssl3@3.0.22-1~deb12u2?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libkrb5support0@1.20.1-2%2Bdeb12u5?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libldap-2.5-0@2.5.13%2Bdfsg-5?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libgnutls30@3.7.9-2%2Bdeb12u7?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libsasl2-2@2.1.28%2Bdfsg-10%2Bdeb12u1?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libldap-common@2.5.13%2Bdfsg-5?arch=all&distro=debian-12.15",
+      "ref": "pkg:deb/debian/tzdata@2026f-0%2Bdeb13u1?arch=all&distro=debian-13.7",
       "dependsOn": []
     },
     {
-      "ref": "pkg:deb/debian/liblz4-1@1.9.4-1?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/liblzma5@5.4.1-1%2Bdeb12u2?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libmd0@1.0.4-2?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libmount1@2.38.1-5%2Bdeb12u3?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libblkid1@2.38.1-5%2Bdeb12u3?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libselinux1@3.4-1%2Bb6?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libnettle8@3.8.1-2?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libnghttp2-14@1.52.0-1%2Bdeb12u3?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libp11-kit0@0.24.1-2?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libffi8@3.4.4-1?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libpam-modules-bin@1.5.2-6%2Bdeb12u2?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libaudit1@3.0.9-1?arch=amd64&distro=debian-12.15&epoch=1",
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libcrypt1@4.4.33-2?arch=amd64&distro=debian-12.15&epoch=1",
-        "pkg:deb/debian/libpam0g@1.5.2-6%2Bdeb12u2?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libselinux1@3.4-1%2Bb6?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libpam-modules@1.5.2-6%2Bdeb12u2?arch=amd64&distro=debian-12.15",
+      "ref": "pkg:deb/debian/zlib1g@1.3.dfsg%2Breally1.3.1-1%2Bdeb13u1?arch=amd64&distro=debian-13.7&epoch=1",
       "dependsOn": []
-    },
-    {
-      "ref": "pkg:deb/debian/libpam-runtime@1.5.2-6%2Bdeb12u2?arch=all&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/debconf@1.5.82?arch=all&distro=debian-12.15",
-        "pkg:deb/debian/libpam-modules@1.5.2-6%2Bdeb12u2?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libpam0g@1.5.2-6%2Bdeb12u2?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/debconf@1.5.82?arch=all&distro=debian-12.15",
-        "pkg:deb/debian/libaudit1@3.0.9-1?arch=amd64&distro=debian-12.15&epoch=1",
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libpcre2-8-0@10.42-1%2Bdeb12u2?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libpsl5@0.21.2-1?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libidn2-0@2.3.3-1%2Bb1?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libunistring2@1.0-2?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/librtmp1@2.4%2B20151223.gitfa8646d.1-2%2Bb2?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libgmp10@6.2.1%2Bdfsg1-1.1?arch=amd64&distro=debian-12.15&epoch=2",
-        "pkg:deb/debian/libgnutls30@3.7.9-2%2Bdeb12u7?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libhogweed6@3.8.1-2?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libnettle8@3.8.1-2?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/zlib1g@1.2.13.dfsg-1?arch=amd64&distro=debian-12.15&epoch=1"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libsasl2-2@2.1.28%2Bdfsg-10%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libsasl2-modules-db@2.1.28%2Bdfsg-10%2Bdeb12u1?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libsasl2-modules-db@2.1.28%2Bdfsg-10%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libdb5.3@5.3.28%2Bdfsg2-1?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libsasl2-modules@2.1.28%2Bdfsg-10%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libssl3@3.0.22-1~deb12u2?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libseccomp2@2.5.4-1%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libselinux1@3.4-1%2Bb6?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libpcre2-8-0@10.42-1%2Bdeb12u2?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libsemanage-common@3.4-1?arch=all&distro=debian-12.15",
-      "dependsOn": []
-    },
-    {
-      "ref": "pkg:deb/debian/libsemanage2@3.4-1%2Bb5?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libaudit1@3.0.9-1?arch=amd64&distro=debian-12.15&epoch=1",
-        "pkg:deb/debian/libbz2-1.0@1.0.8-5%2Bb1?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libselinux1@3.4-1%2Bb6?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libsemanage-common@3.4-1?arch=all&distro=debian-12.15",
-        "pkg:deb/debian/libsepol2@3.4-2.1?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libsepol2@3.4-2.1?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libsmartcols1@2.38.1-5%2Bdeb12u3?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libss2@1.47.0-2%2Bb2?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libcom-err2@1.47.0-2%2Bb2?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libssh2-1@1.10.0-3%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libssl3@3.0.22-1~deb12u2?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/zlib1g@1.2.13.dfsg-1?arch=amd64&distro=debian-12.15&epoch=1"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libssl3@3.0.22-1~deb12u2?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libstdc%2B%2B6@12.2.0-14%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/gcc-12-base@12.2.0-14%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libgcc-s1@12.2.0-14%2Bdeb12u1?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libsystemd0@252.39-1~deb12u2?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libcap2@2.66-4%2Bdeb12u3%2Bb1?arch=amd64&distro=debian-12.15&epoch=1",
-        "pkg:deb/debian/libgcrypt20@1.10.1-3%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/liblz4-1@1.9.4-1?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/liblzma5@5.4.1-1%2Bdeb12u2?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libzstd1@1.5.4%2Bdfsg2-5?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libtasn1-6@4.19.0-2%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libtinfo6@6.4-4?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libudev1@252.39-1~deb12u2?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libunistring2@1.0-2?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libuuid1@2.38.1-5%2Bdeb12u3?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libxxhash0@0.8.1-1?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/libzstd1@1.5.4%2Bdfsg2-5?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/login@4.13%2Bdfsg1-1%2Bdeb12u2?arch=amd64&distro=debian-12.15&epoch=1",
-      "dependsOn": []
-    },
-    {
-      "ref": "pkg:deb/debian/logsave@1.47.0-2%2Bb2?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/mawk@1.3.4.20200120-3.1?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/mount@2.38.1-5%2Bdeb12u3?arch=amd64&distro=debian-12.15",
-      "dependsOn": []
-    },
-    {
-      "ref": "pkg:deb/debian/ncurses-base@6.4-4?arch=all&distro=debian-12.15",
-      "dependsOn": []
-    },
-    {
-      "ref": "pkg:deb/debian/ncurses-bin@6.4-4?arch=amd64&distro=debian-12.15",
-      "dependsOn": []
-    },
-    {
-      "ref": "pkg:deb/debian/openssl@3.0.22-1~deb12u2?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libssl3@3.0.22-1~deb12u2?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/passwd@4.13%2Bdfsg1-1%2Bdeb12u2?arch=amd64&distro=debian-12.15&epoch=1",
-      "dependsOn": [
-        "pkg:deb/debian/libaudit1@3.0.9-1?arch=amd64&distro=debian-12.15&epoch=1",
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libcrypt1@4.4.33-2?arch=amd64&distro=debian-12.15&epoch=1",
-        "pkg:deb/debian/libpam-modules@1.5.2-6%2Bdeb12u2?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libpam0g@1.5.2-6%2Bdeb12u2?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libselinux1@3.4-1%2Bb6?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libsemanage2@3.4-1%2Bb5?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/perl-base@5.36.0-7%2Bdeb12u4?arch=amd64&distro=debian-12.15",
-      "dependsOn": []
-    },
-    {
-      "ref": "pkg:deb/debian/publicsuffix@20230209.2326-1?arch=all&distro=debian-12.15",
-      "dependsOn": []
-    },
-    {
-      "ref": "pkg:deb/debian/sed@4.9-1%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-      "dependsOn": []
-    },
-    {
-      "ref": "pkg:deb/debian/sysvinit-utils@3.06-4?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/tar@1.34%2Bdfsg-1.2%2Bdeb12u1?arch=amd64&distro=debian-12.15",
-      "dependsOn": []
-    },
-    {
-      "ref": "pkg:deb/debian/tzdata@2026f-0%2Bdeb12u1?arch=all&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/debconf@1.5.82?arch=all&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/usr-is-merged@37~deb12u1?arch=all&distro=debian-12.15",
-      "dependsOn": []
-    },
-    {
-      "ref": "pkg:deb/debian/util-linux-extra@2.38.1-5%2Bdeb12u3?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/libaudit1@3.0.9-1?arch=amd64&distro=debian-12.15&epoch=1",
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15",
-        "pkg:deb/debian/libsmartcols1@2.38.1-5%2Bdeb12u3?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/util-linux@2.38.1-5%2Bdeb12u3?arch=amd64&distro=debian-12.15",
-      "dependsOn": [
-        "pkg:deb/debian/util-linux-extra@2.38.1-5%2Bdeb12u3?arch=amd64&distro=debian-12.15"
-      ]
-    },
-    {
-      "ref": "pkg:deb/debian/zlib1g@1.2.13.dfsg-1?arch=amd64&distro=debian-12.15&epoch=1",
-      "dependsOn": [
-        "pkg:deb/debian/libc6@2.36-9%2Bdeb12u14?arch=amd64&distro=debian-12.15"
-      ]
     }
   ],
   "vulnerabilities": []

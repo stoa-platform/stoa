@@ -1,0 +1,75 @@
+# Messaging HA failover proof: three Redpanda brokers in the retained sizing.
+#
+# Retained sizing (docs/runbooks/kafka-topics.md, docs/runbooks/event-backbone-ops.md,
+# deploy/redpanda/values.yaml): 3 brokers, replication factor 3, writes acknowledged
+# by 2 replicas. Driven by failover-proof.sh in this directory; see
+# docs/runbooks/messaging-failover-proof.md.
+#
+# Local proof only: no published port, no volume, private bridge network.
+# Image: same Redpanda release as k8s/redpanda/statefulset.yaml, pinned to its
+# multi-arch index digest.
+
+name: stoa-messaging-ha-proof
+
+x-redpanda: &redpanda
+  image: redpandadata/redpanda:v24.3.1@sha256:f2f8bb89f1a0747cc6f86440cb3a0916e981e136e1d72392bab179f73492fb0f
+  pull_policy: missing
+  networks:
+    - ha-proof
+  restart: "no"
+
+services:
+  redpanda-0:
+    <<: *redpanda
+    hostname: redpanda-0
+    command:
+      - redpanda
+      - start
+      - --smp=1
+      - --memory=512M
+      - --overprovisioned
+      - --mode=dev-container
+      - --kafka-addr=internal://0.0.0.0:9092
+      - --advertise-kafka-addr=internal://redpanda-0:9092
+      - --rpc-addr=redpanda-0:33145
+      - --advertise-rpc-addr=redpanda-0:33145
+
+  redpanda-1:
+    <<: *redpanda
+    hostname: redpanda-1
+    depends_on:
+      - redpanda-0
+    command:
+      - redpanda
+      - start
+      - --smp=1
+      - --memory=512M
+      - --overprovisioned
+      - --mode=dev-container
+      - --kafka-addr=internal://0.0.0.0:9092
+      - --advertise-kafka-addr=internal://redpanda-1:9092
+      - --rpc-addr=redpanda-1:33145
+      - --advertise-rpc-addr=redpanda-1:33145
+      - --seeds=redpanda-0:33145
+
+  redpanda-2:
+    <<: *redpanda
+    hostname: redpanda-2
+    depends_on:
+      - redpanda-0
+    command:
+      - redpanda
+      - start
+      - --smp=1
+      - --memory=512M
+      - --overprovisioned
+      - --mode=dev-container
+      - --kafka-addr=internal://0.0.0.0:9092
+      - --advertise-kafka-addr=internal://redpanda-2:9092
+      - --rpc-addr=redpanda-2:33145
+      - --advertise-rpc-addr=redpanda-2:33145
+      - --seeds=redpanda-0:33145
+
+networks:
+  ha-proof:
+    driver: bridge

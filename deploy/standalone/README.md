@@ -379,9 +379,20 @@ the fixture address already in the script. At request time each entry is a
 CIDR: a host prefix contains only that one address.
 
 `networkpolicy.yaml` (`stoa-gateway-ingress`) allows TCP 8080 only from
-ingress-nginx pods and from a pod in `stoa` labelled
-`app.kubernetes.io/name=reconciler`. A pod in `default` calling the Service
-should time out.
+ingress-nginx pods and from the two pods in `stoa` that call the admin API
+with the admin token: the reconciler (`app.kubernetes.io/name=reconciler`)
+and the console (`app.kubernetes.io/name=console`,
+`app.kubernetes.io/part-of=stoa`). In-cluster stoactl runs in one of those
+two pods; from anywhere else, use `kubectl port-forward`. Any other pod
+calling the Service should time out, in `stoa` as in `default`. Node-local
+traffic (kubelet probes, a host-network pod on the node) is not filtered.
+
+The policy filters a port, not a path. A pod it names reaches the whole
+listener, the paths that are 404 behind the proxy included, and the admin
+token it holds decides what it may do there: there is one admin token and
+it has no scopes. The console UI has no login of its own, so whoever
+reaches that UI drives the admin calls the console makes. Give the console
+pod an ingress policy that only admits the ingress controller.
 
 ## Image
 

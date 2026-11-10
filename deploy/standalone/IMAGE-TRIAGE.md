@@ -3,31 +3,32 @@
 ## Identity
 
 Scanned image: `stoa-gateway:standalone`
-Label `org.opencontainers.image.revision`: `4e84fae718a14dd6d1e75504cfe6f031cb76ea9d`
-That value is `git rev-parse HEAD` at build time (`deploy/standalone/build-image.sh`, `STOA_REVISION` unset). It is the commit that bumps tokio to 1.54.1, on top of the opt-in public MCP surface (`c2e40501a5a0ab696f06b308dbb40fab81447b01`).
+Label `org.opencontainers.image.revision`: `36c4c3f934dd709c53e9f270845458b077741743`
+That value is `git rev-parse HEAD` at build time (`deploy/standalone/build-image.sh`, `STOA_REVISION` unset). It is the commit that lets an MCP client find where to sign in (absolute 401 challenge, protected resource metadata per endpoint, the realm as authorization server) and records the audit exceptions, on top of the tokio 1.54.1 image (`4e84fae718a14dd6d1e75504cfe6f031cb76ea9d`).
 Tar: `deploy/standalone/stoa-gateway-standalone.tar` (not committed)
-Tar sha256: `f1108188dd87822ad5850ec20954c61f3126f387f3d6beb3644c5871223d0635`
+Tar sha256: `180d061d540d7c1a3c012d9c1e2d27ddd198485c2ec7eb4ab5e38a6a624b3bfe`
 Base: `debian:bookworm-slim` (Trivy detected Debian 12.15), builder `rust:1.93-bookworm`
 Build: `cargo chef cook --release --locked` and `cargo auditable build --release --locked` (cargo-auditable 0.7.5). The binary is not stripped; `readelf` finds `.dep-v0`.
 Build host: macOS arm64, Docker Desktop 29.6.1, `DOCKER_DEFAULT_PLATFORM=linux/amd64`. The image is `linux/amd64`. Trivy 0.58.1 ran from the `aquasec/trivy:0.58.1` container: the script's fallback downloads a Linux binary.
-Built, scanned and imported on worker-3 on 2026-11-10. Config digest on the node: `sha256:ca6a3c050cfb5026344efdb3d80b93a98c5ec935cd08fff9fd59f03a1cb59547`.
+Built, scanned and imported on worker-3 on 2026-11-10, in service since 18:35 UTC. Config digest on the node: `sha256:02d1a1738252e47703469159ac33f754a43939b0723289bf9be15df5ed473abe`.
 
 Previous images, kept on worker-3 for rollback:
 
 | Tag on worker-3 | Revision | In service |
 | --- | --- | --- |
+| `stoa-gateway:standalone-prev-4e84fae7` | `4e84fae718a14dd6d1e75504cfe6f031cb76ea9d` | 2026-11-10, 17:11 to 18:35 UTC, tar sha256 `f1108188dd87822ad5850ec20954c61f3126f387f3d6beb3644c5871223d0635`, config digest `sha256:ca6a3c050cfb5026344efdb3d80b93a98c5ec935cd08fff9fd59f03a1cb59547` |
 | `stoa-gateway:standalone-prev-c2e40501` | `c2e40501a5a0ab696f06b308dbb40fab81447b01` | 2026-11-10, about 15 minutes (tokio 1.54.0) |
 | `stoa-gateway:standalone-prev-6d23399e` | `6d23399e4d1a1f4c54a03122640c0469c8b4829c` | 2026-10-21 to 2026-11-10, tar sha256 `c714dbf06d0f7e592d47ae3ee706ffec7dfa52603bbf024beec28162c3a52031` |
 
-The triage commit of this image did not touch the docker context (`stoa-gateway/`, including `Dockerfile` and `Cargo.lock`). The source has moved since (sign-in metadata for MCP clients, the audit exceptions below): the image described here is still the revision above until the next build is recorded in this file. At the triage commit this was empty:
+This triage commit does not touch the docker context (`stoa-gateway/`, including `Dockerfile` and `Cargo.lock`). Proof, empty at this commit and after it:
 
 ```text
-git diff 4e84fae718a14dd6d1e75504cfe6f031cb76ea9d HEAD -- stoa-gateway/
+git diff 36c4c3f934dd709c53e9f270845458b077741743 HEAD -- stoa-gateway/
 ```
 
 ## Disposition
 
-`trivy image --ignore-unfixed=false` on the tar (Trivy 0.58.1, exit 0, database of 2026-11-10) reports Debian 12.15: 421 findings (1 CRITICAL, 96 HIGH, 133 MEDIUM, 161 LOW, 30 UNKNOWN) and the Rust binary: 1 MEDIUM. With `--ignore-unfixed`, the build gate, both CRITICAL and HIGH are 0: no finding has a fixed package in bookworm. The scan of 2026-10-21 on revision `6d23399e` reported 364 findings (1 CRITICAL, 70 HIGH, 131 MEDIUM, 161 LOW, 1 UNKNOWN). The rows below are that triage; the changes since are listed under "Rebuild of 2026-11-10". `quick-xml` 0.39.4 is not in that Rust report. RustSec still lists two HIGH advisories on it. >= 0.41.0 avant tout câblage SOAP.
+`trivy image --ignore-unfixed=false` on the tar (Trivy 0.58.1, exit 0, database of 2026-11-10) reports Debian 12.15: 421 findings (1 CRITICAL, 96 HIGH, 133 MEDIUM, 161 LOW, 30 UNKNOWN) and the Rust binary: 1 MEDIUM. With `--ignore-unfixed`, the build gate, both CRITICAL and HIGH are 0: no finding has a fixed package in bookworm. The scan of 2026-10-21 on revision `6d23399e` reported 364 findings (1 CRITICAL, 70 HIGH, 131 MEDIUM, 161 LOW, 1 UNKNOWN). The rows below are that triage; the changes since are listed under "Rebuild of 2026-11-10". Those counts were first taken on revision `4e84fae7`, built the same day; the scan of this image is the same finding for finding (same base image digest, same `Cargo.lock`). `quick-xml` 0.39.4 is not in that Rust report. RustSec still lists two HIGH advisories on it. >= 0.41.0 avant tout câblage SOAP.
 
 | Vulnerability | Packages | Disposition |
 | --- | --- | --- |
@@ -67,7 +68,7 @@ Commitment: migration to `gcr.io/distroless/cc` pinned by digest by 06/11/2026 a
 
 ### Run of 2026-11-10
 
-`cargo audit` (cargo-audit 0.22.1, 1446 advisories, database fetched on 2026-11-10) on the lock of this image exited 1: seven advisories published since 2026-10-21 were outside the 12 exceptions. Christophe accepted the seven on 2026-11-10. They are now exceptions in `stoa-gateway/.cargo/audit.toml` (19 in all) and `cargo audit` exits 0 on the same lock and the same database.
+`cargo audit` (cargo-audit 0.22.1, 1446 advisories, database fetched on 2026-11-10) on the lock of revision `4e84fae7`, which this image keeps unchanged, exited 1: seven advisories published since 2026-10-21 were outside the 12 exceptions. Christophe accepted the seven on 2026-11-10. They are now exceptions in `stoa-gateway/.cargo/audit.toml` (19 in all) and `cargo audit` exits 0 on the same lock and the same database.
 
 | Advisory | Crate | In the standalone binary (SBOM) | Disposition |
 | --- | --- | --- | --- |
@@ -106,20 +107,20 @@ The 12 exceptions in `stoa-gateway/.cargo/audit.toml`:
 
 ## trivy image --ignore-unfixed=false
 
-Command: `trivy image --input deploy/standalone/stoa-gateway-standalone.tar --ignore-unfixed=false` (Trivy 0.58.1 from `aquasec/trivy:0.58.1`, exit 0), on the image of 2026-11-10.
+Command: `trivy image --input deploy/standalone/stoa-gateway-standalone.tar --ignore-unfixed=false` (Trivy 0.58.1 from `aquasec/trivy:0.58.1`, exit 0), on the image of revision `36c4c3f9`.
 
 ```text
-2026-11-10T17:13:46Z	INFO	[vuln] Vulnerability scanning is enabled
-2026-11-10T17:13:46Z	INFO	[secret] Secret scanning is enabled
-2026-11-10T17:13:46Z	INFO	[secret] If your scanning is slow, please try '--scanners vuln' to disable secret scanning
-2026-11-10T17:13:46Z	INFO	[secret] Please see also https://aquasecurity.github.io/trivy/v0.58/docs/scanner/secret#recommendation for faster secret detection
-2026-11-10T17:13:46Z	INFO	Detected OS	family="debian" version="12.15"
-2026-11-10T17:13:46Z	INFO	[debian] Detecting vulnerabilities...	os_version="12" pkg_num=110
-2026-11-10T17:13:46Z	INFO	Number of language-specific files	num=1
-2026-11-10T17:13:46Z	INFO	[rustbinary] Detecting vulnerabilities...
-2026-11-10T17:13:46Z	WARN	Using severities from other vendors for some vulnerabilities. Read https://aquasecurity.github.io/trivy/v0.58/docs/scanner/vulnerability#severity-selection for details.
+2026-11-10T18:37:23Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-11-10T18:37:23Z	INFO	[secret] Secret scanning is enabled
+2026-11-10T18:37:23Z	INFO	[secret] If your scanning is slow, please try '--scanners vuln' to disable secret scanning
+2026-11-10T18:37:23Z	INFO	[secret] Please see also https://aquasecurity.github.io/trivy/v0.58/docs/scanner/secret#recommendation for faster secret detection
+2026-11-10T18:37:23Z	INFO	Detected OS	family="debian" version="12.15"
+2026-11-10T18:37:23Z	INFO	[debian] Detecting vulnerabilities...	os_version="12" pkg_num=110
+2026-11-10T18:37:23Z	INFO	Number of language-specific files	num=1
+2026-11-10T18:37:23Z	INFO	[rustbinary] Detecting vulnerabilities...
+2026-11-10T18:37:23Z	WARN	Using severities from other vendors for some vulnerabilities. Read https://aquasecurity.github.io/trivy/v0.58/docs/scanner/vulnerability#severity-selection for details.
 
-deploy/standalone/stoa-gateway-standalone.tar (debian 12.15)
+/tmp/claude-stoa/wt-build/deploy/standalone/stoa-gateway-standalone.tar (debian 12.15)
 ======================================================================================
 Total: 421 (UNKNOWN: 30, LOW: 161, MEDIUM: 133, HIGH: 96, CRITICAL: 1)
 
@@ -1710,17 +1711,17 @@ Total: 1 (UNKNOWN: 0, LOW: 0, MEDIUM: 1, HIGH: 0, CRITICAL: 0)
 
 ## SBOM
 
-CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.tar --format cyclonedx`, on the image of 2026-11-10. 414 components, including `pkg:cargo/quick-xml@0.39.4` and `pkg:cargo/tokio@1.54.1`. Same bytes as `deploy/standalone/stoa-gateway-standalone.cdx.json` (not committed).
+CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.tar --format cyclonedx`, on the image of revision `36c4c3f9`. 414 components, including `pkg:cargo/quick-xml@0.39.4` and `pkg:cargo/tokio@1.54.1`. Same bytes as `deploy/standalone/stoa-gateway-standalone.cdx.json` (not committed).
 
 ```json
 {
   "$schema": "http://cyclonedx.org/schema/bom-1.6.schema.json",
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:5f1bd2ae-48af-4cb5-84f5-f9e2ed1300e7",
+  "serialNumber": "urn:uuid:17de5b2f-3b21-4f1c-b09d-b7172a9db11c",
   "version": 1,
   "metadata": {
-    "timestamp": "2026-11-10T17:08:32+00:00",
+    "timestamp": "2026-11-10T18:31:42+00:00",
     "tools": {
       "components": [
         {
@@ -1732,7 +1733,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       ]
     },
     "component": {
-      "bom-ref": "bddee12f-29b2-467a-bfb1-704af28caa85",
+      "bom-ref": "22705df6-81fa-4ac7-a895-3df514d1e93c",
       "type": "container",
       "name": "/tmp/claude-stoa/wt-build/deploy/standalone/stoa-gateway-standalone.tar",
       "properties": [
@@ -1742,7 +1743,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         },
         {
           "name": "aquasecurity:trivy:DiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:DiffID",
@@ -1750,7 +1751,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         },
         {
           "name": "aquasecurity:trivy:DiffID",
-          "value": "sha256:dbadba57e25b4b353985581d462cb3ac30a04e5a411e9f4f7656771d8dd4874a"
+          "value": "sha256:a20874e92c40c0814479d6709efd15697c229d781cca669e0127d02d6a5b4906"
         },
         {
           "name": "aquasecurity:trivy:DiffID",
@@ -1762,11 +1763,11 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
         },
         {
           "name": "aquasecurity:trivy:ImageID",
-          "value": "sha256:ca6a3c050cfb5026344efdb3d80b93a98c5ec935cd08fff9fd59f03a1cb59547"
+          "value": "sha256:02d1a1738252e47703469159ac33f754a43939b0723289bf9be15df5ed473abe"
         },
         {
           "name": "aquasecurity:trivy:Labels:org.opencontainers.image.revision",
-          "value": "4e84fae718a14dd6d1e75504cfe6f031cb76ea9d"
+          "value": "36c4c3f934dd709c53e9f270845458b077741743"
         },
         {
           "name": "aquasecurity:trivy:Labels:org.opencontainers.image.source",
@@ -1785,7 +1786,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
   },
   "components": [
     {
-      "bom-ref": "0c760edd-5140-4020-b57c-6fc9f535b69b",
+      "bom-ref": "1d1528b6-518f-4890-934c-7d54e4eef910",
       "type": "application",
       "name": "app/stoa-gateway",
       "properties": [
@@ -1800,7 +1801,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       ]
     },
     {
-      "bom-ref": "da0e1874-e847-4d6c-b66b-b25063be3b1e",
+      "bom-ref": "4b100c96-6c22-4f94-b2c4-ae7b15018348",
       "type": "operating-system",
       "name": "debian",
       "version": "12.15",
@@ -1824,7 +1825,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -1845,7 +1846,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -1866,7 +1867,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -1887,7 +1888,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -1908,7 +1909,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -1929,7 +1930,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -1950,7 +1951,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -1971,7 +1972,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -1992,7 +1993,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2013,7 +2014,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2034,7 +2035,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2055,7 +2056,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2076,7 +2077,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2097,7 +2098,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2118,7 +2119,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2139,7 +2140,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2160,7 +2161,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2181,7 +2182,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2202,7 +2203,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2223,7 +2224,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2244,7 +2245,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2265,7 +2266,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2286,7 +2287,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2307,7 +2308,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2328,7 +2329,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2349,7 +2350,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2370,7 +2371,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2391,7 +2392,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2412,7 +2413,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2433,7 +2434,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2454,7 +2455,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2475,7 +2476,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2496,7 +2497,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2517,7 +2518,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2538,7 +2539,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2559,7 +2560,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2580,7 +2581,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2601,7 +2602,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2622,7 +2623,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2643,7 +2644,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2664,7 +2665,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2685,7 +2686,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2706,7 +2707,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2727,7 +2728,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2748,7 +2749,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2769,7 +2770,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2790,7 +2791,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2811,7 +2812,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2832,7 +2833,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2853,7 +2854,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2874,7 +2875,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2895,7 +2896,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2916,7 +2917,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2937,7 +2938,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2958,7 +2959,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -2979,7 +2980,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3000,7 +3001,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3021,7 +3022,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3042,7 +3043,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3063,7 +3064,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3084,7 +3085,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3105,7 +3106,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3126,7 +3127,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3147,7 +3148,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3168,7 +3169,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3189,7 +3190,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3210,7 +3211,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3231,7 +3232,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3252,7 +3253,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3273,7 +3274,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3294,7 +3295,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3315,7 +3316,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3336,7 +3337,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3357,7 +3358,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3378,7 +3379,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3399,7 +3400,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3420,7 +3421,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3441,7 +3442,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3462,7 +3463,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3483,7 +3484,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3504,7 +3505,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3525,7 +3526,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3546,7 +3547,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3567,7 +3568,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3588,7 +3589,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3609,7 +3610,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3630,7 +3631,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3651,7 +3652,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3672,7 +3673,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3693,7 +3694,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3714,7 +3715,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3735,7 +3736,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3756,7 +3757,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3777,7 +3778,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3798,7 +3799,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3819,7 +3820,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3840,7 +3841,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3861,7 +3862,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3882,7 +3883,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3903,7 +3904,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3924,7 +3925,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3945,7 +3946,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3966,7 +3967,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -3987,7 +3988,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4008,7 +4009,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4029,7 +4030,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4050,7 +4051,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4071,7 +4072,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4092,7 +4093,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4113,7 +4114,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4134,7 +4135,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4155,7 +4156,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4176,7 +4177,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4197,7 +4198,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4218,7 +4219,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4239,7 +4240,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4260,7 +4261,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4281,7 +4282,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4302,7 +4303,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4323,7 +4324,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4344,7 +4345,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4365,7 +4366,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4386,7 +4387,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4407,7 +4408,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4428,7 +4429,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4449,7 +4450,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4470,7 +4471,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4491,7 +4492,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4512,7 +4513,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4533,7 +4534,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4554,7 +4555,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4575,7 +4576,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4596,7 +4597,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4617,7 +4618,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4638,7 +4639,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4659,7 +4660,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4680,7 +4681,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4701,7 +4702,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4722,7 +4723,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4743,7 +4744,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4764,7 +4765,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4785,7 +4786,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4806,7 +4807,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4827,7 +4828,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4848,7 +4849,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4869,7 +4870,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4890,7 +4891,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4911,7 +4912,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4932,7 +4933,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4953,7 +4954,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4974,7 +4975,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -4995,7 +4996,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5016,7 +5017,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5037,7 +5038,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5058,7 +5059,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5079,7 +5080,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5100,7 +5101,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5121,7 +5122,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5142,7 +5143,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5163,7 +5164,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5184,7 +5185,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5205,7 +5206,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5226,7 +5227,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5247,7 +5248,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5268,7 +5269,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5289,7 +5290,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5310,7 +5311,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5331,7 +5332,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5352,7 +5353,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5373,7 +5374,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5394,7 +5395,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5415,7 +5416,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5436,7 +5437,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5457,7 +5458,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5478,7 +5479,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5499,7 +5500,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5520,7 +5521,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5541,7 +5542,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5562,7 +5563,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5583,7 +5584,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5604,7 +5605,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5625,7 +5626,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5646,7 +5647,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5667,7 +5668,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5688,7 +5689,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5709,7 +5710,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5730,7 +5731,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5751,7 +5752,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5772,7 +5773,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5793,7 +5794,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5814,7 +5815,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5835,7 +5836,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5856,7 +5857,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5877,7 +5878,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5898,7 +5899,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5919,7 +5920,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5940,7 +5941,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5961,7 +5962,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -5982,7 +5983,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6003,7 +6004,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6024,7 +6025,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6045,7 +6046,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6066,7 +6067,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6087,7 +6088,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6108,7 +6109,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6129,7 +6130,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6150,7 +6151,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6171,7 +6172,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6192,7 +6193,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6213,7 +6214,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6234,7 +6235,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6255,7 +6256,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6276,7 +6277,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6297,7 +6298,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6318,7 +6319,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6339,7 +6340,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6360,7 +6361,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6381,7 +6382,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6402,7 +6403,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6423,7 +6424,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6444,7 +6445,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6465,7 +6466,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6486,7 +6487,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6507,7 +6508,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6528,7 +6529,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6549,7 +6550,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6570,7 +6571,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6591,7 +6592,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6612,7 +6613,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6633,7 +6634,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6654,7 +6655,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6675,7 +6676,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6696,7 +6697,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6717,7 +6718,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6738,7 +6739,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6759,7 +6760,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6780,7 +6781,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6801,7 +6802,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6822,7 +6823,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6843,7 +6844,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6864,7 +6865,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6885,7 +6886,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6906,7 +6907,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6927,7 +6928,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6948,7 +6949,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6969,7 +6970,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -6990,7 +6991,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7011,7 +7012,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7032,7 +7033,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7053,7 +7054,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7074,7 +7075,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7095,7 +7096,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7116,7 +7117,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7137,7 +7138,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7158,7 +7159,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7179,7 +7180,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7200,7 +7201,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7221,7 +7222,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7242,7 +7243,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7263,7 +7264,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7284,7 +7285,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7305,7 +7306,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7326,7 +7327,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7347,7 +7348,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7368,7 +7369,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7389,7 +7390,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7410,7 +7411,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7431,7 +7432,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7452,7 +7453,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7473,7 +7474,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7494,7 +7495,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7515,7 +7516,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7536,7 +7537,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7557,7 +7558,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7578,7 +7579,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7599,7 +7600,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7620,7 +7621,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7641,7 +7642,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7662,7 +7663,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7683,7 +7684,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7704,7 +7705,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7725,7 +7726,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7746,7 +7747,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7767,7 +7768,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7788,7 +7789,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7809,7 +7810,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7830,7 +7831,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7851,7 +7852,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7872,7 +7873,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7893,7 +7894,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7914,7 +7915,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7935,7 +7936,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7956,7 +7957,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7977,7 +7978,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -7998,7 +7999,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8019,7 +8020,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8040,7 +8041,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8061,7 +8062,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8082,7 +8083,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8103,7 +8104,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8124,7 +8125,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -8145,7 +8146,7 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
       "properties": [
         {
           "name": "aquasecurity:trivy:LayerDiffID",
-          "value": "sha256:2ad1dc15dd8156310b88dc5d82b4653b1bde70a0bc502a093b6b7e83451932d5"
+          "value": "sha256:8caf209151632174632ba1b91d82e138687c48885b33add86910a19998cf91aa"
         },
         {
           "name": "aquasecurity:trivy:PkgID",
@@ -16087,20 +16088,20 @@ CycloneDX from `trivy image --input deploy/standalone/stoa-gateway-standalone.ta
   ],
   "dependencies": [
     {
-      "ref": "0c760edd-5140-4020-b57c-6fc9f535b69b",
+      "ref": "1d1528b6-518f-4890-934c-7d54e4eef910",
       "dependsOn": [
         "pkg:cargo/stoa-gateway@0.9.25"
       ]
     },
     {
-      "ref": "bddee12f-29b2-467a-bfb1-704af28caa85",
+      "ref": "22705df6-81fa-4ac7-a895-3df514d1e93c",
       "dependsOn": [
-        "0c760edd-5140-4020-b57c-6fc9f535b69b",
-        "da0e1874-e847-4d6c-b66b-b25063be3b1e"
+        "1d1528b6-518f-4890-934c-7d54e4eef910",
+        "4b100c96-6c22-4f94-b2c4-ae7b15018348"
       ]
     },
     {
-      "ref": "da0e1874-e847-4d6c-b66b-b25063be3b1e",
+      "ref": "4b100c96-6c22-4f94-b2c4-ae7b15018348",
       "dependsOn": [
         "pkg:deb/debian/apt@2.6.2?arch=amd64&distro=debian-12.15",
         "pkg:deb/debian/base-passwd@3.6.1?arch=amd64&distro=debian-12.15",

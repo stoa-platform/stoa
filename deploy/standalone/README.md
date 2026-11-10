@@ -418,13 +418,14 @@ The Dockerfile is the three-stage cargo-chef build in `stoa-gateway/Dockerfile`
 base is still a tag, not a digest. The commitment is to move it to
 `gcr.io/distroless/cc` pinned by digest. `stoa-gateway/.dockerignore` excludes `target/`
 so the context is not the local debug build. The image in service since
-2026-11-10 is revision `4e84fae718a14dd6d1e75504cfe6f031cb76ea9d` (`IMAGE-REVISION`).
-Tar sha256 `f1108188dd87822ad5850ec20954c61f3126f387f3d6beb3644c5871223d0635`.
+2026-11-10 is revision `36c4c3f934dd709c53e9f270845458b077741743` (`IMAGE-REVISION`).
+Tar sha256 `180d061d540d7c1a3c012d9c1e2d27ddd198485c2ec7eb4ab5e38a6a624b3bfe`.
 A later docs commit does not change that binary. The label equals that
-revision; `git diff 4e84fae718a14dd6d1e75504cfe6f031cb76ea9d HEAD -- stoa-gateway/`
+revision; `git diff 36c4c3f934dd709c53e9f270845458b077741743 HEAD -- stoa-gateway/`
 is empty. It adds, to the image of 2026-10-21 (revision
 `6d23399e4d1a1f4c54a03122640c0469c8b4829c`), the opt-in public MCP surface
-with the transport authentication ("Public MCP" above) and tokio 1.54.1.
+with the transport authentication ("Public MCP" above), tokio 1.54.1 and
+the sign-in metadata for MCP clients ("Sign-in for MCP clients").
 
 Each import replaces the `standalone` tag on worker-3. Tag the image in
 service first, so a rollback is a retag and a restart, with no rebuild:
@@ -433,8 +434,12 @@ service first, so a rollback is a retag and a restart, with no rebuild:
 ssh worker-3 'sudo k3s ctr -n k8s.io images tag docker.io/library/stoa-gateway:standalone docker.io/library/stoa-gateway:standalone-prev-<short sha>'
 ```
 
-worker-3 holds `standalone-prev-c2e40501` (the first build of 2026-11-10,
-tokio 1.54.0) and `standalone-prev-6d23399e` (2026-10-21). The second one
+worker-3 holds `standalone-prev-4e84fae7` (the second build of 2026-11-10),
+`standalone-prev-c2e40501` (the first one, tokio 1.54.0) and
+`standalone-prev-6d23399e` (2026-10-21). The first two do not read
+`STOA_OAUTH_AUTHORIZATION_SERVERS` nor `STOA_OAUTH_SCOPES_SUPPORTED`: with
+them the 401 challenge is relative again and the documents name the
+gateway, so an MCP client cannot sign in. The last one
 has neither the public MCP option nor the transport authentication: with
 it the MCP host answers 404 again, whatever the ConfigMap says. An
 earlier local image id

@@ -194,26 +194,48 @@ ConfigMap. When it is set, a request that carries `X-Forwarded-For` or
 `X-Forwarded-Host` is also delivered for:
 
 ```text
-/mcp and /mcp/...
+/mcp and /mcp/... (except /mcp/health)
 /.well-known/oauth-protected-resource
 /.well-known/oauth-authorization-server
 /.well-known/openid-configuration
 /health  /health/ready  /health/live  /ready
 ```
 
-The list is exact. `/admin`, `/metrics`, `/oauth/token`, `/oauth/par`,
-`/oauth/register`, `/v1/messages`, `/a2a`, `/.well-known/agent.json` and any
-other path are still 404 behind a proxy, with or without a valid admin
-bearer. An ambiguous path (`/mcp/../admin`, `/mcp/%2e%2e/metrics`) is still
+The list is exact. `/admin`, `/metrics`, `/mcp/health` (it reports session
+and tool counts), `/oauth/token`, `/oauth/par`, `/oauth/register`,
+`/v1/messages`, `/a2a`, `/.well-known/agent.json` and any other path are
+still 404 behind a proxy, with or without a valid admin bearer. An ambiguous path (`/mcp/../admin`, `/mcp/%2e%2e/metrics`) is still
 400. A direct ClusterIP or port-forward call is not affected.
 
-The option does not change MCP authentication. `initialize` and `ping` are
-anonymous. `tools/list`, `tools/call` and the REST routes under `/mcp/`
-need a bearer the JWT validator accepts (issuer `STOA_KEYCLOAK_URL`,
-audience `STOA_JWT_AUDIENCE`). Without `STOA_KEYCLOAK_URL` there is no
-validator and the `/mcp` auth gate lets every request through, so
-`Config::validate` refuses to boot with the option set, and the router
-keeps the surface closed if a state is built without that check.
+Authentication on the MCP transports:
+
+| Request | Without an accepted bearer |
+| --- | --- |
+| `GET /mcp`, `GET /mcp/capabilities` | 200, static discovery |
+| `POST /mcp`, `POST /mcp/sse`: `initialize`, `ping`, `notifications/initialized`, `notifications/cancelled` | answered |
+| `POST /mcp`, `POST /mcp/sse`: any other method, alone or in a batch | 401 (per-element error in a batch) |
+| `GET /mcp/sse`, `DELETE /mcp/sse` | 401 |
+| `GET /mcp/ws` (only if `STOA_WEBSOCKET_ENABLED`) | 401 before the upgrade |
+| REST routes under `/mcp/` (`/mcp/tools/...`, `/mcp/v1/tools`, `/mcp/events`, ...) | 401 |
+
+An accepted bearer is a JWT the validator verifies: issuer
+`${STOA_KEYCLOAK_URL}/realms/${STOA_KEYCLOAK_REALM}`, audience
+`STOA_JWT_AUDIENCE`. A header with another scheme (`Basic`, ...) or an
+empty bearer is anonymous. A bearer that is presented and rejected is 401
+whatever the method, and refuses a whole batch. With a validator the tenant
+comes from the token (or `default`), not from `X-Tenant-ID`, and an event
+stream session can only be reopened or closed by its tenant.
+
+Without `STOA_KEYCLOAK_URL` there is no validator: a bearer is then taken as
+is and the REST gate lets every request through. That is a development
+mode. `Config::validate` refuses to boot with the option set in that case,
+and the router keeps the surface closed if a state is built without that
+check.
+
+Not covered here: `GET /mcp/events` takes its `tenant_id` from the query for
+any authenticated caller, and `resources/list` is not filtered by tenant.
+The standalone deployment has one tenant and no event source
+(`STOA_KAFKA_ENABLED=false`).
 
 The OAuth proxy (`/oauth/...`) is not public. The discovery documents
 advertise `STOA_GATEWAY_EXTERNAL_URL` as the authorization server, and that
@@ -229,10 +251,11 @@ Ingress `stoa-mcp` is in stoa-v2 (`deploy/k3s/ingress-mcp.yaml`) and sends
 only `/mcp`, `/oauth`, `/.well-known`, `/health` and `/ready` to Service
 `stoa-gateway`. The gateway answers 404 on `/oauth` there.
 
-Anonymous `initialize` creates an MCP session kept for
-`STOA_MCP_SESSION_TTL_MINUTES`. The session map has no size cap; the
-memory backpressure line (`STOA_MEMORY_LIMIT_MB`) is the only bound in the
-process. Rate limiting for the public host belongs on the Ingress.
+An anonymous `POST` without a session id creates an MCP session kept for
+`STOA_MCP_SESSION_TTL_MINUTES`. The session map has no size cap. The memory
+backpressure (`STOA_MEMORY_LIMIT_MB`) samples process memory and answers
+503 above its line; it is not a session limit. The bound for the public
+host is the rate limit on the Ingress (`limit-rps`, `limit-connections`).
 
 Unset or empty `STOA_ADMIN_API_TOKEN` makes a direct `/admin` call return 503.
 A missing or wrong bearer returns 401. There is no default token.

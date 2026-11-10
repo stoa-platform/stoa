@@ -62,6 +62,10 @@ pub fn is_public_api_path(path: &str) -> bool {
 /// set. Discovery documents and probes are exact matches: a new route under
 /// `/.well-known/` or `/health/` is not public until it is listed here.
 pub fn is_public_mcp_path(path: &str) -> bool {
+    // `/mcp/health` reports session and tool counts: probes use `/health`.
+    if path == "/mcp/health" {
+        return false;
+    }
     path == "/mcp"
         || path.starts_with("/mcp/")
         || matches!(
@@ -236,7 +240,6 @@ mod tests {
         "/mcp",
         "/mcp/sse",
         "/mcp/capabilities",
-        "/mcp/health",
         "/mcp/tools/list",
         "/mcp/v1/tools",
         "/mcp/ws",
@@ -267,6 +270,7 @@ mod tests {
         "/.well-known/agent.json",
         "/soap/route",
         "/ws/route",
+        "/mcp/health",
         // Lookalikes of the opened prefixes and exact paths.
         "/mcpx",
         "/mcp-admin",

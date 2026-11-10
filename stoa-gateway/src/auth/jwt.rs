@@ -423,6 +423,16 @@ p9F8dBQBt/cb1sBl3ammY8HSmaAq+k/vDAR5BTSi6lxo7z+D6Inf65nCqHAygbuN\n\
     pub(crate) async fn validator_against_test_key(
         config: JwtValidatorConfig,
     ) -> (JwtValidator, String) {
+        let (validator, issuer, _server) = validator_with_mock_server(config).await;
+        (validator, issuer)
+    }
+
+    /// Same validator, returned with the mock OIDC server it fetches from.
+    /// wiremock hands a dropped server back to its pool, where another test
+    /// can reuse it: hold the server until the last validation.
+    pub(crate) async fn validator_with_mock_server(
+        config: JwtValidatorConfig,
+    ) -> (JwtValidator, String, wiremock::MockServer) {
         use wiremock::matchers::{method, path};
         use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -462,7 +472,7 @@ p9F8dBQBt/cb1sBl3ammY8HSmaAq+k/vDAR5BTSi6lxo7z+D6Inf65nCqHAygbuN\n\
             },
         ));
         let validator = JwtValidator::with_config(provider, config);
-        (validator, issuer)
+        (validator, issuer, server)
     }
 
     pub(crate) fn issuer_only() -> JwtValidatorConfig {
@@ -495,7 +505,7 @@ p9F8dBQBt/cb1sBl3ammY8HSmaAq+k/vDAR5BTSi6lxo7z+D6Inf65nCqHAygbuN\n\
 
     #[tokio::test]
     async fn rs256_accepts_keycloak_shaped_token_without_audience() {
-        let (validator, issuer) = validator_against_test_key(issuer_only()).await;
+        let (validator, issuer, _oidc) = validator_with_mock_server(issuer_only()).await;
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -508,7 +518,7 @@ p9F8dBQBt/cb1sBl3ammY8HSmaAq+k/vDAR5BTSi6lxo7z+D6Inf65nCqHAygbuN\n\
 
     #[tokio::test]
     async fn rs256_rejects_expired_token() {
-        let (validator, issuer) = validator_against_test_key(issuer_only()).await;
+        let (validator, issuer, _oidc) = validator_with_mock_server(issuer_only()).await;
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -520,7 +530,7 @@ p9F8dBQBt/cb1sBl3ammY8HSmaAq+k/vDAR5BTSi6lxo7z+D6Inf65nCqHAygbuN\n\
 
     #[tokio::test]
     async fn rs256_rejects_wrong_issuer() {
-        let (validator, _issuer) = validator_against_test_key(issuer_only()).await;
+        let (validator, _issuer, _oidc) = validator_with_mock_server(issuer_only()).await;
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -532,7 +542,7 @@ p9F8dBQBt/cb1sBl3ammY8HSmaAq+k/vDAR5BTSi6lxo7z+D6Inf65nCqHAygbuN\n\
 
     #[tokio::test]
     async fn rs256_checks_audience_only_when_configured() {
-        let (validator, issuer) = validator_against_test_key(JwtValidatorConfig {
+        let (validator, issuer, _oidc) = validator_with_mock_server(JwtValidatorConfig {
             validate_audience: true,
             audiences: vec!["stoa-gateway".into()],
             ..JwtValidatorConfig::default()

@@ -28,7 +28,8 @@ use tracing::{debug, info, warn};
 use crate::mcp::pending_requests::{PendingRequestTracker, ServerRequestResult};
 use crate::mcp::session::Session;
 use crate::mcp::sse::{
-    extract_bearer_token, process_single_request, JsonRpcRequest, JsonRpcResponse, SseQueryParams,
+    extract_bearer_token, process_single_request, resolve_caller, JsonRpcRequest, JsonRpcResponse,
+    SseQueryParams,
 };
 use crate::metrics;
 use crate::state::AppState;
@@ -61,6 +62,19 @@ pub async fn handle_ws_upgrade(
     // Build headers for process_single_request (it expects Authorization header)
     let synthetic_headers = build_headers_from_token(&token);
 
+    // Refuse the upgrade for a bearer the validator rejects. Each message is
+    // checked again in `process_single_request`, so an expired token stops
+    // working on an open connection.
+    let tenant_id = match resolve_caller(&state, &synthetic_headers).await {
+        Ok(caller) if caller.is_authenticated() => caller.tenant_id,
+        Ok(_) => {
+            return (StatusCode::UNAUTHORIZED, "Missing Bearer token").into_response();
+        }
+        Err(_) => {
+            return (StatusCode::UNAUTHORIZED, "Invalid Bearer token").into_response();
+        }
+    };
+
     // Check if browser is using subprotocol auth — we need to echo back the subprotocol
     let selected_protocol = extract_subprotocol(&headers);
 
@@ -70,7 +84,8 @@ pub async fn handle_ws_upgrade(
         ws
     };
 
-    upgrade.on_upgrade(move |socket| handle_ws_connection(socket, state, synthetic_headers))
+    upgrade
+        .on_upgrade(move |socket| handle_ws_connection(socket, state, synthetic_headers, tenant_id))
 }
 
 /// Main WebSocket connection loop.
@@ -79,13 +94,13 @@ pub async fn handle_ws_upgrade(
 /// 1. Inbound client messages → parse JSON-RPC → dispatch via `process_single_request`
 /// 2. Outbound server notifications → forward as Text
 /// 3. Periodic ping → keepalive
-async fn handle_ws_connection(mut socket: WebSocket, state: AppState, headers: HeaderMap) {
+async fn handle_ws_connection(
+    mut socket: WebSocket,
+    state: AppState,
+    headers: HeaderMap,
+    tenant_id: String,
+) {
     let session_id = uuid::Uuid::new_v4().to_string();
-    let tenant_id = headers
-        .get("X-Tenant-ID")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("unknown")
-        .to_string();
 
     // Create MCP session
     let session = Session::new(session_id.clone(), tenant_id.clone());

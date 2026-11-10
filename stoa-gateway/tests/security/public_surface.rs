@@ -38,6 +38,7 @@ struct Call<'a> {
     body: &'a str,
     proxied: bool,
     admin_bearer: bool,
+    authorization: Option<&'a str>,
 }
 
 impl<'a> Call<'a> {
@@ -48,7 +49,20 @@ impl<'a> Call<'a> {
             body: "",
             proxied: true,
             admin_bearer: false,
+            authorization: None,
         }
+    }
+
+    fn delete(path: &'a str) -> Self {
+        Self {
+            method: Method::DELETE,
+            ..Self::get(path)
+        }
+    }
+
+    fn with_authorization(mut self, value: &'a str) -> Self {
+        self.authorization = Some(value);
+        self
     }
 
     fn post(path: &'a str, body: &'a str) -> Self {
@@ -82,6 +96,9 @@ impl<'a> Call<'a> {
         }
         if self.admin_bearer {
             request = request.header("authorization", format!("Bearer {ADMIN_TOKEN}"));
+        }
+        if let Some(value) = self.authorization {
+            request = request.header("authorization", value);
         }
         router
             .clone()
@@ -125,7 +142,7 @@ async fn proxied_mcp_surface_is_closed_by_default() {
 #[tokio::test]
 async fn option_opens_the_mcp_surface_to_a_proxy() {
     let router = router(true);
-    for path in ["/mcp", "/mcp/capabilities", "/mcp/health", "/health"] {
+    for path in ["/mcp", "/mcp/capabilities", "/health"] {
         assert_eq!(
             Call::get(path).status(&router).await,
             StatusCode::OK,
@@ -192,10 +209,65 @@ async fn option_does_not_remove_mcp_authentication() {
     );
 }
 
+/// A header that is not an accepted bearer never opens a protected method,
+/// alone or in a batch, nor the event stream. The validator here can accept
+/// no token at all.
+#[tokio::test]
+async fn only_an_accepted_bearer_reaches_protected_mcp_methods() {
+    let router = router(true);
+    let batch = format!("[{TOOLS_LIST}]");
+    for authorization in ["Basic eDp5", "Token abc", "Bearer nope", "Bearer "] {
+        for path in ["/mcp", "/mcp/sse"] {
+            assert_eq!(
+                Call::post(path, TOOLS_LIST)
+                    .with_authorization(authorization)
+                    .status(&router)
+                    .await,
+                StatusCode::UNAUTHORIZED,
+                "{authorization} {path}"
+            );
+            let batch_status = Call::post(path, &batch)
+                .with_authorization(authorization)
+                .status(&router)
+                .await;
+            assert_ne!(
+                batch_status,
+                StatusCode::NOT_FOUND,
+                "{authorization} {path}"
+            );
+        }
+        for call in [
+            Call::get("/mcp/sse"),
+            Call::delete("/mcp/sse?sessionId=any"),
+            Call::get("/mcp/v1/tools"),
+        ] {
+            let path = call.path;
+            assert_eq!(
+                call.with_authorization(authorization).status(&router).await,
+                StatusCode::UNAUTHORIZED,
+                "{authorization} {path}"
+            );
+        }
+    }
+    assert_eq!(
+        Call::get("/mcp/sse").status(&router).await,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        Call::delete("/mcp/sse?sessionId=any").status(&router).await,
+        StatusCode::UNAUTHORIZED
+    );
+}
+
 #[tokio::test]
 async fn private_routes_stay_hidden_from_a_proxy_with_the_option_on() {
     let router = router(true);
-    for path in ["/admin/health", "/admin/contracts", "/metrics"] {
+    for path in [
+        "/admin/health",
+        "/admin/contracts",
+        "/metrics",
+        "/mcp/health",
+    ] {
         assert_eq!(
             Call::get(path).with_admin_bearer().status(&router).await,
             StatusCode::NOT_FOUND,

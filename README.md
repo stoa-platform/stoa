@@ -86,7 +86,7 @@ export KEYCLOAK_ADMIN_CLIENT_SECRET="$(openssl rand -hex 32)"
 export STOA_ADMIN_API_TOKEN="$(openssl rand -hex 32)"
 
 docker compose config --quiet
-timeout 300 docker compose up --wait
+timeout 300 docker compose up --build --wait
 ./verify.sh
 ```
 

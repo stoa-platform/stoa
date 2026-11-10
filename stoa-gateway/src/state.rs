@@ -580,13 +580,14 @@ impl AppState {
             Arc::new(SnapshotStore::disabled())
         };
 
-        // Tenant tool permissions, gated by the signer trust set when one is configured.
+        // Tenant tool permissions require a valid signed policy and a pinned trust set.
         let policy_trust = config.policy_trust_jwks_file.as_deref();
         let tool_permissions = config.control_plane_url.as_ref().map(|cp_url| {
             tracing::info!("Tenant tool permission cache enabled (60s TTL)");
             Arc::new(
                 ToolPermissionService::new(http_client.clone(), cp_url, Duration::from_secs(60))
                     .with_auth(control_plane.clone())
+                    .with_policy_identity(&config.policy_expected_issuer, &config.policy_audience)
                     .with_trust_store(policy_trust.map(PolicyTrustStore::open)),
             )
         });

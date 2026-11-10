@@ -121,3 +121,15 @@ gateway cannot read tool permissions and every tool call is denied.
 
 - **Depends on**: control-plane-api (config/tool sync), Keycloak (JWT verification)
 - **Depended on by**: portal (MCP API consumer)
+
+### Signed tool permissions
+
+Tool calls require an explicit allow from the Control Plane's complete signed
+policy (`GET /v1/tenants/{tenant}/tool-permissions/artifact`). Configure
+`STOA_POLICY_TRUST_JWKS_FILE` with the pinned Ed25519 public keys and use
+`STOA_POLICY_EXPECTED_ISSUER` / `STOA_POLICY_AUDIENCE` to bind the policy to
+this gateway. The signed `expires_at` timestamp is required and must be in the
+future; it also bounds cache validity and policy readiness. Cached artifacts
+are reverified against the current trust set. An absent or invalid artifact or
+trust set denies calls; the unsigned permissions listing is never a fallback.
+Publish a valid signed policy before rolling out this requirement.

@@ -19,7 +19,7 @@ Previous images, kept on worker-3 for rollback:
 | `stoa-gateway:standalone-prev-c2e40501` | `c2e40501a5a0ab696f06b308dbb40fab81447b01` | 2026-11-10, about 15 minutes (tokio 1.54.0) |
 | `stoa-gateway:standalone-prev-6d23399e` | `6d23399e4d1a1f4c54a03122640c0469c8b4829c` | 2026-10-21 to 2026-11-10, tar sha256 `c714dbf06d0f7e592d47ae3ee706ffec7dfa52603bbf024beec28162c3a52031` |
 
-This triage commit does not touch the docker context (`stoa-gateway/`, including `Dockerfile` and `Cargo.lock`). Proof, empty at this commit and after it:
+The triage commit of this image did not touch the docker context (`stoa-gateway/`, including `Dockerfile` and `Cargo.lock`). The source has moved since (sign-in metadata for MCP clients, the audit exceptions below): the image described here is still the revision above until the next build is recorded in this file. At the triage commit this was empty:
 
 ```text
 git diff 4e84fae718a14dd6d1e75504cfe6f031cb76ea9d HEAD -- stoa-gateway/
@@ -50,12 +50,12 @@ The CRITICAL is unchanged (`CVE-2023-45853`, zlib1g, will_not_fix, accepted abov
 
 No longer reported at HIGH on this image: `CVE-2026-76642`, `CVE-2026-78408`, `CVE-2026-78409` (util-linux) and `CVE-2026-84782` (libssl3, openssl). Their rows above are kept as the record of the earlier acceptance.
 
-Reported at HIGH and absent from the triage above. The dispositions are proposals written during the rebuild; none is accepted until Christophe says so.
+Reported at HIGH and absent from the triage above. The dispositions were written during the rebuild and accepted by Christophe on 2026-11-10.
 
-| Vulnerability | Packages | Proposed disposition |
+| Vulnerability | Packages | Disposition |
 | --- | --- | --- |
-| CVE-2026-112315 to CVE-2026-112323, CVE-2026-119079 HIGH, affected | krb5-locales, libgssapi-krb5-2, libk5crypto3, libkrb5-3, libkrb5support0 | Memory leaks, CPU exhaustion and a null dereference in the MIT krb5 daemons (`kadmind`, KDC). The image runs neither. The libraries are pulled in by curl, which only runs the `HEALTHCHECK` against localhost. Proposed: accept. |
-| CVE-2026-76844 HIGH, affected | zlib1g | Heap overflow in `gz_write` after a failed `write()` (the `gz*` file API). The gateway binary does not link the system zlib (no `libz-sys` in the SBOM) and nothing in the container writes gzip files. Proposed: accept. |
+| CVE-2026-112315 to CVE-2026-112323, CVE-2026-119079 HIGH, affected | krb5-locales, libgssapi-krb5-2, libk5crypto3, libkrb5-3, libkrb5support0 | Memory leaks, CPU exhaustion and a null dereference in the MIT krb5 daemons (`kadmind`, KDC). The image runs neither. The libraries are pulled in by curl, which only runs the `HEALTHCHECK` against localhost. Accepted on 2026-11-10. |
+| CVE-2026-76844 HIGH, affected | zlib1g | Heap overflow in `gz_write` after a failed `write()` (the `gz*` file API). The gateway binary does not link the system zlib (no `libz-sys` in the SBOM) and nothing in the container writes gzip files. Accepted on 2026-11-10. |
 
 Rust binary: the first rebuild of the day (revision `c2e40501`) carried `CVE-2026-115567`, a race in tokio 1.54.0 timer handling, fixed in 1.54.1. It was in the image of 2026-10-21 as well; Trivy's database did not list it then. This image links tokio 1.54.1 and the finding is gone. `CVE-2026-48504` (opentelemetry_sdk 0.27.1, MEDIUM) is unchanged and accepted above.
 
@@ -67,16 +67,16 @@ Commitment: migration to `gcr.io/distroless/cc` pinned by digest by 06/11/2026 a
 
 ### Run of 2026-11-10
 
-`cargo audit` (cargo-audit 0.22.1, 1446 advisories, database fetched on 2026-11-10) on the lock of this image exits 1: seven advisories published since 2026-10-21 are outside the 12 exceptions. `.cargo/audit.toml` is not extended here: adding an exception is an acceptance, and none of these is accepted yet.
+`cargo audit` (cargo-audit 0.22.1, 1446 advisories, database fetched on 2026-11-10) on the lock of this image exited 1: seven advisories published since 2026-10-21 were outside the 12 exceptions. Christophe accepted the seven on 2026-11-10. They are now exceptions in `stoa-gateway/.cargo/audit.toml` (19 in all) and `cargo audit` exits 0 on the same lock and the same database.
 
-| Advisory | Crate | In the standalone binary (SBOM) | Proposed disposition |
+| Advisory | Crate | In the standalone binary (SBOM) | Disposition |
 | --- | --- | --- | --- |
-| `RUSTSEC-2026-0387` | crypto-bigint 0.5.5 | yes, through p256 and p384 of jsonwebtoken | Timing variability in operations meant to be constant-time. The gateway verifies JWT signatures with public keys and holds no secret scalar. Proposed: accept, on the same ground as `RUSTSEC-2023-0071`. |
-| `RUSTSEC-2026-0391` | zstd 0.13.3 | no | Not linked. Proposed: exception, not in the image. |
-| `RUSTSEC-2026-0403`, `RUSTSEC-2026-0398` | zstd-safe 7.3.0 | no | Not linked. Proposed: exception, not in the image. |
-| `RUSTSEC-2026-0418` | libz-sys 1.1.30 | no | Build script issue, crate not linked. Proposed: exception, not in the image. |
-| `RUSTSEC-2026-0388` | pingora-core 0.8.1 | no | Optional `pingora` feature, `FEATURES` is empty. Proposed: exception, not in the image. |
-| `RUSTSEC-2026-0424` | wasmtime 43.0.2 | no | Optional `wasm` feature, like the eight wasmtime exceptions. Proposed: exception, not in the image. |
+| `RUSTSEC-2026-0387` | crypto-bigint 0.5.5 | yes, through p256 and p384 of jsonwebtoken | Timing variability in operations meant to be constant-time. The gateway verifies JWT signatures with public keys and holds no secret scalar. Accepted on 2026-11-10, on the same ground as `RUSTSEC-2023-0071`. |
+| `RUSTSEC-2026-0391` | zstd 0.13.3 | no | Not linked. Exception since 2026-11-10: not in the image. |
+| `RUSTSEC-2026-0403`, `RUSTSEC-2026-0398` | zstd-safe 7.3.0 | no | Not linked. Exception since 2026-11-10: not in the image. |
+| `RUSTSEC-2026-0418` | libz-sys 1.1.30 | no | Build script issue, crate not linked. Exception since 2026-11-10: not in the image. |
+| `RUSTSEC-2026-0388` | pingora-core 0.8.1 | no | Optional `pingora` feature, `FEATURES` is empty. Exception since 2026-11-10: not in the image. |
+| `RUSTSEC-2026-0424` | wasmtime 43.0.2 | no | Optional `wasm` feature, like the eight wasmtime exceptions. Exception since 2026-11-10: not in the image. |
 
 The text below is the run of 2026-10-21.
 

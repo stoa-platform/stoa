@@ -23,6 +23,7 @@ use uuid::Uuid;
 use crate::mcp::session::Session;
 use crate::mcp::tools::ToolContext;
 use crate::metrics;
+use crate::oauth::discovery::McpEndpoint;
 use crate::optimization::{OptimizationSettings, TokenOptimizer};
 use crate::state::{AppState, PolicyCallerCtx};
 
@@ -232,37 +233,50 @@ async fn session_open_to(state: &AppState, caller: &Caller, id: &str) -> bool {
 }
 
 /// 401 for a bearer the validator rejected.
-fn invalid_token_response(id: Option<Value>, error: &str) -> Response {
-    (
-        StatusCode::UNAUTHORIZED,
-        [(
-            "WWW-Authenticate",
-            r#"Bearer error="invalid_token", resource_metadata="/.well-known/oauth-protected-resource""#,
-        )],
-        Json(JsonRpcResponse::error(
-            id,
-            -32001,
-            format!("Invalid token: {}", error),
-        )),
+fn invalid_token_response(
+    state: &AppState,
+    endpoint: McpEndpoint,
+    id: Option<Value>,
+    error: &str,
+) -> Response {
+    challenge_response(
+        state,
+        endpoint,
+        Some("invalid_token"),
+        JsonRpcResponse::error(id, -32001, format!("Invalid token: {}", error)),
     )
-        .into_response()
 }
 
 /// 401 challenge for a request that needs an authenticated caller.
-fn authentication_required_response(id: Option<Value>) -> Response {
-    (
-        StatusCode::UNAUTHORIZED,
-        [(
-            "WWW-Authenticate",
-            r#"Bearer resource_metadata="/.well-known/oauth-protected-resource""#,
-        )],
-        Json(JsonRpcResponse::error(
-            id,
-            -32001,
-            "Authentication required",
-        )),
+fn authentication_required_response(
+    state: &AppState,
+    endpoint: McpEndpoint,
+    id: Option<Value>,
+) -> Response {
+    challenge_response(
+        state,
+        endpoint,
+        None,
+        JsonRpcResponse::error(id, -32001, "Authentication required"),
     )
-        .into_response()
+}
+
+/// 401 with the OAuth challenge that tells the client where the protected
+/// resource metadata of `endpoint` is (RFC 9728).
+fn challenge_response(
+    state: &AppState,
+    endpoint: McpEndpoint,
+    error: Option<&str>,
+    body: JsonRpcResponse,
+) -> Response {
+    let mut response = (StatusCode::UNAUTHORIZED, Json(body)).into_response();
+    let challenge = crate::oauth::discovery::bearer_challenge(&state.config, endpoint, error);
+    if let Ok(value) = axum::http::HeaderValue::from_str(&challenge) {
+        response
+            .headers_mut()
+            .insert(header::WWW_AUTHENTICATE, value);
+    }
+    response
 }
 
 // ============================================
@@ -338,6 +352,18 @@ pub async fn handle_sse_post(
     Query(params): Query<SseQueryParams>,
     body: Bytes,
 ) -> Response {
+    handle_json_rpc_post(state, McpEndpoint::Sse, headers, params, body).await
+}
+
+/// JSON-RPC over POST, shared by `/mcp/sse` and `/mcp`. `endpoint` is the
+/// one the request came in on: a 401 names its metadata document.
+async fn handle_json_rpc_post(
+    state: AppState,
+    endpoint: McpEndpoint,
+    headers: HeaderMap,
+    params: SseQueryParams,
+    body: Bytes,
+) -> Response {
     // === Phase 5: Batch Request Detection (MCP 2025-03-26) ===
     let parsed: Value = match serde_json::from_slice(&body) {
         Ok(v) => v,
@@ -354,7 +380,7 @@ pub async fn handle_sse_post(
     // Detect batch vs single request
     if parsed.is_array() {
         // Batch request - process all and return array
-        return handle_batch_request(state, headers, params, parsed).await;
+        return handle_batch_request(state, endpoint, headers, params, parsed).await;
     }
 
     // Single request - parse and process
@@ -397,7 +423,7 @@ pub async fn handle_sse_post(
         Ok(caller) => caller,
         Err(e) => {
             warn!(error = %e, "JWT validation failed");
-            return invalid_token_response(request.id, &e);
+            return invalid_token_response(&state, endpoint, request.id, &e);
         }
     };
 
@@ -406,7 +432,7 @@ pub async fn handle_sse_post(
             method = %request.method,
             "Unauthenticated request to protected method — returning 401"
         );
-        return authentication_required_response(request.id);
+        return authentication_required_response(&state, endpoint, request.id);
     }
 
     // Resolve or create session
@@ -559,7 +585,7 @@ pub async fn handle_streamable_http_post(
 
     let params = SseQueryParams { session_id };
 
-    handle_sse_post(State(state), headers, Query(params), body).await
+    handle_json_rpc_post(state, McpEndpoint::StreamableHttp, headers, params, body).await
 }
 
 /// GET /mcp/sse - Establish SSE connection (legacy/streaming)
@@ -575,11 +601,11 @@ pub async fn handle_sse_get(
 ) -> Response {
     let caller = match resolve_caller(&state, &headers).await {
         Ok(caller) => caller,
-        Err(e) => return invalid_token_response(None, &e),
+        Err(e) => return invalid_token_response(&state, McpEndpoint::Sse, None, &e),
     };
     if state.jwt_validator.is_some() {
         if !caller.is_authenticated() {
-            return authentication_required_response(None);
+            return authentication_required_response(&state, McpEndpoint::Sse, None);
         }
         if let Some(ref id) = params.session_id {
             if let Some(existing) = state.session_manager.get(id).await {
@@ -679,11 +705,11 @@ pub async fn handle_sse_delete(
 ) -> Response {
     let caller = match resolve_caller(&state, &headers).await {
         Ok(caller) => caller,
-        Err(e) => return invalid_token_response(None, &e),
+        Err(e) => return invalid_token_response(&state, McpEndpoint::Sse, None, &e),
     };
     if state.jwt_validator.is_some() {
         if !caller.is_authenticated() {
-            return authentication_required_response(None);
+            return authentication_required_response(&state, McpEndpoint::Sse, None);
         }
         if let Some(ref id) = params.session_id {
             match state.session_manager.get(id).await {
@@ -719,6 +745,7 @@ pub async fn handle_sse_delete(
 /// Errors in individual requests don't affect others.
 async fn handle_batch_request(
     state: AppState,
+    endpoint: McpEndpoint,
     headers: HeaderMap,
     params: SseQueryParams,
     batch: Value,
@@ -749,7 +776,7 @@ async fn handle_batch_request(
         Ok(caller) => std::sync::Arc::new(caller),
         Err(e) => {
             warn!(error = %e, "JWT validation failed (batch)");
-            return invalid_token_response(None, &e);
+            return invalid_token_response(&state, endpoint, None, &e);
         }
     };
 

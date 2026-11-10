@@ -3,7 +3,7 @@
 # quick-xml 0.39.4 stays. >= 0.41.0 avant tout câblage SOAP.
 
 [advisories]
-# Informational (unmaintained, unsound) is not one of the 12 vulnerability exceptions.
+# Informational (unmaintained, unsound) is not one of the 19 vulnerability exceptions.
 informational_warnings = []
 ignore = [
     # Linked. SOAP module only. Proxy and bridge stay off. No SOAP contract.
@@ -22,4 +22,18 @@ ignore = [
     "RUSTSEC-2026-0359",
     "RUSTSEC-2026-0222",
     "RUSTSEC-2026-0362",
+    # The seven below were published after 2026-10-21 and accepted on 2026-11-10
+    # (deploy/standalone/IMAGE-TRIAGE.md, "Run of 2026-11-10").
+    # wasmtime again: optional, not in stoa-gateway:standalone.
+    "RUSTSEC-2026-0424",
+    # pingora-core is optional (`--features pingora`) and is not in stoa-gateway:standalone.
+    "RUSTSEC-2026-0388",
+    # zstd, zstd-safe and libz-sys are in the lockfile and not linked into the standalone binary.
+    "RUSTSEC-2026-0391",
+    "RUSTSEC-2026-0403",
+    "RUSTSEC-2026-0398",
+    "RUSTSEC-2026-0418",
+    # Linked. crypto-bigint timing variability, through p256/p384 of jsonwebtoken.
+    # JWT verification with public keys, no secret scalar in the process.
+    "RUSTSEC-2026-0387",
 ]

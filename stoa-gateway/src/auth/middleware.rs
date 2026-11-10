@@ -279,7 +279,7 @@ pub async fn mcp_jwt_required(
         Some(h) => h,
         None => {
             return mcp_auth_challenge(
-                r#"Bearer resource_metadata="/.well-known/oauth-protected-resource""#,
+                &rest_challenge(&state, None),
                 "Missing Authorization header",
             );
         }
@@ -289,7 +289,7 @@ pub async fn mcp_jwt_required(
         Ok(t) => t,
         Err(_) => {
             return mcp_auth_challenge(
-                r#"Bearer error="invalid_token", resource_metadata="/.well-known/oauth-protected-resource""#,
+                &rest_challenge(&state, Some("invalid_token")),
                 "Malformed Authorization header",
             );
         }
@@ -306,10 +306,7 @@ pub async fn mcp_jwt_required(
                 JwtError::InvalidSignature => "Invalid signature",
                 _ => "Invalid token",
             };
-            return mcp_auth_challenge(
-                r#"Bearer error="invalid_token", resource_metadata="/.well-known/oauth-protected-resource""#,
-                msg,
-            );
+            return mcp_auth_challenge(&rest_challenge(&state, Some("invalid_token")), msg);
         }
     };
 
@@ -325,8 +322,18 @@ pub async fn mcp_jwt_required(
     next.run(request).await
 }
 
+/// Challenge for the REST routes under `/mcp/`. They are not endpoints a
+/// client is configured with, so they name the Streamable HTTP endpoint.
+fn rest_challenge(state: &AppState, error: Option<&str>) -> String {
+    crate::oauth::discovery::bearer_challenge(
+        &state.config,
+        crate::oauth::discovery::McpEndpoint::StreamableHttp,
+        error,
+    )
+}
+
 /// Build the 401 response for `mcp_jwt_required` with a uniform body shape.
-fn mcp_auth_challenge(www_authenticate: &'static str, message: &str) -> Response {
+fn mcp_auth_challenge(www_authenticate: &str, message: &str) -> Response {
     let body = AuthError::unauthorized(message);
     let mut response = (StatusCode::UNAUTHORIZED, Json(body)).into_response();
     if let Ok(value) = axum::http::HeaderValue::from_str(www_authenticate) {

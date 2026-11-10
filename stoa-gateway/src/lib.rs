@@ -176,6 +176,16 @@ pub fn build_router(state: AppState) -> Router {
                     "/.well-known/oauth-protected-resource",
                     get(oauth::discovery::protected_resource_metadata),
                 )
+                // RFC 9728 §3.1: one document per MCP endpoint, at the
+                // well-known path followed by the endpoint path.
+                .route(
+                    "/.well-known/oauth-protected-resource/mcp",
+                    get(oauth::discovery::mcp_protected_resource_metadata),
+                )
+                .route(
+                    "/.well-known/oauth-protected-resource/mcp/sse",
+                    get(oauth::discovery::mcp_sse_protected_resource_metadata),
+                )
                 .route(
                     "/.well-known/oauth-authorization-server",
                     get(oauth::discovery::authorization_server_metadata),

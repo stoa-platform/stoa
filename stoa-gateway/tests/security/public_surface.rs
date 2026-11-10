@@ -128,6 +128,11 @@ impl<'a> Call<'a> {
 
 const INITIALIZE: &str = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"public-surface-test","version":"0"}}}"#;
 const TOOLS_LIST: &str = r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#;
+const TOOLS_LIST_BATCH: &str = r#"[{"jsonrpc":"2.0","id":2,"method":"tools/list"}]"#;
+
+fn unroutable_keycloak() -> Option<String> {
+    Some("http://127.0.0.1:1".to_string())
+}
 
 #[tokio::test]
 async fn proxied_mcp_surface_is_closed_by_default() {
@@ -137,6 +142,7 @@ async fn proxied_mcp_surface_is_closed_by_default() {
         "/mcp/capabilities",
         "/mcp/health",
         "/.well-known/oauth-protected-resource",
+        "/.well-known/oauth-protected-resource/mcp",
         "/health",
         "/ready",
     ] {
@@ -353,4 +359,166 @@ async fn direct_admin_and_metrics_still_answer_with_the_option_on() {
         Call::get("/admin/health").direct().status(&router).await,
         StatusCode::UNAUTHORIZED
     );
+}
+
+/// The 401 challenge must name the protected resource metadata by an
+/// absolute URL: an MCP client requests that value as is (RFC 9728).
+#[tokio::test]
+async fn unauthenticated_challenge_names_the_metadata_by_absolute_url() {
+    let config = Config {
+        auto_register: false,
+        public_mcp_enabled: true,
+        keycloak_url: unroutable_keycloak(),
+        gateway_external_url: Some("https://mcp.example.test".to_string()),
+        ..Config::default()
+    };
+    let router = stoa_gateway::build_router(AppState::new(config));
+    // Each endpoint names its own document; the REST routes name the
+    // Streamable HTTP endpoint's.
+    let mcp = "https://mcp.example.test/.well-known/oauth-protected-resource/mcp";
+    let sse = "https://mcp.example.test/.well-known/oauth-protected-resource/mcp/sse";
+
+    for (method, path, body, authorization, expected) in [
+        (Method::POST, "/mcp", TOOLS_LIST, None, mcp),
+        (Method::POST, "/mcp", TOOLS_LIST, Some("Bearer nope"), mcp),
+        (
+            Method::POST,
+            "/mcp",
+            TOOLS_LIST_BATCH,
+            Some("Bearer nope"),
+            mcp,
+        ),
+        (Method::POST, "/mcp/sse", TOOLS_LIST, None, sse),
+        (
+            Method::POST,
+            "/mcp/sse",
+            TOOLS_LIST,
+            Some("Bearer nope"),
+            sse,
+        ),
+        (Method::GET, "/mcp/sse", "", None, sse),
+        (Method::DELETE, "/mcp/sse", "", Some("Bearer nope"), sse),
+        (Method::GET, "/mcp/v1/tools", "", None, mcp),
+        (Method::GET, "/mcp/v1/tools", "", Some("Bearer nope"), mcp),
+    ] {
+        let mut request = Request::builder()
+            .method(method.clone())
+            .uri(path)
+            .header("content-type", "application/json")
+            .header("x-forwarded-for", "203.0.113.10");
+        if let Some(value) = authorization {
+            request = request.header("authorization", value);
+        }
+        let response = router
+            .clone()
+            .oneshot(request.body(Body::from(body.to_string())).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(
+            response.status(),
+            StatusCode::UNAUTHORIZED,
+            "{method} {path}"
+        );
+        let challenge = response
+            .headers()
+            .get("www-authenticate")
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or_default()
+            .to_string();
+        assert!(
+            challenge.contains(&format!(r#"resource_metadata="{expected}""#)),
+            "{method} {path} {authorization:?}: {challenge}"
+        );
+        assert_eq!(
+            challenge.contains(r#"error="invalid_token""#),
+            authorization.is_some(),
+            "{challenge}"
+        );
+    }
+}
+
+/// A client compares `resource` with the URL it was configured with, path
+/// included, so each MCP endpoint has its own document (RFC 9728 §3.1) and
+/// the document a 401 names is the one of the endpoint that answered.
+#[tokio::test]
+async fn each_mcp_endpoint_has_its_own_resource_metadata() {
+    let config = Config {
+        auto_register: false,
+        public_mcp_enabled: true,
+        keycloak_url: unroutable_keycloak(),
+        gateway_external_url: Some("https://mcp.example.test".to_string()),
+        ..Config::default()
+    };
+    let router = stoa_gateway::build_router(AppState::new(config));
+    for (path, resource) in [
+        (
+            "/.well-known/oauth-protected-resource/mcp",
+            "https://mcp.example.test/mcp",
+        ),
+        (
+            "/.well-known/oauth-protected-resource/mcp/sse",
+            "https://mcp.example.test/mcp/sse",
+        ),
+        (
+            "/.well-known/oauth-protected-resource",
+            "https://mcp.example.test",
+        ),
+    ] {
+        let (status, body) = Call::get(path).send(&router).await;
+        assert_eq!(status, StatusCode::OK, "{path}");
+        let document: serde_json::Value = serde_json::from_str(&body).expect("json");
+        assert_eq!(document["resource"], resource, "{path}");
+        assert_eq!(
+            document["authorization_servers"],
+            serde_json::json!(["https://mcp.example.test"]),
+            "{path}"
+        );
+    }
+    for path in [
+        "/.well-known/oauth-protected-resource/mcp/extra",
+        "/.well-known/oauth-protected-resource/admin",
+        "/.well-known/oauth-protected-resource/mcp/v1/tools",
+    ] {
+        assert_eq!(
+            Call::get(path).status(&router).await,
+            StatusCode::NOT_FOUND,
+            "{path}"
+        );
+    }
+}
+
+/// With `STOA_OAUTH_AUTHORIZATION_SERVERS`, the documents name the realm
+/// that signs the tokens: a client checks that the metadata it fetches there
+/// carries that same issuer.
+#[tokio::test]
+async fn resource_metadata_names_the_configured_authorization_server() {
+    let config = Config {
+        auto_register: false,
+        public_mcp_enabled: true,
+        keycloak_url: unroutable_keycloak(),
+        gateway_external_url: Some("https://mcp.example.test".to_string()),
+        oauth_authorization_servers: vec!["https://auth.example.test/realms/stoa".to_string()],
+        oauth_scopes_supported: vec!["openid".to_string(), "stoa:read".to_string()],
+        ..Config::default()
+    };
+    let router = stoa_gateway::build_router(AppState::new(config));
+    for path in [
+        "/.well-known/oauth-protected-resource",
+        "/.well-known/oauth-protected-resource/mcp",
+        "/.well-known/oauth-protected-resource/mcp/sse",
+    ] {
+        let (status, body) = Call::get(path).send(&router).await;
+        assert_eq!(status, StatusCode::OK, "{path}");
+        let document: serde_json::Value = serde_json::from_str(&body).expect("json");
+        assert_eq!(
+            document["authorization_servers"],
+            serde_json::json!(["https://auth.example.test/realms/stoa"]),
+            "{path}"
+        );
+        assert_eq!(
+            document["scopes_supported"],
+            serde_json::json!(["openid", "stoa:read"]),
+            "{path}"
+        );
+    }
 }

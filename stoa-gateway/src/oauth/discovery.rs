@@ -12,6 +12,78 @@ use tracing::{debug, warn};
 
 use crate::state::AppState;
 
+/// An MCP endpoint a client can be configured with. Each one is a protected
+/// resource of its own (RFC 9728 §3.1): its metadata document carries the
+/// endpoint URL in `resource`, and a client compares that value with the URL
+/// it was given, path included.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum McpEndpoint {
+    /// `POST /mcp`, Streamable HTTP. Also stands for the REST routes under
+    /// `/mcp/`, which are not endpoints a client is configured with.
+    StreamableHttp,
+    /// `/mcp/sse`, the older SSE transport.
+    Sse,
+}
+
+impl McpEndpoint {
+    /// Path of the endpoint, as it follows the gateway base URL.
+    pub fn path(self) -> &'static str {
+        match self {
+            McpEndpoint::StreamableHttp => "/mcp",
+            McpEndpoint::Sse => "/mcp/sse",
+        }
+    }
+}
+
+/// Base URL of the documents and of the challenge. A blank value counts as
+/// unset; `Config::validate` refuses anything else that is not a URL.
+fn external_base(config: &crate::config::Config) -> &str {
+    config
+        .gateway_external_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|url| !url.is_empty())
+        .unwrap_or("http://localhost:8080")
+        .trim_end_matches('/')
+}
+
+/// `authorization_servers` of the protected resource metadata (RFC 9728):
+/// the configured issuers, or the gateway itself when none is configured.
+///
+/// A client fetches the metadata of the first entry and checks that its
+/// `issuer` is that entry (RFC 8414 §3.3). The gateway's own document
+/// (`/.well-known/oauth-authorization-server`) carries the realm as issuer
+/// and the gateway's OAuth proxy as token endpoint: it suits clients that
+/// do not make that check, and needs `/oauth/...` to be reachable by them.
+fn authorization_servers(config: &crate::config::Config) -> Vec<String> {
+    if config.oauth_authorization_servers.is_empty() {
+        vec![external_base(config).to_string()]
+    } else {
+        config.oauth_authorization_servers.clone()
+    }
+}
+
+/// `WWW-Authenticate` value for a 401 on an MCP route (RFC 9728 §5.1).
+///
+/// `resource_metadata` is the absolute URL of the protected resource
+/// metadata of `endpoint`, built from `gateway_external_url`: a client
+/// fetches it as is, and a relative reference is not a URL it can request.
+pub fn bearer_challenge(
+    config: &crate::config::Config,
+    endpoint: McpEndpoint,
+    error: Option<&str>,
+) -> String {
+    let base = external_base(config);
+    let metadata = format!(
+        "{base}/.well-known/oauth-protected-resource{}",
+        endpoint.path()
+    );
+    match error {
+        Some(error) => format!(r#"Bearer error="{error}", resource_metadata="{metadata}""#),
+        None => format!(r#"Bearer resource_metadata="{metadata}""#),
+    }
+}
+
 /// GET /.well-known/oauth-protected-resource
 ///
 /// RFC 9728 — tells clients (e.g. Claude.ai) where to authenticate.
@@ -24,26 +96,47 @@ pub async fn protected_resource_metadata(State(state): State<AppState>) -> Json<
         .unwrap_or("http://localhost:8080");
 
     // RFC 9728: authorization_servers MUST point to where the client can discover
-    // OAuth metadata via /.well-known/oauth-authorization-server.
-    // We point to the gateway itself (not Keycloak) because:
+    // OAuth metadata. Unless `oauth_authorization_servers` names the issuer,
+    // we point to the gateway itself (not Keycloak) because:
     // 1. Gateway serves curated metadata with token_endpoint_auth_methods: ["none"] (public clients)
     // 2. Gateway proxies token/register endpoints (adding PKCE, Trusted Hosts bypass, etc.)
     // 3. Keycloak's metadata doesn't advertise "none" auth method, breaking public MCP clients
-    let gateway_url_trimmed = gateway_url.trim_end_matches('/');
+    let authorization_servers = authorization_servers(config);
 
-    debug!(resource = %gateway_url, authorization_server = %gateway_url_trimmed, "Serving protected resource metadata");
+    debug!(resource = %gateway_url, authorization_servers = ?authorization_servers, "Serving protected resource metadata");
 
     Json(json!({
         "resource": gateway_url,
-        "authorization_servers": [gateway_url_trimmed],
-        "scopes_supported": [
-            "openid",
-            "profile",
-            "email",
-            "stoa:read",
-            "stoa:write",
-            "stoa:admin"
-        ],
+        "authorization_servers": authorization_servers,
+        "scopes_supported": config.oauth_scopes_supported,
+        "bearer_methods_supported": ["header"]
+    }))
+}
+
+/// GET /.well-known/oauth-protected-resource/mcp
+///
+/// RFC 9728 §3.1 — metadata of the Streamable HTTP endpoint. `resource` is
+/// the endpoint URL, which is what a client configured with it expects.
+pub async fn mcp_protected_resource_metadata(State(state): State<AppState>) -> Json<Value> {
+    endpoint_resource_metadata(&state.config, McpEndpoint::StreamableHttp)
+}
+
+/// GET /.well-known/oauth-protected-resource/mcp/sse
+///
+/// Same document for the SSE endpoint.
+pub async fn mcp_sse_protected_resource_metadata(State(state): State<AppState>) -> Json<Value> {
+    endpoint_resource_metadata(&state.config, McpEndpoint::Sse)
+}
+
+fn endpoint_resource_metadata(
+    config: &crate::config::Config,
+    endpoint: McpEndpoint,
+) -> Json<Value> {
+    let base = external_base(config);
+    Json(json!({
+        "resource": format!("{base}{}", endpoint.path()),
+        "authorization_servers": authorization_servers(config),
+        "scopes_supported": config.oauth_scopes_supported,
         "bearer_methods_supported": ["header"]
     }))
 }
@@ -79,14 +172,7 @@ pub async fn authorization_server_metadata(State(state): State<AppState>) -> Jso
         "pushed_authorization_request_endpoint": format!("{}/oauth/par", gateway_url),
         "registration_endpoint": format!("{}/oauth/register", gateway_url),
         "jwks_uri": format!("{}/protocol/openid-connect/certs", kc_base),
-        "scopes_supported": [
-            "openid",
-            "profile",
-            "email",
-            "stoa:read",
-            "stoa:write",
-            "stoa:admin"
-        ],
+        "scopes_supported": config.oauth_scopes_supported,
         "response_types_supported": ["code"],
         "grant_types_supported": [
             "authorization_code",
@@ -284,5 +370,112 @@ mod tests {
         let result = openid_configuration(State(state)).await;
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[tokio::test]
+    async fn advertised_scopes_follow_the_configuration() {
+        let config = Config {
+            keycloak_url: Some("https://auth.example.test".to_string()),
+            gateway_external_url: Some("https://mcp.example.test".to_string()),
+            oauth_scopes_supported: vec!["openid".to_string(), "stoa:read".to_string()],
+            ..Config::default()
+        };
+        let state = AppState::new(config);
+        let expected = json!(["openid", "stoa:read"]);
+
+        let Json(resource) = protected_resource_metadata(State(state.clone())).await;
+        assert_eq!(resource["scopes_supported"], expected);
+        assert_eq!(resource["resource"], "https://mcp.example.test");
+
+        let Json(server) = authorization_server_metadata(State(state)).await;
+        assert_eq!(server["scopes_supported"], expected);
+        assert_eq!(
+            server["registration_endpoint"],
+            "https://mcp.example.test/oauth/register"
+        );
+    }
+
+    #[test]
+    fn bearer_challenge_carries_an_absolute_metadata_url() {
+        let config = Config {
+            gateway_external_url: Some("https://mcp.example.test/".to_string()),
+            ..Config::default()
+        };
+        assert_eq!(
+            bearer_challenge(&config, McpEndpoint::StreamableHttp, None),
+            r#"Bearer resource_metadata="https://mcp.example.test/.well-known/oauth-protected-resource/mcp""#
+        );
+        assert_eq!(
+            bearer_challenge(&config, McpEndpoint::Sse, Some("invalid_token")),
+            r#"Bearer error="invalid_token", resource_metadata="https://mcp.example.test/.well-known/oauth-protected-resource/mcp/sse""#
+        );
+        let default = bearer_challenge(&Config::default(), McpEndpoint::StreamableHttp, None);
+        assert!(
+            default.contains(r#"="http://localhost:8080/.well-known/"#),
+            "{default}"
+        );
+    }
+
+    /// With `oauth_authorization_servers`, every protected resource document
+    /// names those issuers, in order, instead of the gateway.
+    #[tokio::test]
+    async fn configured_authorization_servers_replace_the_gateway() {
+        let config = Config {
+            keycloak_url: Some("https://auth.example.test".to_string()),
+            gateway_external_url: Some("https://mcp.example.test".to_string()),
+            oauth_authorization_servers: vec![
+                "https://auth.example.test/realms/stoa".to_string(),
+                "https://other.example.test".to_string(),
+            ],
+            ..Config::default()
+        };
+        let state = AppState::new(config);
+        let expected = json!([
+            "https://auth.example.test/realms/stoa",
+            "https://other.example.test"
+        ]);
+
+        let Json(root) = protected_resource_metadata(State(state.clone())).await;
+        assert_eq!(root["authorization_servers"], expected);
+        assert_eq!(root["resource"], "https://mcp.example.test");
+        let Json(mcp) = mcp_protected_resource_metadata(State(state.clone())).await;
+        assert_eq!(mcp["authorization_servers"], expected);
+        assert_eq!(mcp["resource"], "https://mcp.example.test/mcp");
+        let Json(sse) = mcp_sse_protected_resource_metadata(State(state)).await;
+        assert_eq!(sse["authorization_servers"], expected);
+    }
+
+    /// The document a challenge names must describe the endpoint that sent
+    /// it: same `resource` as the endpoint URL, path included.
+    #[tokio::test]
+    async fn endpoint_metadata_names_the_endpoint_url() {
+        let config = Config {
+            keycloak_url: Some("https://auth.example.test".to_string()),
+            gateway_external_url: Some("https://mcp.example.test/".to_string()),
+            oauth_scopes_supported: vec!["openid".to_string()],
+            ..Config::default()
+        };
+        let state = AppState::new(config);
+
+        let Json(mcp) = mcp_protected_resource_metadata(State(state.clone())).await;
+        assert_eq!(mcp["resource"], "https://mcp.example.test/mcp");
+        assert_eq!(
+            mcp["authorization_servers"],
+            json!(["https://mcp.example.test"])
+        );
+        assert_eq!(mcp["scopes_supported"], json!(["openid"]));
+
+        let Json(sse) = mcp_sse_protected_resource_metadata(State(state.clone())).await;
+        assert_eq!(sse["resource"], "https://mcp.example.test/mcp/sse");
+        assert_eq!(sse["authorization_servers"], mcp["authorization_servers"]);
+
+        for endpoint in [McpEndpoint::StreamableHttp, McpEndpoint::Sse] {
+            let challenge = bearer_challenge(&state.config, endpoint, None);
+            let expected = format!(
+                r#"resource_metadata="https://mcp.example.test/.well-known/oauth-protected-resource{}""#,
+                endpoint.path()
+            );
+            assert!(challenge.contains(&expected), "{challenge}");
+        }
     }
 }

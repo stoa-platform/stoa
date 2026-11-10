@@ -196,6 +196,8 @@ ConfigMap. When it is set, a request that carries `X-Forwarded-For` or
 ```text
 /mcp and /mcp/... (except /mcp/health)
 /.well-known/oauth-protected-resource
+/.well-known/oauth-protected-resource/mcp
+/.well-known/oauth-protected-resource/mcp/sse
 /.well-known/oauth-authorization-server
 /.well-known/openid-configuration
 /health  /health/ready  /health/live  /ready
@@ -240,19 +242,60 @@ any authenticated caller, and `resources/list` is not filtered by tenant.
 The standalone deployment has one tenant and no event source
 (`STOA_KAFKA_ENABLED=false`).
 
-The OAuth proxy (`/oauth/...`) is not public. The discovery documents
-advertise `STOA_GATEWAY_EXTERNAL_URL` as the authorization server, and that
-host does not serve `/oauth` either, so an interactive MCP client cannot
-register or fetch a token through the gateway. A caller gets its token
-from Keycloak (`https://auth.gostoa.dev/realms/stoa`) and sends it as a
-bearer. Opening dynamic client registration to the internet is a separate
-decision.
+### Sign-in for MCP clients
+
+A 401 on an MCP route carries
+`WWW-Authenticate: Bearer resource_metadata="<STOA_GATEWAY_EXTERNAL_URL>/.well-known/oauth-protected-resource/mcp"`
+(`.../mcp/sse` on the SSE endpoint). The URL is absolute: a client requests
+it as is. Each MCP endpoint has its own document (RFC 9728 §3.1) whose
+`resource` is the endpoint URL, `<STOA_GATEWAY_EXTERNAL_URL>/mcp` or
+`.../mcp/sse`: a client compares that value with the URL it was configured
+with (Claude asks for the two to be equal, path included; the MCP SDK also
+accepts a parent of the URL). `STOA_GATEWAY_EXTERNAL_URL` must therefore be the host
+MCP clients use (`https://mcp.gostoa.dev` in this ConfigMap), and the URL
+to give a client is `https://mcp.gostoa.dev/mcp`. Boot is refused when the
+value is not an absolute `http(s)` URL without query, fragment or quote.
+`/.well-known/oauth-protected-resource` without a path is still served,
+with the base URL as `resource`.
+
+`authorization_servers` in those documents is
+`STOA_OAUTH_AUTHORIZATION_SERVERS`, here the realm,
+`https://auth.gostoa.dev/realms/stoa`. A client fetches the realm's own
+metadata (`<issuer>/.well-known/openid-configuration`), checks that its
+`issuer` is the URL it was given, sends the browser to the realm and
+exchanges the code at the realm's token endpoint. The gateway is not on
+that path: it only validates the bearer it then receives (issuer, and
+`aud` = `STOA_JWT_AUDIENCE`). `scopes_supported` is
+`STOA_OAUTH_SCOPES_SUPPORTED`: list only scopes the realm defines, a
+client asks for what it reads there.
+
+The client the user signs in with is a public client the realm defines,
+`stoa-mcp-client` (PKCE S256 required, consent asked, an audience mapper
+for `stoa-gateway`, no secret; stoa-v2 `deploy/k3s/keycloak/mcp-client.sh`).
+Its id is given to the MCP client by hand. The realm must advertise a token
+endpoint a client can reach: on 2026-11-10 it advertised
+`https://auth.gostoa.dev:80/...` for requests that came through the tunnel
+on the plain HTTP port of ingress-nginx; the tunnel route of
+`auth.gostoa.dev` has to use the TLS port (stoa-labs).
+
+Without `STOA_OAUTH_AUTHORIZATION_SERVERS` the documents name the gateway
+itself. Its own `/.well-known/oauth-authorization-server` and
+`/.well-known/openid-configuration` carry the realm as `issuer` and the
+gateway's OAuth proxy (`/oauth/token`, `/oauth/par`, `/oauth/register`) as
+endpoints. That suits a client that does not compare the issuer with the
+URL it was given (the MCP SDK does, RFC 8414 §3.3, and stops there), and
+it needs `/oauth/...` to be delivered to that client. Here `/oauth/...` is
+404 behind a proxy, dynamic client registration included. Should
+registration be opened one day: the proxy forwards a registration to the
+realm (it only drops `scope`), so the realm's client registration policies must first
+rule out a self-registered confidential client with the
+`client_credentials` grant, which would be a token with no user.
 
 Routing is outside this tree: DNS `mcp.gostoa.dev` and the tunnel route
 are in stoa-labs (`deploy/bootstrap/edge/cloudflared/config.yaml`), the
 Ingress `stoa-mcp` is in stoa-v2 (`deploy/k3s/ingress-mcp.yaml`) and sends
-only `/mcp`, `/oauth`, `/.well-known`, `/health` and `/ready` to Service
-`stoa-gateway`. The gateway answers 404 on `/oauth` there.
+only `/mcp`, `/.well-known`, `/health` and `/ready` to Service
+`stoa-gateway`.
 
 An anonymous `POST` without a session id creates an MCP session kept for
 `STOA_MCP_SESSION_TTL_MINUTES`. The session map has no size cap. The memory
@@ -456,6 +499,8 @@ end. Secrets are never given a default.
 | `STOA_ADMIN_API_TOKEN` | unset | Unset → admin 503. Wrong bearer → 401. |
 | `STOA_TRUSTED_PROXIES` | empty | CSV/JSON CIDRs for client IP and scheme. |
 | `STOA_PUBLIC_MCP_ENABLED` | `false` | Lets a proxied request reach `/mcp`, the OAuth discovery documents and the health probes. Needs `STOA_KEYCLOAK_URL`. See "Public MCP". |
+| `STOA_OAUTH_AUTHORIZATION_SERVERS` | empty (the gateway itself) | `authorization_servers` in the protected resource metadata: issuer URLs, CSV or JSON array. See "Sign-in for MCP clients". |
+| `STOA_OAUTH_SCOPES_SUPPORTED` | `openid,profile,email,stoa:read,stoa:write,stoa:admin` | `scopes_supported` in the discovery documents (CSV or JSON array). |
 
 ### Control plane and audit
 

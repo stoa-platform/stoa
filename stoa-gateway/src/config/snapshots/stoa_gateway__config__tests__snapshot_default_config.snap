@@ -198,6 +198,15 @@ expression: "Config::default()"
   "tcp_rate_limit_per_ip": null,
   "trusted_proxies": [],
   "public_mcp_enabled": false,
+  "oauth_authorization_servers": [],
+  "oauth_scopes_supported": [
+    "openid",
+    "profile",
+    "email",
+    "stoa:read",
+    "stoa:write",
+    "stoa:admin"
+  ],
   "jwt_audience": [],
   "memory_limit_mb": 512,
   "snapshot_enabled": false,

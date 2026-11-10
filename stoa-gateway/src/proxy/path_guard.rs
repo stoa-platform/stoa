@@ -71,6 +71,8 @@ pub fn is_public_mcp_path(path: &str) -> bool {
         || matches!(
             path,
             "/.well-known/oauth-protected-resource"
+                | "/.well-known/oauth-protected-resource/mcp"
+                | "/.well-known/oauth-protected-resource/mcp/sse"
                 | "/.well-known/oauth-authorization-server"
                 | "/.well-known/openid-configuration"
                 | "/health"
@@ -244,6 +246,8 @@ mod tests {
         "/mcp/v1/tools",
         "/mcp/ws",
         "/.well-known/oauth-protected-resource",
+        "/.well-known/oauth-protected-resource/mcp",
+        "/.well-known/oauth-protected-resource/mcp/sse",
         "/.well-known/oauth-authorization-server",
         "/.well-known/openid-configuration",
         "/health",
@@ -283,6 +287,9 @@ mod tests {
         "/.well-known/",
         "/.well-known/other",
         "/.well-known/oauth-protected-resource/extra",
+        "/.well-known/oauth-protected-resource/mcp/extra",
+        "/.well-known/oauth-protected-resource/mcp/sse/extra",
+        "/.well-known/oauth-protected-resource/admin",
         "/MCP",
         "/",
     ];

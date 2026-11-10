@@ -36,7 +36,10 @@ data:
   STOA_LOG_FORMAT: json
   RUST_LOG: "info,stoa_gateway=info"
   STOA_GATEWAY_MODE: edge-mcp
-  STOA_GATEWAY_EXTERNAL_URL: https://api.gostoa.dev
+  # Base of the OAuth discovery documents and of the 401 challenge. MCP
+  # clients reach the gateway on mcp.gostoa.dev; api.gostoa.dev serves
+  # /apis only, neither /.well-known nor /oauth.
+  STOA_GATEWAY_EXTERNAL_URL: https://mcp.gostoa.dev
   STOA_GATEWAY_PUBLIC_URL: https://api.gostoa.dev
   STOA_KEYCLOAK_URL: https://auth.gostoa.dev
   STOA_KEYCLOAK_INTERNAL_URL: http://keycloak.stoa.svc:8080
@@ -58,3 +61,12 @@ data:
   # health probes. /admin, /metrics, /oauth and /v1/messages stay 404.
   # Boot is refused without STOA_KEYCLOAK_URL. See README, "Public MCP".
   STOA_PUBLIC_MCP_ENABLED: "true"
+  # Sign-in for MCP clients (decided 2026-11-10). The protected resource
+  # metadata names the realm as the authorization server: a client reads the
+  # realm's own metadata and uses its token endpoint. The gateway's OAuth
+  # proxy (/oauth/...) is not involved and stays closed behind the proxy,
+  # dynamic client registration included. A client signs users in with a
+  # public client the realm defines. The scopes are the ones the realm
+  # defines. See README, "Sign-in for MCP clients".
+  STOA_OAUTH_AUTHORIZATION_SERVERS: https://auth.gostoa.dev/realms/stoa
+  STOA_OAUTH_SCOPES_SUPPORTED: "openid,profile,email,stoa:read"

@@ -1331,9 +1331,10 @@ mod tests {
     /// There is no allowUnauthenticatedREST or allowWidenedPrefix switch.
     #[tokio::test]
     async fn published_route_jwt_matrix_enforces_policy_audience() {
-        use crate::auth::jwt::tests::{issuer_only, mint, validator_against_test_key};
+        use crate::auth::jwt::tests::{issuer_only, mint, validator_with_mock_server};
 
-        let (validator, issuer) = validator_against_test_key(issuer_only()).await;
+        // Held to the end: the validator fetches its keys from it lazily.
+        let (validator, issuer, _oidc) = validator_with_mock_server(issuer_only()).await;
         let mut state = AppState::new(crate::config::Config::default());
         state.jwt_validator = Some(std::sync::Arc::new(validator));
         let route = ping_route();
@@ -1380,10 +1381,11 @@ mod tests {
     /// token are 401. A token whose `aud` is `stoa-gateway` is not.
     #[tokio::test]
     async fn jwt_proof_global_audience_rejects_account_and_missing_aud() {
-        use crate::auth::jwt::tests::{mint, validator_against_test_key};
+        use crate::auth::jwt::tests::{mint, validator_with_mock_server};
         use crate::auth::jwt::JwtValidatorConfig;
 
-        let (validator, issuer) = validator_against_test_key(JwtValidatorConfig {
+        // Held to the end: the validator fetches its keys from it lazily.
+        let (validator, issuer, _oidc) = validator_with_mock_server(JwtValidatorConfig {
             validate_audience: true,
             audiences: vec!["stoa-gateway".into()],
             ..JwtValidatorConfig::default()
@@ -1441,9 +1443,10 @@ mod tests {
     /// Standalone must 401 that token even if boot validation was skipped.
     #[tokio::test]
     async fn standalone_without_global_or_route_audience_is_401() {
-        use crate::auth::jwt::tests::{issuer_only, mint, validator_against_test_key};
+        use crate::auth::jwt::tests::{issuer_only, mint, validator_with_mock_server};
 
-        let (validator, issuer) = validator_against_test_key(issuer_only()).await;
+        // Held to the end: the validator fetches its keys from it lazily.
+        let (validator, issuer, _oidc) = validator_with_mock_server(issuer_only()).await;
         let mut state = AppState::new(crate::config::Config::default());
         state.jwt_validator = Some(std::sync::Arc::new(validator));
         let route = ping_route();

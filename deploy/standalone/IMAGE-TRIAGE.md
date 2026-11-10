@@ -56,7 +56,7 @@ Reported at HIGH and absent from the triage above. The dispositions were written
 | Vulnerability | Packages | Disposition |
 | --- | --- | --- |
 | CVE-2026-112315 to CVE-2026-112323, CVE-2026-119079 HIGH, affected | krb5-locales, libgssapi-krb5-2, libk5crypto3, libkrb5-3, libkrb5support0 | Memory leaks, CPU exhaustion and a null dereference in the MIT krb5 daemons (`kadmind`, KDC). The image runs neither. The libraries are pulled in by curl, which only runs the `HEALTHCHECK` against localhost. Accepted on 2026-11-10. |
-| CVE-2026-76844 HIGH, affected | zlib1g | Heap overflow in `gz_write` after a failed `write()` (the `gz*` file API). The gateway binary does not link the system zlib (no `libz-sys` in the SBOM) and nothing in the container writes gzip files. Accepted on 2026-11-10. |
+| CVE-2026-76844 HIGH, affected | zlib1g | Heap overflow in `gz_write` after a failed `write()` (the `gz*` file API). The gateway binary does not link the system zlib (no `libz-sys` in the SBOM) and nothing in the container writes gzip files. In the table below Trivy prints another advisory's title for this identifier ("webpack-dev-middleware ... Path Traversal"); the description it carries for it, and the package, are the zlib ones. Accepted on 2026-11-10. |
 
 Rust binary: the first rebuild of the day (revision `c2e40501`) carried `CVE-2026-115567`, a race in tokio 1.54.0 timer handling, fixed in 1.54.1. It was in the image of 2026-10-21 as well; Trivy's database did not list it then. This image links tokio 1.54.1 and the finding is gone. `CVE-2026-48504` (opentelemetry_sdk 0.27.1, MEDIUM) is unchanged and accepted above.
 

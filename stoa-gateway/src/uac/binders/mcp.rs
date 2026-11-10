@@ -267,6 +267,7 @@ impl McpBinder {
     /// with parameters (`/customers/{id}/segment`) gets the rest as a path
     /// pattern: the call goes to `backend_url` joined to `C-1001/segment`, and
     /// the arguments used in the path are not sent again as query or body.
+    /// A path parameter is one segment: a value with `/` or `\` is refused.
     fn create_dynamic_tools(contract: &UacContractSpec) -> Vec<Arc<dyn Tool>> {
         contract
             .endpoints
@@ -285,7 +286,9 @@ impl McpBinder {
                 .with_action(spec.action)
                 .with_annotations(ToolAnnotations::from_action(spec.action));
                 if !spec.path_rest.is_empty() {
-                    tool = tool.with_path_pattern(spec.path_rest);
+                    tool = tool
+                        .with_path_pattern(spec.path_rest)
+                        .with_single_segment_path_parameters();
                 }
                 Arc::new(tool) as Arc<dyn Tool>
             })
@@ -738,6 +741,52 @@ mod tests {
             content,
             crate::mcp::tools::ToolContent::Text { text } if text == "segment"
         )));
+    }
+
+    /// A contract path parameter is one segment: `/` and `\` are refused
+    /// before any request, not sent as `%2F` / `%5C`.
+    #[tokio::test]
+    async fn contract_tool_refuses_a_separator_in_a_path_parameter() {
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let backend = MockServer::start().await;
+        Mock::given(wiremock::matchers::any())
+            .respond_with(ResponseTemplate::new(200).set_body_string("reached"))
+            .mount(&backend)
+            .await;
+
+        let mut contract = UacContractSpec::new("api", "demo");
+        contract.status = ContractStatus::Published;
+        contract.endpoints = vec![UacEndpoint {
+            path: "/customers/{id}".to_string(),
+            methods: vec!["GET".to_string()],
+            backend_url: format!("{}/customers", backend.uri()),
+            method: None,
+            description: None,
+            operation_id: Some("get_customer".to_string()),
+            input_schema: None,
+            output_schema: None,
+            llm: None,
+        }];
+
+        let registry = Arc::new(ToolRegistry::new());
+        McpBinder::new(registry.clone())
+            .bind(&contract)
+            .await
+            .expect("bind");
+        let tool = registry.get("demo_api_get_customer").expect("tool");
+        for value in ["a/b", "a\\b", "group/project"] {
+            let error = tool
+                .execute(serde_json::json!({ "id": value }), &tool_context("demo"))
+                .await
+                .expect_err(value);
+            assert!(
+                matches!(error, crate::mcp::tools::ToolError::InvalidArguments(_)),
+                "{value:?}: {error}"
+            );
+        }
+        let received = backend.received_requests().await.expect("recording");
+        assert!(received.is_empty(), "{} request(s) sent", received.len());
     }
 
     #[tokio::test]

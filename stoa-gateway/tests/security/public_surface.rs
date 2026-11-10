@@ -255,6 +255,15 @@ async fn only_an_accepted_bearer_reaches_protected_mcp_methods() {
                 !batch_body.contains(r#""result""#),
                 "{authorization} {path} {batch_body}"
             );
+            if expected == StatusCode::OK {
+                // One answer per element, each a JSON-RPC authentication error.
+                let answers: serde_json::Value =
+                    serde_json::from_str(&batch_body).expect("JSON batch answer");
+                let answers = answers.as_array().expect("array");
+                assert_eq!(answers.len(), 1, "{authorization} {path} {batch_body}");
+                assert_eq!(answers[0]["id"], 2, "{batch_body}");
+                assert_eq!(answers[0]["error"]["code"], -32001, "{batch_body}");
+            }
         }
         for call in [
             Call::get("/mcp/sse"),

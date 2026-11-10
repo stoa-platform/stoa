@@ -220,10 +220,12 @@ pub(crate) async fn resolve_caller(
 /// the client that holds its id, before and after it authenticates. An
 /// unknown id is not an existing session and is left to the handlers.
 async fn session_open_to(state: &AppState, caller: &Caller, id: &str) -> bool {
+    // `get` also refreshes the session's activity, with or without a validator.
+    let session = state.session_manager.get(id).await;
     if state.jwt_validator.is_none() {
         return true;
     }
-    match state.session_manager.get(id).await {
+    match session {
         Some(session) => session.tenant_id == caller.tenant_id || session.tenant_id == "default",
         None => true,
     }
@@ -2003,6 +2005,40 @@ mod caller_tests {
                 .is_none(),
             "a refused initialize must not write to the session"
         );
+    }
+
+    /// The path of a client that initializes anonymously, then authenticates
+    /// as a tenant, and the reverse cases that must stay closed.
+    #[tokio::test]
+    async fn session_ownership_follows_the_tenant() {
+        let fx = fixture().await;
+        for (id, tenant) in [
+            ("anonymous", "default"),
+            ("demo", "demo"),
+            ("other", "other"),
+        ] {
+            fx.state
+                .session_manager
+                .create(Session::new(id.into(), tenant.into()))
+                .await;
+        }
+        let demo = Caller {
+            tenant_id: "demo".into(),
+            ..Caller::unverified(None, Some("accepted".into()))
+        };
+        let anonymous = Caller::unverified(None, None);
+
+        assert!(session_open_to(&fx.state, &demo, "anonymous").await);
+        assert!(session_open_to(&fx.state, &demo, "demo").await);
+        assert!(!session_open_to(&fx.state, &demo, "other").await);
+        assert!(session_open_to(&fx.state, &anonymous, "anonymous").await);
+        assert!(!session_open_to(&fx.state, &anonymous, "demo").await);
+        assert!(session_open_to(&fx.state, &demo, "unknown").await);
+
+        // Development mode (no validator): no ownership check.
+        let mut dev = fx.state.clone();
+        dev.jwt_validator = None;
+        assert!(session_open_to(&dev, &anonymous, "other").await);
     }
 
     #[tokio::test]

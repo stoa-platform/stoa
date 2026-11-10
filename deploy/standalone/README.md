@@ -250,9 +250,11 @@ A 401 on an MCP route carries
 it as is. Each MCP endpoint has its own document (RFC 9728 §3.1) whose
 `resource` is the endpoint URL, `<STOA_GATEWAY_EXTERNAL_URL>/mcp` or
 `.../mcp/sse`: a client compares that value with the URL it was configured
-with, path included. `STOA_GATEWAY_EXTERNAL_URL` must therefore be the host
+with (Claude asks for the two to be equal, path included; the MCP SDK also
+accepts a parent of the URL). `STOA_GATEWAY_EXTERNAL_URL` must therefore be the host
 MCP clients use (`https://mcp.gostoa.dev` in this ConfigMap), and the URL
-to give a client is `https://mcp.gostoa.dev/mcp`.
+to give a client is `https://mcp.gostoa.dev/mcp`. Boot is refused when the
+value is not an absolute `http(s)` URL without query, fragment or quote.
 `/.well-known/oauth-protected-resource` without a path is still served,
 with the base URL as `resource`.
 
@@ -284,8 +286,8 @@ endpoints. That suits a client that does not compare the issuer with the
 URL it was given (the MCP SDK does, RFC 8414 §3.3, and stops there), and
 it needs `/oauth/...` to be delivered to that client. Here `/oauth/...` is
 404 behind a proxy, dynamic client registration included. Should
-registration be opened one day: the proxy forwards a registration as the
-client sent it, so the realm's client registration policies must first
+registration be opened one day: the proxy forwards a registration to the
+realm (it only drops `scope`), so the realm's client registration policies must first
 rule out a self-registered confidential client with the
 `client_credentials` grant, which would be a token with no user.
 

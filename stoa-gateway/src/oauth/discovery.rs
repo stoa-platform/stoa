@@ -35,10 +35,14 @@ impl McpEndpoint {
     }
 }
 
+/// Base URL of the documents and of the challenge. A blank value counts as
+/// unset; `Config::validate` refuses anything else that is not a URL.
 fn external_base(config: &crate::config::Config) -> &str {
     config
         .gateway_external_url
         .as_deref()
+        .map(str::trim)
+        .filter(|url| !url.is_empty())
         .unwrap_or("http://localhost:8080")
         .trim_end_matches('/')
 }

@@ -94,25 +94,50 @@ pub enum ConfigError {
          (absolute http(s) URL, no query, no fragment)"
     )]
     InvalidOauthAuthorizationServer(String),
+
+    /// `gateway_external_url` is the base of the OAuth documents and of the
+    /// quoted `resource_metadata` parameter of the 401 challenge.
+    #[error(
+        "STOA_GATEWAY_EXTERNAL_URL: {0:?} is not a base URL the gateway can \
+         publish (absolute http(s) URL, no query, no fragment, no quote)"
+    )]
+    InvalidGatewayExternalUrl(String),
+}
+
+/// True for a URL the gateway can publish in an OAuth document and inside a
+/// quoted `WWW-Authenticate` parameter: absolute `http(s)` with a host, no
+/// userinfo, no query, no fragment, and no character that ends a quoted
+/// string or a header line.
+fn is_publishable_url(value: &str) -> bool {
+    if value.contains(|c: char| c.is_whitespace() || c.is_control() || c == '"' || c == '\\') {
+        return false;
+    }
+    // `https:///host` parses with `host` as the authority: refuse it as written.
+    if value
+        .split_once("://")
+        .is_none_or(|(_, rest)| rest.starts_with('/'))
+    {
+        return false;
+    }
+    url::Url::parse(value).is_ok_and(|url| {
+        matches!(url.scheme(), "http" | "https")
+            && url.host_str().is_some_and(|host| !host.is_empty())
+            && url.username().is_empty()
+            && url.password().is_none()
+            && url.query().is_none()
+            && url.fragment().is_none()
+    })
 }
 
 impl Config {
-    /// `oauth_authorization_servers` entries that are not an absolute
-    /// `http(s)` URL without query or fragment (RFC 8414 §2, issuer).
+    /// `oauth_authorization_servers` entries that are not an issuer URL
+    /// (RFC 8414 §2: `https`, or `http` for a local realm, no query, no
+    /// fragment).
     fn invalid_oauth_authorization_servers(&self) -> Vec<&str> {
         self.oauth_authorization_servers
             .iter()
             .map(String::as_str)
-            .filter(|server| {
-                let rest = server
-                    .strip_prefix("https://")
-                    .or_else(|| server.strip_prefix("http://"));
-                !rest.is_some_and(|rest| {
-                    !rest.is_empty()
-                        && !rest.starts_with('/')
-                        && !rest.contains(|c: char| c.is_whitespace() || c == '?' || c == '#')
-                })
-            })
+            .filter(|server| !is_publishable_url(server))
             .collect()
     }
 
@@ -236,6 +261,17 @@ impl Config {
                 .is_some_and(|url| !url.trim().is_empty())
         {
             return Err(ConfigError::PublicMcpRequiresJwtValidator);
+        }
+
+        // Blank means unset: the documents then fall back to localhost.
+        if let Some(url) = self
+            .gateway_external_url
+            .as_deref()
+            .filter(|url| !url.trim().is_empty())
+        {
+            if !is_publishable_url(url) {
+                return Err(ConfigError::InvalidGatewayExternalUrl(url.to_string()));
+            }
         }
 
         if let Some(server) = self.invalid_oauth_authorization_servers().first() {
@@ -450,6 +486,8 @@ mod tests {
                 "https://auth.example.test",
                 "http://keycloak:8080/realms/stoa",
             ][..],
+            &["HTTPS://auth.example.test/realms/stoa"][..],
+            &["https://[2001:db8::1]:8443/realms/stoa"][..],
         ] {
             with(servers).validate().expect("issuer URLs");
         }
@@ -461,6 +499,11 @@ mod tests {
             "https://auth.example.test/realms/stoa?x=1",
             "https://auth.example.test/realms/stoa#frag",
             "https://auth.example.test/realms/ stoa",
+            "https://auth.example.test:notaport/realms/stoa",
+            "https://[broken",
+            "https://user:secret@auth.example.test/realms/stoa",
+            "ftp://auth.example.test/realms/stoa",
+            "https://auth.example.test/realms/\"stoa",
             "",
         ] {
             match with(&["https://auth.example.test", bad]).validate() {
@@ -470,6 +513,40 @@ mod tests {
                 other => {
                     panic!("expected InvalidOauthAuthorizationServer for {bad:?}, got {other:?}")
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn test_validate_gateway_external_url_is_publishable() {
+        let with = |url: Option<&str>| Config {
+            jwt_audience: vec!["stoa-gateway".into()],
+            gateway_external_url: url.map(str::to_string),
+            ..Config::default()
+        };
+        for good in [
+            None,
+            Some(""),
+            Some("  "),
+            Some("https://mcp.example.test"),
+            Some("https://mcp.example.test/"),
+            Some("http://localhost:8080"),
+        ] {
+            with(good)
+                .validate()
+                .unwrap_or_else(|e| panic!("{good:?}: {e}"));
+        }
+        for bad in [
+            "mcp.example.test",
+            "https://mcp.example.test/\"x",
+            "https://mcp.example.test\r\nX-Injected: 1",
+            "https://mcp.example.test?x=1",
+            "https://mcp.example.test#frag",
+            "https://mcp.example.test:port",
+        ] {
+            match with(Some(bad)).validate() {
+                Err(ConfigError::InvalidGatewayExternalUrl(url)) => assert_eq!(url, bad),
+                other => panic!("expected InvalidGatewayExternalUrl for {bad:?}, got {other:?}"),
             }
         }
     }

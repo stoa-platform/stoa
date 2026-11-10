@@ -180,12 +180,16 @@ grep -i '^www-authenticate:' /tmp/stoa-jwt-anon-hdr
 open_anon="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/apis/demo/open-api/ping)"
 echo "GET open contract without token $open_anon"
 
+# Tokens are requested from inside the proof network, so their issuer is the
+# one the gateway expects (http://keycloak:8080). The request runs in the
+# nginx container, which has curl: the gateway image has neither a shell nor
+# curl.
 if [[ -n "$PROOF_BIN" ]]; then
   token_json="$(curl -sS --max-time 20 -X POST "$KC_URL/realms/stoa/protocol/openid-connect/token" \
     -H 'content-type: application/x-www-form-urlencoded' \
     -d "grant_type=client_credentials" -d "client_id=stoa-caller" -d "client_secret=$CLIENT_SECRET")"
 else
-  token_json="$(sudo docker exec stoa-jwt-gw curl -sS --max-time 20 -X POST "$KC_URL/realms/stoa/protocol/openid-connect/token" \
+  token_json="$(sudo docker exec stoa-jwt-echo curl -sS --max-time 20 -X POST "$KC_URL/realms/stoa/protocol/openid-connect/token" \
     -H 'content-type: application/x-www-form-urlencoded' \
     -d "grant_type=client_credentials" -d "client_id=stoa-caller" -d "client_secret=$CLIENT_SECRET")"
 fi
@@ -203,7 +207,7 @@ if [[ -n "$PROOF_BIN" ]]; then
     -H 'content-type: application/x-www-form-urlencoded' \
     -d "grant_type=client_credentials" -d "client_id=stoa-no-audience" -d "client_secret=$NOAUD_SECRET")"
 else
-  noaud_json="$(sudo docker exec stoa-jwt-gw curl -sS --max-time 20 -X POST "$KC_URL/realms/stoa/protocol/openid-connect/token" \
+  noaud_json="$(sudo docker exec stoa-jwt-echo curl -sS --max-time 20 -X POST "$KC_URL/realms/stoa/protocol/openid-connect/token" \
     -H 'content-type: application/x-www-form-urlencoded' \
     -d "grant_type=client_credentials" -d "client_id=stoa-no-audience" -d "client_secret=$NOAUD_SECRET")"
 fi

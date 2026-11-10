@@ -319,7 +319,11 @@ logged.
   `endpoints` (from 0) when it has no `operation_id`. Any character outside
   `A-Z a-z 0-9 _ -` becomes `_`. A name longer than 64 characters is cut and
   ends with `_` and 8 hex characters of a SHA-256 of the full name. Images
-  before this change named these tools `uac:<tenant>:<name>:<operation>`.
+  before this change named these tools `uac:<tenant>:<name>:<operation_id>`,
+  or `uac:<tenant>:<name>:<name>-<index>` without an `operation_id`.
+- Method: the tool sends the first entry of `methods` only. An endpoint with
+  `methods: [GET, POST]` gives one tool that calls GET; POST is served by
+  the REST route only.
 - Path parameters: `backend_url` is the upstream URL of the static part of
   the path, up to the first `{param}` segment. For `/customers/{id}` it is
   `https://backend.example/customers/`, the REST route is
@@ -328,6 +332,19 @@ logged.
   `https://backend.example/customers/C-1001`. A given `input_schema` keeps
   its properties and gets the missing path parameters. The other arguments
   go as query string (GET, DELETE) or JSON body (POST, PUT, PATCH).
+- Path parameter values: a value that is empty, `.` or `..`, or that
+  contains `/`, `\` or a control character is refused before any request
+  is sent (invalid arguments; the error names the parameter, not the
+  value). `..` would otherwise call the parent of the backend path with the
+  caller's bearer, and an empty value the collection. Other values are
+  percent-encoded.
+- Refused paths and `backend_url`: the publish returns 400
+  (`"status": "rejected"`, the message names `endpoints[<i>]` and its path)
+  when a `backend_url` contains `{` or `}`, a path does not start with `/`,
+  braces are unmatched or empty (`/customers/{id`, `/a/{}`), or a parameter
+  is not a whole segment (`/a{id}`, `/files/f-{id}`). The REST binder
+  refuses it before changing a route or a tool; the restore after a refusal
+  (below) still applies.
 - REST routes and methods: a route is a prefix and serves every path under
   it. Endpoints whose static part is the same share one route, and the
   methods of all of them are merged on it. `GET /customers/{id}` and
@@ -339,16 +356,29 @@ logged.
   keeps the contract's JWT policy and audience, for every method. Two
   endpoints with the same static part and different `backend_url` are
   refused (400).
+- Segment boundary: a route serves the path equal to its prefix and the
+  paths under it, not a longer segment. `/apis/<tenant>/<name>/customers`
+  serves `.../customers`, `.../customers/` and `.../customers/C-1`, not
+  `.../customers-archive/1` or `.../customersX` (404 unless another route
+  matches). The longest matching prefix wins.
+- Upstream URL: the rest of the request path after the route prefix
+  (percent-decoded) is appended to `backend_url` without its trailing `/`,
+  with a `/` in front when it has none, so it cannot change the backend
+  host. It is not otherwise rewritten (`//` stays). The query is kept.
 - Tenant: `tools/list` shows a contract tool only to a caller of the
   contract's tenant, and `tools/call` refuses the others. The caller's
   tenant is the token's `tenant` claim, else its first realm role
   `tenant-<x>`, else `default`.
-- Scope, with the built-in policy (no `STOA_POLICY_PATH`): a read tool (first
-  method GET, or `llm.side_effects` `none` or `read`) needs `stoa:read` in
-  the token's `scope`; `stoa:execute`, `stoa:admin` or the realm role
-  `cpi-admin` also pass. On `POST /mcp` a token with no scope at all counts
-  as `stoa:read`. POST, PUT, PATCH, DELETE and `side_effects: destructive`
-  need `stoa:write` (or `stoa:admin`, or `cpi-admin`).
+- Scope, with the built-in policy (no `STOA_POLICY_PATH`): the tool's
+  action comes from `llm.side_effects` when the endpoint has `llm`: `none`
+  or `read` make a read tool whatever the method, a POST or DELETE endpoint
+  included; `destructive` a delete tool; `write` the action of the method.
+  Without `llm`, from the first method: POST create, PUT and PATCH update,
+  DELETE delete, GET and any other method read. A read tool needs
+  `stoa:read` in the token's `scope`; `stoa:execute`, `stoa:admin` or the
+  realm role `cpi-admin` also pass. On `POST /mcp` a token with no scope at
+  all counts as `stoa:read`. Create, update and delete tools need
+  `stoa:write` (or `stoa:admin`, or `cpi-admin`).
 - Call: the gateway calls the backend directly with the caller's bearer
   (`Authorization: Bearer <token>`). It does not go through the `/apis`
   route, so `inboundAuthAudience` is not checked on this path; the token was
@@ -356,10 +386,31 @@ logged.
 - Republishing a contract replaces its tools: those of removed endpoints
   disappear. `DELETE /admin/contracts/<tenant>:<name>` removes them, whatever
   their names. A name held by another contract or by a tool that is not
-  from this contract, or produced by two endpoints, is refused with 400 and
-  nothing changes.
+  from this contract, or produced by two endpoints, is refused with 400.
+- After a refused publish (400), the previous version's routes and tools
+  are back in place when the response is sent, not during the whole
+  request. The handler binds the previous version again: its REST routes
+  are removed and re-added, and a request in that short window gets 404.
+  A refusal by the REST binder (a path, a `backend_url`, a prefix with two
+  backends) comes before any change of its own. A refusal by the MCP binder
+  (a tool name) comes after the REST binder has installed the refused
+  version's routes: they serve requests until the previous routes replace
+  them, or, for a contract not published before, until they are removed.
+- One at a time: contract publications and deletions run one after the
+  other. A `POST` or `DELETE /admin/contracts` waits until the one in
+  progress has answered.
 - Without a control plane and with `STOA_NATIVE_TOOLS_ENABLED=false` (this
-  ConfigMap), no `stoa_*` platform tool is registered.
+  ConfigMap), no `stoa_*` platform tool is registered at startup. Three
+  calls still start a tool discovery for the caller's tenant:
+  `GET /mcp/v1/tools` and `POST /mcp/tools/list` in the background when the
+  tenant's list is older than `STOA_TOOL_REFRESH_TTL_SECS` (300), and
+  `POST /mcp/tools/call` (or `POST /mcp/v1/tools/invoke`) on an unknown
+  tool, inline, when the tenant was never loaded. The discovery calls the
+  control-plane client, whose URL is `http://localhost:8000` when
+  `STOA_CONTROL_PLANE_URL` is unset. Nothing listens there in this pod: the
+  call fails, the tenant is marked loaded, and no tool is added. A process
+  answering on that address would have its tools registered as relay
+  tools. `tools/list` on `POST /mcp` starts no discovery.
 - Routes and tools are process memory. After a restart `tools/list` has no
   contract tool until the publisher posts the contracts again (see
   "Republish after a restart").
@@ -545,7 +596,9 @@ Leave `STOA_CONTROL_PLANE_URL` unset. The process then:
 `AppState` still builds an internal client aimed at `http://localhost:8000`
 for tools that are invoked later; nothing dials it at startup when the URL is
 unset. With `STOA_NATIVE_TOOLS_ENABLED=false` the `stoa_*` relay tools that
-called it are not registered.
+called it are not registered. The per-tenant tool discovery of the REST MCP
+endpoints still dials it on request: see "MCP tools from published
+contracts".
 
 `prod` / `staging` without a policy file exits immediately. That is a config
 panic, not a control-plane retry.

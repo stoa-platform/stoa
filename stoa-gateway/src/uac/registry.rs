@@ -11,6 +11,10 @@ use super::schema::UacContractSpec;
 /// Thread-safe in-memory registry of UAC contracts.
 pub struct ContractRegistry {
     contracts: RwLock<HashMap<String, UacContractSpec>>,
+    /// MCP tool names registered for each contract key (`tenant_id:name`).
+    /// The MCP binder replaces and removes a contract's tools from this list,
+    /// whatever their names, and refuses a name another contract holds.
+    tool_names: RwLock<HashMap<String, Vec<String>>>,
 }
 
 impl Default for ContractRegistry {
@@ -24,7 +28,56 @@ impl ContractRegistry {
     pub fn new() -> Self {
         Self {
             contracts: RwLock::new(HashMap::new()),
+            tool_names: RwLock::new(HashMap::new()),
         }
+    }
+
+    /// MCP tool names recorded for a contract key.
+    pub fn tool_names(&self, key: &str) -> Vec<String> {
+        self.tool_names.read().get(key).cloned().unwrap_or_default()
+    }
+
+    /// Record `names` as the MCP tools of contract `key` and return the
+    /// names recorded before.
+    ///
+    /// Fails without recording anything when a name belongs to another
+    /// contract, or when `registered_elsewhere(name)` says a tool that is not
+    /// this contract's already has it. The check and the record happen under
+    /// one lock, so two publications cannot both take a name.
+    pub fn claim_tool_names(
+        &self,
+        key: &str,
+        names: &[String],
+        registered_elsewhere: impl Fn(&str) -> bool,
+    ) -> Result<Vec<String>, String> {
+        let mut owned = self.tool_names.write();
+        let own: &[String] = owned.get(key).map(Vec::as_slice).unwrap_or_default();
+        for name in names {
+            if let Some((other, _)) = owned
+                .iter()
+                .find(|(other, list)| other.as_str() != key && list.contains(name))
+            {
+                return Err(format!(
+                    "MCP tool name {name:?} is already used by contract {other:?}"
+                ));
+            }
+            if !own.contains(name) && registered_elsewhere(name) {
+                return Err(format!(
+                    "MCP tool name {name:?} is already used by a tool that is not from this contract"
+                ));
+            }
+        }
+        let previous = if names.is_empty() {
+            owned.remove(key)
+        } else {
+            owned.insert(key.to_string(), names.to_vec())
+        };
+        Ok(previous.unwrap_or_default())
+    }
+
+    /// Forget and return the MCP tool names recorded for a contract key.
+    pub fn take_tool_names(&self, key: &str) -> Vec<String> {
+        self.tool_names.write().remove(key).unwrap_or_default()
     }
 
     /// Insert or update a contract by name. Returns the previous value if it existed.
@@ -162,6 +215,42 @@ mod tests {
 
         let empty = reg.list_by_tenant("unknown");
         assert!(empty.is_empty());
+    }
+
+    #[test]
+    fn claim_tool_names_refuses_a_name_of_another_contract_and_records_nothing() {
+        let reg = ContractRegistry::new();
+        let names = |list: &[&str]| list.iter().map(|n| n.to_string()).collect::<Vec<_>>();
+        let nowhere = |_: &str| false;
+
+        assert!(reg
+            .claim_tool_names("acme:a", &names(&["x", "y"]), nowhere)
+            .expect("first")
+            .is_empty());
+        let error = reg
+            .claim_tool_names("globex:b", &names(&["z", "y"]), nowhere)
+            .expect_err("y belongs to acme:a");
+        assert!(error.contains("acme:a"), "{error}");
+        assert!(reg.tool_names("globex:b").is_empty());
+
+        // The owner may keep, drop or add names.
+        let previous = reg
+            .claim_tool_names("acme:a", &names(&["y", "w"]), nowhere)
+            .expect("republish");
+        assert_eq!(previous, names(&["x", "y"]));
+        assert_eq!(reg.tool_names("acme:a"), names(&["y", "w"]));
+
+        // A name held outside contracts is refused unless already this contract's.
+        let elsewhere = |name: &str| name == "w" || name == "builtin";
+        assert!(reg
+            .claim_tool_names("acme:a", &names(&["w"]), elsewhere)
+            .is_ok());
+        assert!(reg
+            .claim_tool_names("globex:b", &names(&["builtin"]), elsewhere)
+            .is_err());
+
+        assert_eq!(reg.take_tool_names("acme:a"), names(&["w"]));
+        assert!(reg.tool_names("acme:a").is_empty());
     }
 
     #[test]

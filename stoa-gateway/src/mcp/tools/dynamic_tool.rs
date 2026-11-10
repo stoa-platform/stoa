@@ -39,7 +39,8 @@ pub struct DynamicTool {
     /// Skip tenant isolation check (for catalog API tools accessible to all)
     public: bool,
     /// Optional OpenAPI path pattern with `{name}` placeholders (CAB-2113 Phase 0).
-    /// When set, the final URL is `endpoint + substituted(path_pattern)`.
+    /// When set, the final URL is `endpoint` joined to `substituted(path_pattern)`
+    /// with one `/` between them.
     /// Tokens are pulled from the tool args and removed before the remainder is
     /// sent as query string (GET/DELETE) or JSON body (POST/PUT/PATCH).
     path_pattern: Option<String>,
@@ -150,12 +151,15 @@ impl Tool for DynamicTool {
         }
 
         // CAB-2113 Phase 0: when a path pattern is attached, substitute `{name}`
-        // tokens from args into the path and append to endpoint. The matched
+        // tokens from args into the path and join it to endpoint. The matched
         // args are removed so they don't leak into the query/body.
         let (final_url, remaining_args) = match &self.path_pattern {
             Some(pattern) => {
                 let (path, stripped) = substitute_path_pattern(pattern, args, &self.name)?;
-                (format!("{}{}", self.endpoint, path), stripped)
+                (
+                    crate::proxy::dynamic::join_upstream_url(&self.endpoint, &path, None),
+                    stripped,
+                )
             }
             None => (self.endpoint.clone(), args),
         };
@@ -286,7 +290,7 @@ fn substitute_path_pattern(
 }
 
 /// Extract `{name}` tokens from an OpenAPI path pattern, in document order.
-fn extract_path_tokens(pattern: &str) -> Vec<String> {
+pub(crate) fn extract_path_tokens(pattern: &str) -> Vec<String> {
     let mut out = Vec::new();
     let bytes = pattern.as_bytes();
     let mut i = 0;
@@ -689,6 +693,53 @@ mod tests {
         tool.execute(json!({"id": "42", "amount": 100}), &ctx)
             .await
             .unwrap();
+    }
+
+    #[tokio::test]
+    async fn path_pattern_is_joined_to_the_endpoint_with_one_slash() {
+        use wiremock::matchers::{method, path as m_path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(m_path("/customers/C-1001"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("found"))
+            .mount(&mock)
+            .await;
+
+        let ctx = ToolContext {
+            tenant_id: "demo".to_string(),
+            user_id: None,
+            user_email: None,
+            request_id: "req-1".to_string(),
+            roles: vec![],
+            scopes: vec![],
+            raw_token: None,
+            skill_instructions: None,
+            progress_token: None,
+            consumer_id: "c".to_string(),
+            from_control_plane: false,
+        };
+        // Endpoint without trailing slash + pattern without leading slash,
+        // and endpoint with trailing slash + pattern with leading slash.
+        let cases = [
+            (format!("{}/customers", mock.uri()), "{id}"),
+            (format!("{}/", mock.uri()), "/customers/{id}"),
+        ];
+        for (endpoint, pattern) in cases {
+            let tool = DynamicTool::new(
+                "demo_api_get",
+                "Get customer",
+                &endpoint,
+                "GET",
+                schema_empty_object(),
+                "demo",
+            )
+            .with_path_pattern(pattern);
+            tool.execute(json!({"id": "C-1001"}), &ctx)
+                .await
+                .unwrap_or_else(|e| panic!("{endpoint} + {pattern}: {e}"));
+        }
     }
 
     // === CAB-2123: public DynamicTool must be tenant_id=None in discovery ===

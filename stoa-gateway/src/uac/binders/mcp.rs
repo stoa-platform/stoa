@@ -1,41 +1,111 @@
 //! MCP Protocol Binder
 //!
 //! Transforms a UAC contract into MCP tools registered in the ToolRegistry.
-//! Each endpoint in the contract becomes a DynamicTool with the naming pattern:
-//! `{tenant_id}_{contract_name}_{operation_id}`
+//! Each endpoint in the contract becomes a DynamicTool named
+//! `endpoint.llm.tool_name`, or [`default_tool_name`] when it has none:
+//! `{tenant_id}_{contract_name}_{operation_id|index}`.
+//!
+//! The names a contract registered are kept in the [`ContractRegistry`], so a
+//! republication replaces exactly those tools and a deletion removes them,
+//! whatever their names.
 
-use std::collections::HashMap;
+use std::fmt::Write as _;
 use std::sync::Arc;
 
-use parking_lot::RwLock;
+use sha2::{Digest, Sha256};
 
-use crate::mcp::tools::dynamic_tool::DynamicTool;
-use crate::mcp::tools::{ToolAnnotations, ToolDefinition, ToolRegistry, ToolSchema};
+use crate::mcp::tools::dynamic_tool::{extract_path_tokens, schema_from_value, DynamicTool};
+use crate::mcp::tools::{
+    validation, Tool, ToolAnnotations, ToolDefinition, ToolRegistry, ToolSchema,
+};
+use crate::uac::registry::ContractRegistry;
 use crate::uac::schema::{EndpointSideEffects, UacContractSpec, UacEndpoint};
 use crate::uac::Action;
 
-use super::{BindingOutput, ProtocolBinder};
+use super::{split_path_template, BindingOutput, ProtocolBinder, CONTRACT_REJECTED};
+
+/// Longest default tool name. MCP clients commonly enforce
+/// `^[a-zA-Z0-9_-]{1,64}$`.
+pub const MAX_DEFAULT_TOOL_NAME_LEN: usize = 64;
+
+/// Default MCP tool name of a contract endpoint that has no `llm.tool_name`.
+///
+/// `{tenant_id}_{contract_name}_{operation}`, each part reduced to
+/// `[A-Za-z0-9_-]` (any other character becomes `_`). A name longer than
+/// [`MAX_DEFAULT_TOOL_NAME_LEN`] is cut and ends with `_` plus 8 hex
+/// characters of the SHA-256 of the full name, so it stays stable and two
+/// long names that share a start stay distinct.
+pub fn default_tool_name(tenant_id: &str, contract_name: &str, operation: &str) -> String {
+    let full = [tenant_id, contract_name, operation]
+        .iter()
+        .map(|part| sanitize_name_part(part))
+        .collect::<Vec<_>>()
+        .join("_");
+    if full.len() <= MAX_DEFAULT_TOOL_NAME_LEN {
+        return full;
+    }
+    let mut hasher = Sha256::new();
+    hasher.update(full.as_bytes());
+    let digest = hasher.finalize();
+    // `full` is ASCII after sanitising, so any byte index is a char boundary.
+    let mut name = full[..MAX_DEFAULT_TOOL_NAME_LEN - 9].to_string();
+    name.push('_');
+    for byte in digest.iter().take(4) {
+        let _ = write!(name, "{byte:02x}");
+    }
+    name
+}
+
+fn sanitize_name_part(part: &str) -> String {
+    part.chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
+/// What the binder derives from one endpoint, shared by the definitions and
+/// the registered tools.
+struct EndpointTool {
+    name: String,
+    description: String,
+    method: String,
+    action: Action,
+    input_schema: ToolSchema,
+    /// Path after the static prefix, `{param}` tokens included (`{id}/segment`).
+    /// Empty when the path has no parameter.
+    path_rest: String,
+}
 
 /// MCP protocol binder — generates MCP tools from UAC contracts.
 pub struct McpBinder {
     tool_registry: Arc<ToolRegistry>,
-    contract_tool_names: RwLock<HashMap<String, Vec<String>>>,
+    /// Holds the tool names of each contract across binder instances.
+    contracts: Arc<ContractRegistry>,
 }
 
 impl McpBinder {
-    /// Create a new MCP binder backed by the given tool registry.
+    /// Create a binder whose tool-name records live in a private registry.
+    ///
+    /// Production uses [`Self::with_contracts`] so the records outlive the
+    /// binder built for one admin request.
     pub fn new(tool_registry: Arc<ToolRegistry>) -> Self {
-        Self {
-            tool_registry,
-            contract_tool_names: RwLock::new(HashMap::new()),
-        }
+        Self::with_contracts(tool_registry, Arc::new(ContractRegistry::new()))
     }
 
-    /// Tool name prefix for a contract (used for cascade deletion).
-    pub fn tool_prefix(contract_key: &str) -> String {
-        // contract_key = "tenant_id:contract_name"
-        // prefix = "uac:tenant_id:contract_name:"
-        format!("uac:{}:", contract_key)
+    /// Create a binder that records tool names in `contracts`.
+    pub fn with_contracts(
+        tool_registry: Arc<ToolRegistry>,
+        contracts: Arc<ContractRegistry>,
+    ) -> Self {
+        Self {
+            tool_registry,
+            contracts,
+        }
     }
 
     /// Map HTTP method to UAC Action.
@@ -70,18 +140,18 @@ impl McpBinder {
     /// Build the generated MCP tool name.
     ///
     /// For LLM-ready endpoints, endpoint.llm.tool_name is the stable MCP tool
-    /// name. Legacy endpoints keep the namespaced UAC fallback.
+    /// name. Other endpoints get [`default_tool_name`].
     fn tool_name(contract: &UacContractSpec, endpoint: &UacEndpoint, index: usize) -> String {
         if let Some(llm) = endpoint.llm.as_ref() {
             return llm.tool_name.clone();
         }
-
-        let op_id = endpoint
+        let operation = endpoint
             .operation_id
-            .clone()
-            .unwrap_or_else(|| format!("{}-{}", contract.name, index));
-
-        format!("uac:{}:{}:{}", contract.tenant_id, contract.name, op_id)
+            .as_deref()
+            .filter(|op| !op.is_empty())
+            .map(str::to_string)
+            .unwrap_or_else(|| index.to_string());
+        default_tool_name(&contract.tenant_id, &contract.name, &operation)
     }
 
     /// Build the agent-facing tool description.
@@ -118,6 +188,57 @@ impl McpBinder {
         lines.join("\n")
     }
 
+    /// Input schema of the endpoint, with each path parameter declared as a
+    /// required string. A property the contract already defines is kept.
+    fn input_schema(endpoint: &UacEndpoint, path_params: &[String]) -> ToolSchema {
+        let mut schema = endpoint
+            .input_schema
+            .as_ref()
+            .map(schema_from_value)
+            .unwrap_or_else(|| ToolSchema {
+                schema_type: "object".to_string(),
+                properties: Default::default(),
+                required: vec![],
+            });
+        for param in path_params {
+            schema.properties.entry(param.clone()).or_insert_with(|| {
+                serde_json::json!({
+                    "type": "string",
+                    "description": format!("Value of {{{param}}} in {}", endpoint.path),
+                })
+            });
+            if !schema.required.contains(param) {
+                schema.required.push(param.clone());
+            }
+        }
+        schema
+    }
+
+    fn endpoint_tool(
+        contract: &UacContractSpec,
+        endpoint: &UacEndpoint,
+        index: usize,
+    ) -> EndpointTool {
+        // Use first method for action hint (most endpoints have one primary method)
+        let method = endpoint
+            .methods
+            .first()
+            .map(|m| m.as_str())
+            .unwrap_or("GET")
+            .to_string();
+        let action = Self::endpoint_action(endpoint, &method);
+        let (_, path_rest) = split_path_template(&endpoint.path);
+        let path_params = extract_path_tokens(path_rest);
+        EndpointTool {
+            name: Self::tool_name(contract, endpoint, index),
+            description: Self::description(contract, endpoint, &method),
+            input_schema: Self::input_schema(endpoint, &path_params),
+            method,
+            action,
+            path_rest: path_rest.to_string(),
+        }
+    }
+
     /// Generate tool definitions from a contract (pure function, no side effects).
     pub fn generate_tool_definitions(contract: &UacContractSpec) -> Vec<ToolDefinition> {
         contract
@@ -125,33 +246,13 @@ impl McpBinder {
             .iter()
             .enumerate()
             .map(|(i, endpoint)| {
-                // Use first method for action hint (most endpoints have one primary method)
-                let primary_method = endpoint
-                    .methods
-                    .first()
-                    .map(|m| m.as_str())
-                    .unwrap_or("GET");
-                let action = Self::endpoint_action(endpoint, primary_method);
-                let tool_name = Self::tool_name(contract, endpoint, i);
-                let description = Self::description(contract, endpoint, primary_method);
-
-                // Build input schema from endpoint schema or default empty object
-                let input_schema = endpoint
-                    .input_schema
-                    .as_ref()
-                    .map(crate::mcp::tools::dynamic_tool::schema_from_value)
-                    .unwrap_or_else(|| ToolSchema {
-                        schema_type: "object".to_string(),
-                        properties: Default::default(),
-                        required: vec![],
-                    });
-
+                let spec = Self::endpoint_tool(contract, endpoint, i);
                 ToolDefinition {
-                    name: tool_name,
-                    description,
-                    input_schema,
+                    name: spec.name,
+                    description: spec.description,
+                    input_schema: spec.input_schema,
                     output_schema: endpoint.output_schema.clone(),
-                    annotations: Some(ToolAnnotations::from_action(action)),
+                    annotations: Some(ToolAnnotations::from_action(spec.action)),
                     tenant_id: Some(contract.tenant_id.clone()),
                 }
             })
@@ -159,77 +260,95 @@ impl McpBinder {
     }
 
     /// Create DynamicTool instances from a contract for registration.
-    fn create_dynamic_tools(contract: &UacContractSpec) -> Vec<Arc<dyn crate::mcp::tools::Tool>> {
+    ///
+    /// `backend_url` is the upstream URL of the path's static prefix. A path
+    /// with parameters (`/customers/{id}/segment`) gets the rest as a path
+    /// pattern: the call goes to `backend_url` joined to `C-1001/segment`, and
+    /// the arguments used in the path are not sent again as query or body.
+    fn create_dynamic_tools(contract: &UacContractSpec) -> Vec<Arc<dyn Tool>> {
         contract
             .endpoints
             .iter()
             .enumerate()
             .map(|(i, endpoint)| {
-                let primary_method = endpoint
-                    .methods
-                    .first()
-                    .map(|m| m.as_str())
-                    .unwrap_or("GET");
-                let action = Self::endpoint_action(endpoint, primary_method);
-                let tool_name = Self::tool_name(contract, endpoint, i);
-                let description = Self::description(contract, endpoint, primary_method);
-
-                let input_schema = endpoint
-                    .input_schema
-                    .as_ref()
-                    .map(crate::mcp::tools::dynamic_tool::schema_from_value)
-                    .unwrap_or_else(|| ToolSchema {
-                        schema_type: "object".to_string(),
-                        properties: Default::default(),
-                        required: vec![],
-                    });
-
-                let tool = DynamicTool::new(
-                    &tool_name,
-                    &description,
+                let spec = Self::endpoint_tool(contract, endpoint, i);
+                let mut tool = DynamicTool::new(
+                    &spec.name,
+                    &spec.description,
                     &endpoint.backend_url,
-                    primary_method,
-                    input_schema,
+                    &spec.method,
+                    spec.input_schema,
                     &contract.tenant_id,
                 )
-                .with_action(action)
-                .with_annotations(ToolAnnotations::from_action(action));
-
-                Arc::new(tool) as Arc<dyn crate::mcp::tools::Tool>
+                .with_action(spec.action)
+                .with_annotations(ToolAnnotations::from_action(spec.action));
+                if !spec.path_rest.is_empty() {
+                    tool = tool.with_path_pattern(spec.path_rest);
+                }
+                Arc::new(tool) as Arc<dyn Tool>
             })
             .collect()
     }
 }
 
 impl ProtocolBinder for McpBinder {
+    /// Replace the tools of a contract.
+    ///
+    /// Two endpoints with one name, or a name held by another contract or by
+    /// a tool from elsewhere, reject the contract before any registry change.
+    /// A tool the registry's validation refuses is left out and not counted.
     async fn bind(&self, contract: &UacContractSpec) -> Result<BindingOutput, String> {
         let contract_key = format!("{}:{}", contract.tenant_id, contract.name);
-        let prefix = Self::tool_prefix(&contract_key);
+        let tools = Self::create_dynamic_tools(contract);
 
-        // Remove existing tools for this contract (idempotent re-bind)
-        self.tool_registry.remove_by_prefix(&prefix);
-        if let Some(previous_names) = self.contract_tool_names.write().remove(&contract_key) {
-            for name in previous_names {
-                self.tool_registry.unregister(&name);
+        let mut seen: Vec<&str> = Vec::with_capacity(tools.len());
+        for tool in &tools {
+            if seen.contains(&tool.name()) {
+                return Err(format!(
+                    "{CONTRACT_REJECTED}two endpoints produce the MCP tool name {:?}",
+                    tool.name()
+                ));
+            }
+            seen.push(tool.name());
+        }
+
+        let mut valid = Vec::with_capacity(tools.len());
+        for tool in tools {
+            match validation::validate_tool(tool.as_ref()) {
+                Ok(()) => valid.push(tool),
+                Err(e) => tracing::warn!(
+                    contract = %contract_key,
+                    errors = %e,
+                    "MCP binder: tool left out"
+                ),
             }
         }
+        let names: Vec<String> = valid.iter().map(|t| t.name().to_string()).collect();
 
-        // Create and register new tools
-        let tools = Self::create_dynamic_tools(contract);
-        let count = tools.len();
-        let definitions = Self::generate_tool_definitions(contract);
+        let previous = self
+            .contracts
+            .claim_tool_names(&contract_key, &names, |name| {
+                self.tool_registry.exists(name)
+            })
+            .map_err(|e| format!("{CONTRACT_REJECTED}{e}"))?;
 
-        for tool in &tools {
-            self.tool_registry.register(Arc::clone(tool));
+        for stale in previous.iter().filter(|name| !names.contains(name)) {
+            self.tool_registry.unregister(stale);
         }
-        self.contract_tool_names.write().insert(
-            contract_key.clone(),
-            definitions.iter().map(|d| d.name.clone()).collect(),
-        );
+        for tool in valid {
+            self.tool_registry.register(tool);
+        }
+
+        // Count what the registry holds now, not what the contract asked for.
+        let definitions: Vec<ToolDefinition> = names
+            .iter()
+            .filter_map(|name| self.tool_registry.get(name))
+            .map(|tool| tool.definition())
+            .collect();
 
         tracing::info!(
             contract = %contract_key,
-            tools = count,
+            tools = definitions.len(),
             "MCP binder: tools generated"
         );
 
@@ -237,15 +356,11 @@ impl ProtocolBinder for McpBinder {
     }
 
     async fn unbind(&self, contract_key: &str) -> Result<usize, String> {
-        let prefix = Self::tool_prefix(contract_key);
-        let mut removed = self.tool_registry.remove_by_prefix(&prefix);
-        if let Some(previous_names) = self.contract_tool_names.write().remove(contract_key) {
-            for name in previous_names {
-                if self.tool_registry.unregister(&name) {
-                    removed += 1;
-                }
-            }
-        }
+        let names = self.contracts.take_tool_names(contract_key);
+        let removed = names
+            .iter()
+            .filter(|name| self.tool_registry.unregister(name))
+            .count();
 
         tracing::info!(
             contract = %contract_key,
@@ -260,6 +375,7 @@ impl ProtocolBinder for McpBinder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::mcp::tools::ToolContext;
     use crate::uac::classifications::Classification;
     use crate::uac::schema::{
         ContractStatus, EndpointLlm, EndpointLlmExample, EndpointSideEffects, UacContractSpec,
@@ -296,12 +412,41 @@ mod tests {
         spec
     }
 
-    #[test]
-    fn test_tool_prefix() {
-        assert_eq!(
-            McpBinder::tool_prefix("acme:payments"),
-            "uac:acme:payments:"
-        );
+    fn read_llm(tool_name: &str) -> EndpointLlm {
+        EndpointLlm {
+            summary: "List customer payments.".to_string(),
+            intent: "Use to inspect payments without changing state.".to_string(),
+            tool_name: tool_name.to_string(),
+            side_effects: EndpointSideEffects::Read,
+            safe_for_agents: true,
+            requires_human_approval: false,
+            examples: vec![EndpointLlmExample {
+                input: serde_json::json!({}),
+                expected_output_contains: None,
+            }],
+        }
+    }
+
+    fn tool_context(tenant: &str) -> ToolContext {
+        ToolContext {
+            tenant_id: tenant.to_string(),
+            user_id: None,
+            user_email: None,
+            request_id: "req-1".to_string(),
+            roles: vec![],
+            scopes: vec![],
+            raw_token: None,
+            skill_instructions: None,
+            progress_token: None,
+            consumer_id: "c".to_string(),
+            from_control_plane: false,
+        }
+    }
+
+    fn sorted_names(registry: &ToolRegistry) -> Vec<String> {
+        let mut names = registry.names();
+        names.sort();
+        names
     }
 
     #[test]
@@ -325,36 +470,96 @@ mod tests {
     fn test_generate_definitions_tool_names() {
         let contract = sample_contract();
         let defs = McpBinder::generate_tool_definitions(&contract);
-        assert_eq!(defs[0].name, "uac:acme:payments:list_payments");
-        assert_eq!(defs[1].name, "uac:acme:payments:delete_payment");
+        assert_eq!(defs[0].name, "acme_payments_list_payments");
+        assert_eq!(defs[1].name, "acme_payments_delete_payment");
     }
 
     #[test]
     fn test_generate_definitions_uses_llm_tool_name() {
         let mut contract = sample_contract();
-        contract.endpoints[0].llm = Some(EndpointLlm {
-            summary: "List customer payments.".to_string(),
-            intent: "Use to inspect payments without changing state.".to_string(),
-            tool_name: "list_customer_payments".to_string(),
-            side_effects: EndpointSideEffects::Read,
-            safe_for_agents: true,
-            requires_human_approval: false,
-            examples: vec![EndpointLlmExample {
-                input: serde_json::json!({}),
-                expected_output_contains: None,
-            }],
-        });
+        contract.endpoints[0].llm = Some(read_llm("list_customer_payments"));
 
         let defs = McpBinder::generate_tool_definitions(&contract);
         assert_eq!(defs[0].name, "list_customer_payments");
     }
 
     #[test]
+    fn llm_tool_name_is_used_as_given() {
+        let mut contract = sample_contract();
+        contract.endpoints[0].llm = Some(read_llm("payments.list:v2"));
+
+        let defs = McpBinder::generate_tool_definitions(&contract);
+        assert_eq!(defs[0].name, "payments.list:v2");
+    }
+
+    #[test]
     fn test_generate_definitions_name_fallback() {
         let mut contract = sample_contract();
         contract.endpoints[0].operation_id = None;
+        contract.endpoints[1].operation_id = Some(String::new());
         let defs = McpBinder::generate_tool_definitions(&contract);
-        assert_eq!(defs[0].name, "uac:acme:payments:payments-0");
+        assert_eq!(defs[0].name, "acme_payments_0");
+        assert_eq!(defs[1].name, "acme_payments_1");
+    }
+
+    #[test]
+    fn default_tool_name_keeps_only_letters_digits_underscore_and_hyphen() {
+        assert_eq!(
+            default_tool_name("demo", "customer-api", "getCustomer"),
+            "demo_customer-api_getCustomer"
+        );
+        assert_eq!(
+            default_tool_name("acme corp", "v1.payments", "get:payment/{id}"),
+            "acme_corp_v1_payments_get_payment__id_"
+        );
+        assert_eq!(default_tool_name("démo", "api", "0"), "d_mo_api_0");
+    }
+
+    #[test]
+    fn default_tool_name_matches_the_strict_client_pattern() {
+        let names = [
+            default_tool_name("demo", "customer-api", "list"),
+            default_tool_name("t:x", "a b", "op.with.dots"),
+            default_tool_name(&"t".repeat(40), &"n".repeat(40), &"o".repeat(40)),
+        ];
+        for name in names {
+            assert!(!name.is_empty() && name.len() <= 64, "{name}");
+            assert!(
+                name.chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-'),
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn long_default_tool_name_is_cut_with_a_stable_hash_suffix() {
+        let tenant = "tenant-with-a-long-identifier";
+        let contract = "customer-referential-api";
+        let a = default_tool_name(tenant, contract, "get_customer_by_external_reference");
+        let b = default_tool_name(tenant, contract, "get_customer_by_external_reference_v2");
+
+        assert_eq!(a.len(), 64);
+        assert_eq!(b.len(), 64);
+        assert_ne!(a, b);
+        assert_eq!(
+            a,
+            default_tool_name(tenant, contract, "get_customer_by_external_reference")
+        );
+        let full = "tenant-with-a-long-identifier_customer-referential-api_get_customer_by_external_reference";
+        let (head, suffix) = a.split_at(55);
+        assert_eq!(head, &full[..55]);
+        assert!(suffix.starts_with('_'));
+        assert_eq!(suffix.len(), 9);
+        assert!(suffix[1..].chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn default_tool_name_at_64_characters_is_not_cut() {
+        let name = default_tool_name(&"t".repeat(20), &"n".repeat(20), &"o".repeat(22));
+        assert_eq!(name.len(), 64);
+        assert!(!name.contains("__"));
+        assert!(name.ends_with(&"o".repeat(22)));
     }
 
     #[test]
@@ -431,11 +636,101 @@ mod tests {
     }
 
     #[test]
+    fn path_parameters_are_required_strings_without_input_schema() {
+        let mut contract = sample_contract();
+        contract.endpoints[1].path = "/payments/{id}/lines/{line}".to_string();
+        let defs = McpBinder::generate_tool_definitions(&contract);
+
+        let schema = &defs[1].input_schema;
+        assert_eq!(schema.schema_type, "object");
+        assert_eq!(schema.required, vec!["id", "line"]);
+        for param in ["id", "line"] {
+            let property = &schema.properties[param];
+            assert_eq!(property["type"], "string");
+            assert!(property["description"]
+                .as_str()
+                .is_some_and(|d| !d.is_empty()));
+        }
+        // An endpoint without parameters gets no invented property.
+        assert!(defs[0].input_schema.properties.is_empty());
+        assert!(defs[0].input_schema.required.is_empty());
+    }
+
+    #[test]
+    fn path_parameters_complete_the_given_input_schema() {
+        let mut contract = sample_contract();
+        contract.endpoints[1].path = "/payments/{id}/lines/{line}".to_string();
+        contract.endpoints[1].input_schema = Some(serde_json::json!({
+            "type": "object",
+            "properties": {
+                "id": {"type": "integer", "description": "Payment number"},
+                "reason": {"type": "string"}
+            },
+            "required": ["reason"]
+        }));
+        let defs = McpBinder::generate_tool_definitions(&contract);
+
+        let schema = &defs[1].input_schema;
+        assert_eq!(schema.properties["id"]["type"], "integer");
+        assert_eq!(schema.properties["id"]["description"], "Payment number");
+        assert_eq!(schema.properties["reason"]["type"], "string");
+        assert_eq!(schema.properties["line"]["type"], "string");
+        assert_eq!(schema.required, vec!["reason", "id", "line"]);
+    }
+
+    #[test]
     fn test_generate_definitions_with_output_schema() {
         let mut contract = sample_contract();
         contract.endpoints[0].output_schema = Some(serde_json::json!({"type": "array"}));
         let defs = McpBinder::generate_tool_definitions(&contract);
         assert!(defs[0].output_schema.is_some());
+    }
+
+    #[tokio::test]
+    async fn tool_substitutes_path_parameters_under_the_static_prefix_url() {
+        use wiremock::matchers::{method, path, query_param, query_param_is_missing};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let backend = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/customers/C-1001/segment"))
+            .and(query_param("expand", "all"))
+            .and(query_param_is_missing("id"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("segment"))
+            .mount(&backend)
+            .await;
+
+        let mut contract = UacContractSpec::new("api", "demo");
+        contract.status = ContractStatus::Published;
+        contract.endpoints = vec![UacEndpoint {
+            path: "/customers/{id}/segment".to_string(),
+            methods: vec!["GET".to_string()],
+            backend_url: format!("{}/customers/", backend.uri()),
+            method: None,
+            description: None,
+            operation_id: Some("get_segment".to_string()),
+            input_schema: None,
+            output_schema: None,
+            llm: None,
+        }];
+
+        let registry = Arc::new(ToolRegistry::new());
+        McpBinder::new(registry.clone())
+            .bind(&contract)
+            .await
+            .expect("bind");
+        let tool = registry.get("demo_api_get_segment").expect("tool");
+        let result = tool
+            .execute(
+                serde_json::json!({"id": "C-1001", "expand": "all"}),
+                &tool_context("demo"),
+            )
+            .await
+            .expect("call reaches the backend sub-path");
+        assert!(result.content.iter().any(|content| matches!(
+            content,
+            crate::mcp::tools::ToolContent::Text { text } if text == "segment"
+        )));
     }
 
     #[tokio::test]
@@ -449,8 +744,8 @@ mod tests {
 
         // Tools should be in the registry
         assert_eq!(registry.count(), 2);
-        assert!(registry.exists("uac:acme:payments:list_payments"));
-        assert!(registry.exists("uac:acme:payments:delete_payment"));
+        assert!(registry.exists("acme_payments_list_payments"));
+        assert!(registry.exists("acme_payments_delete_payment"));
     }
 
     #[tokio::test]
@@ -467,6 +762,42 @@ mod tests {
         updated.endpoints.pop();
         binder.bind(&updated).await.expect("second bind");
         assert_eq!(registry.count(), 1);
+    }
+
+    #[tokio::test]
+    async fn republish_replaces_llm_named_tools_across_binder_instances() {
+        // The admin handler builds a new binder for every request; the
+        // records must live in the shared contract registry.
+        let registry = Arc::new(ToolRegistry::new());
+        let contracts = Arc::new(ContractRegistry::new());
+
+        let mut first = sample_contract();
+        first.endpoints[0].llm = Some(read_llm("list_customer_payments"));
+        McpBinder::with_contracts(registry.clone(), contracts.clone())
+            .bind(&first)
+            .await
+            .expect("first publish");
+        assert_eq!(
+            sorted_names(&registry),
+            vec!["acme_payments_delete_payment", "list_customer_payments"]
+        );
+
+        let mut second = sample_contract();
+        second.endpoints.remove(1);
+        second.endpoints[0].llm = Some(read_llm("list_payments_v2"));
+        let output = McpBinder::with_contracts(registry.clone(), contracts.clone())
+            .bind(&second)
+            .await
+            .expect("republish");
+        let BindingOutput::Tools(tools) = output else {
+            panic!("tools expected");
+        };
+        assert_eq!(tools.len(), 1);
+        assert_eq!(sorted_names(&registry), vec!["list_payments_v2"]);
+        assert_eq!(
+            contracts.tool_names("acme:payments"),
+            vec!["list_payments_v2"]
+        );
     }
 
     #[tokio::test]
@@ -489,18 +820,7 @@ mod tests {
         let binder = McpBinder::new(registry.clone());
 
         let mut contract = sample_contract();
-        contract.endpoints[0].llm = Some(EndpointLlm {
-            summary: "List customer payments.".to_string(),
-            intent: "Use to inspect payments without changing state.".to_string(),
-            tool_name: "list_customer_payments".to_string(),
-            side_effects: EndpointSideEffects::Read,
-            safe_for_agents: true,
-            requires_human_approval: false,
-            examples: vec![EndpointLlmExample {
-                input: serde_json::json!({}),
-                expected_output_contains: None,
-            }],
-        });
+        contract.endpoints[0].llm = Some(read_llm("list_customer_payments"));
 
         binder.bind(&contract).await.expect("bind");
         assert!(registry.exists("list_customer_payments"));
@@ -511,12 +831,149 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn unbind_from_another_binder_instance_removes_llm_named_tools() {
+        let registry = Arc::new(ToolRegistry::new());
+        let contracts = Arc::new(ContractRegistry::new());
+
+        let mut contract = sample_contract();
+        contract.endpoints[0].llm = Some(read_llm("list_customer_payments"));
+        McpBinder::with_contracts(registry.clone(), contracts.clone())
+            .bind(&contract)
+            .await
+            .expect("publish");
+
+        let removed = McpBinder::with_contracts(registry.clone(), contracts.clone())
+            .unbind("acme:payments")
+            .await
+            .expect("delete");
+        assert_eq!(removed, 2);
+        assert_eq!(registry.count(), 0);
+        assert!(contracts.tool_names("acme:payments").is_empty());
+    }
+
+    #[tokio::test]
+    async fn name_taken_by_another_contract_rejects_without_partial_change() {
+        let registry = Arc::new(ToolRegistry::new());
+        let contracts = Arc::new(ContractRegistry::new());
+        let binder = McpBinder::with_contracts(registry.clone(), contracts.clone());
+
+        let mut owner = sample_contract();
+        owner.endpoints[0].llm = Some(read_llm("shared_name"));
+        binder.bind(&owner).await.expect("owner");
+
+        // Another tenant's contract, first published without the clash.
+        let mut other = sample_contract();
+        other.tenant_id = "globex".to_string();
+        binder.bind(&other).await.expect("other");
+        let before = sorted_names(&registry);
+
+        let mut clash = other.clone();
+        clash.endpoints[1].llm = Some(read_llm("shared_name"));
+        let error = binder.bind(&clash).await.expect_err("name taken");
+        assert!(error.starts_with(CONTRACT_REJECTED), "{error}");
+        assert!(error.contains("shared_name"), "{error}");
+        assert!(error.contains("acme:payments"), "{error}");
+
+        // Nothing replaced, nothing removed, records unchanged.
+        assert_eq!(sorted_names(&registry), before);
+        let shared = registry.get("shared_name").expect("owner tool kept");
+        assert_eq!(shared.tenant_id(), Some("acme"));
+        assert_eq!(
+            contracts.tool_names("globex:payments"),
+            vec![
+                "globex_payments_list_payments",
+                "globex_payments_delete_payment"
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn name_of_a_tool_from_elsewhere_rejects_the_contract() {
+        let registry = Arc::new(ToolRegistry::new());
+        let binder = McpBinder::new(registry.clone());
+        registry.register(Arc::new(DynamicTool::new(
+            "stoa_catalog",
+            "Built-in",
+            "http://localhost",
+            "GET",
+            ToolSchema {
+                schema_type: "object".to_string(),
+                properties: Default::default(),
+                required: vec![],
+            },
+            "acme",
+        )));
+
+        let mut contract = sample_contract();
+        contract.endpoints[0].llm = Some(read_llm("stoa_catalog"));
+        let error = binder.bind(&contract).await.expect_err("name taken");
+        assert!(error.starts_with(CONTRACT_REJECTED), "{error}");
+        assert_eq!(registry.names(), vec!["stoa_catalog"]);
+        assert_eq!(
+            registry.get("stoa_catalog").expect("kept").description(),
+            "Built-in"
+        );
+    }
+
+    #[tokio::test]
+    async fn two_endpoints_with_one_tool_name_reject_the_contract() {
+        let registry = Arc::new(ToolRegistry::new());
+        let binder = McpBinder::new(registry.clone());
+
+        let mut contract = sample_contract();
+        contract.endpoints[1].operation_id = Some("list_payments".to_string());
+        let error = binder.bind(&contract).await.expect_err("duplicate");
+        assert!(error.starts_with(CONTRACT_REJECTED), "{error}");
+        assert!(error.contains("acme_payments_list_payments"), "{error}");
+        assert_eq!(registry.count(), 0);
+    }
+
+    #[tokio::test]
+    async fn bound_tool_count_is_what_the_registry_accepted() {
+        let registry = Arc::new(ToolRegistry::new());
+        let binder = McpBinder::new(registry.clone());
+
+        // The registry refuses a tool whose input schema is not an object.
+        let mut contract = sample_contract();
+        contract.endpoints[1].input_schema = Some(serde_json::json!({"type": "array"}));
+        let output = binder.bind(&contract).await.expect("bind");
+        let BindingOutput::Tools(tools) = output else {
+            panic!("tools expected");
+        };
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0].name, "acme_payments_list_payments");
+        assert_eq!(registry.count(), 1);
+    }
+
+    #[tokio::test]
     async fn test_unbind_nonexistent_returns_zero() {
         let registry = Arc::new(ToolRegistry::new());
         let binder = McpBinder::new(registry.clone());
 
         let removed = binder.unbind("unknown:contract").await.expect("unbind");
         assert_eq!(removed, 0);
+    }
+
+    #[tokio::test]
+    async fn unbind_keeps_tools_of_a_contract_whose_key_extends_this_one() {
+        let registry = Arc::new(ToolRegistry::new());
+        let binder = McpBinder::new(registry.clone());
+
+        let short = sample_contract();
+        let mut long = sample_contract();
+        long.name = "payments:archive".to_string();
+        binder.bind(&short).await.expect("short");
+        binder.bind(&long).await.expect("long");
+        assert_eq!(registry.count(), 4);
+
+        binder.unbind("acme:payments").await.expect("unbind short");
+        assert_eq!(
+            sorted_names(&registry),
+            vec![
+                "acme_payments_archive_delete_payment",
+                "acme_payments_archive_list_payments"
+            ]
+        );
     }
 
     #[tokio::test]

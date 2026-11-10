@@ -71,7 +71,12 @@ impl RealBinders {
                         .with_global_audience(state.config.jwt_audience.iter().map(String::as_str))
                 }
             },
-            mcp: McpBinder::new(state.tool_registry.clone()),
+            // Tool names per contract live in the contract registry: this
+            // binder only serves one request.
+            mcp: McpBinder::with_contracts(
+                state.tool_registry.clone(),
+                state.contract_registry.clone(),
+            ),
         }
     }
 }

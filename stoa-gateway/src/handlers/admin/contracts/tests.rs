@@ -322,9 +322,7 @@ async fn test_contract_upsert_generates_routes() {
 
     // Verify MCP tool is in the tool registry (no operation_id → fallback name)
     assert_eq!(state.tool_registry.count(), 1);
-    assert!(state
-        .tool_registry
-        .exists("uac:acme:payment-api:payment-api-0"));
+    assert!(state.tool_registry.exists("acme_payment-api_0"));
 }
 
 #[tokio::test]
@@ -525,8 +523,8 @@ async fn test_contract_upsert_generates_mcp_tools() {
 
     // Both tools registered
     assert_eq!(state.tool_registry.count(), 2);
-    assert!(state.tool_registry.exists("uac:acme:orders:list_orders"));
-    assert!(state.tool_registry.exists("uac:acme:orders:create_order"));
+    assert!(state.tool_registry.exists("acme_orders_list_orders"));
+    assert!(state.tool_registry.exists("acme_orders_create_order"));
 }
 
 #[tokio::test]
@@ -565,8 +563,222 @@ async fn test_mcp_tools_visible_via_list() {
     // Tool should be visible in tool registry
     let tools = state.tool_registry.list(Some("acme"));
     assert_eq!(tools.len(), 1);
-    assert_eq!(tools[0].name, "uac:acme:payment-api:payment-api-0");
+    assert_eq!(tools[0].name, "acme_payment-api_0");
     assert_eq!(tools[0].tenant_id.as_deref(), Some("acme"));
+}
+
+// =============================================================================
+// MCP tool lifecycle across admin requests (one binder per request)
+// =============================================================================
+
+fn llm_endpoint(path: &str, method: &str, tool_name: Option<&str>) -> serde_json::Value {
+    let mut endpoint = serde_json::json!({
+        "path": path,
+        "methods": [method],
+        "backend_url": "https://backend.test/customers/"
+    });
+    if let Some(tool_name) = tool_name {
+        endpoint["llm"] = serde_json::json!({
+            "summary": "Read a customer.",
+            "intent": "Use to look up one customer.",
+            "tool_name": tool_name,
+            "side_effects": "read",
+            "safe_for_agents": true,
+            "requires_human_approval": false,
+            "examples": [{"input": {"id": "C-1001"}}]
+        });
+    }
+    endpoint
+}
+
+fn customer_contract_json(
+    tenant: &str,
+    name: &str,
+    endpoints: Vec<serde_json::Value>,
+) -> serde_json::Value {
+    serde_json::json!({
+        "name": name,
+        "version": "1.0.0",
+        "tenant_id": tenant,
+        "classification": "H",
+        "endpoints": endpoints,
+        "status": "published"
+    })
+}
+
+async fn post_contract(
+    app: &axum::Router,
+    contract: serde_json::Value,
+) -> (StatusCode, serde_json::Value) {
+    let response = app
+        .clone()
+        .oneshot(auth_json_req("POST", "/contracts", contract))
+        .await
+        .unwrap();
+    let status = response.status();
+    let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+        .await
+        .unwrap();
+    (status, serde_json::from_slice(&body).unwrap())
+}
+
+fn sorted_tool_names(state: &crate::state::AppState) -> Vec<String> {
+    let mut names = state.tool_registry.names();
+    names.sort();
+    names
+}
+
+#[tokio::test]
+async fn delete_removes_tools_named_by_llm_tool_name() {
+    let state = create_test_state(Some("secret"));
+    let app = build_full_admin_router(state.clone());
+
+    let (status, data) = post_contract(
+        &app,
+        customer_contract_json(
+            "demo",
+            "customers",
+            vec![
+                llm_endpoint("/customers/{id}", "GET", Some("get_customer")),
+                llm_endpoint("/customers", "POST", None),
+            ],
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(data["tools_generated"], 2);
+    assert_eq!(
+        sorted_tool_names(&state),
+        vec!["demo_customers_1", "get_customer"]
+    );
+
+    let response = app
+        .oneshot(auth_req("DELETE", "/contracts/demo:customers"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+        .await
+        .unwrap();
+    let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(data["tools_removed"], 2);
+    assert_eq!(state.tool_registry.count(), 0);
+}
+
+#[tokio::test]
+async fn republish_drops_the_tools_of_removed_endpoints() {
+    let state = create_test_state(Some("secret"));
+    let app = build_full_admin_router(state.clone());
+
+    let (status, _) = post_contract(
+        &app,
+        customer_contract_json(
+            "demo",
+            "customers",
+            vec![
+                llm_endpoint("/customers/{id}", "GET", Some("get_customer")),
+                llm_endpoint("/customers/{id}/segment", "GET", Some("get_segment")),
+            ],
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+
+    let (status, data) = post_contract(
+        &app,
+        customer_contract_json(
+            "demo",
+            "customers",
+            vec![llm_endpoint(
+                "/customers/{id}",
+                "GET",
+                Some("find_customer"),
+            )],
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(data["tools_generated"], 1);
+    assert_eq!(sorted_tool_names(&state), vec!["find_customer"]);
+}
+
+#[tokio::test]
+async fn tool_name_of_another_contract_is_400_and_changes_nothing() {
+    let state = create_test_state(Some("secret"));
+    let app = build_full_admin_router(state.clone());
+
+    let (status, _) = post_contract(
+        &app,
+        customer_contract_json(
+            "demo",
+            "customers",
+            vec![llm_endpoint("/customers/{id}", "GET", Some("get_customer"))],
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let (status, _) = post_contract(
+        &app,
+        customer_contract_json(
+            "other",
+            "crm",
+            vec![llm_endpoint("/accounts/{id}", "GET", Some("get_account"))],
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let routes_before = state.route_registry.count();
+
+    // Republish of `other:crm` that takes `get_customer`: rejected, and the
+    // previous `other:crm` routes and tools stay.
+    let (status, data) = post_contract(
+        &app,
+        customer_contract_json(
+            "other",
+            "crm",
+            vec![
+                llm_endpoint("/accounts/{id}", "GET", Some("get_account")),
+                llm_endpoint("/customers/{id}", "GET", Some("get_customer")),
+            ],
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(data["status"], "rejected");
+    let message = data["message"].as_str().unwrap();
+    assert!(message.contains("get_customer"), "{message}");
+    assert!(message.contains("demo:customers"), "{message}");
+
+    assert_eq!(
+        sorted_tool_names(&state),
+        vec!["get_account", "get_customer"]
+    );
+    let owner = state.tool_registry.get("get_customer").unwrap();
+    assert_eq!(owner.tenant_id(), Some("demo"));
+    assert_eq!(state.route_registry.count(), routes_before);
+    assert!(state
+        .route_registry
+        .find_by_path("/apis/other/crm/customers/C-1")
+        .is_none());
+    let stored = state.contract_registry.get("other:crm").unwrap();
+    assert_eq!(stored.endpoints.len(), 1);
+
+    // A new contract that takes the name is not stored at all.
+    let (status, _) = post_contract(
+        &app,
+        customer_contract_json(
+            "other",
+            "new-api",
+            vec![llm_endpoint("/x/{id}", "GET", Some("get_customer"))],
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(state.contract_registry.get("other:new-api").is_none());
+    assert!(state
+        .route_registry
+        .find_by_path("/apis/other/new-api/x/1")
+        .is_none());
 }
 
 // =============================================================================

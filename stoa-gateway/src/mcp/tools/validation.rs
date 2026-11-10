@@ -341,9 +341,10 @@ mod tests {
 
     #[test]
     fn valid_name_with_colons() {
-        // STOA uses colons as namespace separators: uac:tenant:contract:operation
+        // Colons stay valid: catalog tool names use them as separators
+        // (`demo:bank:get-customer`), and so may an `llm.tool_name`.
         let mut tool = MockTool::valid();
-        tool.name = "uac:acme:payments:list_payments".into();
+        tool.name = "demo:bank:get-customer".into();
         assert!(validate_tool(&tool).is_ok());
     }
 

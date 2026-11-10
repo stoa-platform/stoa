@@ -32,7 +32,9 @@ use axum::{
 use tracing::warn;
 
 use crate::state::AppState;
-use crate::uac::binders::{mcp::McpBinder, rest::RestBinder, BindingOutput, ProtocolBinder};
+use crate::uac::binders::{
+    mcp::McpBinder, rest::RestBinder, BindingOutput, ProtocolBinder, CONTRACT_REJECTED,
+};
 use crate::uac::registry::ContractRegistry;
 use crate::uac::{parse_admin_contract, UacContractSpec};
 
@@ -341,9 +343,13 @@ async fn restore_previous_bindings(
 }
 
 fn binder_failure_response(key: &str, which: &str, err: &str) -> Response {
-    // The standalone inbound-auth refusal is a caller error. Other binder
-    // failures stay generic; the detail is already in `tracing::warn!`.
-    if err.contains("no inbound auth") || err.contains("no audience") {
+    // The standalone inbound-auth refusal and a contract the binders reject
+    // are caller errors. Other binder failures stay generic; the detail is
+    // already in `tracing::warn!`.
+    if err.contains("no inbound auth")
+        || err.contains("no audience")
+        || err.starts_with(CONTRACT_REJECTED)
+    {
         return (
             StatusCode::BAD_REQUEST,
             Json(serde_json::json!({

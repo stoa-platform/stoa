@@ -317,7 +317,7 @@ async fn test_contract_upsert_generates_routes() {
     let route = state.route_registry.get("uac:acme:payment-api:0");
     assert!(route.is_some());
     let route = route.unwrap();
-    assert_eq!(route.path_prefix, "/apis/acme/payment-api/payments/{id}");
+    assert_eq!(route.path_prefix, "/apis/acme/payment-api/payments/");
     assert_eq!(route.contract_key.as_deref(), Some("acme:payment-api"));
 
     // Verify MCP tool is in the tool registry (no operation_id → fallback name)
@@ -405,6 +405,53 @@ async fn test_contract_re_upsert_replaces_routes() {
 
     // Old route should be gone, 2 new routes present
     assert_eq!(state.route_registry.count(), 2);
+}
+
+#[tokio::test]
+async fn same_rest_prefix_with_two_backends_is_400_and_stores_nothing() {
+    let state = create_test_state(Some("secret"));
+    let app = build_full_admin_router(state.clone());
+
+    let contract = serde_json::json!({
+        "name": "customers",
+        "version": "1.0.0",
+        "tenant_id": "demo",
+        "classification": "H",
+        "endpoints": [
+            {
+                "path": "/customers/{id}",
+                "methods": ["GET"],
+                "backend_url": "https://backend.test/customers/"
+            },
+            {
+                "path": "/customers/{id}/segment",
+                "methods": ["GET"],
+                "backend_url": "https://segments.test/segments/"
+            }
+        ],
+        "status": "published"
+    });
+
+    let response = app
+        .oneshot(auth_json_req("POST", "/contracts", contract))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+        .await
+        .unwrap();
+    let data: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(data["status"], "rejected");
+    let message = data["message"].as_str().unwrap();
+    assert!(message.contains("different backend_url"), "{message}");
+    assert!(
+        message.contains("/apis/demo/customers/customers/"),
+        "{message}"
+    );
+    assert_eq!(state.contract_registry.count(), 0);
+    assert_eq!(state.route_registry.count(), 0);
+    assert_eq!(state.tool_registry.count(), 0);
 }
 
 #[tokio::test]

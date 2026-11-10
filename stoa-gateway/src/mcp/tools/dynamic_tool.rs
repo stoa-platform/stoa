@@ -241,7 +241,8 @@ impl Tool for DynamicTool {
 ///
 /// Returns the substituted path + remaining args (with matched keys removed).
 /// Non-object args with a non-empty pattern is an error. A missing required
-/// token is an error. Matched values are URL-encoded.
+/// token is an error. A value that would change which path is called is
+/// refused (see [`path_value_refusal`]); the others are URL-encoded.
 fn substitute_path_pattern(
     pattern: &str,
     args: Value,
@@ -277,6 +278,13 @@ fn substitute_path_pattern(
                 tool_name, token
             ))
         })?;
+        // The value is not repeated in the error: it is caller input.
+        if let Some(reason) = path_value_refusal(&rendered) {
+            return Err(ToolError::InvalidArguments(format!(
+                "Tool {} path parameter {} {}",
+                tool_name, token, reason
+            )));
+        }
         substituted =
             substituted.replace(&format!("{{{}}}", token), &urlencoding::encode(&rendered));
     }
@@ -287,6 +295,28 @@ fn substitute_path_pattern(
         Value::Object(obj)
     };
     Ok((substituted, remaining))
+}
+
+/// Why a path parameter value cannot go into the URL path, if it cannot.
+///
+/// Percent-encoding does not make these values safe. `urlencoding::encode`
+/// keeps `.`, and the URL parser resolves `.` and `..` segments:
+/// `/customers/..` calls the parent. An empty value turns a call on one item
+/// into a call on the collection. `/` and `\` leave as `%2F` and `%5C`, which
+/// many backends decode and then normalise. Control characters have no place
+/// in a path segment.
+fn path_value_refusal(value: &str) -> Option<&'static str> {
+    if value.is_empty() {
+        Some("must not be empty")
+    } else if value == "." || value == ".." {
+        Some("must not be a dot segment")
+    } else if value.contains(['/', '\\']) {
+        Some("must not contain a slash or a backslash")
+    } else if value.chars().any(char::is_control) {
+        Some("must not contain a control character")
+    } else {
+        None
+    }
 }
 
 /// Extract `{name}` tokens from an OpenAPI path pattern, in document order.
@@ -585,10 +615,123 @@ mod tests {
 
     #[test]
     fn cab_2113_substitute_path_pattern_url_encodes_values() {
-        let (path, _) =
-            substitute_path_pattern("/items/{id}", json!({"id": "a/b c"}), "demo:store:get-item")
-                .unwrap();
-        assert_eq!(path, "/items/a%2Fb%20c");
+        let (path, _) = substitute_path_pattern(
+            "/items/{id}",
+            json!({"id": "a b?c#%2e"}),
+            "demo:store:get-item",
+        )
+        .unwrap();
+        assert_eq!(path, "/items/a%20b%3Fc%23%252e");
+    }
+
+    /// Values that would change which backend path is called, whatever the
+    /// percent-encoding: dot segments, an empty segment, separators, control
+    /// characters.
+    const PATH_CHANGING_VALUES: [&str; 8] =
+        ["", ".", "..", "a/b", "a\\b", "a\nb", "a\0b", "a\u{7f}b"];
+
+    #[test]
+    fn path_parameter_values_that_change_the_path_are_refused() {
+        for value in PATH_CHANGING_VALUES {
+            let err = substitute_path_pattern(
+                "{id}/segment",
+                json!({"id": value, "expand": "x"}),
+                "demo_api_get",
+            )
+            .expect_err(value);
+            assert!(
+                matches!(err, ToolError::InvalidArguments(_)),
+                "{value:?}: {err}"
+            );
+            let message = err.to_string();
+            assert!(
+                message.contains("path parameter id "),
+                "{value:?}: {message}"
+            );
+            if !value.is_empty() {
+                assert!(!message.contains(value), "{value:?} repeated: {message}");
+            }
+        }
+    }
+
+    #[test]
+    fn path_parameter_values_with_dots_inside_are_kept() {
+        for (value, encoded) in [
+            ("...", "..."),
+            ("a.b", "a.b"),
+            (".a", ".a"),
+            ("a..", "a.."),
+            ("%2e%2e", "%252e%252e"),
+            ("C-1001", "C-1001"),
+        ] {
+            let (path, _) = substitute_path_pattern("{id}", json!({ "id": value }), "demo_api_get")
+                .unwrap_or_else(|e| panic!("{value:?}: {e}"));
+            assert_eq!(path, encoded, "{value:?}");
+        }
+        let (path, _) = substitute_path_pattern("{id}", json!({"id": 42}), "demo_api_get").unwrap();
+        assert_eq!(path, "42");
+    }
+
+    #[tokio::test]
+    async fn regression_path_parameter_dot_segments_and_separators_never_reach_the_backend() {
+        use wiremock::matchers::method;
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("reached"))
+            .mount(&mock)
+            .await;
+
+        // As the MCP binder builds it for `/customers/{id}`.
+        let tool = DynamicTool::new(
+            "demo_api_get_customer",
+            "Get customer",
+            format!("{}/customers/", mock.uri()),
+            "GET",
+            schema_empty_object(),
+            "demo",
+        )
+        .with_path_pattern("{id}");
+        let ctx = ToolContext {
+            tenant_id: "demo".to_string(),
+            user_id: None,
+            user_email: None,
+            request_id: "req-1".to_string(),
+            roles: vec![],
+            scopes: vec![],
+            raw_token: Some("caller-token".to_string()),
+            skill_instructions: None,
+            progress_token: None,
+            consumer_id: "c".to_string(),
+            from_control_plane: false,
+        };
+
+        for value in ["..", ".", "", "a/b", "a\\b"] {
+            let err = tool
+                .execute(json!({ "id": value }), &ctx)
+                .await
+                .expect_err(value);
+            assert!(
+                matches!(err, ToolError::InvalidArguments(_)),
+                "{value:?}: {err}"
+            );
+        }
+        let received = mock.received_requests().await.expect("recording");
+        assert!(
+            received.is_empty(),
+            "requests reached the backend: {:?}",
+            received
+                .iter()
+                .map(|r| r.url.to_string())
+                .collect::<Vec<_>>()
+        );
+
+        // The same tool with a plain value does reach `/customers/C-1`.
+        tool.execute(json!({"id": "C-1"}), &ctx).await.unwrap();
+        let received = mock.received_requests().await.expect("recording");
+        assert_eq!(received.len(), 1);
+        assert_eq!(received[0].url.path(), "/customers/C-1");
     }
 
     #[tokio::test]

@@ -272,6 +272,22 @@ pub(super) fn default_memory_limit_mb() -> u64 {
     512
 }
 
+/// Scopes of the platform realm (ADR-012). A realm that defines fewer scopes
+/// narrows the list with `STOA_OAUTH_SCOPES_SUPPORTED`.
+pub(super) fn default_oauth_scopes_supported() -> Vec<String> {
+    [
+        "openid",
+        "profile",
+        "email",
+        "stoa:read",
+        "stoa:write",
+        "stoa:admin",
+    ]
+    .iter()
+    .map(|scope| scope.to_string())
+    .collect()
+}
+
 pub(super) fn default_snapshot_max_count() -> usize {
     100
 }
@@ -464,6 +480,8 @@ impl Default for Config {
             tcp_rate_limit_per_ip: None,
             trusted_proxies: Vec::new(),
             public_mcp_enabled: false,
+            oauth_authorization_servers: Vec::new(),
+            oauth_scopes_supported: default_oauth_scopes_supported(),
             jwt_audience: Vec::new(),
             memory_limit_mb: default_memory_limit_mb(),
             snapshot_enabled: false,

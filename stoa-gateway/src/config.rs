@@ -892,6 +892,28 @@ pub struct Config {
     #[serde(default)]
     pub public_mcp_enabled: bool,
 
+    /// Authorization servers named in the protected resource metadata
+    /// (RFC 9728 `authorization_servers`): issuer URLs, the first one being
+    /// the one clients use. A client fetches the issuer's own metadata and
+    /// checks that its `issuer` is this URL, so name the realm that signs
+    /// the tokens (`https://auth.example.com/realms/stoa`). Empty, the
+    /// default, names the gateway itself (`gateway_external_url`), which
+    /// then has to deliver its OAuth proxy (`/oauth/...`) to those clients.
+    /// Env: STOA_OAUTH_AUTHORIZATION_SERVERS (CSV or JSON array)
+    #[serde(default, deserialize_with = "self::deserializers::string_list")]
+    pub oauth_authorization_servers: Vec<String>,
+
+    /// Scopes advertised in the OAuth discovery documents (RFC 9728 and
+    /// RFC 8414). A client asks the authorization server for the scopes it
+    /// reads here: list only scopes the realm defines and that any user it
+    /// signs in may hold.
+    /// Env: STOA_OAUTH_SCOPES_SUPPORTED (CSV or JSON array)
+    #[serde(
+        default = "defaults::default_oauth_scopes_supported",
+        deserialize_with = "self::deserializers::string_list"
+    )]
+    pub oauth_scopes_supported: Vec<String>,
+
     /// Accepted JWT `aud` values for published routes and MCP. Empty disables
     /// audience checks (issuer + RS256 only) when a control plane is configured.
     /// Standalone boot refuses an empty list: a published route with no
@@ -1153,6 +1175,11 @@ impl fmt::Debug for Config {
             .field("tcp_rate_limit_per_ip", &self.tcp_rate_limit_per_ip)
             .field("trusted_proxies", &self.trusted_proxies)
             .field("public_mcp_enabled", &self.public_mcp_enabled)
+            .field(
+                "oauth_authorization_servers",
+                &self.oauth_authorization_servers,
+            )
+            .field("oauth_scopes_supported", &self.oauth_scopes_supported)
             .field("jwt_audience", &self.jwt_audience)
             .field("memory_limit_mb", &self.memory_limit_mb)
             .field("snapshot_enabled", &self.snapshot_enabled)

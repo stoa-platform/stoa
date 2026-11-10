@@ -86,9 +86,36 @@ pub enum ConfigError {
          would be unauthenticated"
     )]
     PublicMcpRequiresJwtValidator,
+
+    /// `oauth_authorization_servers` is sent to clients as is, and they
+    /// compare it with the `issuer` of the metadata they fetch from it.
+    #[error(
+        "STOA_OAUTH_AUTHORIZATION_SERVERS: {0:?} is not an issuer URL \
+         (absolute http(s) URL, no query, no fragment)"
+    )]
+    InvalidOauthAuthorizationServer(String),
 }
 
 impl Config {
+    /// `oauth_authorization_servers` entries that are not an absolute
+    /// `http(s)` URL without query or fragment (RFC 8414 §2, issuer).
+    fn invalid_oauth_authorization_servers(&self) -> Vec<&str> {
+        self.oauth_authorization_servers
+            .iter()
+            .map(String::as_str)
+            .filter(|server| {
+                let rest = server
+                    .strip_prefix("https://")
+                    .or_else(|| server.strip_prefix("http://"));
+                !rest.is_some_and(|rest| {
+                    !rest.is_empty()
+                        && !rest.starts_with('/')
+                        && !rest.contains(|c: char| c.is_whitespace() || c == '?' || c == '#')
+                })
+            })
+            .collect()
+    }
+
     /// Return the Keycloak backend URL for service-to-service calls.
     ///
     /// Prefers `keycloak_internal_url` (K8s service DNS) over `keycloak_url` (external)
@@ -209,6 +236,12 @@ impl Config {
                 .is_some_and(|url| !url.trim().is_empty())
         {
             return Err(ConfigError::PublicMcpRequiresJwtValidator);
+        }
+
+        if let Some(server) = self.invalid_oauth_authorization_servers().first() {
+            return Err(ConfigError::InvalidOauthAuthorizationServer(
+                server.to_string(),
+            ));
         }
 
         // Routes are published after boot. Without a global audience, a JWT
@@ -401,6 +434,44 @@ mod tests {
             ..Config::default()
         };
         config.validate().expect("public MCP with a JWT validator");
+    }
+
+    #[test]
+    fn test_validate_oauth_authorization_servers_are_issuer_urls() {
+        let with = |servers: &[&str]| Config {
+            jwt_audience: vec!["stoa-gateway".into()],
+            oauth_authorization_servers: servers.iter().map(|s| s.to_string()).collect(),
+            ..Config::default()
+        };
+        for servers in [
+            &[][..],
+            &["https://auth.example.test/realms/stoa"][..],
+            &[
+                "https://auth.example.test",
+                "http://keycloak:8080/realms/stoa",
+            ][..],
+        ] {
+            with(servers).validate().expect("issuer URLs");
+        }
+        for bad in [
+            "auth.example.test/realms/stoa",
+            "https://",
+            "https:///realms/stoa",
+            "/realms/stoa",
+            "https://auth.example.test/realms/stoa?x=1",
+            "https://auth.example.test/realms/stoa#frag",
+            "https://auth.example.test/realms/ stoa",
+            "",
+        ] {
+            match with(&["https://auth.example.test", bad]).validate() {
+                Err(ConfigError::InvalidOauthAuthorizationServer(server)) => {
+                    assert_eq!(server, bad)
+                }
+                other => {
+                    panic!("expected InvalidOauthAuthorizationServer for {bad:?}, got {other:?}")
+                }
+            }
+        }
     }
 
     #[test]

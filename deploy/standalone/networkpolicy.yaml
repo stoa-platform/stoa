@@ -1,8 +1,20 @@
-# Default-deny ingress for the gateway pods, then the three flows that
-# must reach port 8080. kube-router on k3s enforces this.
+# Default-deny ingress for the gateway pods, then the flows that must
+# reach port 8080. kube-router on k3s enforces this.
 #
-# The reconciler pod label is app.kubernetes.io/name=reconciler, in
-# namespace stoa. Do not widen this to the whole pod CIDR.
+# Two pods of namespace stoa call the admin API with the admin token:
+# the reconciler (app.kubernetes.io/name=reconciler) publishes contracts,
+# the console (app.kubernetes.io/name=console, part-of=stoa) reads the
+# catalog and creates consumers. Each is named by its labels. Do not widen
+# this to the whole namespace or to the pod CIDR.
+#
+# A policy filters a port, not a path: a pod named here reaches the whole
+# listener, and the admin token it holds decides what it may do there.
+# The console UI has no login of its own, so the console pod needs an
+# ingress policy too (ingress controller only), in the profile that
+# deploys it.
+#
+# The namespace comes from kustomization.yaml. With `kubectl apply -f`,
+# pass `-n stoa`.
 #
 # Kubelet probes are host-originated. kube-router allows node-local probe
 # traffic; if a probe is denied, add worker-3's node IP as a /32 and do
@@ -32,6 +44,14 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: reconciler
+      ports:
+        - protocol: TCP
+          port: 8080
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: console
+              app.kubernetes.io/part-of: stoa
       ports:
         - protocol: TCP
           port: 8080

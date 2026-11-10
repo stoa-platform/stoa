@@ -651,7 +651,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn no_control_plane_and_no_native_tools_registers_no_platform_tool() {
+    async fn regression_no_control_plane_and_no_native_tools_registers_no_platform_tool() {
         let state = state_without_control_plane(false);
         assert!(!state.config.control_plane_configured());
         let before = state.tool_registry.count();

@@ -525,7 +525,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn parameterised_path_reaches_the_backend_through_the_proxy() {
+    async fn regression_parameterised_path_reaches_the_backend_through_the_proxy() {
         use axum::body::Body;
         use axum::http::{Request, StatusCode};
         use tower::ServiceExt;

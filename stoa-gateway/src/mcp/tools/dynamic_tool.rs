@@ -839,7 +839,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn path_pattern_is_joined_to_the_endpoint_with_one_slash() {
+    async fn regression_path_pattern_is_joined_to_the_endpoint_with_one_slash() {
         use wiremock::matchers::{method, path as m_path};
         use wiremock::{Mock, MockServer, ResponseTemplate};
 

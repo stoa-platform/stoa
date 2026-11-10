@@ -1890,7 +1890,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn prefix_ending_with_slash_reaches_the_backend_sub_path() {
+    async fn regression_prefix_ending_with_slash_reaches_the_backend_sub_path() {
         use axum::body::Body;
         use axum::http::Request;
         use tower::ServiceExt;

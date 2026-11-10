@@ -629,7 +629,7 @@ fn sorted_tool_names(state: &crate::state::AppState) -> Vec<String> {
 }
 
 #[tokio::test]
-async fn delete_removes_tools_named_by_llm_tool_name() {
+async fn regression_delete_removes_tools_named_by_llm_tool_name() {
     let state = create_test_state(Some("secret"));
     let app = build_full_admin_router(state.clone());
 

@@ -26,6 +26,9 @@ on:
       - '.github/workflows/ai-factory-scripts-tests.yml'
       - '.github/workflows/reusable-python-ci.yml'
       - '.github/workflows/control-plane-api-ci.yml'
+      - '.github/workflows/mcp-sdk-smoke.yml'
+      - '.github/workflows/reusable-gitops-deploy.yml'
+      - '.github/workflows/reusable-health-smoke.yml'
       - '.yamllint'
 
 permissions:

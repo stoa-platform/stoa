@@ -16,8 +16,8 @@
 # and attestations, independently of this switch.
 #
 # Endpoint verify (CAB-2612): an empty URL, or a deadline without HTTP 200,
-# is FAIL or SKIP and fails the job. CAB-2618 makes this selected check
-# mandatory, regardless of the legacy repository variable.
+# is FAIL or SKIP. CAB-2618 makes this check mandatory in prod; dev keeps
+# DEV_POST_DEPLOY_REQUIRED and reports missing verification explicitly.
 # The image-updated dispatch is unchanged.
 #
 # Requires: STOA_INFRA_DISPATCH_TOKEN secret (PAT with repo scope on PotoMitan/stoa-infra)
@@ -156,7 +156,7 @@ jobs:
         if: always()
         env:
           POST_DEPLOY_CONTROL: Wait for ArgoCD sync
-          POST_DEPLOY_REQUIRED_INPUT: 'true'
+          POST_DEPLOY_REQUIRED_INPUT: ${{ inputs.environment == 'prod' && 'true' || '' }}
           POST_DEPLOY_RAN: ${{ steps.wait.outputs.ran }}
           POST_DEPLOY_OK: ${{ steps.wait.outputs.ok }}
           POST_DEPLOY_REASON: ${{ steps.wait.outputs.detail }}

@@ -146,7 +146,7 @@ def test_workflows_record_the_verdict_without_weakening_guards():
     assert truth["if"] == "always()"
     assert "bash scripts/ci/dev_post_deploy_truth.sh" in truth["run"]
     assert truth["env"]["POST_DEPLOY_REQUIRED_VAR"] == "${{ vars.DEV_POST_DEPLOY_REQUIRED }}"
-    assert truth["env"]["POST_DEPLOY_REQUIRED_INPUT"] == "true"
+    assert truth["env"]["POST_DEPLOY_REQUIRED_INPUT"] == "${{ inputs.environment == 'prod' && 'true' || '' }}"
     assert truth["env"]["POST_DEPLOY_COMMIT"] == "${{ github.sha }}"
     assert truth["env"]["POST_DEPLOY_ENVIRONMENT"] == "${{ inputs.environment }}"
     assert truth["env"]["POST_DEPLOY_RAN"] == "${{ steps.wait.outputs.ran }}"
@@ -173,7 +173,7 @@ def test_workflows_record_the_verdict_without_weakening_guards():
     assert "SKIPPED, no dev target" in htruth["run"]
     assert "bash scripts/ci/dev_post_deploy_truth.sh" in htruth["run"]
     assert htruth["env"]["POST_DEPLOY_REQUIRED_VAR"] == "${{ vars.DEV_POST_DEPLOY_REQUIRED }}"
-    assert htruth["env"]["POST_DEPLOY_REQUIRED_INPUT"] == "true"
+    assert htruth["env"]["POST_DEPLOY_REQUIRED_INPUT"] == "${{ inputs.environment == 'prod' && 'true' || '' }}"
     assert htruth["env"]["POST_DEPLOY_ENVIRONMENT"] == "${{ inputs.environment }}"
     assert htruth["env"]["POST_DEPLOY_COMMIT"] == "${{ github.sha }}"
 

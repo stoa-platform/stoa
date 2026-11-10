@@ -11,19 +11,32 @@ The [32-control inventory](controls-truth-inventory.md) retains its dated
 | --- | --- | --- | --- |
 | MCP SDK pre-merge | Gateway built from the run's commit on the GitHub runner | Checkout, SDK installation, build, authenticated smoke all executed successfully | Missing, skipped, failed, or cancelled step fails the final guard |
 | MCP SDK production | `mcp.gostoa.dev`, read-only probe | DNS, SDK installation, smoke and verdict all executed successfully | Unresolved DNS or unavailable endpoint fails; no service is republished |
-| Health smoke | Selected dev/prod target | Explicit target and successful endpoint checks | Missing dev target and unavailable endpoints fail; no fallback to prod |
-| GitOps endpoint verification | Selected dev/prod target | Explicit endpoint returns HTTP 200 within the existing deadline | Missing endpoint and timeout fail the verdict |
+| Health smoke | Selected dev/prod target | Explicit target and successful endpoint checks | Prod requires execution; dev keeps `DEV_POST_DEPLOY_REQUIRED`; executed probe failures remain fatal; no fallback to prod |
+| GitOps endpoint verification | Selected dev/prod target | Explicit endpoint returns HTTP 200 within the existing deadline | Missing endpoint and timeout fail in prod; dev keeps `DEV_POST_DEPLOY_REQUIRED` and explicit FAIL/SKIP evidence |
 
 The last MCP step checks both `outcome` and `conclusion`, so even a failure
-masked by `continue-on-error` is rejected. The selected probes force the
-required input to true; legacy repository variables cannot disable them.
+masked by `continue-on-error` is rejected. MCP probes and production
+post-deploy checks force the required input to true. Dev post-deploy checks
+leave that input empty so `DEV_POST_DEPLOY_REQUIRED` retains its effect.
+An optional dev verdict remains FAIL or SKIP / NON VÉRIFIÉ, never PASS.
 Deployment kill-switches and job selection by event are unchanged.
 
 States remain distinct: **PASS réel** requires execution; **FAIL** records an
 unsuccessful probe; **SKIP** records no execution; **NON VÉRIFIÉ** describes
 missing evidence. **NON APPLICABLE** requires an explicit scope decision.
 The public MCP service has no retirement decision in this change. An absent
-endpoint is therefore not classified as non-applicable.
+endpoint is therefore not classified as non-applicable. The daily prod MCP
+probe remains required and fails while the endpoint is absent. Its status
+requires a separate human decision before merge; this fix neither retires
+nor republishes the service.
+
+Workflow-only changes to these three workflows run the regression suite
+in `AI-Factory Scripts Tests` and the required `ci-gate` contract job.
+The tests reject `continue-on-error` on MCP guards and jobs, and cover the
+prod/dev requirement matrix. A change limited to the prod verdict helper
+runs lightweight script tests without starting a PR gateway build.
+The legacy boolean dispatch input `MCP_PROD_SMOKE_REQUIRED` is accepted
+for caller compatibility but ignored, including when explicitly false.
 
 ## Reproduce without deploying
 
@@ -38,7 +51,8 @@ Wait for the first run before dispatching the second: branch concurrency
 cancels an older run. The production run must fail if the expected endpoint
 is absent. The local run builds the gateway and executes the authenticated
 SDK smoke; it is not evidence of production availability. PR events also
-execute that local smoke. Regression tests run in `AI-Factory Scripts Tests`.
+execute that local smoke. Regression tests run in `AI-Factory Scripts Tests`
+and, for workflow changes, the required `ci-gate` contract job.
 
 Record each run URL, commit, environment, UTC date, job conclusion and smoke
 step conclusion in the PR. The original false positive is

@@ -12,7 +12,6 @@ on:
       - 'stoa-gateway/**'
       - '.github/workflows/mcp-sdk-smoke.yml'
       - 'scripts/ci/require_steps.py'
-      - 'scripts/ci/mcp_prod_smoke_truth.sh'
       - 'scripts/ci/tests/test_regression_cab_2618_required_steps.py'
   push:
     branches: [main]
@@ -32,6 +31,10 @@ on:
         type: choice
         options: [prod, local]
         default: prod
+      MCP_PROD_SMOKE_REQUIRED:
+        description: 'Deprecated compatibility input; ignored. Production checks are always required.'
+        type: boolean
+        default: true
 
 concurrency:
   group: mcp-sdk-smoke-${{ github.ref }}

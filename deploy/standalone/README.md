@@ -223,8 +223,11 @@ An accepted bearer is a JWT the validator verifies: issuer
 `STOA_JWT_AUDIENCE`. A header with another scheme (`Basic`, ...) or an
 empty bearer is anonymous. A bearer that is presented and rejected is 401
 whatever the method, and refuses a whole batch. With a validator the tenant
-comes from the token (or `default`), not from `X-Tenant-ID`, and an event
-stream session can only be reopened or closed by its tenant.
+comes from the token (or `default`), not from `X-Tenant-ID`, on the JSON-RPC
+transports and on the REST routes; an anonymous caller is in `default`. A
+session that belongs to a tenant is used, reopened or closed only by that
+tenant (`Session tenant mismatch` otherwise). A session opened anonymously
+stays usable by the client that holds its id.
 
 Without `STOA_KEYCLOAK_URL` there is no validator: a bearer is then taken as
 is and the REST gate lets every request through. That is a development

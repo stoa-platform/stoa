@@ -84,6 +84,20 @@ impl<'a> Call<'a> {
     }
 
     async fn status(self, router: &Router) -> StatusCode {
+        self.respond(router).await.status()
+    }
+
+    /// Status and body. Not for the event stream, whose body never ends.
+    async fn send(self, router: &Router) -> (StatusCode, String) {
+        let response = self.respond(router).await;
+        let status = response.status();
+        let bytes = axum::body::to_bytes(response.into_body(), 1_048_576)
+            .await
+            .expect("body");
+        (status, String::from_utf8_lossy(&bytes).into_owned())
+    }
+
+    async fn respond(self, router: &Router) -> axum::response::Response {
         let mut request = Request::builder()
             .method(self.method)
             .uri(self.path)
@@ -109,7 +123,6 @@ impl<'a> Call<'a> {
             )
             .await
             .expect("router answers")
-            .status()
     }
 }
 
@@ -226,14 +239,21 @@ async fn only_an_accepted_bearer_reaches_protected_mcp_methods() {
                 StatusCode::UNAUTHORIZED,
                 "{authorization} {path}"
             );
-            let batch_status = Call::post(path, &batch)
+            // A rejected bearer refuses the batch; any other header is an
+            // anonymous caller, whose elements are refused one by one.
+            let expected = if authorization == "Bearer nope" {
+                StatusCode::UNAUTHORIZED
+            } else {
+                StatusCode::OK
+            };
+            let (batch_status, batch_body) = Call::post(path, &batch)
                 .with_authorization(authorization)
-                .status(&router)
+                .send(&router)
                 .await;
-            assert_ne!(
-                batch_status,
-                StatusCode::NOT_FOUND,
-                "{authorization} {path}"
+            assert_eq!(batch_status, expected, "{authorization} {path}");
+            assert!(
+                !batch_body.contains(r#""result""#),
+                "{authorization} {path} {batch_body}"
             );
         }
         for call in [

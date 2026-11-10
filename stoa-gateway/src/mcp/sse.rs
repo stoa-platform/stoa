@@ -129,9 +129,11 @@ pub(crate) struct Caller {
 }
 
 impl Caller {
-    fn unverified(headers: &HeaderMap, token: Option<String>) -> Self {
+    /// No verified identity. `tenant_header` is honoured only in development
+    /// (no validator); with a validator an anonymous caller is in `default`.
+    fn unverified(tenant_header: Option<String>, token: Option<String>) -> Self {
         Self {
-            tenant_id: extract_tenant(headers).unwrap_or_else(|| "default".to_string()),
+            tenant_id: tenant_header.unwrap_or_else(|| "default".to_string()),
             user_id: None,
             user_email: None,
             roles: vec![],
@@ -175,12 +177,15 @@ pub(crate) async fn resolve_caller(
     state: &AppState,
     headers: &HeaderMap,
 ) -> Result<Caller, String> {
-    let Some(token) = extract_bearer_token(headers).filter(|token| !token.is_empty()) else {
-        return Ok(Caller::unverified(headers, None));
-    };
+    let token = extract_bearer_token(headers).filter(|token| !token.is_empty());
     let Some(ref validator) = state.jwt_validator else {
-        debug!("JWT validator not configured — skipping token validation");
-        return Ok(Caller::unverified(headers, Some(token)));
+        if token.is_some() {
+            debug!("JWT validator not configured — skipping token validation");
+        }
+        return Ok(Caller::unverified(extract_tenant(headers), token));
+    };
+    let Some(token) = token else {
+        return Ok(Caller::unverified(None, None));
     };
     match validator.validate(&token).await {
         Ok(claims) => {
@@ -205,6 +210,22 @@ pub(crate) async fn resolve_caller(
             Ok(caller)
         }
         Err(e) => Err(e.to_string()),
+    }
+}
+
+/// Whether `caller` may use the session `id`.
+///
+/// With a validator, a session that belongs to a tenant is used only by that
+/// tenant. A session opened anonymously is in `default` and stays usable by
+/// the client that holds its id, before and after it authenticates. An
+/// unknown id is not an existing session and is left to the handlers.
+async fn session_open_to(state: &AppState, caller: &Caller, id: &str) -> bool {
+    if state.jwt_validator.is_none() {
+        return true;
+    }
+    match state.session_manager.get(id).await {
+        Some(session) => session.tenant_id == caller.tenant_id || session.tenant_id == "default",
+        None => true,
     }
 }
 
@@ -389,8 +410,15 @@ pub async fn handle_sse_post(
     // Resolve or create session
     let session_id = match params.session_id {
         Some(ref id) => {
-            // Touch existing session
-            let _ = state.session_manager.get(id).await;
+            // Touch existing session (`session_open_to` reads it)
+            if !session_open_to(&state, &caller, id).await {
+                return Json(JsonRpcResponse::error(
+                    request.id,
+                    -32003,
+                    "Session tenant mismatch",
+                ))
+                .into_response();
+            }
             id.clone()
         }
         None => {
@@ -799,6 +827,12 @@ async fn process_request_as(
 
     if !caller.may_call(&request.method) {
         return JsonRpcResponse::error(request.id, -32001, "Authentication required");
+    }
+
+    if let Some(ref id) = params.session_id {
+        if !session_open_to(state, caller, id).await {
+            return JsonRpcResponse::error(request.id, -32003, "Session tenant mismatch");
+        }
     }
 
     let session_id = params
@@ -1903,6 +1937,10 @@ mod caller_tests {
 
         let anonymous = resolve_caller(&fx.state, &headers).await.unwrap();
         assert!(!anonymous.is_authenticated());
+        assert_eq!(
+            anonymous.tenant_id, "default",
+            "header must not pick the tenant"
+        );
 
         headers.insert(header::AUTHORIZATION, fx.bearer.parse().unwrap());
         let caller = resolve_caller(&fx.state, &headers).await.unwrap();
@@ -1921,6 +1959,50 @@ mod caller_tests {
         let caller = resolve_caller(&dev, &headers).await.unwrap();
         assert!(caller.is_authenticated());
         assert_eq!(caller.tenant_id, "acme");
+    }
+
+    #[tokio::test]
+    async fn a_tenant_session_is_closed_to_other_callers() {
+        let fx = fixture().await;
+        fx.state
+            .session_manager
+            .create(Session::new("theirs".into(), "other".into()))
+            .await;
+        fx.state
+            .session_manager
+            .create(Session::new("anonymous".into(), "default".into()))
+            .await;
+        let initialize = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"intruder","version":"0"}}}"#;
+
+        for auth in [None, Some(fx.bearer.as_str())] {
+            for body in [
+                initialize.to_string(),
+                format!("[{initialize}]"),
+                rpc("ping"),
+            ] {
+                let (_, text) = post(&fx.router, "/mcp/sse?sessionId=theirs", auth, body).await;
+                assert!(text.contains("Session tenant mismatch"), "{auth:?} {text}");
+                assert!(!text.contains(r#""result""#), "{auth:?} {text}");
+            }
+            // A session opened anonymously stays usable by whoever holds its id.
+            let (status, text) = post(
+                &fx.router,
+                "/mcp/sse?sessionId=anonymous",
+                auth,
+                rpc("ping"),
+            )
+            .await;
+            assert_eq!(status, StatusCode::OK, "{auth:?} {text}");
+            assert!(text.contains(r#""result""#), "{auth:?} {text}");
+        }
+        assert!(
+            fx.state
+                .session_manager
+                .get_metadata("theirs", "protocol_version")
+                .await
+                .is_none(),
+            "a refused initialize must not write to the session"
+        );
     }
 
     #[tokio::test]

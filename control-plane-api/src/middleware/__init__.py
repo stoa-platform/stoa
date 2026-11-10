@@ -11,11 +11,13 @@ from .rate_limit import (
     limiter,
     rate_limit_exceeded_handler,
 )
+from .security_headers import SecurityHeadersMiddleware
 
 __all__ = [
     "HTTPLoggingMiddleware",
     "MetricsMiddleware",
     "PIIMaskingMiddleware",
+    "SecurityHeadersMiddleware",
     "limit_anonymous",
     "limit_authenticated",
     "limit_subscription",

@@ -69,7 +69,10 @@ server {
         add_header Cache-Control "no-cache" always;
     }
 
-    # API proxy (Swagger UI requires unsafe-eval + unsafe-inline for JS rendering)
+    # API proxy. Content-Security-Policy is set by control-plane-api per route
+    # (strict on the API, Swagger/ReDoc only on /docs and /redoc — CAB-2587).
+    # Do not add a location-wide CSP here: nginx add_header would attach it to
+    # every proxied response, including JSON API calls.
     # rewrite is required: with variable-based proxy_pass, nginx does NOT
     # perform URI substitution — a trailing / would send all requests to /
     location /api/ {
@@ -83,7 +86,6 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_cache_bypass $http_upgrade;
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://fastapi.tiangolo.com; font-src 'self' data:; connect-src 'self'" always;
     }
 
     # Health check

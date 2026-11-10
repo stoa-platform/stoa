@@ -781,6 +781,100 @@ async fn tool_name_of_another_contract_is_400_and_changes_nothing() {
         .is_none());
 }
 
+fn route_snapshot(state: &crate::state::AppState) -> Vec<(String, String, String)> {
+    let mut routes: Vec<(String, String, String)> = state
+        .route_registry
+        .list()
+        .iter()
+        .map(|r| (r.id.clone(), r.path_prefix.clone(), r.backend_url.clone()))
+        .collect();
+    routes.sort();
+    routes
+}
+
+#[tokio::test]
+async fn path_or_backend_url_the_binders_cannot_serve_is_400_and_changes_nothing() {
+    let state = create_test_state(Some("secret"));
+    let app = build_full_admin_router(state.clone());
+
+    let good = llm_endpoint("/customers/{id}", "GET", Some("get_customer"));
+    let (status, _) = post_contract(
+        &app,
+        customer_contract_json("demo", "customers", vec![good.clone()]),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let routes_before = route_snapshot(&state);
+    let tools_before = sorted_tool_names(&state);
+
+    let backend = "https://backend.test/customers/";
+    let cases = [
+        (
+            "/customers/{id}",
+            "https://backend.test/customers/{id}",
+            "backend_url",
+        ),
+        ("/customers/{id}", "https://backend.test/}", "backend_url"),
+        ("customers/{id}", backend, "must start with /"),
+        ("/customers/{id", backend, "unbalanced"),
+        ("/customers/id}", backend, "unbalanced"),
+        ("/a/{}", backend, "empty parameter"),
+        ("/a{id}", backend, "whole segment"),
+        ("/files/f-{id}", backend, "whole segment"),
+        ("/a/{b}{c}", backend, "whole segment"),
+    ];
+    for (path, backend_url, reason) in cases {
+        let bad = serde_json::json!({
+            "path": path,
+            "methods": ["GET"],
+            "backend_url": backend_url
+        });
+
+        // Republish of a stored contract: the previous routes and tools stay.
+        let (status, data) = post_contract(
+            &app,
+            customer_contract_json("demo", "customers", vec![good.clone(), bad.clone()]),
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{path} {backend_url}");
+        assert_eq!(data["status"], "rejected", "{path} {backend_url}");
+        let message = data["message"].as_str().unwrap();
+        assert!(message.contains("endpoints[1]"), "{message}");
+        assert!(message.contains(reason), "{reason}: {message}");
+
+        // A new contract is not stored at all.
+        let (status, data) = post_contract(
+            &app,
+            customer_contract_json("demo", "fresh", vec![bad.clone()]),
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{path} {backend_url}");
+        let message = data["message"].as_str().unwrap();
+        assert!(message.contains("endpoints[0]"), "{message}");
+
+        assert_eq!(
+            route_snapshot(&state),
+            routes_before,
+            "{path} {backend_url}"
+        );
+        assert_eq!(
+            sorted_tool_names(&state),
+            tools_before,
+            "{path} {backend_url}"
+        );
+        assert_eq!(
+            state
+                .contract_registry
+                .get("demo:customers")
+                .unwrap()
+                .endpoints
+                .len(),
+            1
+        );
+        assert!(state.contract_registry.get("demo:fresh").is_none());
+    }
+}
+
 // =============================================================================
 // GW-1 P1-1 / P1-2 / P2-2: transactional invariants
 // =============================================================================

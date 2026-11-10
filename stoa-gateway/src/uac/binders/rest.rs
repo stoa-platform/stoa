@@ -10,7 +10,9 @@ use std::sync::Arc;
 use crate::routes::{ApiRoute, PolicyEntry, PolicyRegistry, RouteRegistry};
 use crate::uac::schema::{is_jwt_validation_policy, UacContractSpec};
 
-use super::{split_path_template, BindingOutput, ProtocolBinder, CONTRACT_REJECTED};
+use super::{
+    check_endpoint_templates, split_path_template, BindingOutput, ProtocolBinder, CONTRACT_REJECTED,
+};
 
 /// REST protocol binder — generates proxy routes from UAC contracts.
 pub struct RestBinder {
@@ -77,8 +79,10 @@ impl RestBinder {
     /// `/apis/{tenant}/{contract}/customers/`). `backend_url` is the upstream
     /// URL of that static part; the proxy appends the rest of the request path.
     /// Endpoints with the same prefix and backend share one route, methods
-    /// merged. Same prefix with another backend is an error.
+    /// merged. Same prefix with another backend is an error, and so is an
+    /// endpoint refused by [`check_endpoint_templates`].
     pub fn generate_routes(contract: &UacContractSpec) -> Result<Vec<ApiRoute>, String> {
+        check_endpoint_templates(contract)?;
         let contract_key = format!("{}:{}", contract.tenant_id, contract.name);
         let mut routes: Vec<ApiRoute> = Vec::new();
         // Index of the endpoint that created each route, for error messages.
@@ -472,6 +476,44 @@ mod tests {
         assert_eq!(registry.count(), 1);
         let route = registry.get("uac:demo:api:0").expect("route kept");
         assert_eq!(route.backend_url, "http://b/customers/");
+    }
+
+    #[tokio::test]
+    async fn path_or_backend_url_refused_before_any_route_change() {
+        let registry = Arc::new(RouteRegistry::new());
+        let binder = RestBinder::new(registry.clone());
+        binder
+            .bind(&customer_contract(vec![customer_endpoint(
+                "/customers/{id}",
+                "GET",
+                "http://b/customers/",
+            )]))
+            .await
+            .expect("first bind");
+
+        for (path, backend_url) in [
+            ("/customers/{id}", "http://b/customers/{id}"),
+            ("customers/{id}", "http://b/customers/"),
+            ("/customers/{id", "http://b/customers/"),
+            ("/customers/{}", "http://b/customers/"),
+            ("/customers{id}", "http://b/customers/"),
+            ("/files/f-{id}", "http://b/files/"),
+        ] {
+            let error = binder
+                .bind(&customer_contract(vec![customer_endpoint(
+                    path,
+                    "GET",
+                    backend_url,
+                )]))
+                .await
+                .expect_err(path);
+            assert!(error.starts_with(CONTRACT_REJECTED), "{error}");
+            assert!(error.contains("endpoints[0]"), "{error}");
+            assert_eq!(registry.count(), 1, "{path}");
+            let route = registry.get("uac:demo:api:0").expect("route kept");
+            assert_eq!(route.path_prefix, "/apis/demo/api/customers/", "{path}");
+            assert_eq!(route.backend_url, "http://b/customers/", "{path}");
+        }
     }
 
     #[tokio::test]

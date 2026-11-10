@@ -22,7 +22,9 @@ use crate::uac::registry::ContractRegistry;
 use crate::uac::schema::{EndpointSideEffects, UacContractSpec, UacEndpoint};
 use crate::uac::Action;
 
-use super::{split_path_template, BindingOutput, ProtocolBinder, CONTRACT_REJECTED};
+use super::{
+    check_endpoint_templates, split_path_template, BindingOutput, ProtocolBinder, CONTRACT_REJECTED,
+};
 
 /// Longest default tool name. MCP clients commonly enforce
 /// `^[a-zA-Z0-9_-]{1,64}$`.
@@ -294,11 +296,16 @@ impl McpBinder {
 impl ProtocolBinder for McpBinder {
     /// Replace the tools of a contract.
     ///
-    /// Two endpoints with one name, or a name held by another contract or by
-    /// a tool from elsewhere, reject the contract before any registry change.
-    /// A tool the registry's validation refuses is left out and not counted.
+    /// Two endpoints with one name, a name held by another contract or by a
+    /// tool from elsewhere, or an endpoint refused by
+    /// [`check_endpoint_templates`] reject the contract before any registry
+    /// change. A tool the registry's validation refuses is left out and not
+    /// counted.
     async fn bind(&self, contract: &UacContractSpec) -> Result<BindingOutput, String> {
         let contract_key = format!("{}:{}", contract.tenant_id, contract.name);
+        // POST /admin/contracts runs the REST binder first, which already
+        // refuses these; this keeps the MCP binder safe on its own.
+        check_endpoint_templates(contract)?;
         let tools = Self::create_dynamic_tools(contract);
 
         let mut seen: Vec<&str> = Vec::with_capacity(tools.len());
@@ -913,6 +920,38 @@ mod tests {
             registry.get("stoa_catalog").expect("kept").description(),
             "Built-in"
         );
+    }
+
+    #[tokio::test]
+    async fn path_or_backend_url_the_rest_binder_refuses_is_refused_here_too() {
+        let registry = Arc::new(ToolRegistry::new());
+        let contracts = Arc::new(ContractRegistry::new());
+        let binder = McpBinder::with_contracts(registry.clone(), contracts.clone());
+        binder.bind(&sample_contract()).await.expect("first bind");
+        let before = sorted_names(&registry);
+
+        for (path, backend_url) in [
+            (
+                "/payments/{id}",
+                "https://backend.acme.com/v1/payments/{id}",
+            ),
+            ("payments/{id}", "https://backend.acme.com/v1/payments"),
+            ("/payments/{id", "https://backend.acme.com/v1/payments"),
+            ("/payments/{}", "https://backend.acme.com/v1/payments"),
+            ("/payments/p-{id}", "https://backend.acme.com/v1/payments"),
+        ] {
+            let mut contract = sample_contract();
+            contract.endpoints[1].path = path.to_string();
+            contract.endpoints[1].backend_url = backend_url.to_string();
+            contract.endpoints[1].operation_id = Some("renamed".to_string());
+            let error = binder.bind(&contract).await.expect_err(path);
+            assert!(error.starts_with(CONTRACT_REJECTED), "{error}");
+            assert!(error.contains("endpoints[1]"), "{error}");
+            assert_eq!(sorted_names(&registry), before, "{path}");
+            let mut recorded = contracts.tool_names("acme:payments");
+            recorded.sort();
+            assert_eq!(recorded, before, "{path}");
+        }
     }
 
     #[tokio::test]

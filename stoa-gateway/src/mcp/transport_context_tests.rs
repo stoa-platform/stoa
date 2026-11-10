@@ -11,8 +11,9 @@ use tower::ServiceExt;
 use wiremock::matchers::{body_string_contains, header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-use crate::auth::jwt::tests::{mcp_test_jwks, mcp_test_mint, test_signing_pem};
+use crate::auth::jwt::tests::{mcp_test_jwks, mcp_test_mint, policy, test_signing_pem};
 use crate::config::Config;
+use crate::control_plane::tool_permissions::tests::{permissions_response, VALID_JWKS};
 use crate::guardrails::{TenantGuardrailPolicy, TokenBudgetTracker};
 use crate::mcp::tools::dynamic_tool::DynamicTool;
 use crate::mcp::tools::{Tool, ToolContext, ToolError, ToolResult, ToolSchema};
@@ -54,22 +55,24 @@ impl Fixture {
             .mount(&server)
             .await;
         Mock::given(method("GET"))
-            .and(path("/v1/tenants/tenant-a/tool-permissions"))
+            .and(path("/v1/tenants/tenant-a/tool-permissions/artifact"))
             .and(header("Authorization", "Bearer fixture-service-access"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-                "items": [{"mcp_server_id": "test-server", "tool_name": "echo_tool", "allowed": true}],
-                "total": 1
-            })))
+            .respond_with(permissions_response(json!([
+                {"mcp_server_id": "test-server", "tool_name": "echo_tool", "allowed": true}
+            ])))
             .mount(&server)
             .await;
         let spool = tempfile::tempdir().unwrap();
         let key_path = spool.path().join("service-key.pem");
         std::fs::write(&key_path, test_signing_pem()).unwrap();
+        let trust_path = spool.path().join("policy-trust.json");
+        std::fs::write(&trust_path, VALID_JWKS).unwrap();
         let mut config = Config {
             keycloak_url: Some(server.uri()),
             keycloak_realm: Some("stoa".into()),
             keycloak_client_id: Some("stoa-mcp-gateway".into()),
             keycloak_client_key_path: Some(key_path.display().to_string()),
+            policy_trust_jwks_file: Some(trust_path.display().to_string()),
             mcp_audience: Some("control-plane-api".into()),
             control_plane_url: Some(server.uri()),
             audit_spool_dir: spool.path().join("spool"),
@@ -723,11 +726,11 @@ async fn jsonrpc_meters_success_per_tenant() {
     }));
     fixture.state.metering_producer = Some(producer.clone());
     Mock::given(method("GET"))
-        .and(path("/v1/tenants/metered-tenant/tool-permissions"))
+        .and(path("/v1/tenants/metered-tenant/tool-permissions/artifact"))
         .and(header("Authorization", "Bearer fixture-service-access"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-            "items": [{"mcp_server_id": "test-server", "tool_name": "echo_tool", "allowed": true}], "total": 1
-        })))
+        .respond_with(permissions_response(json!([
+            {"mcp_server_id": "test-server", "tool_name": "echo_tool", "allowed": true}
+        ])))
         .mount(&fixture.server)
         .await;
     let counter = |status| {
@@ -760,7 +763,7 @@ async fn permissions_request_uses_service_account() {
     let requests = fixture.server.received_requests().await.unwrap();
     let permission = requests
         .iter()
-        .find(|r| r.url.path().ends_with("/tool-permissions"))
+        .find(|r| r.url.path().ends_with("/tool-permissions/artifact"))
         .unwrap();
     assert!(
         permission
@@ -831,11 +834,11 @@ async fn tool_call_requires_permissions_service_credentials() {
             .await
             .unwrap()
             .iter()
-            .all(|request| !request.url.path().ends_with("/tool-permissions")));
+            .all(|request| !request.url.path().ends_with("/tool-permissions/artifact")));
     }
     let fixture = Fixture::new(|_| {}).await;
     Mock::given(method("GET"))
-        .and(path("/v1/tenants/tenant-a/tool-permissions"))
+        .and(path("/v1/tenants/tenant-a/tool-permissions/artifact"))
         .respond_with(ResponseTemplate::new(401))
         .with_priority(1)
         .mount(&fixture.server)
@@ -960,7 +963,7 @@ async fn write_operations_require_write_scope() {
 }
 
 #[tokio::test]
-async fn tool_call_requires_complete_permissions() {
+async fn tool_call_requires_available_and_valid_signed_permissions() {
     let fixture = Fixture::new(|c| {
         c.control_plane_url = None;
     })
@@ -973,25 +976,58 @@ async fn tool_call_requires_complete_permissions() {
         assert!(response["error"]["data"].get("httpStatus").is_none());
         assert!(response["error"]["data"].get("result").is_none());
     }
-    let fixture = Fixture::new(|_| {}).await;
-    Mock::given(method("GET"))
-        .and(path("/v1/tenants/tenant-a/tool-permissions"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-            "items": [{"mcp_server_id": "test-server", "tool_name": "echo_tool", "allowed": true}],
-            "total": 101
-        })))
-        .with_priority(1)
-        .mount(&fixture.server)
-        .await;
-    assert!(
-        !fixture
+    for permissions in [None, Some(json!({"invalid": "entries"}))] {
+        let fixture = Fixture::new(|_| {}).await;
+        fixture
             .state
-            .tool_permissions
-            .as_ref()
-            .unwrap()
-            .is_tool_allowed("tenant-a", "echo_tool")
+            .tool_registry
+            .register(Arc::new(DynamicTool::new(
+                "echo_tool",
+                "permission validation test",
+                format!("{}/backend", fixture.server.uri()),
+                "GET",
+                empty_schema(),
+                "tenant-a",
+            )));
+        let mut claims = policy::claims("tenant-a", json!([]));
+        match permissions {
+            None => {
+                claims.as_object_mut().unwrap().remove("permissions");
+            }
+            Some(value) => claims["permissions"] = value,
+        }
+        Mock::given(method("GET"))
+            .and(path("/v1/tenants/tenant-a/tool-permissions/artifact"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_raw(policy::sign(&claims), "application/jose"),
+            )
+            .with_priority(1)
+            .mount(&fixture.server)
+            .await;
+        let token = fixture.token(json!({"scope": "stoa:admin"}));
+        for batch in [false, true] {
+            assert_denied(
+                &fixture.rpc(&token, batch, json!({})).await,
+                "policy_artifact_invalid",
+            );
+            assert_eq!(
+                fixture
+                    .state
+                    .tool_permissions
+                    .as_ref()
+                    .unwrap()
+                    .readiness_failure_reason(),
+                Some("policy_artifact_invalid")
+            );
+        }
+        assert!(fixture
+            .server
+            .received_requests()
             .await
-    );
+            .unwrap()
+            .iter()
+            .all(|request| request.url.path() != "/backend"));
+    }
 }
 
 #[tokio::test]
@@ -1712,8 +1748,29 @@ async fn service_account_reads_cp_permissions_end_to_end() {
             assert_eq!(response["items"][0]["allowed"], false);
         }
     }
+    let signed = client
+        .get(format!(
+            "{cp}/v1/tenants/tenant-a/tool-permissions/artifact"
+        ))
+        .bearer_auth(service)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(signed.status(), reqwest::StatusCode::OK);
+    assert_eq!(signed.headers()["content-type"], "application/jose");
+    let trust =
+        crate::control_plane::policy_trust::PolicyTrustSet::parse(VALID_JWKS.as_bytes()).unwrap();
+    let policy = crate::control_plane::policy_artifact::PolicyArtifactVerifier::new(
+        "stoa-control-plane",
+        "stoa-gateway",
+    )
+    .verify(&trust, "tenant-a", &signed.text().await.unwrap())
+    .unwrap();
+    assert_eq!(policy.claims["permissions"].as_array().unwrap().len(), 101);
     let other_tenant = client
-        .get(format!("{cp}/v1/tenants/tenant-b/tool-permissions"))
+        .get(format!(
+            "{cp}/v1/tenants/tenant-b/tool-permissions/artifact"
+        ))
         .bearer_auth(service)
         .send()
         .await
@@ -1785,7 +1842,9 @@ async fn service_account_reads_cp_permissions_end_to_end() {
     ] {
         let unauthorized = mcp_test_mint(&issuer, overrides);
         let response = client
-            .get(format!("{cp}/v1/tenants/tenant-b/tool-permissions"))
+            .get(format!(
+                "{cp}/v1/tenants/tenant-b/tool-permissions/artifact"
+            ))
             .bearer_auth(unauthorized)
             .send()
             .await
@@ -2511,10 +2570,8 @@ fn permission(tool: &str, allowed: bool) -> Value {
 /// Replace the fixture's tenant-a permissions with `items`.
 async fn override_permissions(fixture: &Fixture, items: Vec<Value>) {
     Mock::given(method("GET"))
-        .and(path("/v1/tenants/tenant-a/tool-permissions"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-            "total": items.len(), "items": items
-        })))
+        .and(path("/v1/tenants/tenant-a/tool-permissions/artifact"))
+        .respond_with(permissions_response(Value::Array(items)))
         .with_priority(1)
         .mount(&fixture.server)
         .await;
@@ -2926,10 +2983,10 @@ async fn cp_requests(fixture: &Fixture) -> usize {
 }
 
 // Missing or refused signer trust denies before the cold catalogue refresh or the
-// federation cache miss can send a Control Plane request; absent configuration refreshes.
+// federation cache miss can send a Control Plane request; a loaded trust set permits refreshes.
 #[tokio::test]
 async fn trust_gate_denies_before_catalogue_refresh_and_federation_lookup() {
-    use crate::control_plane::tool_permissions::tests::{authenticated_service, VALID_JWKS};
+    use crate::control_plane::tool_permissions::tests::authenticated_service;
     let dir = tempfile::tempdir().unwrap();
     let trust = crate::control_plane::PolicyTrustStore::open(dir.path().join("trust.json"));
     let mut fixture = Fixture::new(|config| config.federation_enabled = true).await;
@@ -2956,7 +3013,7 @@ async fn trust_gate_denies_before_catalogue_refresh_and_federation_lookup() {
     assert_eq!(tool_call(&fixture, &token, "missing").await, 403);
     assert_eq!(tool_call(&fixture, &sub, "echo_tool").await, 403);
     assert_eq!(cp_requests(&fixture).await, 1);
-    // Absent trust configuration: the cold catalogue refresh reaches the Control Plane.
+    // Restore the fixture's valid trust: the cold catalogue refresh reaches the Control Plane.
     fixture.state.tool_permissions = plain;
     assert_eq!(tool_call(&fixture, &token, "missing").await, 404);
     assert!(cp_requests(&fixture).await > 1);

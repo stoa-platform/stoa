@@ -78,7 +78,8 @@ impl PolicyTrustSet {
 
 /// Reloadable holder for the pinned trust set. `None` means "trust set not
 /// loaded". A refused reload replaces any previously loaded set, so a key
-/// removed from the file stops verifying immediately.
+/// removed from the file stops verifying after an explicit reload. Production
+/// loads this file at startup; changing it currently requires a gateway restart.
 pub struct PolicyTrustStore {
     path: PathBuf,
     current: RwLock<Option<PolicyTrustSet>>,

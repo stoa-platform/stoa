@@ -12,11 +12,13 @@
 //!   `STOA_POLICY_AUDIENCE` exactly (a string, never a list);
 //! - `tenant_id` equals the requested tenant and `tenant_uuid` is a UUID.
 //!
-//! Freshness, version floors and tenant UUID pinning belong to the caller.
+//! `expires_at` must be an RFC 3339 timestamp strictly in the future.
+//! Cache age, version floors and tenant UUID pinning belong to the caller.
 
 use super::policy_trust::PolicyTrustSet;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
+use chrono::{DateTime, Utc};
 use jsonwebtoken::Validation;
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -57,6 +59,8 @@ pub enum PolicyArtifactError {
     Tenant,
     #[error("artifact tenant_uuid is missing or not a UUID")]
     TenantUuid,
+    #[error("artifact expires_at is missing, invalid or no longer in the future")]
+    Expiration,
 }
 
 /// Expected `iss` and `aud` of every artifact, taken from the configuration.
@@ -72,6 +76,7 @@ pub struct VerifiedPolicyArtifact {
     pub kid: String,
     pub tenant_id: String,
     pub tenant_uuid: Uuid,
+    pub expires_at: DateTime<Utc>,
     /// Whole verified payload; the caller reads version, validity and entries.
     pub claims: Map<String, Value>,
 }
@@ -142,10 +147,16 @@ impl PolicyArtifactVerifier {
         let tenant_uuid = claim("tenant_uuid")
             .and_then(|raw| Uuid::parse_str(raw).ok())
             .ok_or(TenantUuid)?;
+        let expires_at = claim("expires_at")
+            .and_then(|raw| DateTime::parse_from_rfc3339(raw).ok())
+            .map(|at| at.with_timezone(&Utc))
+            .filter(|at| *at > Utc::now())
+            .ok_or(Expiration)?;
         Ok(VerifiedPolicyArtifact {
             kid: kid.to_owned(),
             tenant_id: tenant_id.to_owned(),
             tenant_uuid,
+            expires_at,
             claims,
         })
     }
@@ -176,7 +187,8 @@ mod tests {
 
     fn claims() -> Value {
         json!({"iss": "stoa-control-plane", "aud": "stoa-gateway", "tenant_id": "acme",
-               "tenant_uuid": TENANT_UUID, "version": 3, "permissions": []})
+               "tenant_uuid": TENANT_UUID, "version": 3, "permissions": [],
+               "expires_at": (Utc::now() + chrono::Duration::minutes(15)).to_rfc3339()})
     }
 
     /// Sign raw segments exactly like the Control Plane signer does.
@@ -227,6 +239,25 @@ mod tests {
             };
             assert_eq!(verify(&sign(&header(), &claims)), Err(expected), "{claim}");
         }
+    }
+
+    #[test]
+    fn expires_at_is_required_and_strictly_future() {
+        for expiry in [
+            Value::Null,
+            json!("invalid"),
+            json!("2099-01-01"),
+            json!(42),
+            json!(Utc::now().to_rfc3339()),
+            json!((Utc::now() - chrono::Duration::seconds(1)).to_rfc3339()),
+        ] {
+            let mut payload = claims();
+            payload["expires_at"] = expiry;
+            assert_eq!(verify(&sign(&header(), &payload)), Err(Expiration));
+        }
+        let mut payload = claims();
+        payload.as_object_mut().unwrap().remove("expires_at");
+        assert_eq!(verify(&sign(&header(), &payload)), Err(Expiration));
     }
 
     #[test]

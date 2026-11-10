@@ -1206,8 +1206,8 @@ mod tests {
         state.tool_permissions = Some(std::sync::Arc::new(permissions.clone()));
         let readiness = || ready(axum::extract::State(state.clone()));
 
-        // The startup policy loads, yet missing and then refused trust keep readiness down.
-        assert_eq!(permissions.load_policy("tenant1").await, Ok(()));
+        // Missing and then refused trust prevent loading a startup policy.
+        assert!(permissions.load_policy("tenant1").await.is_err());
         assert_eq!(readiness().await.status(), StatusCode::SERVICE_UNAVAILABLE);
         std::fs::write(&trust_path, "not json").unwrap();
         assert!(trust.reload().is_err());
@@ -1216,6 +1216,7 @@ mod tests {
         // A valid set recovers; refusing it again fails readiness despite the cached policy.
         std::fs::write(&trust_path, VALID_JWKS).unwrap();
         assert_eq!(trust.reload(), Ok(1));
+        assert_eq!(permissions.load_policy("tenant1").await, Ok(()));
         assert_eq!(readiness().await.status(), StatusCode::OK);
         std::fs::write(&trust_path, r#"{"keys":[]}"#).unwrap();
         assert!(trust.reload().is_err());

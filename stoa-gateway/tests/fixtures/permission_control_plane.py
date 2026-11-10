@@ -10,6 +10,7 @@ import json
 import os
 import socket
 import sys
+import tempfile
 import uuid
 from pathlib import Path
 
@@ -43,7 +44,10 @@ from fastapi import FastAPI, Request  # noqa: E402
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine  # noqa: E402
 
 from src.database import get_db  # noqa: E402
+from src.config import settings  # noqa: E402
+from src.models.tenant import Tenant  # noqa: E402
 from src.models.tenant_tool_permission import TenantToolPermission  # noqa: E402
+from src.models.tool_policy_version import ToolPolicyVersion  # noqa: E402
 from src.routers.tenant_tool_permissions import router  # noqa: E402
 
 # Reuse the existing signing fixture without copying key material into this file.
@@ -62,6 +66,16 @@ client_public_pem = (
 )
 CLIENT_ASSERTION_TYPE = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
 modulus = source.split('const TEST_N: &str = "', 1)[1].split('";', 1)[0]
+# The same published Ed25519 vector is trusted by the Rust permission fixtures.
+policy_der = source.split('pub const KEY_DER: &str = "', 1)[1].split('";', 1)[0]
+policy_key = serialization.load_der_private_key(base64.urlsafe_b64decode(policy_der + "=="), password=None)
+policy_directory = tempfile.TemporaryDirectory()
+policy_path = Path(policy_directory.name) / "policy-signing.pem"
+policy_path.write_bytes(
+    policy_key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
+)
+settings.STOA_POLICY_SIGNING_KEY_FILE = str(policy_path)
+settings.STOA_POLICY_SIGNING_KID = "cp-policy-202611-1"
 issuer = f"{base_url}/realms/stoa"
 app = FastAPI()
 app.include_router(router)
@@ -162,8 +176,12 @@ async def token(request: Request):
 
 async def main():
     async with engine.begin() as conn:
+        await conn.run_sync(Tenant.__table__.create)
         await conn.run_sync(TenantToolPermission.__table__.create)
+        await conn.run_sync(ToolPolicyVersion.__table__.create)
     async with sessions() as session:
+        session.add(Tenant(id="tenant-a", name="Test tenant"))
+        session.add(ToolPolicyVersion(tenant_id="tenant-a", version=1))
         # Tools are denied by default: echo_tool has an explicit allow row.
         # Page two contains an explicit deny; page one cannot authorize early.
         for index in range(101):
@@ -185,6 +203,7 @@ async def main():
     print(json.dumps({"base_url": base_url}), flush=True)
     await server.serve(sockets=[listener])
     await engine.dispose()
+    policy_directory.cleanup()
 
 
 if __name__ == "__main__":

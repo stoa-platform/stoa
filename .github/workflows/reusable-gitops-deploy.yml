@@ -16,9 +16,9 @@
 # and attestations, independently of this switch.
 #
 # Endpoint verify (CAB-2612): an empty URL, or a deadline without HTTP 200,
-# is FAIL or SKIP — never a silent success. DEV_POST_DEPLOY_REQUIRED
-# (default false) fails the job on that verdict; otherwise the job warns
-# and stays green. The image-updated dispatch is unchanged.
+# is FAIL or SKIP. CAB-2618 makes this check mandatory in prod; dev keeps
+# DEV_POST_DEPLOY_REQUIRED and reports missing verification explicitly.
+# The image-updated dispatch is unchanged.
 #
 # Requires: STOA_INFRA_DISPATCH_TOKEN secret (PAT with repo scope on PotoMitan/stoa-infra)
 # =============================================================================
@@ -153,9 +153,10 @@ jobs:
 
       - name: Record GitOps verify verdict
         id: truth
-        if: always() && steps.wait.outcome == 'success'
+        if: always()
         env:
           POST_DEPLOY_CONTROL: Wait for ArgoCD sync
+          POST_DEPLOY_REQUIRED_INPUT: ${{ inputs.environment == 'prod' && 'true' || '' }}
           POST_DEPLOY_RAN: ${{ steps.wait.outputs.ran }}
           POST_DEPLOY_OK: ${{ steps.wait.outputs.ok }}
           POST_DEPLOY_REASON: ${{ steps.wait.outputs.detail }}

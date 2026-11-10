@@ -11,19 +11,28 @@ on:
     paths:
       - 'stoa-gateway/**'
       - '.github/workflows/mcp-sdk-smoke.yml'
+      - 'scripts/ci/require_steps.py'
+      - 'scripts/ci/tests/test_regression_cab_2618_required_steps.py'
   push:
     branches: [main]
     paths:
       - 'stoa-gateway/**'
       - '.github/workflows/mcp-sdk-smoke.yml'
+      - 'scripts/ci/require_steps.py'
+      - 'scripts/ci/mcp_prod_smoke_truth.sh'
   schedule:
     # 08:00 UTC daily probe against prod — catches config drift / chart
     # regressions that bypass the repo (e.g. tool registry changes).
     - cron: '0 8 * * *'
   workflow_dispatch:
     inputs:
+      target:
+        description: Probe prod or build and smoke the local gateway; neither deploys a service.
+        type: choice
+        options: [prod, local]
+        default: prod
       MCP_PROD_SMOKE_REQUIRED:
-        description: Fail when the prod MCP smoke did not run. Default true. A skip is never PASS.
+        description: 'Deprecated compatibility input; ignored. Production checks are always required.'
         type: boolean
         default: true
 
@@ -54,7 +63,7 @@ jobs:
   pre-merge:
     # PR + main push: build the gateway from HEAD and run the smoke
     # against a locally-started binary. This is the blocking gate.
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.target == 'local')
     name: Pre-merge (local gateway)
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -63,6 +72,7 @@ jobs:
         working-directory: stoa-gateway
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        id: checkout
 
       - name: Install system deps (rdkafka + python3)
         working-directory: .
@@ -85,25 +95,34 @@ jobs:
           working-directory: stoa-gateway
 
       - name: Install MCP Python SDK
+        id: sdk
         working-directory: .
         run: |
           python3 -m venv .venv-mcp
           .venv-mcp/bin/pip install --quiet "mcp==${PY_MCP_VERSION}" "cryptography>=47.0.0"
 
       - name: Build gateway binary
+        id: build
         run: cargo build --release
 
       - name: Run authenticated MCP SDK smoke
+        id: smoke
         run: ../.venv-mcp/bin/python tests/e2e/local_mcp_sdk_smoke.py
+
+      - name: Require executed MCP checks
+        if: always()
+        working-directory: .
+        env:
+          REQUIRED_STEP_RESULTS: ${{ toJSON(steps) }}
+        run: python3 scripts/ci/require_steps.py checkout sdk build smoke
 
   post-deploy:
     # Daily cron + manual dispatch: probe prod `mcp.gostoa.dev`. Catches
     # config drift that the repo-level gate misses (tool registry, chart
     # defaults changed out-of-band, etc.).
-    # CAB-2612: a skipped smoke is not a pass. The truth step fails the job
-    # when MCP_PROD_SMOKE_REQUIRED is true (the default). It does not create
-    # DNS records or republish the public MCP endpoint.
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    # CAB-2618: every selected probe is mandatory. An unavailable public
+    # endpoint fails; its retirement remains a separate human decision.
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.target != 'local')
     name: Post-deploy (prod probe)
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -111,6 +130,7 @@ jobs:
       mcp_prod_status: ${{ steps.truth.outputs.mcp_prod_status }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        id: checkout
 
       - name: Check prod MCP DNS
         id: dns
@@ -150,8 +170,7 @@ jobs:
         if: success() || failure()
         env:
           MCP_SMOKE_EVENT: ${{ github.event_name }}
-          MCP_SMOKE_REQUIRED_INPUT: ${{ inputs.MCP_PROD_SMOKE_REQUIRED }}
-          MCP_SMOKE_REQUIRED_VAR: ${{ vars.MCP_PROD_SMOKE_REQUIRED }}
+          MCP_SMOKE_REQUIRED_INPUT: 'true'
           MCP_SMOKE_DNS: ${{ steps.dns.outputs.resolves }}
           MCP_SMOKE_RAN: ${{ steps.smoke.outputs.ran }}
           MCP_SMOKE_EXIT: ${{ steps.smoke.outputs.exit_code }}
@@ -159,3 +178,9 @@ jobs:
           MCP_COMMIT: ${{ github.sha }}
           MCP_ENVIRONMENT: prod
         run: bash scripts/ci/mcp_prod_smoke_truth.sh
+
+      - name: Require executed MCP checks
+        if: always()
+        env:
+          REQUIRED_STEP_RESULTS: ${{ toJSON(steps) }}
+        run: python3 scripts/ci/require_steps.py checkout dns sdk smoke truth

@@ -306,6 +306,53 @@ host is the rate limit on the Ingress (`limit-rps`, `limit-connections`).
 Unset or empty `STOA_ADMIN_API_TOKEN` makes a direct `/admin` call return 503.
 A missing or wrong bearer returns 401. There is no default token.
 
+## MCP tools from published contracts
+
+Each endpoint of a contract published with `POST /admin/contracts` becomes
+one MCP tool. `tools_generated` in the response is the number of tools the
+registry holds after the publish: a tool the registry refuses (an
+`input_schema` whose `type` is not `object`, for example) is left out and
+logged.
+
+- Name: the endpoint's `llm.tool_name`, as given. Without it,
+  `<tenant>_<name>_<operation_id>`, or the endpoint's position in
+  `endpoints` (from 0) when it has no `operation_id`. Any character outside
+  `A-Z a-z 0-9 _ -` becomes `_`. A name longer than 64 characters is cut and
+  ends with `_` and 8 hex characters of a SHA-256 of the full name. Images
+  before this change named these tools `uac:<tenant>:<name>:<operation>`.
+- Path parameters: `backend_url` is the upstream URL of the static part of
+  the path, up to the first `{param}` segment. For `/customers/{id}` it is
+  `https://backend.example/customers/`, the REST route is
+  `/apis/<tenant>/<name>/customers/`, and the tool takes a required string
+  argument `id`: `{"id": "C-1001"}` calls
+  `https://backend.example/customers/C-1001`. A given `input_schema` keeps
+  its properties and gets the missing path parameters. The other arguments
+  go as query string (GET, DELETE) or JSON body (POST, PUT, PATCH).
+- Tenant: `tools/list` shows a contract tool only to a caller of the
+  contract's tenant, and `tools/call` refuses the others. The caller's
+  tenant is the token's `tenant` claim, else its first realm role
+  `tenant-<x>`, else `default`.
+- Scope, with the built-in policy (no `STOA_POLICY_PATH`): a read tool (first
+  method GET, or `llm.side_effects` `none` or `read`) needs `stoa:read` in
+  the token's `scope`; `stoa:execute`, `stoa:admin` or the realm role
+  `cpi-admin` also pass. On `POST /mcp` a token with no scope at all counts
+  as `stoa:read`. POST, PUT, PATCH, DELETE and `side_effects: destructive`
+  need `stoa:write` (or `stoa:admin`, or `cpi-admin`).
+- Call: the gateway calls the backend directly with the caller's bearer
+  (`Authorization: Bearer <token>`). It does not go through the `/apis`
+  route, so `inboundAuthAudience` is not checked on this path; the token was
+  checked against `STOA_JWT_AUDIENCE` on `/mcp`.
+- Republishing a contract replaces its tools: those of removed endpoints
+  disappear. `DELETE /admin/contracts/<tenant>:<name>` removes them, whatever
+  their names. A name held by another contract or by a tool that is not
+  from this contract, or produced by two endpoints, is refused with 400 and
+  nothing changes.
+- Without a control plane and with `STOA_NATIVE_TOOLS_ENABLED=false` (this
+  ConfigMap), no `stoa_*` platform tool is registered.
+- Routes and tools are process memory. After a restart `tools/list` has no
+  contract tool until the publisher posts the contracts again (see
+  "Republish after a restart").
+
 ## Resilience
 
 One replica, no PodDisruptionBudget, `nodeSelector` `worker-3`. Memory
@@ -486,7 +533,8 @@ Leave `STOA_CONTROL_PLANE_URL` unset. The process then:
 `/health` does not call the control plane. A blank URL is treated as unset.
 `AppState` still builds an internal client aimed at `http://localhost:8000`
 for tools that are invoked later; nothing dials it at startup when the URL is
-unset.
+unset. With `STOA_NATIVE_TOOLS_ENABLED=false` the `stoa_*` relay tools that
+called it are not registered.
 
 `prod` / `staging` without a policy file exits immediately. That is a config
 panic, not a control-plane retry.

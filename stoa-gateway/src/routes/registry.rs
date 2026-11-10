@@ -174,8 +174,10 @@ impl RouteRegistry {
 
     /// Find the best matching route for a request path.
     ///
-    /// Uses longest-prefix matching: if multiple routes match,
-    /// the one with the longest `path_prefix` wins.
+    /// A route matches at a segment boundary only (see
+    /// [`prefix_matches_path`]): `/apis/t/n/customers` serves
+    /// `/apis/t/n/customers/C-1`, not `/apis/t/n/customers-archive/1`.
+    /// If multiple routes match, the one with the longest `path_prefix` wins.
     ///
     /// Returns `Arc<ApiRoute>` — one atomic increment instead of cloning
     /// 7+ String fields per request. (CAB-1332)
@@ -185,13 +187,25 @@ impl RouteRegistry {
         let mut best_len = 0;
 
         for route in table.values() {
-            if path.starts_with(&route.path_prefix) && route.path_prefix.len() > best_len {
+            if route.path_prefix.len() > best_len && prefix_matches_path(&route.path_prefix, path) {
                 best = Some(route);
                 best_len = route.path_prefix.len();
             }
         }
 
         best.map(Arc::clone)
+    }
+}
+
+/// Whether a route prefix covers a request path, at a segment boundary.
+///
+/// True when the path equals the prefix, when the prefix ends with `/` and
+/// the path starts with it, or when the path starts with the prefix followed
+/// by `/`.
+fn prefix_matches_path(prefix: &str, path: &str) -> bool {
+    match path.strip_prefix(prefix) {
+        Some(rest) => rest.is_empty() || prefix.ends_with('/') || rest.starts_with('/'),
+        None => false,
     }
 }
 
@@ -288,6 +302,69 @@ mod tests {
         let found = reg.find_by_path("/apis/acme/payments");
         assert!(found.is_some());
         assert_eq!(found.unwrap().id, "r2");
+    }
+
+    fn found_id(reg: &RouteRegistry, path: &str) -> Option<String> {
+        reg.find_by_path(path).map(|route| route.id.clone())
+    }
+
+    #[test]
+    fn prefix_without_trailing_slash_matches_only_at_a_segment_boundary() {
+        let reg = RouteRegistry::new();
+        reg.upsert(make_route("customers", "/apis/t/n/customers"));
+        for path in [
+            "/apis/t/n/customers",
+            "/apis/t/n/customers/",
+            "/apis/t/n/customers/C-1",
+            "/apis/t/n/customers//C-1",
+        ] {
+            assert_eq!(found_id(&reg, path).as_deref(), Some("customers"), "{path}");
+        }
+        for path in [
+            "/apis/t/n/customersX",
+            "/apis/t/n/customers-archive/1",
+            "/apis/t/n/customers@evil.example/x",
+            "/apis/t/n/custom",
+        ] {
+            assert_eq!(found_id(&reg, path), None, "{path}");
+        }
+    }
+
+    #[test]
+    fn prefix_with_trailing_slash_matches_what_follows_it() {
+        let reg = RouteRegistry::new();
+        reg.upsert(make_route("items", "/apis/t/n/customers/"));
+        assert_eq!(
+            found_id(&reg, "/apis/t/n/customers/C-1").as_deref(),
+            Some("items")
+        );
+        assert_eq!(
+            found_id(&reg, "/apis/t/n/customers/").as_deref(),
+            Some("items")
+        );
+        assert_eq!(found_id(&reg, "/apis/t/n/customers"), None);
+        assert_eq!(found_id(&reg, "/apis/t/n/customersX/1"), None);
+    }
+
+    #[test]
+    fn longest_prefix_wins_among_segment_matches() {
+        let reg = RouteRegistry::new();
+        reg.upsert(make_route("collection", "/apis/t/n/customers"));
+        reg.upsert(make_route("items", "/apis/t/n/customers/"));
+        reg.upsert(make_route("root", "/apis/t/n"));
+        assert_eq!(
+            found_id(&reg, "/apis/t/n/customers").as_deref(),
+            Some("collection")
+        );
+        assert_eq!(
+            found_id(&reg, "/apis/t/n/customers/C-1").as_deref(),
+            Some("items")
+        );
+        // Not a segment of `/customers`: falls back to the shorter route.
+        assert_eq!(
+            found_id(&reg, "/apis/t/n/customers-archive/1").as_deref(),
+            Some("root")
+        );
     }
 
     #[test]

@@ -1825,6 +1825,70 @@ mod tests {
         );
     }
 
+    /// The route `/apis/demo/api/customers` used to serve
+    /// `/apis/demo/api/customers-archive/1` and `/apis/demo/api/customersX`
+    /// as well: `starts_with` alone does not stop at a segment.
+    #[tokio::test]
+    async fn regression_route_prefix_matches_only_at_a_segment_boundary() {
+        use axum::body::Body;
+        use axum::http::Request;
+        use tower::ServiceExt;
+        use wiremock::matchers::method;
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let backend = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("customers"))
+            .mount(&backend)
+            .await;
+
+        let state = AppState::new(crate::config::Config::default());
+        let mut route = ping_route();
+        route.path_prefix = "/apis/demo/api/customers".into();
+        route.backend_url = format!("{}/customers", backend.uri());
+        state.route_registry.upsert(route);
+        let app = axum::Router::new()
+            .fallback(dynamic_proxy)
+            .with_state(state);
+        let get = |uri: &'static str| {
+            let app = app.clone();
+            async move {
+                app.oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap())
+                    .await
+                    .unwrap()
+                    .status()
+            }
+        };
+
+        for uri in [
+            "/apis/demo/api/customersX",
+            "/apis/demo/api/customers-archive/1",
+            "/apis/demo/api/customers@evil.example/x",
+        ] {
+            assert_eq!(get(uri).await, StatusCode::NOT_FOUND, "{uri}");
+        }
+        assert!(
+            backend.received_requests().await.unwrap().is_empty(),
+            "a non-matching path reached the backend"
+        );
+
+        for uri in [
+            "/apis/demo/api/customers",
+            "/apis/demo/api/customers/",
+            "/apis/demo/api/customers/C-1",
+        ] {
+            assert_eq!(get(uri).await, StatusCode::OK, "{uri}");
+        }
+        let paths: Vec<String> = backend
+            .received_requests()
+            .await
+            .unwrap()
+            .iter()
+            .map(|request| request.url.path().to_string())
+            .collect();
+        assert_eq!(paths, ["/customers", "/customers/", "/customers/C-1"]);
+    }
+
     #[tokio::test]
     async fn prefix_ending_with_slash_reaches_the_backend_sub_path() {
         use axum::body::Body;

@@ -1,7 +1,7 @@
-fastapi==0.136.3
+fastapi==0.162.2
 uvicorn[standard]==0.54.0
 python-keycloak==7.1.1
-pydantic[email]==2.14.2
+pydantic[email]==2.14.3
 # GHSA (MEDIUM) — NestedSecretsSettingsSource suit les liens symboliques HORS
 # de secrets_dir, ce qui permet de lire des fichiers arbitraires par un lien
 # planté dans le répertoire de secrets. Plage vulnérable >= 2.12.0, < 2.14.2.
@@ -20,13 +20,13 @@ python-gitlab==8.6.0
 # GitHub integration (CAB-1890 — dual-provider migration)
 PyGithub>=2.9.1
 pyyaml==6.0.3
-sse-starlette==3.6.0
+sse-starlette==3.7.0
 aiocache==0.12.3
 cachetools>=5.3.0
 prometheus-client==0.26.0
 structlog==25.5.0
 # Database
-sqlalchemy[asyncio]==2.0.55
+sqlalchemy[asyncio]==2.1.8
 asyncpg==0.32.0
 alembic==1.20.1
 psycopg2-binary==2.9.13

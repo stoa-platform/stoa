@@ -208,7 +208,10 @@ def _docs(path: Path):
         return text, []
     try:
         docs = [doc for doc in yaml.safe_load_all(text) if isinstance(doc, dict)]
-    except yaml.YAMLError:
+    except yaml.YAMLError as exc:
+        # Not fatal, the text is still scanned. Name the file: a broken manifest must not be skipped in silence.
+        print(f"warning: {path}: YAML not parsed, structured checks skipped ({type(exc).__name__})",
+              file=sys.stderr)
         return text, []
     return text, docs
 

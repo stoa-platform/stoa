@@ -4,12 +4,15 @@
     python3 -B -m unittest discover -s deploy/keycloak/ha-proof -p 'test_*.py' -v
 """
 
+import contextlib
+import io
 import re
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
-from verify_static import analyze, tolerated_losses
+from verify_static import _docs, analyze, tolerated_losses
 
 HERE = Path(__file__).resolve().parent
 SCRIPT = HERE / "failover-proof.sh"
@@ -157,6 +160,30 @@ class ProofScript(unittest.TestCase):
             check=True,
         )
         self.assertRegex(result.stdout, re.compile(r"^HA_STATIC=fail\n"))
+
+
+class UnparsedYaml(unittest.TestCase):
+    def test_broken_yaml_is_reported_on_stderr(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            broken = Path(tmp) / "broken.yaml"
+            broken.write_text("kind: Deployment\n  replicas: [unclosed\n", encoding="utf-8")
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                text, docs = _docs(broken)
+        self.assertEqual(docs, [])
+        self.assertIn("kind: Deployment", text)
+        self.assertIn("broken.yaml", stderr.getvalue())
+        self.assertIn("YAML not parsed", stderr.getvalue())
+
+    def test_templates_stay_silent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            template = Path(tmp) / "template.yaml"
+            template.write_text("kind: {{ .Values.kind }}\n", encoding="utf-8")
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                _, docs = _docs(template)
+        self.assertEqual(docs, [])
+        self.assertEqual(stderr.getvalue(), "")
 
 
 if __name__ == "__main__":

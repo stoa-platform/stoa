@@ -1,0 +1,46 @@
+# Identity HA proof (deploy/keycloak/ha-proof/README.md). CAB-2555.
+#
+# Runs the Docker-free static checks only. There is no live bascule job:
+# the in-repo Keycloak sizing is a single replica without a shared session
+# cache, and this workflow must not target a cluster. Not a required check.
+name: Identity HA Failover Proof
+
+on:
+  pull_request:
+    paths:
+      - 'deploy/keycloak/**'
+      - 'charts/stoa-platform/values*.yaml'
+      - 'charts/stoa-platform/templates/keycloak-servicemonitor.yaml'
+      - 'charts/stoa-platform/templates/*pdb*'
+      - 'deploy/docker-compose/docker-compose.yml'
+      - 'quickstart/docker-compose.yml'
+      - '.github/workflows/identity-ha-proof.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: identity-ha-proof-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static:
+    name: Static checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: '3.11'
+      - name: Install hash-locked YAML parser
+        run: python -m pip install --require-hashes -r .github/workflows/requirements/pyyaml.txt
+      - name: Sizing, control and parser tests
+        run: python -B -m unittest discover -s deploy/keycloak/ha-proof -p 'test_*.py' -v
+      - name: Shellcheck the proof script
+        run: shellcheck deploy/keycloak/ha-proof/failover-proof.sh
+      - name: Static report
+        run: python -B deploy/keycloak/ha-proof/verify_static.py

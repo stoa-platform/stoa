@@ -92,7 +92,6 @@ class CompanionRenderTests(unittest.TestCase):
             "--set", "stoa.bootstrap.firstAdmin.enabled=true",
             "--set", "stoa.bootstrap.firstAdmin.existingSecret=existing-request",
             "--set", "vault.credentialsCheck.enabled=true",
-            "--set", "infisical.enabled=true",
         )
         containers = self.containers(objects)
         self.assertTrue({"stoa-gateway", "stoa-sidecar", "bootstrap", "sync", "test"}

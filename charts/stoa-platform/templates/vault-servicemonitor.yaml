@@ -6,7 +6,7 @@ metadata:
   name: vault
   namespace: {{ .Values.vault.namespace | default "vault" }}
   labels:
-    app.kubernetes.io/name: vault
+    app.kubernetes.io/name: {{ .Values.vault.monitoring.appName | default "openbao" }}
     app.kubernetes.io/component: secrets
     {{- include "stoa-platform.labels" . | nindent 4 }}
     prometheus: kube-prometheus-stack
@@ -14,7 +14,7 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app.kubernetes.io/name: vault
+      app.kubernetes.io/name: {{ .Values.vault.monitoring.appName | default "openbao" }}
   endpoints:
     - port: http
       path: /v1/sys/metrics

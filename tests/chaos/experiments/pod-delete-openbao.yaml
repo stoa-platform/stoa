@@ -161,9 +161,10 @@ spec:
             type: "cmdProbe"
             cmdProbe/inputs:
               command: |
-                # No token: bao status reads sys/leader, which is unauthenticated, and prints
-                # leader_address only while a leader is known (quorum of 2 with one pod partitioned).
-                # raft list-peers would need a BAO_TOKEN in the probe pod and always failed without it.
+                # No token: bao status reads sys/seal-status, then sys/leader (both unauthenticated).
+                # leader_address comes from sys/leader and is printed only while a leader is known
+                # (quorum of 2 with one pod partitioned). raft list-peers needs a BAO_TOKEN in the
+                # probe pod and always failed without it.
                 bao status -address=http://openbao.openbao.svc:8200 -format=json \
                   | grep -Eq '"leader_address": *"https?://' && echo true
               source:

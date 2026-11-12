@@ -156,14 +156,16 @@ spec:
               retry: 5
               probePollingInterval: 3
 
-          # Check raft peers remain connected
-          - name: "openbao-raft-peers"
+          # Check the raft quorum holds: a leader is still known
+          - name: "openbao-raft-quorum"
             type: "cmdProbe"
             cmdProbe/inputs:
               command: |
-                # Needs BAO_TOKEN allowed to read sys/storage/raft/configuration
-                peers=$(bao operator raft list-peers -address=http://openbao.openbao.svc:8200 -format=json | grep -c '"node_id"')
-                [ "$peers" -ge 2 ] && echo true
+                # No token: bao status reads sys/leader, which is unauthenticated, and prints
+                # leader_address only while a leader is known (quorum of 2 with one pod partitioned).
+                # raft list-peers would need a BAO_TOKEN in the probe pod and always failed without it.
+                bao status -address=http://openbao.openbao.svc:8200 -format=json \
+                  | grep -Eq '"leader_address": *"https?://' && echo true
               source:
                 image: openbao/openbao:2.7.2@sha256:5046911075e137e154ce49ab051502f4ec7cf367d484ae4a4dce665d9b90561f
               comparator:

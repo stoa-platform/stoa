@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import runpy
 import shutil
 import subprocess
@@ -343,3 +344,18 @@ def test_regression_container_requires_dockerfile(tmp_path: Path, exists: bool) 
         assert output.read_text().strip() == "exists=true"
     else:
         assert "::error::" in proc.stdout
+
+
+@pytest.mark.parametrize("component", COMPONENTS)
+def test_regression_scan_never_reuses_a_cached_os_package_stage(component: str) -> None:
+    """A cached `apk upgrade` layer kept a fixed CVE (libxslt, CVE-2026-87636) in the scanned image."""
+    job = yaml.safe_load((ROOT / ".github/workflows/security-scan.yml").read_text())["jobs"]["container-scan"]
+    build = next(step for step in job["steps"] if step.get("name") == "Build image for scanning")["with"]
+    if f"== '{component}'" in build["no-cache"]:
+        return  # the whole build ignores the cache
+    assert f'"{component}"' in build["no-cache-filters"]
+    assert "'runtime'" in build["no-cache-filters"]
+    dockerfile = (ROOT / component / "Dockerfile").read_text()
+    assert re.search(r"^FROM \S+ AS runtime$", dockerfile, flags=re.M)
+    # OS packages are installed in the last stage: it must be the one rebuilt.
+    assert "\nFROM " not in dockerfile.split(" AS runtime\n", 1)[1]

@@ -86,7 +86,7 @@ ARG CACHEBUST=unknown
 RUN npm run build
 
 # Production stage - Use nginx-unprivileged for Kubernetes compatibility
-FROM nginxinc/nginx-unprivileged:alpine@sha256:b5047b9b76845eac124358373c6852377c52e4b05834a47647e955dd91cb8f1e
+FROM nginxinc/nginx-unprivileged:alpine@sha256:b5047b9b76845eac124358373c6852377c52e4b05834a47647e955dd91cb8f1e AS runtime
 
 # Preserve the project distribution notices in the runtime image.
 COPY LICENSE NOTICE /usr/share/licenses/stoa/

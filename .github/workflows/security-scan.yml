@@ -419,9 +419,10 @@ jobs:
           load: true
           push: false
           tags: stoa/${{ matrix.component.name }}:scan
-          # Refresh OS security updates; keep the gateway's Rust builder cache.
+          # Refresh OS security updates: the stage that installs OS packages is never taken from the cache
+          # (a cached "apk upgrade" kept a fixed CVE in the scanned image). Builder stages stay cached.
           no-cache: ${{ matrix.component.name == 'control-plane-api' }}
-          no-cache-filters: ${{ matrix.component.name == 'stoa-gateway' && 'runtime' || '' }}
+          no-cache-filters: ${{ contains(fromJSON('["stoa-gateway", "portal", "control-plane-ui"]'), matrix.component.name) && 'runtime' || '' }}
           cache-from: type=gha,scope=security-scan-${{ matrix.component.name }}
           cache-to: type=gha,mode=max,scope=security-scan-${{ matrix.component.name }}
 

@@ -26,7 +26,7 @@
     "i18next": "^26.7.1",
     "js-yaml": "^4.3.2",
     "lucide-react": "^1.66.0",
-    "node-forge": "^1.4.2",
+    "node-forge": "^1.4.3",
     "oidc-client-ts": "^3.5.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

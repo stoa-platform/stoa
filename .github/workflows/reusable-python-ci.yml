@@ -120,7 +120,7 @@ jobs:
 
       - name: Upload coverage shard
         if: always() && inputs.test-shards == 2
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage-${{ inputs.component }}-${{ matrix.shard }}
           path: ${{ inputs.component }}/.coverage.shard-${{ matrix.shard }}
@@ -129,7 +129,7 @@ jobs:
           retention-days: 1
 
       - name: Upload test results
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: test-results-${{ inputs.component }}${{ inputs.test-shards == 2 && format('-{0}', matrix.shard) || '' }}
@@ -200,7 +200,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: ${{ inputs.python-version }}
 
@@ -248,7 +248,7 @@ jobs:
 
       - name: Upload combined coverage
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage-report-${{ inputs.component }}
           path: ${{ inputs.component }}/coverage.xml

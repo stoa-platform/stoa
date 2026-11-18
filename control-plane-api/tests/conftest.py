@@ -161,7 +161,6 @@ from src.middleware.pii_masking import PIIMaskingMiddleware
 _ORIGINAL_MASK_QUERY_STRING = PIIMaskingMiddleware._mask_query_string
 PIIMaskingMiddleware._mask_query_string = lambda _self, qs: qs
 
-import asyncio
 from collections.abc import AsyncGenerator, Generator
 from datetime import datetime
 from enum import Enum

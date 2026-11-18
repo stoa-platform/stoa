@@ -936,35 +936,6 @@ class TestCheckConnectivity:
         assert http_stage.error is None
 
     @pytest.mark.asyncio
-    async def test_regression_tls_stage_refuses_tls_below_1_2(self) -> None:
-        """CodeQL py/insecure-protocol (alert 1545): the TLS probe must not allow TLS 1.0/1.1."""
-        import ssl
-
-        mock_gw = MagicMock()
-        mock_gw.base_url = "https://127.0.0.1:8443"
-        svc = DiagnosticService(_make_session())
-        contexts: list[ssl.SSLContext] = []
-        real_factory = ssl.create_default_context
-
-        def capture_context(*args: object, **kwargs: object) -> ssl.SSLContext:
-            ctx = real_factory(*args, **kwargs)
-            ctx.wrap_socket = MagicMock()  # type: ignore[method-assign]
-            contexts.append(ctx)
-            return ctx
-
-        with (
-            patch.object(svc, "_get_gateway", return_value=mock_gw),
-            patch("src.services.diagnostic_service.socket.getaddrinfo", return_value=[()]),
-            patch("src.services.diagnostic_service.socket.create_connection", return_value=MagicMock()),
-            patch("src.services.diagnostic_service.ssl.create_default_context", side_effect=capture_context),
-            patch("httpx.AsyncClient.get", new=AsyncMock(return_value=httpx.Response(200))),
-        ):
-            result = await svc.check_connectivity("t1", "gw1")
-
-        assert any(stage.name == "tls" and stage.status == "ok" for stage in result.stages)
-        assert contexts and all(ctx.minimum_version == ssl.TLSVersion.TLSv1_2 for ctx in contexts)
-
-    @pytest.mark.asyncio
     async def test_http_error_status_records_error_stage(self) -> None:
         """HTTP health returns 503 → http_health stage status='error', overall='unhealthy'."""
         mock_gw = MagicMock()

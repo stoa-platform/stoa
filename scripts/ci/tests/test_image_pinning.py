@@ -57,6 +57,14 @@ class PinningTests(unittest.TestCase):
         source = "- uses: 'docker/metadata-action@" + "a" * 40 + "'\n  with:\n    tags: |\n      type=semver,pattern={{version}}"
         self.assertEqual(guard.findings("build.yml", source), [(4, "metadata-implicit-latest")])
 
+    def test_regression_publication_regex_is_linear(self):
+        # CodeQL py/redos (alert 1523): "-/" followed by many "$/" backtracked exponentially.
+        import time
+
+        start = time.monotonic()
+        self.assertEqual(guard.findings("build.yml", "-/" + "$/" * 28 + "!"), [])
+        self.assertLess(time.monotonic() - start, 1.0)
+
     def test_file_citations_and_sql(self):
         for value in ("module.py:123", "src/module.rs:42-50", "path/file.ext:123", "Dockerfile:12"):
             self.assertFalse(guard.findings("docs/guide.md", "See `" + value + "`."))

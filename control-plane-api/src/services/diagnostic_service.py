@@ -150,6 +150,7 @@ class DiagnosticService:
             tls_start = time.monotonic()
             try:
                 ctx = ssl.create_default_context()
+                ctx.minimum_version = ssl.TLSVersion.TLSv1_2  # no TLS 1.0/1.1
                 with socket.create_connection((host, port), timeout=5) as raw_sock:
                     ctx.wrap_socket(raw_sock, server_hostname=host)
                 tls_ms = (time.monotonic() - tls_start) * 1000

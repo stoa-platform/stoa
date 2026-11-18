@@ -215,11 +215,20 @@ def test_web_scans_keep_check_names_and_full_non_pr_runs() -> None:
         "github.event_name != 'pull_request' || "
         "needs.scan-changes.outputs[format('sast-{0}', matrix.project)] == 'true'"
     )
-    for name in ("Install dependencies", "Install ESLint security plugin",
+    for name in ("Install dependencies",
                  "Run ESLint security report (non-blocking)", "Run ESLint security gate (blocking)"):
         assert next(step for step in scan["steps"] if step["name"] == name)["if"] == (
             "steps.check.outputs.exists == 'true'"
         )
+    # The ESLint security plugin comes from the lockfile (npm ci), never from an
+    # unpinned `npm install` (OpenSSF Scorecard Pinned-Dependencies).
+    for step in scan["steps"]:
+        assert "npm install" not in step.get("run", ""), step["name"]
+    for component in ("portal", "control-plane-ui"):
+        manifest = json.loads((ROOT / component / "package.json").read_text())
+        assert "eslint-plugin-security" in manifest["devDependencies"], component
+        lock = json.loads((ROOT / component / "package-lock.json").read_text())
+        assert "node_modules/eslint-plugin-security" in lock["packages"], component
 
 
 @pytest.mark.parametrize(("name", "directory", "command"), (

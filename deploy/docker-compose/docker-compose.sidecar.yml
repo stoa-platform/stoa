@@ -23,6 +23,7 @@ services:
     build:
       context: ../../stoa-gateway
       dockerfile: Dockerfile
+      target: runtime-debian  # healthcheck runs curl in the container
     container_name: stoa-sidecar-gateway
     environment:
       STOA_GATEWAY_MODE: sidecar

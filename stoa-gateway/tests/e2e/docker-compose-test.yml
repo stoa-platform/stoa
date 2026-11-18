@@ -12,6 +12,7 @@ services:
     build:
       context: ../..
       dockerfile: Dockerfile
+      target: runtime-debian  # healthcheck runs curl in the container
     ports:
       - "18080:8080"
     environment:

@@ -68,7 +68,6 @@ jobs:
       result: ${{ steps.set-result.outputs.result }}
     permissions:
       contents: read
-      checks: write
 
     steps:
       - name: Checkout repository

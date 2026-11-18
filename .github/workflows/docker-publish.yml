@@ -40,9 +40,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
 
+# Read-only by default; the job that pushes images declares packages: write.
 permissions:
   contents: read
-  packages: write
 
 env:
   REGISTRY: ghcr.io

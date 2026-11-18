@@ -22,9 +22,9 @@ on:
         type: string
         description: "Semantic version (e.g., 0.3.1)"
 
+# Read-only by default; the goreleaser job declares what it writes.
 permissions:
-  contents: write
-  packages: write
+  contents: read
 
 defaults:
   run:
@@ -34,6 +34,9 @@ jobs:
   goreleaser:
     name: GoReleaser
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # GitHub release and assets
+      packages: write  # ghcr.io images
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6

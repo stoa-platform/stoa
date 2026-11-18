@@ -56,7 +56,6 @@ jobs:
     permissions:
       contents: read
       id-token: write
-      checks: write
       attestations: write
       packages: write # callee docker job declares it (push-only, but validated at parse time)
 
@@ -67,7 +66,6 @@ jobs:
     permissions:
       contents: read
       id-token: write
-      checks: write
       attestations: write
       packages: write # callee docker job declares it (push-only, but validated at parse time)
 
@@ -78,7 +76,6 @@ jobs:
     permissions:
       contents: read
       id-token: write
-      checks: write
       attestations: write
       packages: write # callee docker job declares it (push-only, but validated at parse time)
 
@@ -89,7 +86,6 @@ jobs:
     permissions:
       contents: read
       id-token: write
-      checks: write
       attestations: write
       packages: write # callee docker job declares it (push-only, but validated at parse time)
 
@@ -106,7 +102,6 @@ jobs:
     uses: ./.github/workflows/stoa-operator-ci.yml
     permissions:
       contents: read
-      checks: write
 
   helm:
     needs: changes

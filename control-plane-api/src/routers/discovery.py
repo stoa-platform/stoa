@@ -21,10 +21,18 @@ from src.catalog.loader import (
     get_categories,
 )
 from src.logging_config import get_logger
+from src.services.outbound_url import (
+    UnsafeOutboundURLError,
+    ensure_public_http_url,
+    guard_outbound_request,
+)
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/v1/discovery", tags=["Discovery"])
+
+# Transport of the probe client; tests replace it with httpx.MockTransport.
+_PROBE_TRANSPORT: httpx.AsyncBaseTransport | None = None
 
 
 # ---------- Schemas (detect only — catalog schemas moved to catalog.loader) ----------
@@ -91,7 +99,21 @@ async def detect_from_url(
     """Probe a URL to auto-detect OpenAPI spec or MCP endpoint."""
     url = request.url.rstrip("/")
 
-    async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+    # SSRF: the URL comes from the request body. Refuse non-public targets up
+    # front, and re-check every request the probe client sends, redirects
+    # included (a public page could redirect to an internal address).
+    try:
+        await ensure_public_http_url(url)
+    except UnsafeOutboundURLError:
+        raise HTTPException(status_code=422, detail="URL must be a public http(s) address") from None
+
+    async with httpx.AsyncClient(
+        timeout=10.0,
+        follow_redirects=True,
+        max_redirects=5,
+        event_hooks={"request": [guard_outbound_request]},
+        transport=_PROBE_TRANSPORT,
+    ) as client:
         # Try MCP capabilities first
         for mcp_path in ["/mcp/capabilities", "/.well-known/mcp.json", "/mcp"]:
             try:

@@ -163,7 +163,7 @@ jobs:
 
       - name: Python audit
         run: |
-          pip install pip-audit
+          pip install --require-hashes -r .github/workflows/requirements/pip-audit.txt
           cd control-plane-api && pip-audit -r requirements.txt --desc 2>&1 || true
         continue-on-error: true
 

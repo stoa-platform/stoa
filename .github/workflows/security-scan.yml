@@ -213,11 +213,6 @@ jobs:
         working-directory: ${{ matrix.project }}
         run: npm ci
 
-      - name: Install ESLint security plugin
-        if: steps.check.outputs.exists == 'true'
-        working-directory: ${{ matrix.project }}
-        run: npm install --no-save eslint-plugin-security
-
       - name: Run ESLint security report (non-blocking)
         if: steps.check.outputs.exists == 'true'
         continue-on-error: true  # Non-blocking: report is collected, blocking gate runs in next step

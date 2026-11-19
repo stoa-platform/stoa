@@ -56,16 +56,10 @@ updates:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
       # ESM-only 0.5 releases require ESLint 9+; both apps still use ESLint 8.
+      # A range, not a list of releases: a list missed 0.5.8 (#3191).
       - dependency-name: "eslint-plugin-react-refresh"
         versions:
-          - "0.5.0"
-          - "0.5.1"
-          - "0.5.2"
-          - "0.5.3"
-          - "0.5.4"
-          - "0.5.5"
-          - "0.5.6"
-          - "0.5.7"
+          - ">= 0.5.0"
 
   # GitHub Actions
   - package-ecosystem: "github-actions"

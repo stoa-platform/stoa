@@ -98,8 +98,9 @@ jobs:
         id: sdk
         working-directory: .
         run: |
+          grep -q "^mcp==${PY_MCP_VERSION} " .github/workflows/requirements/mcp-sdk.txt || { echo "::error::requirements/mcp-sdk.txt does not pin mcp==${PY_MCP_VERSION}"; exit 1; }
           python3 -m venv .venv-mcp
-          .venv-mcp/bin/pip install --quiet "mcp==${PY_MCP_VERSION}" "cryptography>=47.0.0"
+          .venv-mcp/bin/pip install --quiet --require-hashes -r .github/workflows/requirements/mcp-sdk.txt
 
       - name: Build gateway binary
         id: build
@@ -147,8 +148,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y python3 python3-venv python3-pip
+          grep -q "^mcp==${PY_MCP_VERSION} " .github/workflows/requirements/mcp-sdk.txt || { echo "::error::requirements/mcp-sdk.txt does not pin mcp==${PY_MCP_VERSION}"; exit 1; }
           python3 -m venv .venv-mcp
-          .venv-mcp/bin/pip install --quiet "mcp==${PY_MCP_VERSION}"
+          .venv-mcp/bin/pip install --quiet --require-hashes -r .github/workflows/requirements/mcp-sdk.txt
 
       - name: Run MCP SDK smoke against prod
         id: smoke

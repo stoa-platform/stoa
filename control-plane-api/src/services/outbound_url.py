@@ -18,6 +18,10 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from src.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 _ALLOWED_SCHEMES = {"http", "https"}
 _DEFAULT_PORTS = {"http": 80, "https": 443}
 
@@ -72,4 +76,8 @@ async def ensure_public_http_url(url: str) -> None:
 
 async def guard_outbound_request(request: httpx.Request) -> None:
     """httpx request hook: checks the first request and every redirect hop."""
-    await ensure_public_http_url(str(request.url))
+    try:
+        await ensure_public_http_url(str(request.url))
+    except UnsafeOutboundURLError as exc:
+        logger.warning("Blocked outbound request to %s://%s: %s", request.url.scheme, request.url.host, exc)
+        raise

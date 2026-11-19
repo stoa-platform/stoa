@@ -86,7 +86,7 @@ async def test_regression_detect_does_not_follow_redirect_to_internal(monkeypatc
     response = await detect(probe_app(monkeypatch, handler), "http://public.example")
 
     assert response.status_code == 422
-    assert fetched and all(url.startswith("http://public.example") for url in fetched)
+    assert fetched and {httpx.URL(url).host for url in fetched} == {"public.example"}
 
 
 async def test_detect_still_probes_public_url(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -7,7 +7,7 @@ export LC_ALL=C
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 UV_REQ="$ROOT/.github/workflows/requirements/uv.txt"
 LOCK_OUT="$ROOT/control-plane-api/requirements-lock.txt"
-BENCH_OUT="$ROOT/.github/workflows/requirements/stoa-bench.txt"
+BENCH_OUT="$ROOT/control-plane-api/requirements-bench.txt"
 
 PINNED_UV="$(sed -nE 's/^uv==([^[:space:]\\]+).*/\1/p' "$UV_REQ" | head -n 1)"
 if [[ -z "$PINNED_UV" ]]; then
@@ -70,9 +70,9 @@ LOCK_HEADER="# Hash-locked install set of the control-plane-api image (pip insta
 # scripts/ci/tests/test_regression_requirements_lock.py checks that it still satisfies requirements.txt."
 
 BENCH_HEADER="# Hash-locked install set of stoa-bench.yml: control-plane-api/requirements.txt plus locust.
-# Source of truth: control-plane-api/requirements.txt + .github/workflows/requirements/stoa-bench.in.
+# Source of truth: control-plane-api/requirements.txt + control-plane-api/requirements-bench.in.
 # Regenerate with: scripts/ci/regenerate-requirements-locks.sh
 # scripts/ci/tests/test_regression_requirements_lock.py checks that it still satisfies requirements.txt."
 
 compile_lock "$ROOT/control-plane-api" "requirements-lock.in" "$LOCK_OUT" "$LOCK_HEADER"
-compile_lock "$ROOT/.github/workflows/requirements" "stoa-bench.in" "$BENCH_OUT" "$BENCH_HEADER"
+compile_lock "$ROOT/control-plane-api" "requirements-bench.in" "$BENCH_OUT" "$BENCH_HEADER"

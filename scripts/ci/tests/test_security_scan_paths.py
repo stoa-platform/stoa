@@ -250,7 +250,7 @@ def test_regression_dependency_findings_are_blocking(
     if command:
         assert step["run"].strip() == command
     else:
-        assert "pip-audit -r control-plane-api/requirements.txt --desc" in step["run"]
+        assert "pip-audit -r control-plane-api/requirements-lock.txt --desc" in step["run"]
         assert "--ignore-vuln CVE-2024-23342" in step["run"]
 
 

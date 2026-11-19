@@ -61,9 +61,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: control-plane-api
-        run: |
-          pip install -r requirements.txt
-          pip install locust>=2.29
+        run: pip install --require-hashes -r ../.github/workflows/requirements/stoa-bench.txt
 
       - name: Start API server
         working-directory: control-plane-api

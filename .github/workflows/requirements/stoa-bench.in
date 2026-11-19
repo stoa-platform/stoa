@@ -1,4 +1,0 @@
-# Input for .github/workflows/requirements/stoa-bench.txt.
-# Regenerate with: scripts/ci/regenerate-requirements-locks.sh
--r ../../../control-plane-api/requirements.txt
-locust>=2.29

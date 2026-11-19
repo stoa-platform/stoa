@@ -61,7 +61,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: control-plane-api
-        run: pip install --require-hashes -r ../.github/workflows/requirements/stoa-bench.txt
+        run: pip install --require-hashes -r requirements-bench.txt
 
       - name: Start API server
         working-directory: control-plane-api

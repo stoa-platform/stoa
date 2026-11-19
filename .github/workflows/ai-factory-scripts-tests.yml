@@ -21,6 +21,7 @@ on:
       - 'scripts/ci/**'
       - 'control-plane-api/requirements*.txt'
       - 'control-plane-api/requirements-lock.in'
+      - 'control-plane-api/requirements-bench.in'
       - '.github/workflows/requirements/**'
       - '.github/actions/**'
       - '.github/workflows/claude-issue-to-pr.yml'

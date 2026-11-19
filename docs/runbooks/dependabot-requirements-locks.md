@@ -7,7 +7,7 @@
 | Input | Generated lock |
 |---|---|
 | `control-plane-api/requirements.txt` + `control-plane-api/requirements-lock.in` | `control-plane-api/requirements-lock.txt` |
-| `control-plane-api/requirements.txt` + `.github/workflows/requirements/stoa-bench.in` | `.github/workflows/requirements/stoa-bench.txt` |
+| `control-plane-api/requirements.txt` + `control-plane-api/requirements-bench.in` | `control-plane-api/requirements-bench.txt` |
 
 The required `ci-gate` (`gate-contract`) job runs `scripts/ci/tests/test_regression_requirements_lock.py` whenever any of these files change. Because Dependabot does not re-compile transitive hashes via `uv pip compile`, `.github/workflows/dependabot-requirements-locks.yml` automatically regenerates and pushes updated locks on Dependabot pull requests using a dedicated GitHub App token (required because `GITHUB_TOKEN` on Dependabot `pull_request` events is read-only and does not re-trigger CI workflows).
 
@@ -34,7 +34,7 @@ Dependabot `pull_request` workflows receive **Dependabot secrets**, not Actions 
    - `STOA_LOCKS_APP_ID`: the numeric App ID from step 1.
    - `STOA_LOCKS_APP_PRIVATE_KEY`: the full contents of the generated `.pem` private key.
 
-Once configured, any Dependabot PR touching `control-plane-api/requirements.txt`, `control-plane-api/requirements-lock.in`, or `.github/workflows/requirements/stoa-bench.in` will receive an automatic `chore(deps): regenerate requirements locks` commit and re-run `ci-gate`.
+Once configured, any Dependabot PR touching `control-plane-api/requirements.txt`, `control-plane-api/requirements-lock.in`, or `control-plane-api/requirements-bench.in` will receive an automatic `chore(deps): regenerate requirements locks` commit and re-run `ci-gate`.
 
 ## 3. Manual fallback (without GitHub App)
 
@@ -46,7 +46,7 @@ Regenerate and push manually on the PR branch:
 gh pr checkout <PR_NUMBER>
 scripts/ci/regenerate-requirements-locks.sh
 python3 -m pytest scripts/ci/tests/test_regression_requirements_lock.py -v
-git add control-plane-api/requirements-lock.txt .github/workflows/requirements/stoa-bench.txt
+git add control-plane-api/requirements-lock.txt control-plane-api/requirements-bench.txt
 git commit -m "chore(deps): regenerate requirements locks"
 git push
 ```

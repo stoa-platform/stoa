@@ -5,7 +5,7 @@ on:
     paths:
       - 'control-plane-api/requirements.txt'
       - 'control-plane-api/requirements-lock.in'
-      - '.github/workflows/requirements/stoa-bench.in'
+      - 'control-plane-api/requirements-bench.in'
 
 permissions:
   contents: read
@@ -70,7 +70,7 @@ jobs:
           APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
-          git add control-plane-api/requirements-lock.txt .github/workflows/requirements/stoa-bench.txt
+          git add control-plane-api/requirements-lock.txt control-plane-api/requirements-bench.txt
           if git diff --cached --quiet; then
             echo "Requirements locks are already up to date."
             exit 0

@@ -70,7 +70,6 @@ jobs:
       runner: ubuntu-latest
     permissions:
       contents: read
-      checks: write
 
   # === Integration Tests: real PostgreSQL ===
   # CAB-2114: moved to ubuntu-latest. The self-hosted runner pool leaked

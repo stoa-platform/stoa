@@ -38,6 +38,10 @@ on:
 env:
   IMAGE_TAG: ghcr.io/stoa-platform/${{ inputs.image-name }}:${{ inputs.source-env }}-${{ inputs.sha }}
 
+# Each job declares what it needs; nothing else is granted.
+permissions:
+  contents: read
+
 jobs:
   promote:
     # Kill-switch: see reusable-gitops-deploy.yml (GITOPS_DEPLOY_ENABLED, default off)

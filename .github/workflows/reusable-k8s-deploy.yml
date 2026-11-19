@@ -57,6 +57,10 @@ on:
         description: 'Previous deployment image (for rollback)'
         value: ${{ jobs.deploy.outputs.previous_image }}
 
+# Each job declares what it needs; nothing else is granted.
+permissions:
+  contents: read
+
 jobs:
   deploy:
     name: Deploy ${{ inputs.component }} to ${{ inputs.environment }}

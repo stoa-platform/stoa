@@ -20,7 +20,6 @@ jobs:
   ci:
     permissions:
       contents: read
-      checks: write
     name: Lint and Test (landing-api)
     runs-on: ubuntu-latest
     services:

@@ -61,6 +61,10 @@ on:
         description: 'PASS, FAIL, or SKIP for the GitOps endpoint verify'
         value: ${{ jobs.gitops-deploy.outputs.post_deploy_status }}
 
+# Each job declares what it needs; nothing else is granted.
+permissions:
+  contents: read
+
 jobs:
   gitops-deploy:
     if: vars.GITOPS_DEPLOY_ENABLED == 'true'

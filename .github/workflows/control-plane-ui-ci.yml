@@ -62,7 +62,6 @@ jobs:
       runner: ubuntu-latest
     permissions:
       contents: read
-      checks: write
 
   # === Docker: build + push GHCR (with Vite env vars) ===
   docker:

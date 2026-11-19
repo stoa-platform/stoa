@@ -15,7 +15,6 @@ jobs:
   test:
     permissions:
       contents: read
-      checks: write
     uses: ./.github/workflows/reusable-python-ci.yml
     with:
       component: stoa-operator

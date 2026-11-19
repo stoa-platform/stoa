@@ -46,6 +46,10 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ghcr.io/stoa-platform/${{ inputs.image-name }}
 
+# Each job declares what it needs; nothing else is granted.
+permissions:
+  contents: read
+
 jobs:
   docker:
     name: Build Docker Image (${{ inputs.component }})

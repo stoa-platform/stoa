@@ -59,3 +59,4 @@ def test_regression_created_subscription_log_has_no_email(app_with_tenant_admin,
     assert created, "the creation log line is still expected"
     assert all("admin@acme.com" not in line for line in created)
     assert all("tenant-admin-user-id" in line for line in created)
+    assert all("oauth_client_id" not in line for line in created)

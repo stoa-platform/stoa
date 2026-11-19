@@ -5,10 +5,11 @@ COPY LICENSE NOTICE /usr/share/licenses/stoa/
 
 WORKDIR /app
 
-# Upgrade system packages (fix CVEs in base image) + install dependencies
+# Upgrade system packages (fix CVEs in base image).
+# No curl: the healthcheck below uses Python, and curl brought in its own
+# Kerberos, LDAP and SASL libraries. No libsnappy-dev: python-snappy >= 0.7
+# compresses through cramjam and does not load the system library.
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
-    libsnappy-dev \
-    curl \
     zlib1g \
     && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' zlib1g)" ge \
          '1:1.3.dfsg+really1.3.1-1+deb13u1' \
@@ -94,7 +95,7 @@ USER 1000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
 
 # Run the application
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]

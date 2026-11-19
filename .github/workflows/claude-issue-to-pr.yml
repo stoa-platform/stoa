@@ -540,7 +540,7 @@ jobs:
         if: steps.wait.outputs.validated == 'true'
         continue-on-error: true
         # Pinned to the v1 tag's commit (same SHA as council-run composite).
-        uses: anthropics/claude-code-action@e58dfa55559035499a4982426bb73605e8b5ad8e  # v1
+        uses: anthropics/claude-code-action@f3b070c88125d33dbae5653df5f143101d4ea9dc  # v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_args: "--model ${{ steps.route.outputs.model }} --max-turns ${{ steps.route.outputs.turns }} --allowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch"

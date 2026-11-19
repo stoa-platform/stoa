@@ -1,0 +1,4 @@
+# Input for control-plane-api/requirements-bench.txt.
+# Regenerate with: scripts/ci/regenerate-requirements-locks.sh
+-r requirements.txt
+locust>=2.29

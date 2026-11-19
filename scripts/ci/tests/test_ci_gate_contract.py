@@ -364,6 +364,7 @@ def test_gate_script_or_contract_test_selects_contract_job(tmp_path: Path, rel: 
         ("control-plane-api/requirements.txt", ("control-plane-api", "gate-contract")),
         ("control-plane-api/requirements-lock.txt", ("control-plane-api", "gate-contract")),
         ("control-plane-api/requirements-lock.in", ("control-plane-api", "gate-contract")),
+        ("control-plane-api/requirements-bench.in", ("control-plane-api", "gate-contract")),
         ("control-plane-api/Dockerfile", ("control-plane-api", "gate-contract")),
         ("scripts/ci/tests/test_regression_requirements_lock.py", ("gate-contract",)),
     ),

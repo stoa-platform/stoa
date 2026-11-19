@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[3]
 SOURCE = ROOT / "control-plane-api/requirements.txt"
 LOCKS = [
     ROOT / "control-plane-api/requirements-lock.txt",
-    ROOT / ".github/workflows/requirements/stoa-bench.txt",
+    ROOT / "control-plane-api/requirements-bench.txt",
 ]
 
 

@@ -336,6 +336,7 @@ services:
     build:
       context: ../../stoa-gateway
       dockerfile: Dockerfile
+      target: runtime-debian  # healthcheck runs curl in the container
     container_name: stoa-gateway
     ports:
       - "${PORT_GATEWAY:-8081}:8080"
@@ -395,6 +396,7 @@ services:
     build:
       context: ../../stoa-gateway
       dockerfile: Dockerfile
+      target: runtime-debian  # healthcheck runs curl in the container
     container_name: stoa-gateway-link
     environment:
       STOA_PORT: "8081"
@@ -474,6 +476,7 @@ services:
     build:
       context: ../../stoa-gateway
       dockerfile: Dockerfile
+      target: runtime-debian  # healthcheck runs curl in the container
     container_name: stoa-gateway-connect
     environment:
       STOA_PORT: "8083"

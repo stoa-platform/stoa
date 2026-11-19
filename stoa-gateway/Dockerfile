@@ -7,7 +7,11 @@
 # cargo-chef splits the build into 3 stages:
 #   1. planner  — analyse deps from Cargo.toml/Cargo.lock
 #   2. builder  — build deps (cached), then build app
-#   3. runtime  — minimal image with just the binary
+#   3. runtime-debian — Debian slim with a shell and curl, for the local
+#                       compose files and e2e tests whose healthchecks run
+#                       curl inside the container (`target: runtime-debian`)
+#   4. runtime  — distroless, no shell or package manager: default target,
+#                 the image CI publishes and scans
 #
 # Dependency layer is rebuilt only when Cargo.toml or Cargo.lock changes.
 # Source-only changes skip dep compilation entirely.
@@ -79,9 +83,11 @@ COPY proto ./proto
 RUN if [ "${NO_DEFAULT_FEATURES}" = true ]; then set -- --no-default-features; else set --; fi && \
     cargo build --locked --release --features "${FEATURES}" "$@" && strip target/release/stoa-gateway
 
-# --- Stage 3: Runtime (minimal) -----------------------------------------------
+# --- Stage 3: Debian runtime (local compose and e2e only) ----------------------
+# Not published: CI builds the default target below. Kept for the compose
+# files and e2e tests that run curl inside the container.
 # The Bookworm-built binary uses compatible glibc/OpenSSL ABIs on Trixie.
-FROM debian:trixie-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2 AS runtime
+FROM debian:trixie-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2 AS runtime-debian
 
 # Preserve the project distribution notices in the runtime image.
 COPY LICENSE NOTICE /usr/share/licenses/stoa/
@@ -108,6 +114,33 @@ EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8080/health || exit 1
+
+ENV STOA_HOST=0.0.0.0 \
+    STOA_PORT=8080 \
+    STOA_LOG_LEVEL=info \
+    STOA_LOG_FORMAT=json
+
+ENTRYPOINT ["/app/stoa-gateway"]
+
+# --- Stage 4: Runtime (default target, published and scanned) ------------------
+# Distroless: glibc, libgcc, libstdc++, OpenSSL, zlib and CA certificates, no
+# shell, no package manager, no curl. The Debian stage above carried curl, its
+# Kerberos/LDAP/SASL libraries, util-linux, perl and tar for a Docker
+# HEALTHCHECK that Kubernetes ignores: the Deployment probes /health over HTTP.
+FROM gcr.io/distroless/cc-debian13@sha256:809d04afa1be033c441f76bb0051878c342fb76d0ea236bc6dc94b655fa0fbd6 AS runtime
+
+COPY LICENSE NOTICE /usr/share/licenses/stoa/
+
+WORKDIR /app
+
+# Owned by root: the runtime user can execute the binary, not replace it.
+COPY --from=builder /app/target/release/stoa-gateway /app/stoa-gateway
+
+# Numeric on purpose: the base has no passwd entry for 1000, and k8s
+# runAsNonRoot checks the number. The group is explicit so the process does
+# not run with gid 0.
+USER 1000:1000
+EXPOSE 8080
 
 ENV STOA_HOST=0.0.0.0 \
     STOA_PORT=8080 \

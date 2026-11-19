@@ -57,7 +57,7 @@ def assert_image_build_contract(workflow, dockerfile):
     ), "Runtime does not ship the checked release binary"
     assert re.search(r'(?m)^ENTRYPOINT \["/app/stoa-gateway"\]$', runtime)
     users = re.findall(r"(?m)^USER (.+)$", runtime)
-    assert users and users[-1] == "1000", "Runtime must retain the non-root user"
+    assert users and users[-1] in ("1000", "1000:1000"), "Runtime must retain the non-root user"
 
 
 def missing_features(documents, features):

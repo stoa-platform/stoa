@@ -59,7 +59,8 @@ impl RealBinders {
                 state.route_registry.clone(),
                 state.policy_registry.clone(),
             ),
-            mcp: McpBinder::new(state.tool_registry.clone()),
+            mcp: McpBinder::new(state.tool_registry.clone())
+                .with_credential_store(state.credential_store.clone()),
         }
     }
 }

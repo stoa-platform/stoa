@@ -19,6 +19,7 @@ use uuid::Uuid;
 use super::dynamic_tool::DynamicTool;
 use super::{ToolAnnotations, ToolRegistry, ToolSchema};
 use crate::config::ExpansionMode;
+use crate::proxy::credentials::CredentialStore;
 
 /// Refresh interval for API tool discovery
 const API_TOOL_REFRESH_INTERVAL: Duration = Duration::from_secs(60);
@@ -88,6 +89,28 @@ pub async fn discover_api_tools(
     gateway_id: Option<Uuid>,
     gateway_key: Option<&str>,
 ) -> Result<usize, String> {
+    discover_api_tools_with_credentials(
+        registry,
+        cp_base_url,
+        client,
+        gateway_id,
+        gateway_key,
+        None,
+    )
+    .await
+}
+
+/// [`discover_api_tools`], attaching the backend credential store to each
+/// registered tool so it authenticates upstream with the credential stored
+/// under [`DynamicTool::credential_key`].
+pub async fn discover_api_tools_with_credentials(
+    registry: &ToolRegistry,
+    cp_base_url: &str,
+    client: &Client,
+    gateway_id: Option<Uuid>,
+    gateway_key: Option<&str>,
+    credential_store: Option<&Arc<CredentialStore>>,
+) -> Result<usize, String> {
     let catalog = fetch_catalog(cp_base_url, client, gateway_id, gateway_key).await?;
 
     let mut count = 0;
@@ -156,7 +179,8 @@ pub async fn discover_api_tools(
             open_world_hint: Some(true),
             ..Default::default()
         })
-        .into_public();
+        .into_public()
+        .with_credential_store(credential_store.cloned());
 
         registry.register(Arc::new(tool));
         count += 1;
@@ -181,6 +205,27 @@ pub async fn discover_expanded_api_tools(
     client: &Client,
     gateway_id: Option<Uuid>,
     gateway_key: Option<&str>,
+) -> Result<usize, String> {
+    discover_expanded_api_tools_with_credentials(
+        registry,
+        cp_base_url,
+        client,
+        gateway_id,
+        gateway_key,
+        None,
+    )
+    .await
+}
+
+/// [`discover_expanded_api_tools`], attaching the backend credential store to
+/// each registered tool (see [`discover_api_tools_with_credentials`]).
+pub async fn discover_expanded_api_tools_with_credentials(
+    registry: &ToolRegistry,
+    cp_base_url: &str,
+    client: &Client,
+    gateway_id: Option<Uuid>,
+    gateway_key: Option<&str>,
+    credential_store: Option<&Arc<CredentialStore>>,
 ) -> Result<usize, String> {
     let catalog = fetch_expanded_catalog(cp_base_url, client, gateway_id, gateway_key).await?;
 
@@ -218,7 +263,8 @@ pub async fn discover_expanded_api_tools(
             open_world_hint: Some(true),
             ..Default::default()
         })
-        .into_public();
+        .into_public()
+        .with_credential_store(credential_store.cloned());
 
         if let Some(pattern) = tool.path_pattern {
             if !pattern.is_empty() {
@@ -324,6 +370,7 @@ pub fn start_api_tool_refresh_task(
     registrar: Option<Arc<crate::control_plane::registration::GatewayRegistrar>>,
     mode: ExpansionMode,
     gateway_key: Option<String>,
+    credential_store: Option<Arc<CredentialStore>>,
 ) {
     tokio::spawn(async move {
         loop {
@@ -342,22 +389,24 @@ pub fn start_api_tool_refresh_task(
 
             let result = match mode {
                 ExpansionMode::Coarse => {
-                    discover_api_tools(
+                    discover_api_tools_with_credentials(
                         &registry,
                         &cp_base_url,
                         &client,
                         gw_id,
                         gateway_key.as_deref(),
+                        credential_store.as_ref(),
                     )
                     .await
                 }
                 ExpansionMode::PerOp => {
-                    discover_expanded_api_tools(
+                    discover_expanded_api_tools_with_credentials(
                         &registry,
                         &cp_base_url,
                         &client,
                         gw_id,
                         gateway_key.as_deref(),
+                        credential_store.as_ref(),
                     )
                     .await
                 }
@@ -902,5 +951,44 @@ mod tests {
                 .await
                 .unwrap();
         assert_eq!(count, 1);
+    }
+
+    #[tokio::test]
+    async fn discovered_tools_authenticate_upstream_with_backend_credentials() {
+        use crate::mcp::tools::dynamic_tool::tests::{
+            api_key_store, api_keys_received, orders_upstream,
+        };
+
+        // One server plays both the CP catalog and the tools' upstream.
+        let mock = orders_upstream().await;
+        let backend_url = format!("{}/orders", mock.uri());
+        Mock::given(method("GET"))
+            .and(path("/v1/internal/catalog/apis"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "apis": [{"id": "coarse", "name": "Coarse", "backend_url": backend_url}]
+            })))
+            .mount(&mock)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/v1/internal/catalog/apis/expanded"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "tools": [{"name": "per-op", "description": "Per-operation tool",
+                    "tenant_id": "demo", "backend_url": backend_url}]
+            })))
+            .mount(&mock)
+            .await;
+        let store = api_key_store(&["mcp-tool:coarse", "mcp-tool:per-op"]);
+        let registry = ToolRegistry::new();
+        let (cp, client, creds) = (mock.uri(), Client::new(), Some(&store));
+        discover_api_tools_with_credentials(&registry, &cp, &client, None, None, creds)
+            .await
+            .unwrap();
+        discover_expanded_api_tools_with_credentials(&registry, &cp, &client, None, None, creds)
+            .await
+            .unwrap();
+
+        api_keys_received(registry.get("coarse").unwrap().as_ref(), &mock).await;
+        let keys = api_keys_received(registry.get("per-op").unwrap().as_ref(), &mock).await;
+        assert_eq!(keys, ["fixture-backend-key"; 2]);
     }
 }

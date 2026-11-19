@@ -1031,7 +1031,9 @@ async fn tool_call_requires_available_and_valid_signed_permissions() {
 }
 
 #[tokio::test]
-async fn user_token_forwarding_is_configurable() {
+async fn dynamic_tool_upstream_never_receives_user_token() {
+    // Dynamic tools authenticate upstream with backend credentials only; the
+    // forwarding setting has no effect on what their upstream receives.
     for forward in [false, true] {
         let fixture = Fixture::new(|config| {
             config.mcp_forward_user_token = forward;
@@ -1068,18 +1070,11 @@ async fn user_token_forwarding_is_configurable() {
             .collect();
         assert!(!backend.is_empty());
         for request in backend {
-            assert_eq!(request.headers.contains_key("Authorization"), forward);
-            if forward {
-                assert!(
-                    request
-                        .headers
-                        .get("Authorization")
-                        .unwrap()
-                        .to_str()
-                        .unwrap()
-                        == format!("Bearer {token}")
-                );
-            }
+            assert!(!request.headers.contains_key("Authorization"));
+            assert!(request
+                .headers
+                .values()
+                .all(|value| !String::from_utf8_lossy(value.as_bytes()).contains(&token)));
         }
     }
 }

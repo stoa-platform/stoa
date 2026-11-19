@@ -5,12 +5,15 @@
 
 #![allow(dead_code)]
 
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use reqwest::Client;
 use serde_json::Value;
 use tracing::{debug, warn};
 
 use super::{Tool, ToolAnnotations, ToolContext, ToolError, ToolResult, ToolSchema};
+use crate::proxy::credentials::{AuthType, CredentialStore};
 use crate::uac::Action;
 
 /// Classify the actual HTTP operation; unknown methods require write permission.
@@ -54,6 +57,8 @@ pub struct DynamicTool {
     /// Tokens are pulled from the tool args and removed before the remainder is
     /// sent as query string (GET/DELETE) or JSON body (POST/PUT/PATCH).
     path_pattern: Option<String>,
+    /// Backend credential store used to authenticate the upstream call.
+    credential_store: Option<Arc<CredentialStore>>,
     /// HTTP client
     client: Client,
 }
@@ -82,7 +87,11 @@ impl DynamicTool {
             tenant_id: tenant_id.into(),
             public: false,
             path_pattern: None,
+            credential_store: None,
+            // Redirects are not followed: the request, and the backend
+            // credential it carries, only go to the configured endpoint.
             client: Client::builder()
+                .redirect(reqwest::redirect::Policy::none())
                 .timeout(std::time::Duration::from_secs(30))
                 .build()
                 .expect("HTTP client"),
@@ -119,6 +128,60 @@ impl DynamicTool {
     pub fn into_public(mut self) -> Self {
         self.public = true;
         self
+    }
+
+    /// Attach the gateway's backend credential store. The upstream call is
+    /// then authenticated with the credential registered under
+    /// [`DynamicTool::credential_key`], when there is one.
+    pub fn with_credential_store(mut self, store: impl Into<Option<Arc<CredentialStore>>>) -> Self {
+        self.credential_store = store.into();
+        self
+    }
+
+    /// Credential-store key holding the upstream credential of a dynamic tool:
+    /// `mcp-tool:{tool_name}`, following the `api-proxy:{backend}` convention.
+    ///
+    /// Operators register it through `POST /admin/backend-credentials`, with
+    /// the key as `route_id`, e.g. `{"route_id": "mcp-tool:payments",
+    /// "auth_type": "api_key", "header_name": "X-API-Key", "header_value": "..."}`.
+    /// `tool_name` is the name returned by `tools/list`. The prefix keeps tool
+    /// credentials apart from proxy route credentials held in the same store.
+    pub fn credential_key(tool_name: &str) -> String {
+        format!("mcp-tool:{tool_name}")
+    }
+
+    /// Resolve the upstream auth header from the backend credential store.
+    ///
+    /// `Ok(None)` when no store is attached or no credential is registered
+    /// for this tool: the upstream request then carries no auth header.
+    async fn backend_auth_header(&self) -> Result<Option<(String, String)>, ToolError> {
+        let Some(store) = &self.credential_store else {
+            return Ok(None);
+        };
+        let key = Self::credential_key(&self.name);
+        let Some(cred) = store.get(&key) else {
+            return Ok(None);
+        };
+        if cred.auth_type != AuthType::OAuth2ClientCredentials {
+            return Ok(Some((cred.header_name, cred.header_value)));
+        }
+        match store.get_oauth2_token(&key, &self.client).await {
+            Ok(token) => Ok(Some((
+                "Authorization".to_string(),
+                format!("Bearer {token}"),
+            ))),
+            Err(e) => {
+                warn!(
+                    tool = %self.name,
+                    credential_key = %key,
+                    error = %e,
+                    "Backend OAuth2 token fetch failed"
+                );
+                Err(ToolError::ExecutionFailed(
+                    "Failed to authenticate with upstream".to_string(),
+                ))
+            }
+        }
     }
 }
 
@@ -200,9 +263,10 @@ impl Tool for DynamicTool {
             }
         };
 
-        // Forward auth token if available
-        if let Some(ref token) = ctx.raw_token {
-            req = req.header("Authorization", format!("Bearer {}", token));
+        // Upstream auth comes from the backend credential store only; the
+        // caller's own token is for this gateway and is never sent upstream.
+        if let Some((name, value)) = self.backend_auth_header().await? {
+            req = req.header(name, value);
         }
 
         // Inject skill context header if present (CAB-1365)
@@ -362,8 +426,9 @@ pub fn schema_from_value(value: &Value) -> ToolSchema {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
+    use crate::proxy::credentials::{BackendCredential, OAuth2Config};
     use serde_json::json;
     use std::collections::HashMap;
 
@@ -857,5 +922,256 @@ mod tests {
                 .any(|t| t.name == "demo:bank:get-customer-by-number"),
             "per-op public tool must surface via standard discovery (CAB-2123)"
         );
+    }
+
+    // === Upstream authentication comes from the backend credential store ===
+
+    const CALLER_BEARER: &str = "fixture-caller-bearer";
+
+    fn ctx_with_caller_bearer() -> ToolContext {
+        ToolContext {
+            tenant_id: "t1".to_string(),
+            user_id: None,
+            user_email: None,
+            request_id: "req-1".to_string(),
+            roles: vec![],
+            scopes: vec![],
+            raw_token: Some(CALLER_BEARER.to_string()),
+            skill_instructions: None,
+            progress_token: None,
+            consumer_id: "test-consumer".to_string(),
+            from_control_plane: false,
+        }
+    }
+
+    fn assert_caller_bearer_absent(request: &wiremock::Request) {
+        for (name, value) in request.headers.iter() {
+            assert!(
+                !String::from_utf8_lossy(value.as_bytes()).contains(CALLER_BEARER),
+                "caller bearer found in upstream header {name}"
+            );
+        }
+    }
+
+    fn static_credential(
+        key: &str,
+        auth_type: AuthType,
+        header_name: &str,
+        header_value: &str,
+    ) -> BackendCredential {
+        BackendCredential {
+            route_id: key.to_string(),
+            auth_type,
+            header_name: header_name.to_string(),
+            header_value: header_value.to_string(),
+            oauth2: None,
+        }
+    }
+
+    /// Store holding the API key `fixture-backend-key` under each of `keys`.
+    pub(crate) fn api_key_store(keys: &[&str]) -> Arc<CredentialStore> {
+        let store = Arc::new(CredentialStore::new());
+        for key in keys {
+            store.upsert(static_credential(
+                key,
+                AuthType::ApiKey,
+                "X-Api-Key",
+                "fixture-backend-key",
+            ));
+        }
+        store
+    }
+
+    /// Store holding an OAuth2 client-credentials entry for the `t1_orders` tool.
+    fn oauth2_store(token_url: String) -> Arc<CredentialStore> {
+        let store = Arc::new(CredentialStore::new());
+        store.upsert(BackendCredential {
+            oauth2: Some(OAuth2Config {
+                token_url,
+                client_id: "fixture-client".to_string(),
+                client_secret: "fixture-client-credential".to_string(),
+            }),
+            ..static_credential(
+                "mcp-tool:t1_orders",
+                AuthType::OAuth2ClientCredentials,
+                "Authorization",
+                "unused",
+            )
+        });
+        store
+    }
+
+    /// Upstream answering 200 on `/orders` (any method) and 404 elsewhere.
+    pub(crate) async fn orders_upstream() -> wiremock::MockServer {
+        let upstream = wiremock::MockServer::start().await;
+        wiremock::Mock::given(wiremock::matchers::path("/orders"))
+            .respond_with(wiremock::ResponseTemplate::new(200))
+            .mount(&upstream)
+            .await;
+        upstream
+    }
+
+    fn orders_tool(upstream: &wiremock::MockServer) -> DynamicTool {
+        DynamicTool::new(
+            "t1_orders",
+            "Orders",
+            format!("{}/orders", upstream.uri()),
+            "GET",
+            schema_empty_object(),
+            "t1",
+        )
+    }
+
+    /// Call `tool` with a caller bearer in the context, then return the
+    /// `X-Api-Key` values `upstream` has received on `/orders`.
+    pub(crate) async fn api_keys_received(
+        tool: &dyn Tool,
+        upstream: &wiremock::MockServer,
+    ) -> Vec<String> {
+        tool.execute(json!({}), &ctx_with_caller_bearer())
+            .await
+            .unwrap();
+        let requests = upstream.received_requests().await.unwrap();
+        let orders = requests.iter().filter(|r| r.url.path() == "/orders");
+        orders
+            .inspect(|request| assert_caller_bearer_absent(request))
+            .flat_map(|request| request.headers.get_all("X-Api-Key"))
+            .map(|value| value.to_str().unwrap().to_string())
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn upstream_request_has_no_authorization_without_backend_credential() {
+        let other_tool_only = Arc::new(CredentialStore::new());
+        other_tool_only.upsert(static_credential(
+            "mcp-tool:t1_invoices",
+            AuthType::Bearer,
+            "Authorization",
+            "Bearer fixture-backend-key",
+        ));
+        for store in [None, Some(other_tool_only)] {
+            let upstream = orders_upstream().await;
+            let tool = orders_tool(&upstream).with_credential_store(store);
+
+            tool.execute(json!({}), &ctx_with_caller_bearer())
+                .await
+                .unwrap();
+
+            let requests = upstream.received_requests().await.unwrap();
+            assert_eq!(requests.len(), 1);
+            assert!(!requests[0].headers.contains_key("Authorization"));
+            assert_caller_bearer_absent(&requests[0]);
+        }
+    }
+
+    #[tokio::test]
+    async fn upstream_request_carries_configured_backend_credential() {
+        for (auth_type, header_name, header_value) in [
+            (AuthType::ApiKey, "X-Api-Key", "fixture-backend-key"),
+            (
+                AuthType::Bearer,
+                "Authorization",
+                "Bearer fixture-backend-key",
+            ),
+        ] {
+            let upstream = orders_upstream().await;
+            let store = Arc::new(CredentialStore::new());
+            store.upsert(static_credential(
+                "mcp-tool:t1_orders",
+                auth_type,
+                header_name,
+                header_value,
+            ));
+            let tool = orders_tool(&upstream).with_credential_store(store);
+
+            tool.execute(json!({}), &ctx_with_caller_bearer())
+                .await
+                .unwrap();
+
+            let requests = upstream.received_requests().await.unwrap();
+            assert_eq!(requests.len(), 1);
+            let sent: Vec<_> = requests[0].headers.get_all(header_name).iter().collect();
+            assert_eq!(sent, [header_value]);
+            assert_eq!(
+                requests[0].headers.contains_key("Authorization"),
+                header_name == "Authorization"
+            );
+            assert_caller_bearer_absent(&requests[0]);
+        }
+    }
+
+    #[tokio::test]
+    async fn upstream_request_carries_oauth2_client_credentials_token() {
+        use wiremock::matchers::{body_string_contains, method, path};
+        use wiremock::{Mock, ResponseTemplate};
+
+        let upstream = orders_upstream().await;
+        Mock::given(method("POST"))
+            .and(path("/token"))
+            .and(body_string_contains("grant_type=client_credentials"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(
+                json!({"access_token": "fixture-backend-access", "expires_in": 300}),
+            ))
+            .mount(&upstream)
+            .await;
+        let tool = orders_tool(&upstream)
+            .with_credential_store(oauth2_store(format!("{}/token", upstream.uri())));
+
+        tool.execute(json!({}), &ctx_with_caller_bearer())
+            .await
+            .unwrap();
+
+        let requests = upstream.received_requests().await.unwrap();
+        let orders: Vec<_> = requests
+            .iter()
+            .filter(|r| r.url.path() == "/orders")
+            .collect();
+        assert_eq!(orders.len(), 1);
+        assert_eq!(
+            orders[0].headers.get("Authorization").unwrap(),
+            "Bearer fixture-backend-access"
+        );
+        for request in &requests {
+            assert_caller_bearer_absent(request);
+        }
+    }
+
+    #[tokio::test]
+    async fn tool_call_fails_without_reaching_upstream_when_oauth2_token_is_unavailable() {
+        // No token endpoint is mounted, so the token request gets a 404.
+        let upstream = orders_upstream().await;
+        let tool = orders_tool(&upstream)
+            .with_credential_store(oauth2_store(format!("{}/token", upstream.uri())));
+
+        let result = tool.execute(json!({}), &ctx_with_caller_bearer()).await;
+
+        assert!(result.is_err());
+        let requests = upstream.received_requests().await.unwrap();
+        assert!(requests.iter().all(|r| r.url.path() != "/orders"));
+    }
+
+    #[tokio::test]
+    async fn upstream_redirect_is_not_followed() {
+        let redirect_target = orders_upstream().await;
+        let upstream = wiremock::MockServer::start().await;
+        wiremock::Mock::given(wiremock::matchers::path("/orders"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(302)
+                    .insert_header("Location", format!("{}/orders", redirect_target.uri())),
+            )
+            .mount(&upstream)
+            .await;
+        let tool =
+            orders_tool(&upstream).with_credential_store(api_key_store(&["mcp-tool:t1_orders"]));
+
+        let result = tool.execute(json!({}), &ctx_with_caller_bearer()).await;
+
+        assert!(result.is_err());
+        assert_eq!(upstream.received_requests().await.unwrap().len(), 1);
+        assert!(redirect_target
+            .received_requests()
+            .await
+            .unwrap()
+            .is_empty());
     }
 }

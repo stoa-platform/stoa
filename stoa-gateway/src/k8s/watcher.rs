@@ -22,6 +22,7 @@ use crate::guardrails::policy::{GuardrailPolicyStore, TenantGuardrailPolicy};
 use crate::mcp::session::SessionManager;
 use crate::mcp::tools::dynamic_tool::{schema_from_value, DynamicTool};
 use crate::mcp::tools::{ToolAnnotations, ToolRegistry};
+use crate::proxy::credentials::CredentialStore;
 use crate::skills::resolver::{SkillResolver, SkillScope, StoredSkill};
 
 /// Missing metadata cannot imply membership of Kubernetes' default namespace.
@@ -36,6 +37,8 @@ pub struct CrdWatcher {
     skill_resolver: Arc<SkillResolver>,
     session_manager: Arc<SessionManager>,
     guardrail_policy_store: Arc<GuardrailPolicyStore>,
+    /// Backend credential store attached to tools registered from Tool CRDs.
+    credential_store: Option<Arc<CredentialStore>>,
 }
 
 impl CrdWatcher {
@@ -53,7 +56,15 @@ impl CrdWatcher {
             skill_resolver,
             session_manager,
             guardrail_policy_store,
+            credential_store: None,
         }
+    }
+
+    /// Attach the backend credential store so CRD tools authenticate upstream
+    /// with the credential stored under `DynamicTool::credential_key`.
+    pub fn with_credential_store(mut self, store: Arc<CredentialStore>) -> Self {
+        self.credential_store = Some(store);
+        self
     }
 
     /// Start watching CRDs (runs forever in background)
@@ -296,7 +307,8 @@ impl CrdWatcher {
             &tool.spec.method,
             input_schema,
             namespace,
-        );
+        )
+        .with_credential_store(self.credential_store.clone());
 
         // Apply output schema if present
         if let Some(ref output) = tool.spec.output_schema {
@@ -783,6 +795,40 @@ mod tests {
             .expect("unscoped policy event is handled");
         assert_eq!(store.count(), 0);
         assert_eq!(requests.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn crd_tools_authenticate_upstream_with_backend_credentials() {
+        use crate::mcp::tools::dynamic_tool::tests::{
+            api_key_store, api_keys_received, orders_upstream,
+        };
+
+        let upstream = orders_upstream().await;
+        let service = tower::service_fn(|_: axum::http::Request<kube::client::Body>| {
+            std::future::ready(Err::<axum::http::Response<kube::client::Body>, _>(
+                std::io::Error::other("network requests are forbidden in this test"),
+            ))
+        });
+        let registry = Arc::new(ToolRegistry::new());
+        let watcher = CrdWatcher::new(
+            Client::new(service, "unused"),
+            registry.clone(),
+            Arc::new(SkillResolver::new(300)),
+            Arc::new(SessionManager::default()),
+            Arc::new(GuardrailPolicyStore::new()),
+        )
+        .with_credential_store(api_key_store(&["mcp-tool:t1_orders"]));
+        let spec = serde_json::json!({
+            "displayName": "Orders", "description": "Orders", "method": "GET",
+            "endpoint": format!("{}/orders", upstream.uri()), "inputSchema": {}
+        });
+        let mut crd = Tool::new("orders", serde_json::from_value(spec).unwrap());
+        crd.metadata.namespace = Some("t1".into());
+        watcher.handle_tool_apply(&crd).await;
+
+        let tool = registry.get("t1_orders").unwrap();
+        let keys = api_keys_received(tool.as_ref(), &upstream).await;
+        assert_eq!(keys, ["fixture-backend-key"]);
     }
 }
 

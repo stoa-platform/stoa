@@ -1,0 +1,10 @@
+# Marqueur ai-memory : les sessions d'agents (Claude Code, Codex, Grok, Antigravity) lancees dans ce depot
+# sont capturees par le serveur ai-memory local de la machine, s'il y est installe ; sans ai-memory, ce fichier n'a aucun effet.
+# Ajoute a la porte G1 du plan d'adoption (19/11/2026). Rien n'est envoye hors de la machine.
+workspace = "stoa"
+
+[recovery]
+deliver_on_session_start = false
+
+[capture]
+ignore_paths = [".env", "**/.env", ".env.*", "**/.env.*", "*.env", "**/*.env", "*.pem", "**/*.pem", "*.key", "**/*.key", "*.tfstate", "**/*.tfstate", "*.tfvars", "**/*.tfvars", "**/.terraform/**"]

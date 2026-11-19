@@ -273,7 +273,7 @@ class GitSyncWorker:
         operation = event_type.removeprefix("api-")  # create, update, delete
 
         # Retry loop with exponential backoff
-        last_error = None
+        last_error: Exception | None = None
         max_attempts = 1 + len(self._retry_delays)
         start_time = time.monotonic()
 

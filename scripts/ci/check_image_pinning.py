@@ -194,7 +194,7 @@ def findings(path, source):
                     if markdown_image(value):
                         image(index, value)
         publication = line + " " + re.sub(r"\$\{\{[^}\n]*\}\}|\$\{[^}\n]*\}", "IMAGE_VAR", line)
-        if re.search(r"(?:[\w.-]+(?:/[\w${}./-]+)+|IMAGE_VAR):(?:latest|[\w${}.-]+-latest)(?![\w.@-])", publication):
+        if re.search(r"(?:[\w.-]+(?:/[\w${}.-]+)+|IMAGE_VAR):(?:latest|[\w${}.-]+-latest)(?![\w.@-])", publication):
             add(index, "publication-floating")
         if re.match(r'''\s*(?:-\s*)?uses:\s*['"]?docker/metadata-action@''', line):
             action = block(index, len(line) - len(line.lstrip()), equal=False)

@@ -115,3 +115,4 @@ class TestEdgeCases:
         encrypted = enc_mod.encrypt_auth_config(original)
         decrypted = enc_mod.decrypt_auth_config(encrypted)
         assert decrypted == original
+

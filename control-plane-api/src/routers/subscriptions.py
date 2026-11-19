@@ -182,14 +182,14 @@ async def create_subscription(
 
     try:
         subscription = await repo.create(subscription)
-        # No e-mail address in logs: the subscriber is identified by user id.
+        # No e-mail address or credential identifier in logs: the subscription
+        # id leads to the subscriber and the OAuth client.
         logger.info(
-            "Created subscription %s for app=%s api=%s subscriber=%s oauth_client_id=%s",
+            "Created subscription %s for app=%s api=%s subscriber=%s",
             subscription.id,
             request.application_name,
             request.api_name,
             user.id,
-            oauth_client_id,
         )
 
         # Emit webhook event (CAB-315)

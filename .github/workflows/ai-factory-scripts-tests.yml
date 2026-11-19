@@ -19,6 +19,8 @@ on:
   pull_request:
     paths:
       - 'scripts/ci/**'
+      - 'control-plane-api/requirements*.txt'
+      - 'control-plane-api/requirements-lock.in'
       - '.github/workflows/requirements/**'
       - '.github/actions/**'
       - '.github/workflows/claude-issue-to-pr.yml'

@@ -388,13 +388,12 @@ async fn register_tools(state: &AppState, registrar: Option<std::sync::Arc<Gatew
         } else {
             let discovery = match expansion_mode {
                 stoa_gateway::config::ExpansionMode::Coarse => {
-                    api_bridge::discover_api_tools_with_credentials(
+                    api_bridge::discover_api_tools(
                         &state.tool_registry,
                         &cp_url,
                         &http_client,
                         gw_id,
                         state.config.control_plane_api_key.as_deref(),
-                        Some(&state.credential_store),
                     )
                     .await
                 }

@@ -575,20 +575,22 @@ mod tests {
     #[tokio::test]
     async fn bound_tools_authenticate_upstream_with_backend_credentials() {
         use crate::mcp::tools::dynamic_tool::tests::{
-            api_key_store, api_keys_received, orders_upstream,
+            api_key_for, api_key_store, api_keys_received, orders_upstream,
         };
 
+        // The credential key carries the contract tenant, then the tool name.
+        let key = "mcp-tool:t1:uac:t1:payments:list_payments";
         let upstream = orders_upstream().await;
         let mut contract = sample_contract();
         contract.tenant_id = "t1".to_string();
         contract.endpoints[0].backend_url = format!("{}/orders", upstream.uri());
         let registry = Arc::new(ToolRegistry::new());
         let binder = McpBinder::new(registry.clone())
-            .with_credential_store(api_key_store(&["mcp-tool:uac:t1:payments:list_payments"]));
+            .with_credential_store(api_key_store(&[key], &upstream.uri()));
         binder.bind(&contract).await.unwrap();
 
         let tool = registry.get("uac:t1:payments:list_payments").unwrap();
         let keys = api_keys_received(tool.as_ref(), &upstream).await;
-        assert_eq!(keys, ["fixture-backend-key"]);
+        assert_eq!(keys, [api_key_for(key)]);
     }
 }

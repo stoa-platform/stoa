@@ -643,6 +643,7 @@ mod tests {
             header_name: "X-Service-Key".into(),
             header_value: "fixture-service-value".into(),
             oauth2: None,
+            allowed_origin: None,
         });
         let mut req = Request::builder().uri("/proxy/t/echo");
         if let Some(a) = authz {

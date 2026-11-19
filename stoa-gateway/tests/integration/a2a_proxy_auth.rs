@@ -972,6 +972,7 @@ async fn regression_proxy_path_policy_keeps_direct_oauth_exchange() {
             client_id: "fixture-client".to_string(),
             client_secret: "fixture-only".to_string(),
         }),
+        allowed_origin: None,
     });
     let router = stoa_gateway::build_router(state);
     let response = authenticated_proxy_get(&router, "/graphql").await;

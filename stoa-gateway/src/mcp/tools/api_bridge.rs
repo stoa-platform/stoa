@@ -16,7 +16,7 @@ use std::time::Duration;
 use tracing::{debug, info};
 use uuid::Uuid;
 
-use super::dynamic_tool::DynamicTool;
+use super::dynamic_tool::{DynamicTool, PUBLIC_TENANT_MARKER};
 use super::{ToolAnnotations, ToolRegistry, ToolSchema};
 use crate::config::ExpansionMode;
 use crate::proxy::credentials::CredentialStore;
@@ -81,6 +81,10 @@ struct ExpandedToolsResponse {
 /// When `gateway_id` is provided, only APIs assigned to this gateway are returned.
 /// An empty scoped result is authoritative: the gateway has no assigned APIs.
 ///
+/// These tools are registered for no tenant in particular
+/// ([`PUBLIC_TENANT_MARKER`]), so they call their backend without a backend
+/// credential: credentials are registered per tenant.
+///
 /// Returns the number of API tools registered.
 pub async fn discover_api_tools(
     registry: &ToolRegistry,
@@ -88,28 +92,6 @@ pub async fn discover_api_tools(
     client: &Client,
     gateway_id: Option<Uuid>,
     gateway_key: Option<&str>,
-) -> Result<usize, String> {
-    discover_api_tools_with_credentials(
-        registry,
-        cp_base_url,
-        client,
-        gateway_id,
-        gateway_key,
-        None,
-    )
-    .await
-}
-
-/// [`discover_api_tools`], attaching the backend credential store to each
-/// registered tool so it authenticates upstream with the credential stored
-/// under [`DynamicTool::credential_key`].
-pub async fn discover_api_tools_with_credentials(
-    registry: &ToolRegistry,
-    cp_base_url: &str,
-    client: &Client,
-    gateway_id: Option<Uuid>,
-    gateway_key: Option<&str>,
-    credential_store: Option<&Arc<CredentialStore>>,
 ) -> Result<usize, String> {
     let catalog = fetch_catalog(cp_base_url, client, gateway_id, gateway_key).await?;
 
@@ -172,15 +154,14 @@ pub async fn discover_api_tools_with_credentials(
             &backend_url,
             "POST",
             schema,
-            "_public", // explicit marker; tenant_id unused for public tools
+            PUBLIC_TENANT_MARKER, // explicit marker; tenant_id unused for public tools
         )
         .with_annotations(ToolAnnotations {
             title: Some(api.name.clone()),
             open_world_hint: Some(true),
             ..Default::default()
         })
-        .into_public()
-        .with_credential_store(credential_store.cloned());
+        .into_public();
 
         registry.register(Arc::new(tool));
         count += 1;
@@ -218,7 +199,9 @@ pub async fn discover_expanded_api_tools(
 }
 
 /// [`discover_expanded_api_tools`], attaching the backend credential store to
-/// each registered tool (see [`discover_api_tools_with_credentials`]).
+/// each registered tool so it authenticates upstream with the credential
+/// stored under [`DynamicTool::credential_key`] for the tenant the catalog
+/// reports for that tool.
 pub async fn discover_expanded_api_tools_with_credentials(
     registry: &ToolRegistry,
     cp_base_url: &str,
@@ -363,6 +346,8 @@ async fn fetch_catalog(
 ///
 /// `mode` selects between coarse (`/apis`, one tool per API) and per-op
 /// (`/apis/expanded`, one tool per OpenAPI operation) discovery (CAB-2113).
+/// `credential_store` is attached to per-op tools only (see
+/// [`discover_api_tools`]).
 pub fn start_api_tool_refresh_task(
     registry: Arc<ToolRegistry>,
     cp_base_url: String,
@@ -389,13 +374,12 @@ pub fn start_api_tool_refresh_task(
 
             let result = match mode {
                 ExpansionMode::Coarse => {
-                    discover_api_tools_with_credentials(
+                    discover_api_tools(
                         &registry,
                         &cp_base_url,
                         &client,
                         gw_id,
                         gateway_key.as_deref(),
-                        credential_store.as_ref(),
                     )
                     .await
                 }
@@ -953,42 +937,90 @@ mod tests {
         assert_eq!(count, 1);
     }
 
+    /// Mount an expanded catalog listing `tools` on `cp`, then discover it
+    /// with `store` attached.
+    async fn discover_expanded_with_store(
+        cp: &MockServer,
+        tools: serde_json::Value,
+        store: &Arc<CredentialStore>,
+    ) -> ToolRegistry {
+        Mock::given(method("GET"))
+            .and(path("/v1/internal/catalog/apis/expanded"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"tools": tools})),
+            )
+            .mount(cp)
+            .await;
+        let registry = ToolRegistry::new();
+        let (client, store) = (Client::new(), Some(store));
+        discover_expanded_api_tools_with_credentials(
+            &registry,
+            &cp.uri(),
+            &client,
+            None,
+            None,
+            store,
+        )
+        .await
+        .unwrap();
+        registry
+    }
+
     #[tokio::test]
     async fn discovered_tools_authenticate_upstream_with_backend_credentials() {
+        use crate::mcp::tools::dynamic_tool::tests::{
+            api_key_for, api_key_store, api_keys_received, orders_upstream,
+        };
+
+        // One server plays both the CP catalog and the tool's upstream. The
+        // tool is registered for tenant `demo` and called by tenant `t1`: the
+        // credential of `demo` is the one in use, not an entry of the calling
+        // tenant nor an entry without a tenant.
+        let mock = orders_upstream().await;
+        let tools = serde_json::json!([expanded_tool_json(
+            "per-op",
+            &mock.uri(),
+            "GET",
+            Some("/orders")
+        )]);
+        let store = api_key_store(
+            &[
+                "mcp-tool:demo:per-op",
+                "mcp-tool:t1:per-op",
+                "mcp-tool:per-op",
+            ],
+            &mock.uri(),
+        );
+        let registry = discover_expanded_with_store(&mock, tools, &store).await;
+
+        let keys = api_keys_received(registry.get("per-op").unwrap().as_ref(), &mock).await;
+        assert_eq!(keys, [api_key_for("mcp-tool:demo:per-op")]);
+    }
+
+    #[tokio::test]
+    async fn same_named_catalog_tool_of_another_tenant_gets_no_credential() {
         use crate::mcp::tools::dynamic_tool::tests::{
             api_key_store, api_keys_received, orders_upstream,
         };
 
-        // One server plays both the CP catalog and the tools' upstream.
-        let mock = orders_upstream().await;
-        let backend_url = format!("{}/orders", mock.uri());
-        Mock::given(method("GET"))
-            .and(path("/v1/internal/catalog/apis"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "apis": [{"id": "coarse", "name": "Coarse", "backend_url": backend_url}]
-            })))
-            .mount(&mock)
-            .await;
-        Mock::given(method("GET"))
-            .and(path("/v1/internal/catalog/apis/expanded"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "tools": [{"name": "per-op", "description": "Per-operation tool",
-                    "tenant_id": "demo", "backend_url": backend_url}]
-            })))
-            .mount(&mock)
-            .await;
-        let store = api_key_store(&["mcp-tool:coarse", "mcp-tool:per-op"]);
-        let registry = ToolRegistry::new();
-        let (cp, client, creds) = (mock.uri(), Client::new(), Some(&store));
-        discover_api_tools_with_credentials(&registry, &cp, &client, None, None, creds)
-            .await
-            .unwrap();
-        discover_expanded_api_tools_with_credentials(&registry, &cp, &client, None, None, creds)
-            .await
-            .unwrap();
+        // Two tenants publish a tool under the same name, each with its own
+        // backend; the first one listed is the one registered. The credential
+        // of the other tenant is not used for it.
+        let (mock, other_backend) = (orders_upstream().await, orders_upstream().await);
+        let tool_of = |tenant: &str, backend: &MockServer| {
+            let mut tool = expanded_tool_json("orders", &backend.uri(), "GET", Some("/orders"));
+            tool["tenant_id"] = tenant.into();
+            tool
+        };
+        let tools = serde_json::json!([
+            tool_of("tenant-b", &mock),
+            tool_of("tenant-a", &other_backend)
+        ]);
+        let store = api_key_store(&["mcp-tool:tenant-a:orders"], &other_backend.uri());
+        let registry = discover_expanded_with_store(&mock, tools, &store).await;
 
-        api_keys_received(registry.get("coarse").unwrap().as_ref(), &mock).await;
-        let keys = api_keys_received(registry.get("per-op").unwrap().as_ref(), &mock).await;
-        assert_eq!(keys, ["fixture-backend-key"; 2]);
+        let keys = api_keys_received(registry.get("orders").unwrap().as_ref(), &mock).await;
+        assert!(keys.is_empty());
+        assert!(other_backend.received_requests().await.unwrap().is_empty());
     }
 }

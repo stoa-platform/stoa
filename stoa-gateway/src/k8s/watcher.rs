@@ -800,9 +800,11 @@ mod tests {
     #[tokio::test]
     async fn crd_tools_authenticate_upstream_with_backend_credentials() {
         use crate::mcp::tools::dynamic_tool::tests::{
-            api_key_store, api_keys_received, orders_upstream,
+            api_key_for, api_key_store, api_keys_received, orders_upstream,
         };
 
+        // The credential key carries the CRD namespace as tenant.
+        let key = "mcp-tool:t1:t1_orders";
         let upstream = orders_upstream().await;
         let service = tower::service_fn(|_: axum::http::Request<kube::client::Body>| {
             std::future::ready(Err::<axum::http::Response<kube::client::Body>, _>(
@@ -817,7 +819,7 @@ mod tests {
             Arc::new(SessionManager::default()),
             Arc::new(GuardrailPolicyStore::new()),
         )
-        .with_credential_store(api_key_store(&["mcp-tool:t1_orders"]));
+        .with_credential_store(api_key_store(&[key], &upstream.uri()));
         let spec = serde_json::json!({
             "displayName": "Orders", "description": "Orders", "method": "GET",
             "endpoint": format!("{}/orders", upstream.uri()), "inputSchema": {}
@@ -828,7 +830,7 @@ mod tests {
 
         let tool = registry.get("t1_orders").unwrap();
         let keys = api_keys_received(tool.as_ref(), &upstream).await;
-        assert_eq!(keys, ["fixture-backend-key"]);
+        assert_eq!(keys, [api_key_for(key)]);
     }
 }
 

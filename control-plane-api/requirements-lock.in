@@ -1,0 +1,7 @@
+# Input for control-plane-api/requirements-lock.txt.
+# Regenerate with: scripts/ci/regenerate-requirements-locks.sh
+-r requirements.txt
+pip>=26.2.0
+setuptools>=84.1.0
+jaraco.context
+wheel

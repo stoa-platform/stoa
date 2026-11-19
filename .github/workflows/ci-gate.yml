@@ -135,7 +135,8 @@ jobs:
             scripts/ci/tests/test_regression_publish_image_digest.py \
             scripts/ci/tests/test_regression_cab_2618_required_steps.py \
             scripts/ci/tests/test_regression_cab_2612_dev_post_deploy_truth.py \
-            scripts/ci/tests/test_regression_cab_2612_mcp_prod_smoke_truth.py -v --tb=short
+            scripts/ci/tests/test_regression_cab_2612_mcp_prod_smoke_truth.py \
+            scripts/ci/tests/test_regression_requirements_lock.py -v --tb=short
 
   security:
     uses: ./.github/workflows/security-scan.yml

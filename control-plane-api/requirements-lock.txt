@@ -1,7 +1,6 @@
 # Hash-locked install set of the control-plane-api image (pip install --require-hashes).
-# Source of truth: requirements.txt. Regenerate after any change there:
-#   printf -- "-r requirements.txt\npip>=26.2.0\nsetuptools>=84.1.0\njaraco.context\nwheel\n" > lock.in
-#   uv pip compile lock.in --universal --python-version 3.11 --generate-hashes -o requirements-lock.txt
+# Source of truth: control-plane-api/requirements.txt + requirements-lock.in.
+# Regenerate with: scripts/ci/regenerate-requirements-locks.sh
 # scripts/ci/tests/test_regression_requirements_lock.py checks that it still satisfies requirements.txt.
 aioboto3==15.5.0 \
     --hash=sha256:cc880c4d6a8481dd7e05da89f41c384dbd841454fc1998ae25ca9c39201437a6 \
@@ -1348,8 +1347,8 @@ jaraco-context==6.1.2 \
     --hash=sha256:bf8150b79a2d5d91ae48629d8b427a8f7ba0e1097dd6202a9059f29a36379535 \
     --hash=sha256:f1a6c9d391e661cc5b8d39861ff077a7dc24dc23833ccee564b234b81c82dfe3
     # via
-    #   -r lock.in
     #   -r requirements.txt
+    #   -r requirements-lock.in
 jmespath==1.1.0 \
     --hash=sha256:472c87d80f36026ae83c6ddd0f1d05d4e510134ed462851fd5f754c8c3cbb88d \
     --hash=sha256:a5663118de4908c91729bea0acadca56526eb2698e83de10cd116ae0f4e97c64
@@ -1812,7 +1811,7 @@ passlib==1.7.4 \
 pip==26.3 \
     --hash=sha256:6c36ae7da8695be67e3cd9f7d87919667ced53f57ce2ede75d89b5912ed2bc4c \
     --hash=sha256:f3b60b20ffaadd4415ed7957212a38ac63fa4c5fa375bd0f4a797777940fad13
-    # via -r lock.in
+    # via -r requirements-lock.in
 prometheus-client==0.26.0 \
     --hash=sha256:04a91bcf94e2cf74a44a1a874d651a2e853ed354b6e822f3b7487751465d5c2b \
     --hash=sha256:fa93d06737aa02bacd05794768508bb97d2fbee28cb3bca04eaae92f0ca953d6
@@ -2503,7 +2502,7 @@ s3transfer==0.14.0 \
 setuptools==84.2.1 \
     --hash=sha256:3ff8b3b5492a0aa66960f4419365a86b84e013070d4313e4d4a6894f5d64d6bc \
     --hash=sha256:ca140b45d5325a9478f880e351484f62fef15f336462e449ca0c03c873d589c2
-    # via -r lock.in
+    # via -r requirements-lock.in
 six==1.17.0 \
     --hash=sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274 \
     --hash=sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81
@@ -2889,8 +2888,8 @@ wheel==0.48.0 \
     --hash=sha256:3217dcc807155e45db462d7ef2431f5ddda0d7273b700d05a67b271ceb1287ab \
     --hash=sha256:94800765601e9171bf5d58d066e640662842bcedcbab982b2c90787a2c987322
     # via
-    #   -r lock.in
     #   -r requirements.txt
+    #   -r requirements-lock.in
 wrapt==1.17.3 \
     --hash=sha256:02b551d101f31694fc785e58e0720ef7d9a10c4e62c1c9358ce6f63f23e30a56 \
     --hash=sha256:042ec3bb8f319c147b1301f2393bc19dba6e176b7da446853406d041c36c7828 \

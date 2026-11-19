@@ -358,12 +358,34 @@ def test_gate_script_or_contract_test_selects_contract_job(tmp_path: Path, rel: 
     _assert_selected(_detect(repo, base, head), "gate-contract")
 
 
+@pytest.mark.parametrize(
+    ("rel", "selected"),
+    (
+        ("control-plane-api/requirements.txt", ("control-plane-api", "gate-contract")),
+        ("control-plane-api/requirements-lock.txt", ("control-plane-api", "gate-contract")),
+        ("control-plane-api/requirements-lock.in", ("control-plane-api", "gate-contract")),
+        ("control-plane-api/Dockerfile", ("control-plane-api", "gate-contract")),
+        ("scripts/ci/tests/test_regression_requirements_lock.py", ("gate-contract",)),
+    ),
+)
+def test_requirements_lock_inputs_select_contract_job(
+    tmp_path: Path, rel: str, selected: tuple[str, ...]
+) -> None:
+    repo, base = _repo(tmp_path)
+    path = repo / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("req\n", encoding="utf-8")
+    head = _commit(repo, "req change")
+    _assert_selected(_detect(repo, base, head), *selected)
+
+
 def test_contract_job_is_covered_by_aggregation() -> None:
     workflow = (ROOT / ".github" / "workflows" / "ci-gate.yml").read_text(encoding="utf-8")
     aggregate = AGGREGATE.read_text(encoding="utf-8")
     changes = CHANGES.read_text(encoding="utf-8")
     assert "\n  gate-contract:" in workflow
     assert "needs.changes.outputs.gate-contract == 'true'" in workflow
+    assert "scripts/ci/tests/test_regression_requirements_lock.py" in workflow
     assert "- gate-contract" in workflow.split("name: ci-gate", 1)[1]
     assert "gate-contract" in aggregate
     assert r"^\.github/scripts/ci-gate-.*\.sh$" in changes

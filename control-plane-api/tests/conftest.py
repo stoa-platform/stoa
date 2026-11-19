@@ -161,7 +161,6 @@ from src.middleware.pii_masking import PIIMaskingMiddleware
 _ORIGINAL_MASK_QUERY_STRING = PIIMaskingMiddleware._mask_query_string
 PIIMaskingMiddleware._mask_query_string = lambda _self, qs: qs
 
-import asyncio
 from collections.abc import AsyncGenerator, Generator
 from datetime import datetime
 from enum import Enum
@@ -199,14 +198,6 @@ class SubscriptionStatus(str, Enum):
 
 
 # ============== Session & Backend Fixtures ==============
-
-
-@pytest.fixture(scope="session")
-def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
-    """Create an event loop for the test session."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
 
 
 @pytest.fixture

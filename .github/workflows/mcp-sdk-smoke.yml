@@ -57,7 +57,7 @@ env:
   # (plus de position d'attente sur une 1.x figée). L'épinglage reste : ce
   # qui cassait n'était pas la version mais le PLANCHER, qui laissait entrer
   # une majeure sans qu'aucun commit ne le décide.
-  PY_MCP_VERSION: '2.0.0'
+  PY_MCP_VERSION: '2.2.0'
 
 jobs:
   pre-merge:

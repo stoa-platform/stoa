@@ -7,7 +7,7 @@
 //! Plane tool policies, avoiding any schema conflict with `stoa-tool-policy+jws`.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::fs::{self, OpenOptions};
+use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -251,6 +251,7 @@ impl RolePolicyStore {
         tenant_id: &str,
         verified: VerifiedRolePolicy,
     ) -> Result<VerifiedRolePolicy, RolePolicyError> {
+        let _floor_lock = lock_floor(&self.floor_dir, tenant_id)?;
         let mut map = self.tenants.write();
         if Utc::now() >= verified.expires_at {
             return Err(RolePolicyError::ValidityInvalid);
@@ -600,6 +601,32 @@ fn compute_roles_digest(roles: &HashMap<String, RolePolicySpec>) -> String {
     hash.iter().map(|b| format!("{b:02x}")).collect()
 }
 
+fn lock_floor(floor_dir: &Path, tenant_id: &str) -> Result<File, RolePolicyError> {
+    fs::create_dir_all(floor_dir).map_err(|_| RolePolicyError::FloorPersistFailed)?;
+
+    // The lock file stays in place while successive snapshots replace the JSON file.
+    let mut options = OpenOptions::new();
+    options.read(true).write(true).create(true).truncate(false);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600).custom_flags(libc::O_NOFOLLOW);
+    }
+    let file = options
+        .open(floor_dir.join(format!("{tenant_id}.floor.lock")))
+        .map_err(|_| RolePolicyError::FloorPersistFailed)?;
+    if !file
+        .metadata()
+        .map_err(|_| RolePolicyError::FloorPersistFailed)?
+        .is_file()
+    {
+        return Err(RolePolicyError::FloorPersistFailed);
+    }
+    file.lock()
+        .map_err(|_| RolePolicyError::FloorPersistFailed)?;
+    Ok(file)
+}
+
 fn read_persisted_floor(path: &Path) -> Result<Option<PersistedVersionFloor>, RolePolicyError> {
     match fs::read_to_string(path) {
         Ok(raw) => {
@@ -622,7 +649,17 @@ fn persist_floor_atomic_0600(
     target_path: &Path,
     floor: &PersistedVersionFloor,
 ) -> Result<(), RolePolicyError> {
-    fs::create_dir_all(floor_dir).map_err(|_| RolePolicyError::FloorPersistFailed)?;
+    let tmp_path = stage_floor(floor_dir, floor)?;
+    fs::rename(&tmp_path, target_path).map_err(|_| {
+        let _ = fs::remove_file(&tmp_path);
+        RolePolicyError::FloorPersistFailed
+    })
+}
+
+fn stage_floor(
+    floor_dir: &Path,
+    floor: &PersistedVersionFloor,
+) -> Result<PathBuf, RolePolicyError> {
     let tmp_path = floor_dir.join(format!(".floor-{}.tmp", Uuid::new_v4()));
     let serialized = serde_json::to_vec(floor).map_err(|_| RolePolicyError::FloorPersistFailed)?;
 
@@ -637,25 +674,20 @@ fn persist_floor_atomic_0600(
     let mut file = opts
         .open(&tmp_path)
         .map_err(|_| RolePolicyError::FloorPersistFailed)?;
-    if file.write_all(&serialized).is_err() || file.sync_all().is_err() {
+    let result = file.write_all(&serialized).and_then(|()| {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            file.set_permissions(fs::Permissions::from_mode(0o600))?;
+        }
+        file.sync_all()
+    });
+    drop(file);
+    if result.is_err() {
         let _ = fs::remove_file(&tmp_path);
         return Err(RolePolicyError::FloorPersistFailed);
     }
-    drop(file);
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        if fs::set_permissions(&tmp_path, fs::Permissions::from_mode(0o600)).is_err() {
-            let _ = fs::remove_file(&tmp_path);
-            return Err(RolePolicyError::FloorPersistFailed);
-        }
-    }
-
-    fs::rename(&tmp_path, target_path).map_err(|_| {
-        let _ = fs::remove_file(&tmp_path);
-        RolePolicyError::FloorPersistFailed
-    })
+    Ok(tmp_path)
 }
 
 #[cfg(test)]
@@ -916,6 +948,219 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(floor.version, 16);
+    }
+
+    fn process_floor_fixture() -> tempfile::TempDir {
+        let root = tempfile::tempdir().unwrap();
+        let signer = RoleSigner::new();
+        fs::write(root.path().join("trust.json"), signer.trust_jwks()).unwrap();
+        for version in [1, 2] {
+            let artifacts = root.path().join(format!("v{version}"));
+            fs::create_dir(&artifacts).unwrap();
+            let roles = json!({"reader": {"allowed_tools": ["payments_list"]}});
+            fs::write(
+                artifacts.join("acme.roles.jws"),
+                signer.sign("acme", version, 120, roles),
+            )
+            .unwrap();
+        }
+        root
+    }
+
+    fn fixture_floor_store(root: &Path, version: &str) -> RolePolicyStore {
+        RolePolicyStore::new(
+            root.join(version),
+            root.join("floors"),
+            "stoa-poc-policy",
+            "stoa-gateway",
+            Some(PolicyTrustStore::open(root.join("trust.json"))),
+        )
+    }
+
+    fn wait_for_test_marker(path: &Path) {
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        while !path.is_file() {
+            assert!(std::time::Instant::now() < deadline, "missing {path:?}");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    struct FloorWorker(std::process::Child);
+
+    impl FloorWorker {
+        fn start(root: &Path, mode: &str) -> Self {
+            Self(
+                std::process::Command::new(std::env::current_exe().unwrap())
+                    .args([
+                        "--exact",
+                        "control_plane::role_policy::tests::role_floor_worker_process",
+                    ])
+                    .env("STOA_TEST_FLOOR_ROOT", root)
+                    .env("STOA_TEST_FLOOR_MODE", mode)
+                    .stdout(std::process::Stdio::null())
+                    .spawn()
+                    .unwrap(),
+            )
+        }
+
+        fn wait(&mut self) -> std::process::ExitStatus {
+            let deadline = std::time::Instant::now() + Duration::from_secs(10);
+            loop {
+                if let Some(status) = self.0.try_wait().unwrap() {
+                    return status;
+                }
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "floor worker did not exit"
+                );
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        }
+    }
+
+    impl Drop for FloorWorker {
+        fn drop(&mut self) {
+            if matches!(self.0.try_wait(), Ok(None)) {
+                let _ = self.0.kill();
+                let _ = self.0.wait();
+            }
+        }
+    }
+
+    #[test]
+    fn role_floor_worker_process() {
+        let Some(root) = std::env::var_os("STOA_TEST_FLOOR_ROOT") else {
+            return;
+        };
+        let root = PathBuf::from(root);
+        let mode = std::env::var("STOA_TEST_FLOOR_MODE").unwrap();
+        if mode == "stage" {
+            let floor_dir = root.join("floors");
+            let _guard = lock_floor(&floor_dir, "acme").unwrap();
+            let mut next = read_persisted_floor(&floor_dir.join("acme.floor.json"))
+                .unwrap()
+                .unwrap();
+            next.version = 2;
+            let staged = stage_floor(&floor_dir, &next).unwrap();
+            fs::write(
+                root.join("staged.tmp"),
+                staged.file_name().unwrap().as_encoded_bytes(),
+            )
+            .unwrap();
+            fs::rename(root.join("staged.tmp"), root.join("staged")).unwrap();
+            std::thread::sleep(Duration::from_secs(15));
+            panic!("floor worker was not interrupted");
+        }
+
+        let store = fixture_floor_store(&root, &mode);
+        fs::write(root.join(format!("{mode}.ready")), "").unwrap();
+        wait_for_test_marker(&root.join("start"));
+        let result = store.reload_tenant("acme");
+        match mode.as_str() {
+            "v1" => assert!(matches!(
+                result,
+                Ok(VerifiedRolePolicy { version: 1, .. }) | Err(RolePolicyError::VersionRollback)
+            )),
+            "v2" => assert_eq!(result.unwrap().version, 2),
+            _ => panic!("unexpected floor worker mode"),
+        }
+    }
+
+    #[test]
+    fn role_floor_is_monotone_across_writer_processes() {
+        let fixture = process_floor_fixture();
+        let root = fixture.path();
+        let mut older = FloorWorker::start(root, "v1");
+        let mut newer = FloorWorker::start(root, "v2");
+        wait_for_test_marker(&root.join("v1.ready"));
+        wait_for_test_marker(&root.join("v2.ready"));
+        fs::write(root.join("start"), "").unwrap();
+        assert!(older.wait().success());
+        assert!(newer.wait().success());
+        let floor = read_persisted_floor(&root.join("floors/acme.floor.json"))
+            .unwrap()
+            .unwrap();
+        assert_eq!(floor.version, 2);
+        assert_eq!(
+            fixture_floor_store(root, "v1")
+                .reload_tenant("acme")
+                .unwrap_err(),
+            RolePolicyError::VersionRollback
+        );
+    }
+
+    #[test]
+    fn role_floor_remains_active_after_interrupted_write() {
+        let fixture = process_floor_fixture();
+        let root = fixture.path();
+        assert_eq!(
+            fixture_floor_store(root, "v1")
+                .reload_tenant("acme")
+                .unwrap()
+                .version,
+            1
+        );
+        let floor_dir = root.join("floors");
+        let floor_path = floor_dir.join("acme.floor.json");
+        let mut interrupted = FloorWorker::start(root, "stage");
+        let marker = root.join("staged");
+        wait_for_test_marker(&marker);
+
+        let lock = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(floor_dir.join("acme.floor.lock"))
+            .unwrap();
+        assert!(matches!(lock.try_lock(), Err(fs::TryLockError::WouldBlock)));
+        let staged = floor_dir.join(fs::read_to_string(marker).unwrap());
+        assert_eq!(read_persisted_floor(&staged).unwrap().unwrap().version, 2);
+        assert_eq!(
+            read_persisted_floor(&floor_path).unwrap().unwrap().version,
+            1
+        );
+
+        interrupted.0.kill().unwrap();
+        assert!(!interrupted.wait().success());
+        lock.try_lock().unwrap();
+        drop(lock);
+        assert_eq!(
+            read_persisted_floor(&floor_path).unwrap().unwrap().version,
+            1
+        );
+
+        fs::write(root.join("start"), "").unwrap();
+        let mut resumed = FloorWorker::start(root, "v2");
+        assert!(resumed.wait().success());
+        assert_eq!(
+            read_persisted_floor(&floor_path).unwrap().unwrap().version,
+            2
+        );
+    }
+
+    #[test]
+    fn role_floor_unreadable_state_prevents_activation() {
+        let fixture = process_floor_fixture();
+        let root = fixture.path();
+        let store = fixture_floor_store(root, "v1");
+        assert_eq!(store.reload_tenant("acme").unwrap().version, 1);
+
+        let floor_path = root.join("floors/acme.floor.json");
+        let floor_bytes = fs::read(&floor_path).unwrap();
+        fs::remove_file(&floor_path).unwrap();
+        fs::create_dir(&floor_path).unwrap();
+        fs::copy(
+            root.join("v2/acme.roles.jws"),
+            root.join("v1/acme.roles.jws"),
+        )
+        .unwrap();
+        assert_eq!(
+            store.reload_tenant("acme").unwrap_err(),
+            RolePolicyError::FloorCorrupted
+        );
+        assert_eq!(store.tenants.read()["acme"].current_version, 1);
+        fs::remove_dir(&floor_path).unwrap();
+        fs::write(&floor_path, floor_bytes).unwrap();
+        assert_eq!(store.reload_tenant("acme").unwrap().version, 2);
     }
 
     #[test]

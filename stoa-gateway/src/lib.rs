@@ -113,6 +113,7 @@ pub fn build_router(state: AppState) -> Router {
         base = base
             .route("/mcp/poc/bootstrap", post(mcp::poc::handle_poc_bootstrap))
             .route("/mcp/poc/delegate", post(mcp::poc::handle_poc_delegate))
+            .route("/mcp/poc/revoke", post(mcp::poc::handle_poc_revoke))
             .route("/mcp/poc", post(mcp::poc::handle_poc_mcp));
     }
 

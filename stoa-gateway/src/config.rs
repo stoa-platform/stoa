@@ -1046,6 +1046,21 @@ pub struct Config {
     /// Env: STOA_POC_OUTBOUND_ALLOWED_ORIGINS (CSV or JSON array)
     #[serde(default, deserialize_with = "self::deserializers::string_list")]
     pub poc_outbound_allowed_origins: Vec<String>,
+
+    /// Maximum number of entries in the bounded PoC `chain_id` revocation table (fail-closed when full).
+    /// Env: STOA_POC_MAX_REVOKED_CHAINS (default: 10000)
+    #[serde(default = "default_poc_max_revoked_chains")]
+    pub poc_max_revoked_chains: usize,
+
+    /// Default per-chain call budget for the PoC atomic admission controller.
+    /// Env: STOA_POC_CHAIN_BUDGET (default: 50)
+    #[serde(default = "default_poc_chain_budget")]
+    pub poc_chain_budget: u64,
+
+    /// Default per-caller call budget for the PoC atomic admission controller.
+    /// Env: STOA_POC_CALLER_BUDGET (default: 100)
+    #[serde(default = "default_poc_caller_budget")]
+    pub poc_caller_budget: u64,
 }
 
 impl fmt::Debug for Config {
@@ -1301,6 +1316,9 @@ impl fmt::Debug for Config {
                 "poc_outbound_allowed_origins",
                 &self.poc_outbound_allowed_origins,
             )
+            .field("poc_max_revoked_chains", &self.poc_max_revoked_chains)
+            .field("poc_chain_budget", &self.poc_chain_budget)
+            .field("poc_caller_budget", &self.poc_caller_budget)
             .finish()
     }
 }

@@ -33,6 +33,7 @@ use crate::auth::local_agent_token::{
     canonical_tool_audience, DelegateChildTokenRequest, IssueParentTokenRequest, LocalAgentClaims,
     LocalTokenError, DELEGATION_ISSUER, LOCAL_AGENT_ISSUER,
 };
+use crate::auth::poc_admission::{AdmissionError, AdmitCallRequest};
 use crate::control_plane::role_policy::{ArgumentConstraint, RoleEvalInput};
 use crate::mcp::handlers::{check_tool_permission, check_tool_policy, ToolsCallRequest};
 use crate::mcp::sse::{
@@ -287,25 +288,30 @@ pub async fn handle_poc_bootstrap(
         ttl_secs,
         policy_version,
     }) {
-        Ok(issued) => (
-            StatusCode::OK,
-            Json(PocTokenResponse {
-                access_token: issued.as_str().to_string(),
-                token_type: "DPoP",
-                expires_in: issued.claims.exp - issued.claims.iat,
-                kid: auth.kid().to_string(),
-                iss: issued.claims.iss,
-                chain_id: issued.claims.chain_id,
-                jti: issued.claims.jti,
-                parent_jti: issued.claims.parent_jti,
-                depth: issued.claims.depth,
-                aud: issued.claims.aud,
-                tenant_id: issued.claims.tenant_id,
-                role: issued.claims.role,
-                act: issued.claims.act,
-            }),
-        )
-            .into_response(),
+        Ok(issued) => {
+            state
+                .poc_admission
+                .record_token_expiry(&issued.claims.chain_id, issued.claims.exp);
+            (
+                StatusCode::OK,
+                Json(PocTokenResponse {
+                    access_token: issued.as_str().to_string(),
+                    token_type: "DPoP",
+                    expires_in: issued.claims.exp - issued.claims.iat,
+                    kid: auth.kid().to_string(),
+                    iss: issued.claims.iss,
+                    chain_id: issued.claims.chain_id,
+                    jti: issued.claims.jti,
+                    parent_jti: issued.claims.parent_jti,
+                    depth: issued.claims.depth,
+                    aud: issued.claims.aud,
+                    tenant_id: issued.claims.tenant_id,
+                    role: issued.claims.role,
+                    act: issued.claims.act,
+                }),
+            )
+                .into_response()
+        }
         Err(LocalTokenError::InvalidRequest(msg)) => {
             (StatusCode::BAD_REQUEST, Json(json!({ "error": msg }))).into_response()
         }
@@ -359,6 +365,19 @@ pub async fn handle_poc_delegate(
         }
     };
 
+    // Refuse delegation if the chain is revoked or the revocation table is saturated.
+    let now_epoch = chrono::Utc::now().timestamp();
+    if let Err(err) = state
+        .poc_admission
+        .check_chain_active(&parent_claims.chain_id, now_epoch)
+    {
+        let status = match err {
+            AdmissionError::RevocationTableFull => StatusCode::SERVICE_UNAVAILABLE,
+            _ => StatusCode::FORBIDDEN,
+        };
+        return (status, Json(json!({ "error": err.to_string() }))).into_response();
+    }
+
     // Determine parent's currently effective tool set & constraints from signed role policy.
     let (parent_effective_tools, parent_tool_constraints) = match state.role_policy_store.as_ref() {
         Some(role_store) => {
@@ -404,25 +423,30 @@ pub async fn handle_poc_delegate(
             ttl_secs: req.ttl_secs,
         },
     ) {
-        Ok(issued) => (
-            StatusCode::OK,
-            Json(PocTokenResponse {
-                access_token: issued.as_str().to_string(),
-                token_type: "DPoP",
-                expires_in: issued.claims.exp - issued.claims.iat,
-                kid: auth.kid().to_string(),
-                iss: issued.claims.iss,
-                chain_id: issued.claims.chain_id,
-                jti: issued.claims.jti,
-                parent_jti: issued.claims.parent_jti,
-                depth: issued.claims.depth,
-                aud: issued.claims.aud,
-                tenant_id: issued.claims.tenant_id,
-                role: issued.claims.role,
-                act: issued.claims.act,
-            }),
-        )
-            .into_response(),
+        Ok(issued) => {
+            state
+                .poc_admission
+                .record_token_expiry(&issued.claims.chain_id, issued.claims.exp);
+            (
+                StatusCode::OK,
+                Json(PocTokenResponse {
+                    access_token: issued.as_str().to_string(),
+                    token_type: "DPoP",
+                    expires_in: issued.claims.exp - issued.claims.iat,
+                    kid: auth.kid().to_string(),
+                    iss: issued.claims.iss,
+                    chain_id: issued.claims.chain_id,
+                    jti: issued.claims.jti,
+                    parent_jti: issued.claims.parent_jti,
+                    depth: issued.claims.depth,
+                    aud: issued.claims.aud,
+                    tenant_id: issued.claims.tenant_id,
+                    role: issued.claims.role,
+                    act: issued.claims.act,
+                }),
+            )
+                .into_response()
+        }
         Err(LocalTokenError::DelegationDenied(msg)) => {
             (StatusCode::FORBIDDEN, Json(json!({ "error": msg }))).into_response()
         }
@@ -432,6 +456,85 @@ pub async fn handle_poc_delegate(
         Err(_) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({ "error": "delegation_failed" })),
+        )
+            .into_response(),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PocRevokeRequest {
+    pub chain_id: String,
+}
+
+/// `POST /mcp/poc/revoke` — atomically revoke a `chain_id` across tokens and chain budget.
+pub async fn handle_poc_revoke(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(req): Json<PocRevokeRequest>,
+) -> Response {
+    let Some(ref auth) = state.local_agent_auth else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+
+    let mut authorized = false;
+    if let Some(expected_secret) = state
+        .config
+        .poc_bootstrap_secret
+        .as_deref()
+        .filter(|s| !s.is_empty())
+    {
+        if let Some(provided) = headers
+            .get("X-Stoa-Poc-Bootstrap-Secret")
+            .and_then(|v| v.to_str().ok())
+        {
+            if bool::from(provided.as_bytes().ct_eq(expected_secret.as_bytes())) {
+                authorized = true;
+            }
+        }
+    }
+
+    if !authorized {
+        let base = public_base_url(&state);
+        let revoke_htu = format!("{base}/mcp/poc/revoke");
+        let mcp_aud = format!("{base}/mcp/poc");
+        match auth.validate_mcp_request(&headers, "POST", &revoke_htu, &mcp_aud) {
+            Ok(claims) if claims.depth == 0 && claims.chain_id == req.chain_id.trim() => {
+                authorized = true;
+            }
+            _ => {}
+        }
+    }
+
+    if !authorized {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "error": "unauthorized" })),
+        )
+            .into_response();
+    }
+
+    let now_epoch = chrono::Utc::now().timestamp();
+    match state
+        .poc_admission
+        .revoke_chain(&req.chain_id, None, now_epoch)
+    {
+        Ok(receipt) => (
+            StatusCode::OK,
+            Json(json!({
+                "revoked": true,
+                "chain_id": receipt.chain_id,
+                "retain_until_epoch": receipt.retain_until_epoch
+            })),
+        )
+            .into_response(),
+        Err(AdmissionError::RevocationTableFull) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({ "error": "revocation_table_full" })),
+        )
+            .into_response(),
+        Err(err) => (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": err.to_string() })),
         )
             .into_response(),
     }
@@ -527,10 +630,30 @@ pub async fn handle_poc_mcp(
             }),
         ),
         "tools/list" => {
+            let role_allowed: Option<HashSet<String>> = state
+                .role_policy_store
+                .as_ref()
+                .and_then(|store| {
+                    store
+                        .current_role_snapshot(&claims.tenant_id, &claims.role)
+                        .ok()
+                })
+                .map(|(_, spec)| spec.allowed_tools);
             let tools: Vec<Value> = state
                 .tool_registry
                 .list(Some(&claims.tenant_id))
                 .into_iter()
+                .filter(|def| {
+                    role_allowed
+                        .as_ref()
+                        .is_none_or(|allowed| allowed.contains(&def.name))
+                })
+                .filter(|def| {
+                    claims
+                        .allowed_tools
+                        .as_ref()
+                        .is_none_or(|allowed| allowed.iter().any(|t| t == &def.name))
+                })
                 .map(|def| {
                     json!({
                         "name": def.name,
@@ -542,6 +665,7 @@ pub async fn handle_poc_mcp(
             JsonRpcResponse::success(request.id, json!({ "tools": tools }))
         }
         "tools/call" => handle_poc_tool_call(&state, &claims, request).await,
+        "poc/subcalls" => handle_poc_subcalls(&state, &claims, request).await,
         other => JsonRpcResponse::error(
             request.id,
             METHOD_NOT_FOUND,
@@ -635,7 +759,33 @@ pub(crate) async fn authorize_and_execute_poc_tool(
         }
     }
 
-    // 7. Execute tool (DynamicTool applies OutboundAddressPolicy to final URL and OAuth2 URL,
+    // 7. Unified atomic admission: bounded chain revocation + all-or-nothing 2-level budget debit
+    //    (chain + stable root caller). Executed AFTER authorization passes and BEFORE any upstream call.
+    let caller_id = format!("{}:{}", claims.tenant_id, claims.root_caller_sub());
+    if let Err(err) = state.poc_admission.admit_call(&AdmitCallRequest {
+        chain_id: &claims.chain_id,
+        caller_id: &caller_id,
+        cost: 1,
+        chain_limit: None,
+        caller_limit: None,
+        now_epoch: chrono::Utc::now().timestamp(),
+    }) {
+        warn!(
+            chain_id = %claims.chain_id,
+            caller_id = %caller_id,
+            error = %err,
+            "PoC call rejected by atomic admission controller"
+        );
+        return match err {
+            AdmissionError::ChainRevoked => Err((-32003, "Chain revoked")),
+            AdmissionError::ChainBudgetExceeded => Err((-32003, "Chain budget exceeded")),
+            AdmissionError::CallerBudgetExceeded => Err((-32003, "Caller budget exceeded")),
+            AdmissionError::RevocationTableFull => Err((-32005, "Admission unavailable")),
+            AdmissionError::InvalidInput(_) => Err((-32003, "Admission rejected")),
+        };
+    }
+
+    // 8. Execute tool (DynamicTool applies OutboundAddressPolicy to final URL and OAuth2 URL,
     //    disables redirects, injects backend credential without forwarding caller token,
     //    and scrubs error bodies).
     match tool.execute(arguments, &ctx).await {
@@ -648,6 +798,110 @@ pub(crate) async fn authorize_and_execute_poc_tool(
             Err((-32000, "Tool execution failed"))
         }
     }
+}
+
+#[derive(Debug, Deserialize)]
+struct SubcallFallbackSpec {
+    name: String,
+    #[serde(default)]
+    arguments: Value,
+}
+
+#[derive(Debug, Deserialize)]
+struct SubcallStepSpec {
+    name: String,
+    #[serde(default)]
+    arguments: Value,
+    /// Optional argument key populated from the previous step's text output before authorization.
+    #[serde(default)]
+    map_prev_into_arg: Option<String>,
+    /// Optional fallback step evaluated through the exact same authorization & constraint pipeline.
+    #[serde(default)]
+    fallback: Option<SubcallFallbackSpec>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PocSubcallsParams {
+    steps: Vec<SubcallStepSpec>,
+}
+
+/// Execute sequential sub-calls without using `ComposedTool`: every step and any activated
+/// fallback runs through [`authorize_and_execute_poc_tool`] on its final mapped arguments.
+async fn handle_poc_subcalls(
+    state: &AppState,
+    claims: &LocalAgentClaims,
+    request: JsonRpcRequest,
+) -> JsonRpcResponse {
+    let params = match request.params {
+        Some(p) => p,
+        None => return JsonRpcResponse::error(request.id, INVALID_PARAMS, "Missing params"),
+    };
+    let parsed: PocSubcallsParams = match serde_json::from_value(params) {
+        Ok(p) => p,
+        Err(e) => {
+            return JsonRpcResponse::error(
+                request.id,
+                INVALID_PARAMS,
+                format!("Invalid poc/subcalls params: {e}"),
+            );
+        }
+    };
+    if parsed.steps.is_empty() || parsed.steps.len() > 16 {
+        return JsonRpcResponse::error(
+            request.id,
+            INVALID_PARAMS,
+            "steps must contain between 1 and 16 entries",
+        );
+    }
+
+    let mut results = Vec::with_capacity(parsed.steps.len());
+    let mut prev_text: Option<String> = None;
+
+    for (idx, step) in parsed.steps.into_iter().enumerate() {
+        let mut final_args = step.arguments;
+        if let (Some(ref arg_key), Some(ref prev)) = (&step.map_prev_into_arg, &prev_text) {
+            if let Some(obj) = final_args.as_object_mut() {
+                obj.insert(arg_key.clone(), Value::String(prev.clone()));
+            }
+        }
+
+        match authorize_and_execute_poc_tool(state, claims, &step.name, final_args).await {
+            Ok(val) => {
+                prev_text = val
+                    .get("content")
+                    .and_then(|c| c.get(0))
+                    .and_then(|c| c.get("text"))
+                    .and_then(Value::as_str)
+                    .map(str::to_string);
+                results.push(json!({ "step": idx, "tool": step.name, "result": val }));
+            }
+            // Only execution failures (-32000) may activate a fallback; authorization/budget
+            // denials (-32003 / -32004) terminate immediately without calling fallback.
+            Err((-32000, _)) if step.fallback.is_some() => {
+                let fb = step.fallback.unwrap();
+                match authorize_and_execute_poc_tool(state, claims, &fb.name, fb.arguments).await {
+                    Ok(val) => {
+                        prev_text = val
+                            .get("content")
+                            .and_then(|c| c.get(0))
+                            .and_then(|c| c.get("text"))
+                            .and_then(Value::as_str)
+                            .map(str::to_string);
+                        results.push(json!({
+                            "step": idx,
+                            "tool": fb.name,
+                            "fallback_used": true,
+                            "result": val
+                        }));
+                    }
+                    Err((code, msg)) => return JsonRpcResponse::error(request.id, code, msg),
+                }
+            }
+            Err((code, msg)) => return JsonRpcResponse::error(request.id, code, msg),
+        }
+    }
+
+    JsonRpcResponse::success(request.id, json!({ "steps": results }))
 }
 
 async fn handle_poc_tool_call(
@@ -1620,5 +1874,545 @@ allow if {
         assert!(payment_calls[0].headers.get("authorization").is_none());
         assert_eq!(redirect_target.received_requests().await.unwrap().len(), 0);
         assert_eq!(blocked_internal.received_requests().await.unwrap().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn jalon3_subcalls_fallback_revocation_two_level_budgets_and_filtered_list() {
+        let primary_up = MockServer::start().await;
+        let denied_up = MockServer::start().await;
+        let failing_up = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/payments"))
+            .and(header("X-API-Key", "vault-j3"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"ok": true})))
+            .mount(&primary_up)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/forbidden"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("forbidden-reached"))
+            .expect(0)
+            .mount(&denied_up)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/fail"))
+            .respond_with(ResponseTemplate::new(502).set_body_string("upstream-err"))
+            .mount(&failing_up)
+            .await;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let signer = PolicyFixtureSigner::new();
+        let trust_file = signer.write_trust(tmp.path());
+
+        let policies_dir = tmp.path().join("policies");
+        let roles_dir = tmp.path().join("roles");
+        let floor_dir = tmp.path().join("floors");
+        let contracts_dir = tmp.path().join("contracts");
+        let opa_dir = tmp.path().join("opa");
+        for d in [&policies_dir, &roles_dir, &contracts_dir, &opa_dir] {
+            std::fs::create_dir_all(d).unwrap();
+        }
+
+        // Tenant allows all 3 tools; role omits `payments_hidden` so tools/list hides it and
+        // direct / sub-call invocation is refused with 0 requests to `denied_up`!
+        std::fs::write(
+            policies_dir.join("acme.jws"),
+            signer.sign_tool_policy(
+                "acme",
+                &["payments_list", "payments_fail", "payments_hidden"],
+            ),
+        )
+        .unwrap();
+        std::fs::write(
+            roles_dir.join("acme.roles.jws"),
+            signer.sign_role_policy(
+                "acme",
+                1,
+                json!({
+                    "reader": {
+                        "allowed_tools": ["payments_list", "payments_fail"],
+                        "argument_constraints": {
+                            "payments_list": {
+                                "currency": { "type": "allowed_values", "values": ["EUR"] },
+                                "account": { "type": "prefix", "prefix": "acct-" },
+                                "limit": { "type": "max_number", "max": 50.0 }
+                            }
+                        }
+                    }
+                }),
+            ),
+        )
+        .unwrap();
+        let opa_file = opa_dir.join("policy.rego");
+        std::fs::write(
+            &opa_file,
+            r#"package stoa.authz
+import future.keywords.if
+default allow := false
+allow if {
+    input.tenant_id == "acme"
+    input.resource_tenant_id == "acme"
+    input.action == "Read"
+}
+"#,
+        )
+        .unwrap();
+        std::fs::write(
+            contracts_dir.join("payments.uac.json"),
+            serde_json::to_string(&json!({
+                "name": "payments",
+                "version": "1.0.0",
+                "tenant_id": "acme",
+                "display_name": "Payments J3",
+                "description": "Jalon 3 fixture",
+                "classification": "H",
+                "endpoints": [
+                    {
+                        "path": "/payments",
+                        "methods": ["GET"],
+                        "backend_url": format!("{}/payments", primary_up.uri()),
+                        "operation_id": "list_payments",
+                        "llm": {
+                            "summary": "List payments",
+                            "intent": "Read payments",
+                            "tool_name": "payments_list",
+                            "side_effects": "read",
+                            "safe_for_agents": true,
+                            "requires_human_approval": false,
+                            "examples": []
+                        }
+                    },
+                    {
+                        "path": "/fail",
+                        "methods": ["GET"],
+                        "backend_url": format!("{}/fail", failing_up.uri()),
+                        "operation_id": "failing_tool",
+                        "llm": {
+                            "summary": "Failing tool",
+                            "intent": "Trigger fallback",
+                            "tool_name": "payments_fail",
+                            "side_effects": "read",
+                            "safe_for_agents": true,
+                            "requires_human_approval": false,
+                            "examples": []
+                        }
+                    },
+                    {
+                        "path": "/forbidden",
+                        "methods": ["GET"],
+                        "backend_url": format!("{}/forbidden", denied_up.uri()),
+                        "operation_id": "hidden_tool",
+                        "llm": {
+                            "summary": "Hidden tool",
+                            "intent": "Forbidden by role",
+                            "tool_name": "payments_hidden",
+                            "side_effects": "read",
+                            "safe_for_agents": true,
+                            "requires_human_approval": false,
+                            "examples": []
+                        }
+                    }
+                ],
+                "required_policies": [],
+                "status": "published"
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let creds_file = tmp.path().join("credentials.json");
+        std::fs::write(
+            &creds_file,
+            serde_json::to_string(&json!([{
+                "route_id": "mcp-tool:acme:payments_list",
+                "auth_type": "api_key",
+                "header_name": "X-API-Key",
+                "header_value": "vault-j3",
+                "allowed_origin": primary_up.uri(),
+                "shared_with_tenants": false
+            }]))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let base_url = "http://stoa-gateway:8080";
+        let config = Config {
+            auto_register: false,
+            admin_routes_disabled: true,
+            policy_enabled: true,
+            policy_path: Some(opa_file.to_string_lossy().to_string()),
+            policy_boot_tenants: vec!["acme".to_string()],
+            policy_trust_jwks_file: Some(trust_file),
+            policy_local_artifacts_dir: Some(policies_dir.to_string_lossy().to_string()),
+            policy_expected_issuer: "stoa-poc-policy".to_string(),
+            policy_audience: "stoa-gateway".to_string(),
+            poc_agents_enabled: true,
+            poc_bootstrap_secret: Some("boot-secret-j3".to_string()),
+            poc_uac_contracts_dir: Some(contracts_dir.to_string_lossy().to_string()),
+            poc_credentials_file: Some(creds_file.to_string_lossy().to_string()),
+            poc_public_base_url: Some(base_url.to_string()),
+            poc_role_artifacts_dir: Some(roles_dir.to_string_lossy().to_string()),
+            poc_role_floor_dir: Some(floor_dir.to_string_lossy().to_string()),
+            poc_outbound_allowed_origins: vec![primary_up.uri(), failing_up.uri(), denied_up.uri()],
+            poc_chain_budget: 4,
+            poc_caller_budget: 6,
+            ..Config::default()
+        };
+
+        let state = AppState::new(config);
+        load_poc_fixtures(&state).await.unwrap();
+        state
+            .tool_permissions
+            .as_ref()
+            .unwrap()
+            .load_policy("acme")
+            .await
+            .unwrap();
+        let app = build_router(state.clone());
+
+        let dpop_a = TestDpop::new();
+        let dpop_b = TestDpop::new();
+        let child_dpop = TestDpop::new();
+        let boot_htu = format!("{base_url}/mcp/poc/bootstrap");
+        let mcp_htu = format!("{base_url}/mcp/poc");
+        let del_htu = format!("{base_url}/mcp/poc/delegate");
+        let rev_htu = format!("{base_url}/mcp/poc/revoke");
+
+        // Mint chain A and chain B for the SAME stable caller `agent-parent`.
+        let mint_parent = |dpop: &TestDpop, jti: &str| {
+            let app = app.clone();
+            let proof = dpop.proof("POST", &boot_htu, jti, None);
+            async move {
+                let resp = app
+                    .oneshot(
+                        Request::builder()
+                            .method("POST")
+                            .uri("/mcp/poc/bootstrap")
+                            .header("content-type", "application/json")
+                            .header("X-Stoa-Poc-Bootstrap-Secret", "boot-secret-j3")
+                            .header("DPoP", proof)
+                            .body(Body::from(
+                                json!({"sub":"agent-parent","tenant_id":"acme","role":"reader"})
+                                    .to_string(),
+                            ))
+                            .unwrap(),
+                    )
+                    .await
+                    .unwrap();
+                assert_eq!(resp.status(), StatusCode::OK);
+                serde_json::from_slice::<Value>(
+                    &axum::body::to_bytes(resp.into_body(), 16 * 1024)
+                        .await
+                        .unwrap(),
+                )
+                .unwrap()
+            }
+        };
+
+        let chain_a = mint_parent(&dpop_a, "ba1").await;
+        let tok_a = chain_a["access_token"].as_str().unwrap().to_string();
+        let chain_a_id = chain_a["chain_id"].as_str().unwrap().to_string();
+
+        let chain_b = mint_parent(&dpop_b, "bb1").await;
+        let tok_b = chain_b["access_token"].as_str().unwrap().to_string();
+
+        // 1. tools/list filters out `payments_hidden`; direct call is also denied (0 requests to denied_up).
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/mcp/poc")
+                    .header("content-type", "application/json")
+                    .header("Authorization", format!("DPoP {tok_a}"))
+                    .header("DPoP", dpop_a.proof("POST", &mcp_htu, "tl1", Some(&tok_a)))
+                    .body(Body::from(
+                        json!({"jsonrpc":"2.0","id":1,"method":"tools/list"}).to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let list_rpc: Value = serde_json::from_slice(
+            &axum::body::to_bytes(resp.into_body(), 16 * 1024)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        let names: Vec<&str> = list_rpc["result"]["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|t| t["name"].as_str())
+            .collect();
+        assert!(names.contains(&"payments_list"));
+        assert!(!names.contains(&"payments_hidden"));
+
+        // 2. Sequential sub-calls: step 1 succeeds (budget 1/4), step 2 (`payments_hidden`) denied
+        //    with ZERO requests to `denied_up` and NO budget charged for denied step!
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/mcp/poc")
+                    .header("content-type", "application/json")
+                    .header("Authorization", format!("DPoP {tok_a}"))
+                    .header("DPoP", dpop_a.proof("POST", &mcp_htu, "sc1", Some(&tok_a)))
+                    .body(Body::from(
+                        json!({
+                            "jsonrpc": "2.0",
+                            "id": 2,
+                            "method": "poc/subcalls",
+                            "params": {
+                                "steps": [
+                                    {
+                                        "name": "payments_list",
+                                        "arguments": {"currency":"EUR","account":"acct-1","limit":10}
+                                    },
+                                    {
+                                        "name": "payments_hidden",
+                                        "arguments": {}
+                                    }
+                                ]
+                            }
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let sc_rpc: Value = serde_json::from_slice(
+            &axum::body::to_bytes(resp.into_body(), 16 * 1024)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(sc_rpc.get("error").is_some());
+        assert_eq!(denied_up.received_requests().await.unwrap().len(), 0);
+        assert_eq!(state.poc_admission.chain_used(&chain_a_id), 1);
+
+        // 3. Fallback step: `payments_fail` fails (502 -> budget 2/4), triggers fallback `payments_list`
+        //    with invalid constraint args (limit 99 > 50) -> denied BEFORE hitting primary_up!
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/mcp/poc")
+                    .header("content-type", "application/json")
+                    .header("Authorization", format!("DPoP {tok_a}"))
+                    .header("DPoP", dpop_a.proof("POST", &mcp_htu, "fb1", Some(&tok_a)))
+                    .body(Body::from(
+                        json!({
+                            "jsonrpc": "2.0",
+                            "id": 3,
+                            "method": "poc/subcalls",
+                            "params": {
+                                "steps": [{
+                                    "name": "payments_fail",
+                                    "arguments": {},
+                                    "fallback": {
+                                        "name": "payments_list",
+                                        "arguments": {"currency":"EUR","account":"acct-1","limit":99}
+                                    }
+                                }]
+                            }
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let fb_rpc: Value = serde_json::from_slice(
+            &axum::body::to_bytes(resp.into_body(), 16 * 1024)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(fb_rpc.get("error").is_some());
+        // primary_up still has ONLY 1 call (from step 1 of sc1), proving fallback constraint ran!
+        assert_eq!(primary_up.received_requests().await.unwrap().len(), 1);
+        assert_eq!(state.poc_admission.chain_used(&chain_a_id), 2);
+
+        // 4. Delegate a child on chain A, then revoke chain A -> BOTH parent and child on chain A
+        //    are immediately rejected, while chain B of the same caller retains caller_used=2!
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/mcp/poc/delegate")
+                    .header("content-type", "application/json")
+                    .header("Authorization", format!("DPoP {tok_a}"))
+                    .header("DPoP", dpop_a.proof("POST", &del_htu, "da1", Some(&tok_a)))
+                    .body(Body::from(
+                        json!({
+                            "sub": "agent-child",
+                            "target_tool": "payments_list",
+                            "child_dpop_jwk": {
+                                "kty": child_dpop.jwk.kty,
+                                "crv": child_dpop.jwk.crv,
+                                "x": child_dpop.jwk.x,
+                                "y": child_dpop.jwk.y
+                            },
+                            "allowed_tools": ["payments_list"],
+                            "ttl_secs": 120
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let child_tok = serde_json::from_slice::<Value>(
+            &axum::body::to_bytes(resp.into_body(), 16 * 1024)
+                .await
+                .unwrap(),
+        )
+        .unwrap()["access_token"]
+            .as_str()
+            .unwrap()
+            .to_string();
+
+        // Revoke chain A via DPoP-authenticated POST /mcp/poc/revoke
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/mcp/poc/revoke")
+                    .header("content-type", "application/json")
+                    .header("Authorization", format!("DPoP {tok_a}"))
+                    .header("DPoP", dpop_a.proof("POST", &rev_htu, "rv1", Some(&tok_a)))
+                    .body(Body::from(json!({"chain_id": chain_a_id}).to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // Child on revoked chain A is denied with "Chain revoked" and 0 upstream calls.
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/mcp/poc")
+                    .header("content-type", "application/json")
+                    .header("Authorization", format!("DPoP {child_tok}"))
+                    .header(
+                        "DPoP",
+                        child_dpop.proof("POST", &mcp_htu, "ch-rev", Some(&child_tok)),
+                    )
+                    .body(Body::from(
+                        json!({
+                            "jsonrpc": "2.0",
+                            "id": 4,
+                            "method": "tools/call",
+                            "params": {
+                                "name": "payments_list",
+                                "arguments": {"currency":"EUR","account":"acct-1","limit":10}
+                            }
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let rev_rpc: Value = serde_json::from_slice(
+            &axum::body::to_bytes(resp.into_body(), 16 * 1024)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(rev_rpc["error"]["message"], "Chain revoked");
+
+        // Chain B (same caller `acme:agent-parent`, caller_used already 2 out of 6):
+        // 4 calls succeed (caller_used -> 6 == caller_budget AND chain_b_used == 4 == chain_budget),
+        // 5th call fails with budget exceeded!
+        for i in 0..4 {
+            let resp = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/mcp/poc")
+                        .header("content-type", "application/json")
+                        .header("Authorization", format!("DPoP {tok_b}"))
+                        .header(
+                            "DPoP",
+                            dpop_b.proof("POST", &mcp_htu, &format!("cb-{i}"), Some(&tok_b)),
+                        )
+                        .body(Body::from(
+                            json!({
+                                "jsonrpc": "2.0",
+                                "id": 10 + i,
+                                "method": "tools/call",
+                                "params": {
+                                    "name": "payments_list",
+                                    "arguments": {"currency":"EUR","account":"acct-1","limit":10}
+                                }
+                            })
+                            .to_string(),
+                        ))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            let rpc: Value = serde_json::from_slice(
+                &axum::body::to_bytes(resp.into_body(), 16 * 1024)
+                    .await
+                    .unwrap(),
+            )
+            .unwrap();
+            assert!(rpc.get("error").is_none(), "chain B call {i} failed: {rpc}");
+        }
+        assert_eq!(state.poc_admission.caller_used("acme:agent-parent"), 6);
+
+        // 5th call on chain B exceeds budget -> denied, zero extra upstream request!
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/mcp/poc")
+                    .header("content-type", "application/json")
+                    .header("Authorization", format!("DPoP {tok_b}"))
+                    .header(
+                        "DPoP",
+                        dpop_b.proof("POST", &mcp_htu, "cb-over", Some(&tok_b)),
+                    )
+                    .body(Body::from(
+                        json!({
+                            "jsonrpc": "2.0",
+                            "id": 99,
+                            "method": "tools/call",
+                            "params": {
+                                "name": "payments_list",
+                                "arguments": {"currency":"EUR","account":"acct-1","limit":10}
+                            }
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let over_rpc: Value = serde_json::from_slice(
+            &axum::body::to_bytes(resp.into_body(), 16 * 1024)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(over_rpc["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("budget exceeded"));
+        assert_eq!(primary_up.received_requests().await.unwrap().len(), 5);
     }
 }

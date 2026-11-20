@@ -59,11 +59,22 @@ def main() -> None:
     )
 
     now = datetime.now(timezone.utc)
-    tools = [
+    tenant_tools = [
         "payments_list",
         "payments_opa_denied",
         "payments_redirect",
         "payments_outbound_blocked",
+        "payments_fail",
+        "payments_hidden",
+    ]
+    # `payments_hidden` is intentionally permitted at tenant & OPA level but omitted from the
+    # `reader` role so `tools/list` filters it out and direct/sub-call execution is denied.
+    reader_role_tools = [
+        "payments_list",
+        "payments_opa_denied",
+        "payments_redirect",
+        "payments_outbound_blocked",
+        "payments_fail",
     ]
 
     # 1. Signed tenant tool policy (stoa-tool-policy+jws)
@@ -76,7 +87,7 @@ def main() -> None:
         "issued_at": now.isoformat().replace("+00:00", "Z"),
         "expires_at": (now + timedelta(minutes=10)).isoformat().replace("+00:00", "Z"),
         "permissions": [
-            {"mcp_server": "poc-payments", "tool": t, "allowed": True} for t in tools
+            {"mcp_server": "poc-payments", "tool": t, "allowed": True} for t in tenant_tools
         ],
     }
     (runtime_dir / "policies" / "acme.jws").write_text(
@@ -95,7 +106,7 @@ def main() -> None:
         "expires_at": (now + timedelta(minutes=10)).isoformat().replace("+00:00", "Z"),
         "roles": {
             "reader": {
-                "allowed_tools": tools,
+                "allowed_tools": reader_role_tools,
                 "argument_constraints": {
                     "payments_list": {
                         "currency": {"type": "allowed_values", "values": ["EUR", "USD"]},
@@ -173,6 +184,36 @@ def main() -> None:
                     "summary": "Blocked internal target",
                     "intent": "Verify outbound address policy blocks link-local IP",
                     "tool_name": "payments_outbound_blocked",
+                    "side_effects": "read",
+                    "safe_for_agents": True,
+                    "requires_human_approval": False,
+                    "examples": [],
+                },
+            },
+            {
+                "path": "/fail",
+                "methods": ["GET"],
+                "backend_url": "http://upstream-mock:9000/fail",
+                "operation_id": "payments_fail",
+                "llm": {
+                    "summary": "Simulated upstream failure",
+                    "intent": "Trigger fallback evaluation in poc/subcalls",
+                    "tool_name": "payments_fail",
+                    "side_effects": "read",
+                    "safe_for_agents": True,
+                    "requires_human_approval": False,
+                    "examples": [],
+                },
+            },
+            {
+                "path": "/forbidden",
+                "methods": ["GET"],
+                "backend_url": "http://upstream-mock:9000/forbidden",
+                "operation_id": "payments_hidden",
+                "llm": {
+                    "summary": "Tool outside reader role scope",
+                    "intent": "Verify tools/list filtering and sub-call role enforcement",
+                    "tool_name": "payments_hidden",
                     "side_effects": "read",
                     "safe_for_agents": True,
                     "requires_human_approval": False,

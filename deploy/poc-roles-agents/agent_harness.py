@@ -8,19 +8,15 @@ import hmac
 import json
 import os
 import socket
-import sys
 import threading
 import time
 import urllib.error
 import urllib.request
 import uuid
-from pathlib import Path
 
-from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
-
-CHILD_KEY_FILE = Path("/tmp/child_dpop_key.pem")
 
 
 def b64url(data: bytes) -> str:
@@ -42,21 +38,6 @@ class DpopKey:
             "x": int_to_b64url(pub.x, 32),
             "y": int_to_b64url(pub.y, 32),
         }
-
-    def save(self, path: Path) -> None:
-        pem = self._key.private_bytes(
-            serialization.Encoding.PEM,
-            serialization.PrivateFormat.PKCS8,
-            serialization.NoEncryption(),
-        )
-        path.write_bytes(pem)
-        path.chmod(0o600)
-
-    @classmethod
-    def load(cls, path: Path) -> "DpopKey":
-        key = serialization.load_pem_private_key(path.read_bytes(), password=None)
-        assert isinstance(key, ec.EllipticCurvePrivateKey)
-        return cls(key)
 
     def sign_proof(
         self, htm: str, htu: str, access_token: str | None = None, jti: str | None = None
@@ -152,7 +133,7 @@ def make_external_rs256_token(kid: str | None, aud: str) -> str:
     return f"{inp}.{b64url(sig)}"
 
 
-def run_parent(gateway_url: str, upstream_ip: str, child_jwk_json: str | None) -> tuple[str, str | None]:
+def run_parent(gateway_url: str, upstream_ip: str, child_jwk: dict | None) -> tuple[str, str | None]:
     upstream_host = os.environ["UPSTREAM_MOCK_HOST"]
     bootstrap_secret = os.environ["STOA_POC_BOOTSTRAP_SECRET"]
 
@@ -178,7 +159,7 @@ def run_parent(gateway_url: str, upstream_ip: str, child_jwk_json: str | None) -
         },
         body={"sub": "agent-parent", "tenant_id": "acme", "role": "reader", "ttl_secs": 300},
     )
-    assert code == 200, f"bootstrap failed: {code} {body}"
+    assert code == 200, f"bootstrap failed: {code}"
     boot = json.loads(body)
     token = boot["access_token"]
     kid = boot["kid"]
@@ -245,7 +226,7 @@ def run_parent(gateway_url: str, upstream_ip: str, child_jwk_json: str | None) -
         print(f"PASS: {label} -> 401", flush=True)
 
     child_tok = None
-    if child_jwk_json is not None:
+    if child_jwk is not None:
         # Jalon 2 parent checks: OPA negative, outbound address policy block, 3xx non-follow + scrubbed error
         for label, tool_name, expected_err in [
             ("OPA negative case (payments_opa_denied)", "payments_opa_denied", "policy"),
@@ -286,7 +267,6 @@ def run_parent(gateway_url: str, upstream_ip: str, child_jwk_json: str | None) -
         print("PASS: 3xx redirect not followed and error body scrubbed", flush=True)
 
         # Delegation checks: widening or TTL > parent rejected (403); narrowed child succeeds (200)
-        child_jwk = json.loads(child_jwk_json)
         del_url = f"{gateway_url}/mcp/poc/delegate"
 
         c, _ = http_req(
@@ -345,7 +325,7 @@ def run_parent(gateway_url: str, upstream_ip: str, child_jwk_json: str | None) -
                 "ttl_secs": 120,
             },
         )
-        assert c == 200, f"valid delegation failed: {c} {b}"
+        assert c == 200, f"valid delegation failed: {c}"
         del_resp = json.loads(b)
         assert del_resp["iss"] == "stoa-poc-delegation"
         assert del_resp["aud"] == "mcp-tool:acme:payments_list"
@@ -358,7 +338,11 @@ def run_parent(gateway_url: str, upstream_ip: str, child_jwk_json: str | None) -
 
 
 def run_child(
-    gateway_url: str, upstream_ip: str, leaked_parent_token: str, child_token: str | None
+    gateway_url: str,
+    upstream_ip: str,
+    child_dpop: DpopKey,
+    leaked_parent_token: str,
+    child_token: str | None,
 ) -> None:
     upstream_host = os.environ["UPSTREAM_MOCK_HOST"]
 
@@ -370,7 +354,6 @@ def run_child(
     print("PASS: agent-child /admin/health -> 404", flush=True)
 
     assert "STOA_POC_BOOTSTRAP_SECRET" not in os.environ
-    child_dpop = DpopKey.load(CHILD_KEY_FILE) if CHILD_KEY_FILE.exists() else DpopKey()
     boot_url = f"{gateway_url}/mcp/poc/bootstrap"
     code, _ = http_req(
         "POST",
@@ -484,7 +467,7 @@ def run_child(
                     "ttl_secs": 60,
                 },
             )
-            assert c == 200 and json.loads(b)["depth"] == next_depth, f"depth {next_depth} failed: {c} {b}"
+            assert c == 200 and json.loads(b)["depth"] == next_depth, f"depth {next_depth} failed: {c}"
             curr_tok = json.loads(b)["access_token"]
         c, _ = http_req(
             "POST",
@@ -869,27 +852,3 @@ def run_jalon3_post_restart(gateway_url: str, dpop: DpopKey, token_c: str) -> No
     )
     assert c == 401, f"pre-restart token after gateway restart expected 401, got {c}"
     print("PASS: pre-restart token rejected with 401 after real stoa-gateway restart (ephemeral RS256 rotated)", flush=True)
-
-
-if __name__ == "__main__":
-    mode = sys.argv[1]
-    if mode == "child-init-key":
-        k = DpopKey()
-        k.save(CHILD_KEY_FILE)
-        print(json.dumps(k.jwk), flush=True)
-        sys.exit(0)
-
-    gateway = os.environ["STOA_GATEWAY_URL"]
-    mock_ip = sys.argv[2]
-    if mode == "parent":
-        child_jwk = sys.argv[3] if len(sys.argv) > 3 else None
-        tok, child_tok = run_parent(gateway, mock_ip, child_jwk)
-        print(f"PARENT_TOKEN_FOR_NEGATIVE_TEST={tok}", flush=True)
-        if child_tok is not None:
-            print(f"CHILD_TOKEN_DELEGATED={child_tok}", flush=True)
-    elif mode == "child":
-        parent_tok = sys.argv[3]
-        child_tok = sys.argv[4] if len(sys.argv) > 4 else None
-        run_child(gateway, mock_ip, parent_tok, child_tok)
-    else:
-        raise SystemExit(f"unknown mode: {mode}")

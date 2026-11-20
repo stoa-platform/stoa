@@ -23,6 +23,8 @@ pub struct McpBinder {
     contract_tool_names: RwLock<HashMap<String, Vec<String>>>,
     /// Backend credential store attached to the generated tools.
     credential_store: Option<Arc<CredentialStore>>,
+    /// Optional outbound address policy attached to the generated tools.
+    outbound_policy: Option<Arc<crate::proxy::outbound_policy::OutboundAddressPolicy>>,
 }
 
 impl McpBinder {
@@ -32,6 +34,7 @@ impl McpBinder {
             tool_registry,
             contract_tool_names: RwLock::new(HashMap::new()),
             credential_store: None,
+            outbound_policy: None,
         }
     }
 
@@ -39,6 +42,15 @@ impl McpBinder {
     /// upstream with the credential stored under `DynamicTool::credential_key`.
     pub fn with_credential_store(mut self, store: Arc<CredentialStore>) -> Self {
         self.credential_store = Some(store);
+        self
+    }
+
+    /// Attach an outbound address policy to every generated dynamic tool.
+    pub fn with_outbound_policy(
+        mut self,
+        policy: Arc<crate::proxy::outbound_policy::OutboundAddressPolicy>,
+    ) -> Self {
+        self.outbound_policy = Some(policy);
         self
     }
 
@@ -208,7 +220,8 @@ impl McpBinder {
                 )
                 .with_action(action)
                 .with_annotations(ToolAnnotations::from_action(action))
-                .with_credential_store(self.credential_store.clone());
+                .with_credential_store(self.credential_store.clone())
+                .with_outbound_policy(self.outbound_policy.clone());
 
                 Arc::new(tool) as Arc<dyn crate::mcp::tools::Tool>
             })

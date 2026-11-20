@@ -268,6 +268,76 @@ impl CredentialStore {
 
         Ok(access_token)
     }
+
+    /// Fetch an OAuth2 access token while enforcing the outbound address policy
+    /// and redirect disabling on `oauth2.token_url`, with scrubbed error messages.
+    pub async fn get_oauth2_token_guarded(
+        &self,
+        route_id: &str,
+        outbound_policy: &crate::proxy::outbound_policy::OutboundAddressPolicy,
+    ) -> Result<String, String> {
+        {
+            let cache = self.oauth2_tokens.read();
+            if let Some(cached) = cache.get(route_id) {
+                if cached.expires_at > Instant::now() + TOKEN_EXPIRY_MARGIN {
+                    return Ok(cached.access_token.clone());
+                }
+            }
+        }
+
+        let cred = self
+            .credentials
+            .read()
+            .get(route_id)
+            .cloned()
+            .ok_or_else(|| format!("No credential found for route {route_id}"))?;
+
+        let oauth2 = cred
+            .oauth2
+            .as_ref()
+            .ok_or_else(|| format!("Route {route_id} has no OAuth2 config"))?;
+
+        let client = outbound_policy
+            .validate_and_build_client(&oauth2.token_url, Duration::from_secs(10))
+            .await
+            .map_err(|e| format!("OAuth2 token endpoint blocked: {e}"))?;
+
+        let resp = client
+            .post(&oauth2.token_url)
+            .form(&[
+                ("grant_type", "client_credentials"),
+                ("client_id", &oauth2.client_id),
+                ("client_secret", &oauth2.client_secret),
+            ])
+            .send()
+            .await
+            .map_err(|_| "OAuth2 token request failed".to_string())?;
+
+        if !resp.status().is_success() {
+            return Err(format!(
+                "OAuth2 token endpoint returned HTTP {}",
+                resp.status().as_u16()
+            ));
+        }
+
+        let token_resp: TokenResponse = resp
+            .json()
+            .await
+            .map_err(|_| "Failed to parse OAuth2 token response".to_string())?;
+
+        let expires_at = Instant::now() + Duration::from_secs(token_resp.expires_in);
+        let access_token = token_resp.access_token.clone();
+
+        self.oauth2_tokens.write().insert(
+            route_id.to_string(),
+            CachedOAuth2Token {
+                access_token: token_resp.access_token,
+                expires_at,
+            },
+        );
+
+        Ok(access_token)
+    }
 }
 
 #[cfg(test)]

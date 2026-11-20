@@ -243,6 +243,29 @@ impl RolePolicyStore {
             .to_string();
 
         let verified = self.verify_jws(&trust, tenant_id, &jws)?;
+        self.activate_verified_policy(tenant_id, verified)
+    }
+
+    fn activate_verified_policy(
+        &self,
+        tenant_id: &str,
+        verified: VerifiedRolePolicy,
+    ) -> Result<VerifiedRolePolicy, RolePolicyError> {
+        let mut map = self.tenants.write();
+        if Utc::now() >= verified.expires_at {
+            return Err(RolePolicyError::ValidityInvalid);
+        }
+        let state = map.entry(tenant_id.to_string()).or_default();
+        if verified.version < state.current_version {
+            return Err(RolePolicyError::VersionRollback);
+        }
+        if verified.version == state.current_version {
+            if let Some(prev) = state.history.get(&verified.version) {
+                if prev.content_sha256 != verified.content_sha256 {
+                    return Err(RolePolicyError::VersionRollback);
+                }
+            }
+        }
 
         // Check persisted floor and persist atomically BEFORE activating in memory.
         let floor_path = self.floor_dir.join(format!("{tenant_id}.floor.json"));
@@ -276,20 +299,13 @@ impl RolePolicyStore {
         if must_persist {
             persist_floor_atomic_0600(&self.floor_dir, &floor_path, &next_floor)?;
         }
+        #[cfg(unix)]
+        if must_persist || state.current_version != verified.version {
+            fs::File::open(&self.floor_dir)
+                .and_then(|dir| dir.sync_all())
+                .map_err(|_| RolePolicyError::FloorPersistFailed)?;
+        }
 
-        // Activate in memory after persistence succeeds.
-        let mut map = self.tenants.write();
-        let state = map.entry(tenant_id.to_string()).or_default();
-        if verified.version < state.current_version {
-            return Err(RolePolicyError::VersionRollback);
-        }
-        if verified.version == state.current_version {
-            if let Some(prev) = state.history.get(&verified.version) {
-                if prev.content_sha256 != verified.content_sha256 {
-                    return Err(RolePolicyError::VersionRollback);
-                }
-            }
-        }
         state.current_version = verified.version;
         state.history.insert(verified.version, verified.clone());
         while state.history.len() > MAX_VERSION_HISTORY {
@@ -388,6 +404,57 @@ impl RolePolicyStore {
         }
 
         Ok(())
+    }
+
+    /// Return `(current_version, allowed_tools, active_role_spec)` intersected monotonically
+    /// across every policy version activated since `issued_policy_version` and any token-level
+    /// tool allow-list.
+    pub(crate) fn effective_allowed_tools(
+        &self,
+        tenant_id: &str,
+        role: &str,
+        issued_policy_version: u64,
+        token_allowed_tools: Option<&[String]>,
+    ) -> Result<(u64, HashSet<String>, RolePolicySpec), RolePolicyError> {
+        self.reload_tenant(tenant_id)?;
+        let map = self.tenants.read();
+        let state = map.get(tenant_id).ok_or(RolePolicyError::ArtifactMissing)?;
+        let current = state
+            .history
+            .get(&state.current_version)
+            .ok_or(RolePolicyError::ArtifactMissing)?;
+        if issued_policy_version == 0
+            || issued_policy_version > current.version
+            || !state.history.contains_key(&issued_policy_version)
+        {
+            return Err(RolePolicyError::DeniedByRole);
+        }
+        if Utc::now() >= current.expires_at {
+            return Err(RolePolicyError::ValidityInvalid);
+        }
+        let active_role = current
+            .roles
+            .get(role)
+            .ok_or(RolePolicyError::DeniedByRole)?;
+        let history: Option<Vec<_>> = state
+            .history
+            .range(issued_policy_version..=current.version)
+            .map(|(_, policy)| policy.roles.get(role))
+            .collect();
+        let mut allowed_tools = HashSet::new();
+        if let Some(history) = history {
+            for tool in &active_role.allowed_tools {
+                if token_allowed_tools.is_some_and(|allowed| !allowed.contains(tool))
+                    || history
+                        .iter()
+                        .any(|spec| !spec.allowed_tools.contains(tool))
+                {
+                    continue;
+                }
+                allowed_tools.insert(tool.clone());
+            }
+        }
+        Ok((current.version, allowed_tools, active_role.clone()))
     }
 
     fn verify_jws(
@@ -799,6 +866,56 @@ mod tests {
             restarted_store.reload_tenant("acme").unwrap_err(),
             RolePolicyError::FloorCorrupted
         );
+    }
+
+    #[test]
+    fn parallel_role_activations_keep_the_latest_version() {
+        let tmp = tempfile::tempdir().unwrap();
+        let signer = RoleSigner::new();
+        let trust_path = tmp.path().join("trust.json");
+        fs::write(&trust_path, signer.trust_jwks()).unwrap();
+        let trust = PolicyTrustStore::open(&trust_path);
+        let floor_dir = tmp.path().join("floors");
+        let store = RolePolicyStore::new(
+            tmp.path(),
+            &floor_dir,
+            "stoa-poc-policy",
+            "stoa-gateway",
+            Some(trust.clone()),
+        );
+        let trust = trust.current().unwrap();
+        let barrier = std::sync::Barrier::new(16);
+        let roles = json!({"reader": {"allowed_tools": ["payments_list"]}});
+        std::thread::scope(|scope| {
+            let tasks: Vec<_> = (1..=16)
+                .map(|version| {
+                    let policy = store
+                        .verify_jws(
+                            &trust,
+                            "acme",
+                            &signer.sign("acme", version, 60, roles.clone()),
+                        )
+                        .unwrap();
+                    let barrier = &barrier;
+                    let store = &store;
+                    scope.spawn(move || {
+                        barrier.wait();
+                        store.activate_verified_policy("acme", policy)
+                    })
+                })
+                .collect();
+            for task in tasks {
+                assert!(matches!(
+                    task.join().unwrap(),
+                    Ok(_) | Err(RolePolicyError::VersionRollback)
+                ));
+            }
+        });
+        assert_eq!(store.tenants.read()["acme"].current_version, 16);
+        let floor = read_persisted_floor(&floor_dir.join("acme.floor.json"))
+            .unwrap()
+            .unwrap();
+        assert_eq!(floor.version, 16);
     }
 
     #[test]

@@ -25,6 +25,7 @@ pub struct McpBinder {
     credential_store: Option<Arc<CredentialStore>>,
     /// Optional outbound address policy attached to the generated tools.
     outbound_policy: Option<Arc<crate::proxy::outbound_policy::OutboundAddressPolicy>>,
+    project_uac_output_schemas: bool,
 }
 
 impl McpBinder {
@@ -35,6 +36,7 @@ impl McpBinder {
             contract_tool_names: RwLock::new(HashMap::new()),
             credential_store: None,
             outbound_policy: None,
+            project_uac_output_schemas: false,
         }
     }
 
@@ -51,6 +53,12 @@ impl McpBinder {
         policy: Arc<crate::proxy::outbound_policy::OutboundAddressPolicy>,
     ) -> Self {
         self.outbound_policy = Some(policy);
+        self
+    }
+
+    /// Attach UAC output schemas to the tools stored in the registry.
+    pub(crate) fn with_uac_output_schemas(mut self) -> Self {
+        self.project_uac_output_schemas = true;
         self
     }
 
@@ -223,6 +231,12 @@ impl McpBinder {
                 .with_credential_store(self.credential_store.clone())
                 .with_outbound_policy(self.outbound_policy.clone());
 
+                let tool = match &endpoint.output_schema {
+                    Some(schema) if self.project_uac_output_schemas => {
+                        tool.with_output_schema(schema.clone())
+                    }
+                    _ => tool,
+                };
                 Arc::new(tool) as Arc<dyn crate::mcp::tools::Tool>
             })
             .collect()

@@ -67,6 +67,8 @@ pub struct DynamicTool {
     path_pattern: Option<String>,
     /// Backend credential store used to authenticate the upstream call.
     credential_store: Option<Arc<CredentialStore>>,
+    /// Optional outbound address policy applied to both tool and OAuth2 URLs.
+    outbound_policy: Option<Arc<crate::proxy::outbound_policy::OutboundAddressPolicy>>,
     /// HTTP client
     client: Client,
 }
@@ -96,6 +98,7 @@ impl DynamicTool {
             public: false,
             path_pattern: None,
             credential_store: None,
+            outbound_policy: None,
             // Redirects are not followed: the request, and the backend
             // credential it carries, only go to the configured endpoint.
             client: Client::builder()
@@ -145,6 +148,17 @@ impl DynamicTool {
     /// the tool endpoint.
     pub fn with_credential_store(mut self, store: impl Into<Option<Arc<CredentialStore>>>) -> Self {
         self.credential_store = store.into();
+        self
+    }
+
+    /// Attach an outbound address policy applied to both the tool's final URL
+    /// and any OAuth2 token endpoint, pinning outbound connections to validated
+    /// resolved IPv4/IPv6 addresses with redirects disabled and scrubbed errors.
+    pub fn with_outbound_policy(
+        mut self,
+        policy: impl Into<Option<Arc<crate::proxy::outbound_policy::OutboundAddressPolicy>>>,
+    ) -> Self {
+        self.outbound_policy = policy.into();
         self
     }
 
@@ -266,7 +280,11 @@ impl DynamicTool {
         if cred.auth_type != AuthType::OAuth2ClientCredentials {
             return Ok(Some((cred.header_name, cred.header_value)));
         }
-        match store.get_oauth2_token(&key, &self.client).await {
+        let oauth_result = match self.outbound_policy.as_deref() {
+            Some(policy) => store.get_oauth2_token_guarded(&key, policy).await,
+            None => store.get_oauth2_token(&key, &self.client).await,
+        };
+        match oauth_result {
             Ok(token) => Ok(Some((
                 "Authorization".to_string(),
                 format!("Bearer {token}"),
@@ -347,15 +365,30 @@ impl Tool for DynamicTool {
             "Executing dynamic tool"
         );
 
+        // When an outbound address policy is attached, resolve and validate the target URL
+        // BEFORE fetching any OAuth2 token or building the outbound HTTP request.
+        let pinned_client = match self.outbound_policy.as_deref() {
+            Some(policy) => Some(
+                policy
+                    .validate_and_build_client(&final_url, std::time::Duration::from_secs(30))
+                    .await
+                    .map_err(|_| {
+                        ToolError::ExecutionFailed("Upstream destination blocked".to_string())
+                    })?,
+            ),
+            None => None,
+        };
+        let http_client = pinned_client.as_ref().unwrap_or(&self.client);
+
         // Build HTTP request
         let mut req = match self.method.to_uppercase().as_str() {
-            "GET" => self.client.get(&final_url),
-            "HEAD" => self.client.head(&final_url),
-            "OPTIONS" => self.client.request(reqwest::Method::OPTIONS, &final_url),
-            "POST" => self.client.post(&final_url),
-            "PUT" => self.client.put(&final_url),
-            "DELETE" => self.client.delete(&final_url),
-            "PATCH" => self.client.patch(&final_url),
+            "GET" => http_client.get(&final_url),
+            "HEAD" => http_client.head(&final_url),
+            "OPTIONS" => http_client.request(reqwest::Method::OPTIONS, &final_url),
+            "POST" => http_client.post(&final_url),
+            "PUT" => http_client.put(&final_url),
+            "DELETE" => http_client.delete(&final_url),
+            "PATCH" => http_client.patch(&final_url),
             other => {
                 return Err(ToolError::ExecutionFailed(format!(
                     "Unsupported HTTP method: {}",
@@ -399,19 +432,33 @@ impl Tool for DynamicTool {
 
         // Execute request
         let response = req.send().await.map_err(|e| {
-            warn!(tool = %self.name, error = %e, "Dynamic tool HTTP request failed");
-            ToolError::ExecutionFailed(format!("HTTP request failed: {}", e))
+            warn!(
+                tool = %self.name,
+                error = %e.without_url(),
+                "Dynamic tool HTTP request failed"
+            );
+            ToolError::ExecutionFailed("Upstream HTTP request failed".to_string())
         })?;
 
         let status = response.status();
         let body = response.text().await.map_err(|e| {
-            ToolError::ExecutionFailed(format!("Failed to read response body: {}", e))
+            warn!(
+                tool = %self.name,
+                error = %e.without_url(),
+                "Failed to read dynamic tool response body"
+            );
+            ToolError::ExecutionFailed("Failed to read upstream response body".to_string())
         })?;
 
         if !status.is_success() {
+            warn!(
+                tool = %self.name,
+                status = status.as_u16(),
+                "Dynamic tool upstream returned non-success status"
+            );
             return Err(ToolError::ExecutionFailed(format!(
-                "HTTP {} from {}: {}",
-                status, self.endpoint, body
+                "Upstream returned HTTP {}",
+                status.as_u16()
             )));
         }
 
@@ -1640,5 +1687,141 @@ pub(crate) mod tests {
             assert!(error.contains("does not apply"), "caller={caller}");
             assert_eq!(received, Received::default(), "caller={caller}");
         }
+    }
+
+    #[tokio::test]
+    async fn dynamic_tool_with_outbound_policy_enforces_allowlist_no_redirects_and_masked_errors() {
+        use crate::proxy::outbound_policy::OutboundAddressPolicy;
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let blocked_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/data"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("secret"))
+            .expect(0)
+            .mount(&blocked_server)
+            .await;
+
+        let allowed_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/ok"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("ok-payload"))
+            .mount(&allowed_server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/redir"))
+            .respond_with(
+                ResponseTemplate::new(302)
+                    .insert_header("Location", format!("{}/redir-target", allowed_server.uri()))
+                    .set_body_string("sensitive-redirect-body"),
+            )
+            .mount(&allowed_server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/redir-target"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("must-not-reach"))
+            .expect(0)
+            .mount(&allowed_server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/err"))
+            .respond_with(ResponseTemplate::new(502).set_body_string("internal-stack-trace-xyz"))
+            .mount(&allowed_server)
+            .await;
+
+        let policy = Arc::new(OutboundAddressPolicy::new([allowed_server.uri()]));
+        let ctx = ToolContext {
+            tenant_id: "acme".to_string(),
+            user_id: Some("u1".to_string()),
+            user_email: None,
+            request_id: "req-1".to_string(),
+            roles: vec![],
+            scopes: vec![],
+            raw_token: None,
+            skill_instructions: None,
+            progress_token: None,
+            consumer_id: "c1".to_string(),
+            from_control_plane: false,
+        };
+
+        // 1. Non-allowlisted loopback target is blocked with zero upstream requests.
+        let blocked_tool = DynamicTool::new(
+            "blocked_tool",
+            "Blocked",
+            format!("{}/data", blocked_server.uri()),
+            "GET",
+            ToolSchema {
+                schema_type: "object".to_string(),
+                properties: HashMap::new(),
+                required: vec![],
+            },
+            "acme",
+        )
+        .with_outbound_policy(policy.clone());
+        let err = blocked_tool.execute(json!({}), &ctx).await.unwrap_err();
+        assert!(err.to_string().contains("blocked"));
+        assert_eq!(blocked_server.received_requests().await.unwrap().len(), 0);
+
+        // 2. Allowlisted target succeeds.
+        let ok_tool = DynamicTool::new(
+            "ok_tool",
+            "OK",
+            format!("{}/ok", allowed_server.uri()),
+            "GET",
+            ToolSchema {
+                schema_type: "object".to_string(),
+                properties: HashMap::new(),
+                required: vec![],
+            },
+            "acme",
+        )
+        .with_outbound_policy(policy.clone());
+        let res = ok_tool.execute(json!({}), &ctx).await.unwrap();
+        assert_eq!(res.content.len(), 1);
+
+        // 3. 3xx redirect is not followed and upstream error body is masked.
+        let redir_tool = DynamicTool::new(
+            "redir_tool",
+            "Redirect",
+            format!("{}/redir", allowed_server.uri()),
+            "GET",
+            ToolSchema {
+                schema_type: "object".to_string(),
+                properties: HashMap::new(),
+                required: vec![],
+            },
+            "acme",
+        )
+        .with_outbound_policy(policy.clone());
+        let err = redir_tool
+            .execute(json!({}), &ctx)
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("302"), "unexpected error: {err}");
+        assert!(!err.contains("sensitive-redirect-body"));
+
+        // 4. Non-2xx upstream error body is masked even without outbound_policy.
+        let err_tool = DynamicTool::new(
+            "err_tool",
+            "Error",
+            format!("{}/err", allowed_server.uri()),
+            "GET",
+            ToolSchema {
+                schema_type: "object".to_string(),
+                properties: HashMap::new(),
+                required: vec![],
+            },
+            "acme",
+        );
+        let err = err_tool
+            .execute(json!({}), &ctx)
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("502"), "unexpected error: {err}");
+        assert!(!err.contains("internal-stack-trace-xyz"));
+        assert!(!err.contains(&allowed_server.uri()));
     }
 }

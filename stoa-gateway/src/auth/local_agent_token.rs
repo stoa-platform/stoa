@@ -9,7 +9,11 @@
 //! - Ephemeral tokens are never logged and redacted in `Debug`.
 //! - Every PoC token is sender-constrained via `cnf.jkt` and validated with a DPoP proof
 //!   (`htm`, `htu`, `ath`, `cnf.jkt`) using atomic replay detection.
+//! - Child tokens carry their own `iss` (`stoa-poc-delegation`), canonical target resource `aud`
+//!   (`mcp-tool:{tenant}:{tool}`, never the generic MCP audience), `act`, `chain_id`, `jti`,
+//!   `depth` (`<= 3`), `parent_jti`, inherited non-empty `tenant_id`, and `exp <= parent.exp`.
 
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 
 use aws_lc_rs::encoding::{AsDer, Pkcs8V1Der};
@@ -23,13 +27,14 @@ use jsonwebtoken::{
     decode, decode_header, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 use subtle::ConstantTimeEq;
 use thiserror::Error;
 use uuid::Uuid;
 
 use crate::auth::claims::CnfClaim;
-use crate::auth::dpop::{compute_jwk_thumbprint, DpopConfig, DpopError, DpopValidator};
+use crate::auth::dpop::{compute_jwk_thumbprint, DpopConfig, DpopError, DpopJwk, DpopValidator};
+use crate::control_plane::role_policy::ArgumentConstraint;
 
 /// Issuer for local parent agent tokens minted by the gateway in PoC mode.
 pub const LOCAL_AGENT_ISSUER: &str = "stoa-poc-local";
@@ -46,6 +51,11 @@ pub const MAX_LOCAL_TOKEN_TTL_SECS: i64 = 900;
 /// Generic MCP gateway audience that child tokens must never target.
 pub const FORBIDDEN_CHILD_AUDIENCE: &str = "stoa-mcp-gateway";
 
+/// Canonical resource audience for a tool-scoped delegated child token.
+pub fn canonical_tool_audience(tenant_id: &str, tool_name: &str) -> String {
+    format!("mcp-tool:{tenant_id}:{tool_name}")
+}
+
 /// Errors produced by local RS256 token issuance or verification.
 #[derive(Debug, Error)]
 pub enum LocalTokenError {
@@ -54,6 +64,9 @@ pub enum LocalTokenError {
 
     #[error("invalid token request: {0}")]
     InvalidRequest(&'static str),
+
+    #[error("delegation denied: {0}")]
+    DelegationDenied(&'static str),
 
     #[error("token signing failed")]
     SigningFailed,
@@ -105,6 +118,12 @@ pub struct LocalAgentClaims {
     pub parent_jti: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub act: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub policy_version: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allowed_tools: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub arg_constraints: Option<HashMap<String, ArgumentConstraint>>,
     pub iat: i64,
     pub exp: i64,
     pub cnf: CnfClaim,
@@ -119,6 +138,18 @@ pub struct IssueParentTokenRequest {
     pub aud: String,
     pub cnf_jkt: String,
     pub ttl_secs: i64,
+    pub policy_version: Option<u64>,
+}
+
+/// Request to mint a delegated child token (`depth = parent.depth + 1 <= 3`).
+#[derive(Debug, Clone)]
+pub struct DelegateChildTokenRequest {
+    pub sub: String,
+    pub target_tool: String,
+    pub child_dpop_jwk: DpopJwk,
+    pub allowed_tools: Vec<String>,
+    pub arg_constraints: Option<HashMap<String, ArgumentConstraint>>,
+    pub ttl_secs: Option<i64>,
 }
 
 /// Ephemeral token returned by local issuance; redacted in `Debug`.
@@ -161,6 +192,13 @@ impl fmt::Debug for LocalAgentAuth {
             .field("encoding_key", &"[REDACTED]")
             .field("decoding_key", &"[REDACTED]")
             .finish()
+    }
+}
+
+fn build_act_chain(parent: &LocalAgentClaims) -> Value {
+    match &parent.act {
+        Some(prev) => json!({ "sub": parent.sub, "act": prev }),
+        None => json!({ "sub": parent.sub }),
     }
 }
 
@@ -270,6 +308,9 @@ impl LocalAgentAuth {
             depth: 0,
             parent_jti: None,
             act: None,
+            policy_version: req.policy_version,
+            allowed_tools: None,
+            arg_constraints: None,
             iat: now,
             exp: now + req.ttl_secs,
             cnf: CnfClaim {
@@ -278,27 +319,180 @@ impl LocalAgentAuth {
             },
         };
 
+        self.sign_claims(claims)
+    }
+
+    /// Issue a delegated child token strictly included in `parent` (`depth = parent.depth + 1 <= 3`).
+    pub fn issue_child_token(
+        &self,
+        parent: &LocalAgentClaims,
+        parent_effective_tools: &HashSet<String>,
+        parent_tool_constraints: Option<&HashMap<String, ArgumentConstraint>>,
+        req: DelegateChildTokenRequest,
+    ) -> Result<IssuedLocalToken, LocalTokenError> {
+        if req.sub.trim().is_empty() {
+            return Err(LocalTokenError::InvalidRequest("sub must not be empty"));
+        }
+        if crate::telemetry::validated_tenant(Some(parent.tenant_id.as_str())).is_none() {
+            return Err(LocalTokenError::DelegationDenied(
+                "parent tenant_id is empty or invalid",
+            ));
+        }
+        let target_tool = req.target_tool.trim();
+        if target_tool.is_empty() {
+            return Err(LocalTokenError::InvalidRequest(
+                "target_tool must not be empty",
+            ));
+        }
+        if parent.depth >= MAX_DELEGATION_DEPTH {
+            return Err(LocalTokenError::DelegationDenied(
+                "delegation depth exceeds maximum of 3",
+            ));
+        }
+        if req.child_dpop_jwk.has_private_key() {
+            return Err(LocalTokenError::InvalidRequest(
+                "child_dpop_jwk must be a public JWK",
+            ));
+        }
+        let child_jkt = compute_jwk_thumbprint(&req.child_dpop_jwk);
+        if child_jkt.is_empty() {
+            return Err(LocalTokenError::InvalidRequest(
+                "invalid child_dpop_jwk thumbprint",
+            ));
+        }
+
+        // Strict tool inclusion: every delegated tool must be permitted for the parent.
+        if req.allowed_tools.is_empty() {
+            return Err(LocalTokenError::DelegationDenied(
+                "allowed_tools must not be empty",
+            ));
+        }
+        let mut deduped_tools = Vec::new();
+        for tool in &req.allowed_tools {
+            let trimmed = tool.trim();
+            if trimmed.is_empty() || !parent_effective_tools.contains(trimmed) {
+                return Err(LocalTokenError::DelegationDenied(
+                    "requested tool is outside parent scope",
+                ));
+            }
+            if let Some(ref parent_list) = parent.allowed_tools {
+                if !parent_list.iter().any(|t| t == trimmed) {
+                    return Err(LocalTokenError::DelegationDenied(
+                        "requested tool is outside parent delegated scope",
+                    ));
+                }
+            }
+            if !deduped_tools.iter().any(|t| t == trimmed) {
+                deduped_tools.push(trimmed.to_string());
+            }
+        }
+        if !deduped_tools.iter().any(|t| t == target_tool) {
+            return Err(LocalTokenError::DelegationDenied(
+                "target_tool must be included in allowed_tools",
+            ));
+        }
+
+        // Strict argument constraint inclusion: child may only narrow or add constraints.
+        let mut effective_parent_constraints: HashMap<String, ArgumentConstraint> =
+            parent_tool_constraints.cloned().unwrap_or_default();
+        if let Some(ref parent_tok_constraints) = parent.arg_constraints {
+            for (k, v) in parent_tok_constraints {
+                effective_parent_constraints.insert(k.clone(), v.clone());
+            }
+        }
+        let merged_constraints = if let Some(child_constraints) = req.arg_constraints {
+            let mut merged = effective_parent_constraints.clone();
+            for (arg_name, child_c) in child_constraints {
+                if let Some(parent_c) = effective_parent_constraints.get(&arg_name) {
+                    if !child_c.is_subset_of(parent_c) {
+                        return Err(LocalTokenError::DelegationDenied(
+                            "child argument constraint widens parent constraint",
+                        ));
+                    }
+                }
+                merged.insert(arg_name, child_c);
+            }
+            Some(merged)
+        } else if !effective_parent_constraints.is_empty() {
+            Some(effective_parent_constraints)
+        } else {
+            None
+        };
+
+        // Child exp must strictly be <= parent.exp and strictly in the future.
+        let now = chrono::Utc::now().timestamp();
+        let remaining_parent = parent.exp - now;
+        if remaining_parent <= 0 {
+            return Err(LocalTokenError::DelegationDenied("parent token expired"));
+        }
+        let child_ttl = match req.ttl_secs {
+            Some(requested) => {
+                if requested <= 0 || requested > MAX_LOCAL_TOKEN_TTL_SECS {
+                    return Err(LocalTokenError::InvalidRequest(
+                        "ttl_secs must be between 1 and 900",
+                    ));
+                }
+                if requested > remaining_parent {
+                    return Err(LocalTokenError::DelegationDenied(
+                        "child exp must not exceed parent exp",
+                    ));
+                }
+                requested
+            }
+            None => remaining_parent.min(120),
+        };
+
+        let aud = canonical_tool_audience(&parent.tenant_id, target_tool);
+        if aud == FORBIDDEN_CHILD_AUDIENCE {
+            return Err(LocalTokenError::DelegationDenied(
+                "child audience cannot be generic MCP audience",
+            ));
+        }
+
+        let claims = LocalAgentClaims {
+            iss: DELEGATION_ISSUER.to_string(),
+            sub: req.sub.trim().to_string(),
+            aud,
+            tenant_id: parent.tenant_id.clone(),
+            role: parent.role.clone(),
+            chain_id: parent.chain_id.clone(),
+            jti: format!("jti-{}", Uuid::new_v4()),
+            depth: parent.depth + 1,
+            parent_jti: Some(parent.jti.clone()),
+            act: Some(build_act_chain(parent)),
+            policy_version: parent.policy_version,
+            allowed_tools: Some(deduped_tools),
+            arg_constraints: merged_constraints,
+            iat: now,
+            exp: now + child_ttl,
+            cnf: CnfClaim {
+                x5t_s256: None,
+                jkt: Some(child_jkt),
+            },
+        };
+
+        self.sign_claims(claims)
+    }
+
+    fn sign_claims(&self, claims: LocalAgentClaims) -> Result<IssuedLocalToken, LocalTokenError> {
         let mut header = Header::new(Algorithm::RS256);
         header.kid = Some(self.kid.clone());
         let token = encode(&header, &claims, &self.encoding_key)
             .map_err(|_| LocalTokenError::SigningFailed)?;
-
         Ok(IssuedLocalToken { token, claims })
     }
 
-    /// Validate a local RS256 token strictly: mandatory matching `kid`, no fallback, strict RS256.
-    pub fn validate_token(
+    /// Decode and verify signature, `RS256`, mandatory matching `kid`, `exp`, `iss`, and
+    /// structural claim invariants, then validate exact `aud` via `expected_aud_for`.
+    pub fn validate_token_with_audience_fn<F>(
         &self,
         token: &str,
         expected_issuer: Option<&str>,
-        expected_audience: &str,
-    ) -> Result<LocalAgentClaims, LocalTokenError> {
-        if expected_audience.trim().is_empty() {
-            return Err(LocalTokenError::InvalidRequest(
-                "expected_audience must not be empty",
-            ));
-        }
-
+        expected_aud_for: F,
+    ) -> Result<LocalAgentClaims, LocalTokenError>
+    where
+        F: FnOnce(&LocalAgentClaims) -> Result<String, LocalTokenError>,
+    {
         let header = decode_header(token).map_err(|_| LocalTokenError::InvalidHeader)?;
         if header.alg != Algorithm::RS256 {
             return Err(LocalTokenError::UnsupportedAlgorithm);
@@ -316,9 +510,9 @@ impl LocalAgentAuth {
         let mut validation = Validation::new(Algorithm::RS256);
         validation.validate_exp = true;
         validation.validate_nbf = true;
+        validation.validate_aud = false; // Checked strictly below via expected_aud_for.
         validation.leeway = 5;
         validation.set_required_spec_claims(&["exp", "iss", "aud", "sub"]);
-        validation.set_audience(&[expected_audience]);
         if let Some(iss) = expected_issuer {
             validation.set_issuer(&[iss]);
         } else {
@@ -329,8 +523,26 @@ impl LocalAgentAuth {
             .map_err(|_| LocalTokenError::InvalidToken)?;
         let claims = data.claims;
 
-        Self::validate_claims_invariants(&claims, expected_audience)?;
+        let expected_audience = expected_aud_for(&claims)?;
+        if expected_audience.trim().is_empty() {
+            return Err(LocalTokenError::InvalidRequest(
+                "expected_audience must not be empty",
+            ));
+        }
+
+        Self::validate_claims_invariants(&claims, &expected_audience)?;
         Ok(claims)
+    }
+
+    /// Validate a local RS256 token against a fixed expected audience.
+    pub fn validate_token(
+        &self,
+        token: &str,
+        expected_issuer: Option<&str>,
+        expected_audience: &str,
+    ) -> Result<LocalAgentClaims, LocalTokenError> {
+        let aud = expected_audience.to_string();
+        self.validate_token_with_audience_fn(token, expected_issuer, |_| Ok(aud))
     }
 
     fn validate_claims_invariants(
@@ -396,14 +608,18 @@ impl LocalAgentAuth {
         Ok(())
     }
 
-    /// Validate an incoming HTTP/MCP request carrying `Authorization: DPoP <jwt>` + `DPoP: <proof>`.
-    pub fn validate_mcp_request(
+    /// Validate an incoming HTTP/MCP request carrying `Authorization: DPoP <jwt>` + `DPoP: <proof>`,
+    /// resolving the expected audience dynamically from the verified token's issuer/depth.
+    pub fn validate_mcp_request_with_audience_fn<F>(
         &self,
         headers: &HeaderMap,
         http_method: &str,
         expected_htu: &str,
-        expected_audience: &str,
-    ) -> Result<LocalAgentClaims, LocalTokenError> {
+        expected_aud_for: F,
+    ) -> Result<LocalAgentClaims, LocalTokenError>
+    where
+        F: FnOnce(&LocalAgentClaims) -> Result<String, LocalTokenError>,
+    {
         let auth_header = headers
             .get(AUTHORIZATION)
             .and_then(|v| v.to_str().ok())
@@ -416,7 +632,7 @@ impl LocalAgentAuth {
             return Err(LocalTokenError::InvalidAuthScheme);
         }
 
-        let claims = self.validate_token(token, None, expected_audience)?;
+        let claims = self.validate_token_with_audience_fn(token, None, expected_aud_for)?;
 
         let dpop_header = headers
             .get("DPoP")
@@ -435,12 +651,24 @@ impl LocalAgentAuth {
 
         Ok(claims)
     }
+
+    /// Validate an incoming HTTP/MCP request carrying `Authorization: DPoP <jwt>` + `DPoP: <proof>`.
+    pub fn validate_mcp_request(
+        &self,
+        headers: &HeaderMap,
+        http_method: &str,
+        expected_htu: &str,
+        expected_audience: &str,
+    ) -> Result<LocalAgentClaims, LocalTokenError> {
+        let aud = expected_audience.to_string();
+        self.validate_mcp_request_with_audience_fn(headers, http_method, expected_htu, |_| Ok(aud))
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::auth::dpop::{compute_ath, DpopJwk};
+    use crate::auth::dpop::compute_ath;
     use aws_lc_rs::signature::{EcdsaKeyPair, ECDSA_P256_SHA256_FIXED_SIGNING};
     use axum::http::HeaderValue;
     use serde_json::json;
@@ -528,6 +756,7 @@ mod tests {
             aud: "http://stoa-gateway:8080/mcp/poc".to_string(),
             cnf_jkt: dpop_key.jkt.clone(),
             ttl_secs: 300,
+            policy_version: Some(1),
         })
         .expect("issue parent token")
     }
@@ -598,13 +827,11 @@ mod tests {
         let dpop_key = TestDpopKey::generate();
         let issued = issue_sample_parent(&boot1, &dpop_key);
 
-        // Restart invalidates previous boot kid.
         let err = boot2
             .validate_token(issued.as_str(), None, "http://stoa-gateway:8080/mcp/poc")
             .unwrap_err();
         assert!(matches!(err, LocalTokenError::UnknownKid));
 
-        // External RSA key forged with boot2's kid still fails signature verification.
         let mut forged_header = Header::new(Algorithm::RS256);
         forged_header.kid = Some(boot2.kid().to_string());
         let forged = encode(&forged_header, &issued.claims, &boot1.encoding_key).unwrap();
@@ -622,7 +849,6 @@ mod tests {
         let issued = issue_sample_parent(&auth, &dpop_key);
         let htu = "http://stoa-gateway:8080/mcp/poc";
 
-        // Bearer scheme refused
         let proof1 = dpop_key.sign_proof("POST", htu, "proof-bearer", Some(issued.as_str()));
         let mut bearer_headers = HeaderMap::new();
         bearer_headers.insert(
@@ -636,7 +862,6 @@ mod tests {
             LocalTokenError::InvalidAuthScheme
         ));
 
-        // Wrong DPoP key refused
         let wrong_proof =
             other_key.sign_proof("POST", htu, "proof-wrong-key", Some(issued.as_str()));
         let mut wrong_headers = HeaderMap::new();
@@ -651,7 +876,6 @@ mod tests {
             LocalTokenError::DpopFailed(DpopError::JktMismatch)
         ));
 
-        // Replay of the same DPoP proof is rejected
         let valid_proof = dpop_key.sign_proof("POST", htu, "proof-replay", Some(issued.as_str()));
         let mut headers = HeaderMap::new();
         headers.insert(
@@ -666,6 +890,154 @@ mod tests {
             auth.validate_mcp_request(&headers, "POST", htu, htu)
                 .unwrap_err(),
             LocalTokenError::DpopFailed(DpopError::ReplayDetected(_))
+        ));
+    }
+
+    #[test]
+    fn child_delegation_enforces_claims_exp_depth_and_narrowing() {
+        let auth = LocalAgentAuth::new().expect("init local auth");
+        let parent_key = TestDpopKey::generate();
+        let child_key = TestDpopKey::generate();
+        let parent = issue_sample_parent(&auth, &parent_key);
+
+        let parent_tools: HashSet<String> = ["payments_list".to_string()].into_iter().collect();
+        let mut parent_constraints = HashMap::new();
+        parent_constraints.insert(
+            "limit".to_string(),
+            ArgumentConstraint::MaxNumber { max: 100.0 },
+        );
+
+        // Requesting TTL exceeding parent's exp is rejected.
+        let too_long = auth.issue_child_token(
+            &parent.claims,
+            &parent_tools,
+            Some(&parent_constraints),
+            DelegateChildTokenRequest {
+                sub: "agent-child".to_string(),
+                target_tool: "payments_list".to_string(),
+                child_dpop_jwk: child_key.jwk.clone(),
+                allowed_tools: vec!["payments_list".to_string()],
+                arg_constraints: None,
+                ttl_secs: Some(600),
+            },
+        );
+        assert!(matches!(
+            too_long,
+            Err(LocalTokenError::DelegationDenied(_))
+        ));
+
+        // Widening parent constraint is rejected.
+        let mut wider = HashMap::new();
+        wider.insert(
+            "limit".to_string(),
+            ArgumentConstraint::MaxNumber { max: 200.0 },
+        );
+        let widened = auth.issue_child_token(
+            &parent.claims,
+            &parent_tools,
+            Some(&parent_constraints),
+            DelegateChildTokenRequest {
+                sub: "agent-child".to_string(),
+                target_tool: "payments_list".to_string(),
+                child_dpop_jwk: child_key.jwk.clone(),
+                allowed_tools: vec!["payments_list".to_string()],
+                arg_constraints: Some(wider),
+                ttl_secs: Some(60),
+            },
+        );
+        assert!(matches!(widened, Err(LocalTokenError::DelegationDenied(_))));
+
+        // Valid narrowed child token (depth 1 -> 2 -> 3 succeeds, 3 -> 4 rejected!).
+        let mut narrower = HashMap::new();
+        narrower.insert(
+            "limit".to_string(),
+            ArgumentConstraint::MaxNumber { max: 25.0 },
+        );
+        let c1 = auth
+            .issue_child_token(
+                &parent.claims,
+                &parent_tools,
+                Some(&parent_constraints),
+                DelegateChildTokenRequest {
+                    sub: "agent-child-1".to_string(),
+                    target_tool: "payments_list".to_string(),
+                    child_dpop_jwk: child_key.jwk.clone(),
+                    allowed_tools: vec!["payments_list".to_string()],
+                    arg_constraints: Some(narrower),
+                    ttl_secs: Some(120),
+                },
+            )
+            .expect("depth 1 child");
+        assert_eq!(c1.claims.iss, DELEGATION_ISSUER);
+        assert_eq!(c1.claims.aud, "mcp-tool:acme:payments_list");
+        assert_eq!(c1.claims.tenant_id, "acme");
+        assert_eq!(c1.claims.chain_id, parent.claims.chain_id);
+        assert_eq!(
+            c1.claims.parent_jti.as_deref(),
+            Some(parent.claims.jti.as_str())
+        );
+        assert_eq!(c1.claims.depth, 1);
+        assert!(c1.claims.exp <= parent.claims.exp);
+        assert_eq!(c1.claims.act, Some(json!({ "sub": "agent-parent" })));
+
+        let c2 = auth
+            .issue_child_token(
+                &c1.claims,
+                &parent_tools,
+                None,
+                DelegateChildTokenRequest {
+                    sub: "agent-child-2".to_string(),
+                    target_tool: "payments_list".to_string(),
+                    child_dpop_jwk: child_key.jwk.clone(),
+                    allowed_tools: vec!["payments_list".to_string()],
+                    arg_constraints: None,
+                    ttl_secs: Some(90),
+                },
+            )
+            .expect("depth 2 child");
+        assert_eq!(c2.claims.depth, 2);
+
+        let c3 = auth
+            .issue_child_token(
+                &c2.claims,
+                &parent_tools,
+                None,
+                DelegateChildTokenRequest {
+                    sub: "agent-child-3".to_string(),
+                    target_tool: "payments_list".to_string(),
+                    child_dpop_jwk: child_key.jwk.clone(),
+                    allowed_tools: vec!["payments_list".to_string()],
+                    arg_constraints: None,
+                    ttl_secs: Some(60),
+                },
+            )
+            .expect("depth 3 child");
+        assert_eq!(c3.claims.depth, 3);
+
+        // Depth 3 -> 4 MUST be rejected at issuance!
+        let c4 = auth.issue_child_token(
+            &c3.claims,
+            &parent_tools,
+            None,
+            DelegateChildTokenRequest {
+                sub: "agent-child-4".to_string(),
+                target_tool: "payments_list".to_string(),
+                child_dpop_jwk: child_key.jwk.clone(),
+                allowed_tools: vec!["payments_list".to_string()],
+                arg_constraints: None,
+                ttl_secs: Some(30),
+            },
+        );
+        assert!(matches!(c4, Err(LocalTokenError::DelegationDenied(_))));
+
+        // Depth 4 crafted token MUST also be rejected at validation!
+        let mut forged_c4 = c3.claims.clone();
+        forged_c4.depth = 4;
+        let forged_tok = auth.sign_claims(forged_c4).unwrap();
+        assert!(matches!(
+            auth.validate_token(forged_tok.as_str(), None, "mcp-tool:acme:payments_list")
+                .unwrap_err(),
+            LocalTokenError::InvalidClaims("delegation depth exceeds 3")
         ));
     }
 

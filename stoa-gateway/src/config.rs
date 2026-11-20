@@ -1030,6 +1030,22 @@ pub struct Config {
     /// Env: STOA_POC_PUBLIC_BASE_URL
     #[serde(default)]
     pub poc_public_base_url: Option<String>,
+
+    /// Directory containing signed `<tenant_id>.roles.jws` role policy artifacts.
+    /// Env: STOA_POC_ROLE_ARTIFACTS_DIR
+    #[serde(default)]
+    pub poc_role_artifacts_dir: Option<String>,
+
+    /// Directory where anti-rollback version floor files (`0600`, atomic write) are persisted.
+    /// Env: STOA_POC_ROLE_FLOOR_DIR
+    #[serde(default)]
+    pub poc_role_floor_dir: Option<String>,
+
+    /// Exact normalized origins (`scheme://host:port`) permitted to resolve to private/internal
+    /// addresses in the PoC outbound address policy (used only for isolated local mock fixtures).
+    /// Env: STOA_POC_OUTBOUND_ALLOWED_ORIGINS (CSV or JSON array)
+    #[serde(default, deserialize_with = "self::deserializers::string_list")]
+    pub poc_outbound_allowed_origins: Vec<String>,
 }
 
 impl fmt::Debug for Config {
@@ -1279,6 +1295,12 @@ impl fmt::Debug for Config {
             .field("poc_uac_contracts_dir", &self.poc_uac_contracts_dir)
             .field("poc_credentials_file", &r(&self.poc_credentials_file))
             .field("poc_public_base_url", &self.poc_public_base_url)
+            .field("poc_role_artifacts_dir", &self.poc_role_artifacts_dir)
+            .field("poc_role_floor_dir", &self.poc_role_floor_dir)
+            .field(
+                "poc_outbound_allowed_origins",
+                &self.poc_outbound_allowed_origins,
+            )
             .finish()
     }
 }

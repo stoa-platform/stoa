@@ -508,6 +508,9 @@ impl Default for Config {
             poc_uac_contracts_dir: None,
             poc_credentials_file: None,
             poc_public_base_url: None,
+            poc_role_artifacts_dir: None,
+            poc_role_floor_dir: None,
+            poc_outbound_allowed_origins: vec![],
         }
     }
 }

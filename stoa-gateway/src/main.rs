@@ -347,6 +347,12 @@ fn init_tracing(config: &Config) {
 async fn register_tools(state: &AppState, registrar: Option<std::sync::Arc<GatewayRegistrar>>) {
     use stoa_gateway::mcp::tools::{api_bridge, stoa_tools};
 
+    if state.config.poc_agents_enabled {
+        if let Err(err) = stoa_gateway::mcp::poc::load_poc_fixtures(state).await {
+            error!(error = %err, "Failed to load autonomous PoC fixtures");
+        }
+    }
+
     let Some(control_plane) = state.control_plane.as_ref() else {
         if state.config.allows_explicit_local_dev_access() && state.config.native_tools_enabled {
             let http_client = stoa_gateway::mcp::tools::native_tool::create_http_client();

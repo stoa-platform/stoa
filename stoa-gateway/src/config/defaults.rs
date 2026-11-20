@@ -501,6 +501,13 @@ impl Default for Config {
             snapshot_max_age_secs: default_snapshot_max_age_secs(),
             snapshot_body_max_bytes: default_snapshot_body_max_bytes(),
             snapshot_extra_pii_patterns: vec![],
+            admin_routes_disabled: false,
+            policy_local_artifacts_dir: None,
+            poc_agents_enabled: false,
+            poc_bootstrap_secret: None,
+            poc_uac_contracts_dir: None,
+            poc_credentials_file: None,
+            poc_public_base_url: None,
         }
     }
 }

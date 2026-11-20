@@ -12,6 +12,7 @@ pub mod api_key;
 pub mod claims;
 pub mod dpop;
 pub mod jwt;
+pub mod local_agent_token;
 pub mod middleware;
 pub mod mtls;
 pub mod oidc;

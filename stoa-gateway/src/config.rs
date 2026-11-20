@@ -989,6 +989,47 @@ pub struct Config {
     /// Env: STOA_SNAPSHOT_EXTRA_PII_PATTERNS (comma-separated or JSON array)
     #[serde(default, deserialize_with = "self::deserializers::string_list")]
     pub snapshot_extra_pii_patterns: Vec<String>,
+
+    // === Autonomous Agent Roles PoC ===
+    /// Omit `/admin/*` routes from the main HTTP router (e.g. isolated agent networks).
+    /// Env: STOA_ADMIN_ROUTES_DISABLED (default: false)
+    #[serde(default)]
+    pub admin_routes_disabled: bool,
+
+    /// Optional local directory containing signed `<tenant_id>.jws` tool-policy artifacts
+    /// for autonomous mode without a Control Plane HTTP endpoint.
+    /// Env: STOA_POLICY_LOCAL_ARTIFACTS_DIR
+    #[serde(default)]
+    pub policy_local_artifacts_dir: Option<String>,
+
+    /// Enable the autonomous local RS256 + DPoP agent-roles PoC endpoints (`/mcp/poc/*`).
+    /// Env: STOA_POC_AGENTS_ENABLED (default: false)
+    #[serde(default)]
+    pub poc_agents_enabled: bool,
+
+    /// Shared secret required on `POST /mcp/poc/bootstrap` (`X-Stoa-Poc-Bootstrap-Secret`)
+    /// so only the designated parent container can mint an initial `depth=0` token.
+    /// Env: STOA_POC_BOOTSTRAP_SECRET
+    #[serde(default)]
+    pub poc_bootstrap_secret: Option<String>,
+
+    /// Local directory containing UAC contract fixtures (`.json`/`.yaml`) loaded at boot
+    /// when `poc_agents_enabled` is true.
+    /// Env: STOA_POC_UAC_CONTRACTS_DIR
+    #[serde(default)]
+    pub poc_uac_contracts_dir: Option<String>,
+
+    /// Local JSON file containing backend credentials seeded into `CredentialStore` at boot
+    /// when `poc_agents_enabled` is true.
+    /// Env: STOA_POC_CREDENTIALS_FILE
+    #[serde(default)]
+    pub poc_credentials_file: Option<String>,
+
+    /// Public base URL used to validate DPoP `htu` claims on `/mcp/poc/*` endpoints
+    /// (e.g. `http://stoa-gateway:8080`).
+    /// Env: STOA_POC_PUBLIC_BASE_URL
+    #[serde(default)]
+    pub poc_public_base_url: Option<String>,
 }
 
 impl fmt::Debug for Config {
@@ -1228,6 +1269,16 @@ impl fmt::Debug for Config {
                 "snapshot_extra_pii_patterns",
                 &self.snapshot_extra_pii_patterns,
             )
+            .field("admin_routes_disabled", &self.admin_routes_disabled)
+            .field(
+                "policy_local_artifacts_dir",
+                &self.policy_local_artifacts_dir,
+            )
+            .field("poc_agents_enabled", &self.poc_agents_enabled)
+            .field("poc_bootstrap_secret", &r(&self.poc_bootstrap_secret))
+            .field("poc_uac_contracts_dir", &self.poc_uac_contracts_dir)
+            .field("poc_credentials_file", &r(&self.poc_credentials_file))
+            .field("poc_public_base_url", &self.poc_public_base_url)
             .finish()
     }
 }

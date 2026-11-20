@@ -32,12 +32,13 @@ services:
       STOA_POC_CALLER_BUDGET: "${STOA_POC_CALLER_BUDGET:-100}"
       STOA_POC_MAX_REVOKED_CHAINS: "${STOA_POC_MAX_REVOKED_CHAINS:-10000}"
     volumes:
-      - ./.runtime/trust-jwks.json:/etc/stoa/poc/trust-jwks.json:ro
-      - ./.runtime/policies:/etc/stoa/poc/policies:ro
-      - ./.runtime/roles:/etc/stoa/poc/roles:ro
-      - ./.runtime/contracts:/etc/stoa/poc/contracts:ro
-      - ./.runtime/credentials.json:/etc/stoa/poc/credentials.json:ro
-      - ./.runtime/opa:/etc/stoa/poc/opa:ro
+      - role-floors:/tmp/stoa-poc-floors
+      - "${STOA_POC_RUNTIME_DIR:-./.runtime}/trust-jwks.json:/etc/stoa/poc/trust-jwks.json:ro"
+      - "${STOA_POC_RUNTIME_DIR:-./.runtime}/policies:/etc/stoa/poc/policies:ro"
+      - "${STOA_POC_RUNTIME_DIR:-./.runtime}/roles:/etc/stoa/poc/roles:ro"
+      - "${STOA_POC_RUNTIME_DIR:-./.runtime}/contracts:/etc/stoa/poc/contracts:ro"
+      - "${STOA_POC_RUNTIME_DIR:-./.runtime}/credentials.json:/etc/stoa/poc/credentials.json:ro"
+      - "${STOA_POC_RUNTIME_DIR:-./.runtime}/opa:/etc/stoa/poc/opa:ro"
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://127.0.0.1:8080/ready"]
       interval: 2s
@@ -84,6 +85,9 @@ services:
     depends_on:
       stoa-gateway:
         condition: service_healthy
+
+volumes:
+  role-floors:
 
 networks:
   mcp-net:

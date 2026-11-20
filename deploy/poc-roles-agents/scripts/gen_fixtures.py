@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Generate ephemeral signed Ed25519 policy + role policy, UAC contract, OPA policy, and credential fixtures."""
 
+import argparse
 import base64
 import json
 import os
-import sys
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -28,7 +28,15 @@ def sign_jws(priv: Ed25519PrivateKey, typ: str, kid: str, payload: dict) -> str:
 
 
 def main() -> None:
-    runtime_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(".runtime")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("runtime_dir", nargs="?", type=Path, default=Path(".runtime"))
+    parser.add_argument(
+        "--role-v2-out",
+        type=Path,
+        help="write a second version of the signed role policy",
+    )
+    args = parser.parse_args()
+    runtime_dir = args.runtime_dir
     upstream_api_key = os.environ["STOA_POC_UPSTREAM_API_KEY"]
 
     (runtime_dir / "policies").mkdir(parents=True, exist_ok=True)
@@ -121,6 +129,11 @@ def main() -> None:
         sign_jws(priv, "stoa-agent-role-policy+jws", kid, role_policy_payload) + "\n",
         encoding="utf-8",
     )
+    if args.role_v2_out:
+        args.role_v2_out.write_text(
+            sign_jws(priv, "stoa-agent-role-policy+jws", kid, {**role_policy_payload, "version": 2}) + "\n",
+            encoding="utf-8",
+        )
 
     uac_contract = {
         "name": "payments",

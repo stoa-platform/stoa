@@ -21,6 +21,7 @@ use once_cell::sync::Lazy;
 use parking_lot::RwLock;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use serde_json::value::RawValue;
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
@@ -48,8 +49,147 @@ static KID_FORMAT: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"^cp-policy-[0-9]{4}(0[1-9]|1[0-2])-[1-9][0-9]*$").expect("kid regex")
 });
 
+/// Maximum raw JSON number lexeme length accepted for exact `MaxNumber` validation.
+const MAX_NUMBER_LEXEME_LEN: usize = 1024;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum CanonicalDecimal {
+    Zero,
+    NonZero {
+        negative: bool,
+        digits: String,
+        exponent: i64,
+    },
+}
+
+fn parse_canonical_decimal(raw: &str) -> Option<CanonicalDecimal> {
+    if raw.is_empty() || raw.len() > MAX_NUMBER_LEXEME_LEN {
+        return None;
+    }
+    let bytes = raw.as_bytes();
+    let mut idx = 0;
+
+    let negative = if bytes[idx] == b'-' {
+        idx += 1;
+        if idx == bytes.len() {
+            return None;
+        }
+        true
+    } else {
+        false
+    };
+
+    let int_start = idx;
+    if bytes[idx] == b'0' {
+        idx += 1;
+        if idx < bytes.len() && bytes[idx].is_ascii_digit() {
+            return None;
+        }
+    } else if bytes[idx].is_ascii_digit() {
+        while idx < bytes.len() && bytes[idx].is_ascii_digit() {
+            idx += 1;
+        }
+    } else {
+        return None;
+    }
+    let int_part = &raw[int_start..idx];
+
+    let frac_part = if idx < bytes.len() && bytes[idx] == b'.' {
+        idx += 1;
+        let frac_start = idx;
+        while idx < bytes.len() && bytes[idx].is_ascii_digit() {
+            idx += 1;
+        }
+        if idx == frac_start {
+            return None;
+        }
+        &raw[frac_start..idx]
+    } else {
+        ""
+    };
+
+    let exp_val = if idx < bytes.len() && (bytes[idx] == b'e' || bytes[idx] == b'E') {
+        idx += 1;
+        if idx == bytes.len() {
+            return None;
+        }
+        let exp_neg = match bytes[idx] {
+            b'-' => {
+                idx += 1;
+                true
+            }
+            b'+' => {
+                idx += 1;
+                false
+            }
+            _ => false,
+        };
+        let exp_start = idx;
+        while idx < bytes.len() && bytes[idx].is_ascii_digit() {
+            idx += 1;
+        }
+        if idx == exp_start {
+            return None;
+        }
+        let mut exp_abs: i64 = 0;
+        for &b in &bytes[exp_start..idx] {
+            exp_abs = exp_abs.checked_mul(10)?.checked_add(i64::from(b - b'0'))?;
+        }
+        if exp_neg {
+            exp_abs.checked_neg()?
+        } else {
+            exp_abs
+        }
+    } else {
+        0
+    };
+
+    if idx != bytes.len() {
+        return None;
+    }
+
+    let mut digits = String::with_capacity(int_part.len() + frac_part.len());
+    digits.push_str(int_part);
+    digits.push_str(frac_part);
+
+    let trimmed_leading = digits.trim_start_matches('0');
+    if trimmed_leading.is_empty() {
+        return Some(CanonicalDecimal::Zero);
+    }
+    let trimmed = trimmed_leading.trim_end_matches('0');
+    let trailing_zeros = trimmed_leading.len() - trimmed.len();
+
+    let frac_len = i64::try_from(frac_part.len()).ok()?;
+    let trailing_zeros = i64::try_from(trailing_zeros).ok()?;
+    let exponent = exp_val.checked_sub(frac_len)?.checked_add(trailing_zeros)?;
+
+    Some(CanonicalDecimal::NonZero {
+        negative,
+        digits: trimmed.to_string(),
+        exponent,
+    })
+}
+
+/// Parse a raw JSON number lexeme into a finite `f64` only when its decimal value
+/// round-trips identically through `serde_json::Number::from_f64`.
+pub(crate) fn parse_exact_f64_lexeme(raw: &str) -> Option<f64> {
+    let expected = parse_canonical_decimal(raw)?;
+    let value: f64 = serde_json::from_str(raw).ok()?;
+    if !value.is_finite() {
+        return None;
+    }
+    let round_tripped = serde_json::Number::from_f64(value)?.to_string();
+    let actual = parse_canonical_decimal(&round_tripped)?;
+    (expected == actual).then_some(value)
+}
+
+fn exact_f64_from_value(value: &Value) -> Option<f64> {
+    let number = value.as_number()?;
+    parse_exact_f64_lexeme(&number.to_string())
+}
+
 /// Deterministic v1 argument constraint types.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ArgumentConstraint {
     /// Argument value must exactly match one of the listed JSON values.
@@ -60,9 +200,79 @@ pub enum ArgumentConstraint {
     MaxNumber { max: f64 },
 }
 
+impl<'de> Deserialize<'de> for ArgumentConstraint {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct ConstraintTag {
+            #[serde(rename = "type")]
+            kind: String,
+        }
+        #[derive(Deserialize)]
+        struct AllowedValuesWire {
+            values: Vec<Value>,
+        }
+        #[derive(Deserialize)]
+        struct PrefixWire {
+            prefix: String,
+        }
+        #[derive(Deserialize)]
+        struct MaxNumberWire {
+            max: Box<RawValue>,
+        }
+
+        let raw = Box::<RawValue>::deserialize(deserializer)?;
+        let tag: ConstraintTag =
+            serde_json::from_str(raw.get()).map_err(serde::de::Error::custom)?;
+        match tag.kind.as_str() {
+            "allowed_values" => {
+                let wire: AllowedValuesWire =
+                    serde_json::from_str(raw.get()).map_err(serde::de::Error::custom)?;
+                Ok(ArgumentConstraint::AllowedValues {
+                    values: wire.values,
+                })
+            }
+            "prefix" => {
+                let wire: PrefixWire =
+                    serde_json::from_str(raw.get()).map_err(serde::de::Error::custom)?;
+                Ok(ArgumentConstraint::Prefix {
+                    prefix: wire.prefix,
+                })
+            }
+            "max_number" => {
+                let wire: MaxNumberWire =
+                    serde_json::from_str(raw.get()).map_err(serde::de::Error::custom)?;
+                let max = parse_exact_f64_lexeme(wire.max.get()).ok_or_else(|| {
+                    serde::de::Error::custom("max_number bound must be a finite exact JSON number")
+                })?;
+                Ok(ArgumentConstraint::MaxNumber { max })
+            }
+            other => Err(serde::de::Error::custom(format!(
+                "unknown argument constraint type `{other}`"
+            ))),
+        }
+    }
+}
+
 impl ArgumentConstraint {
     /// Evaluate whether `value` satisfies this constraint. Missing values fail closed.
     pub fn matches(&self, value: Option<&Value>) -> bool {
+        self.matches_with_wire_lexeme(value, None)
+    }
+
+    /// Evaluate whether `value` satisfies this constraint in wire mode, requiring an exact
+    /// raw JSON lexeme for `MaxNumber` that matches the `f64` carried by `value`.
+    pub fn matches_with_raw(&self, value: Option<&Value>, raw_lexeme: Option<&str>) -> bool {
+        self.matches_with_wire_lexeme(value, Some(raw_lexeme))
+    }
+
+    fn matches_with_wire_lexeme(
+        &self,
+        value: Option<&Value>,
+        wire_lexeme: Option<Option<&str>>,
+    ) -> bool {
         let Some(val) = value else {
             return false;
         };
@@ -74,7 +284,26 @@ impl ArgumentConstraint {
                 val.as_str().is_some_and(|s| s.starts_with(prefix.as_str()))
             }
             ArgumentConstraint::MaxNumber { max } => {
-                max.is_finite() && val.as_f64().is_some_and(|n| n.is_finite() && n <= *max)
+                if !max.is_finite() || !val.is_number() {
+                    return false;
+                }
+                let parsed = match wire_lexeme {
+                    Some(Some(raw)) => {
+                        let Some(raw_f64) = parse_exact_f64_lexeme(raw) else {
+                            return false;
+                        };
+                        let Some(val_f64) = exact_f64_from_value(val) else {
+                            return false;
+                        };
+                        if val_f64 != raw_f64 {
+                            return false;
+                        }
+                        Some(raw_f64)
+                    }
+                    Some(None) => None,
+                    None => exact_f64_from_value(val),
+                };
+                parsed.is_some_and(|n| n.is_finite() && n <= *max)
             }
         }
     }
@@ -338,6 +567,24 @@ impl RolePolicyStore {
     /// across every policy version activated since `issued_policy_version`, plus any
     /// delegated tool-set and argument-constraint narrowing carried in the token.
     pub fn evaluate_call(&self, input: &RoleEvalInput<'_>) -> Result<(), RolePolicyError> {
+        self.evaluate_call_internal(input, None)
+    }
+
+    /// Evaluate a tool call with captured wire JSON number lexemes (fail-closed for any
+    /// `MaxNumber` argument missing a raw lexeme).
+    pub(crate) fn evaluate_call_with_raw(
+        &self,
+        input: &RoleEvalInput<'_>,
+        raw_number_args: &HashMap<String, String>,
+    ) -> Result<(), RolePolicyError> {
+        self.evaluate_call_internal(input, Some(raw_number_args))
+    }
+
+    fn evaluate_call_internal(
+        &self,
+        input: &RoleEvalInput<'_>,
+        raw_number_args: Option<&HashMap<String, String>>,
+    ) -> Result<(), RolePolicyError> {
         let RoleEvalInput {
             tenant_id,
             role,
@@ -374,6 +621,19 @@ impl RolePolicyStore {
         }
 
         let args_obj = args.as_object();
+        let validate = |constraints: &HashMap<String, ArgumentConstraint>| {
+            for (arg_name, constraint) in constraints {
+                let wire_lexeme =
+                    raw_number_args.map(|raw_map| raw_map.get(arg_name).map(String::as_str));
+                if !constraint
+                    .matches_with_wire_lexeme(args_obj.and_then(|o| o.get(arg_name)), wire_lexeme)
+                {
+                    return Err(RolePolicyError::DeniedByConstraint);
+                }
+            }
+            Ok(())
+        };
+
         for (&ver, policy) in state.history.range(issued_policy_version..=current.version) {
             if Utc::now() >= policy.expires_at && ver == current.version {
                 return Err(RolePolicyError::ValidityInvalid);
@@ -385,23 +645,13 @@ impl RolePolicyStore {
                 return Err(RolePolicyError::DeniedByRole);
             }
             if let Some(constraints) = role_spec.argument_constraints.get(tool_name) {
-                for (arg_name, constraint) in constraints {
-                    let arg_val = args_obj.and_then(|o| o.get(arg_name));
-                    if !constraint.matches(arg_val) {
-                        return Err(RolePolicyError::DeniedByConstraint);
-                    }
-                }
+                validate(constraints)?;
             }
         }
 
         // Apply any additional delegated argument constraints from the token.
         if let Some(extra_constraints) = token_constraints {
-            for (arg_name, constraint) in extra_constraints {
-                let arg_val = args_obj.and_then(|o| o.get(arg_name));
-                if !constraint.matches(arg_val) {
-                    return Err(RolePolicyError::DeniedByConstraint);
-                }
-            }
+            validate(extra_constraints)?;
         }
 
         Ok(())
@@ -496,36 +746,40 @@ impl RolePolicyStore {
         validation.validate_aud = false;
         validation.required_spec_claims.clear();
 
-        let claims: Map<String, Value> = jsonwebtoken::decode(jws, key, &validation)
+        let claims: BTreeMap<String, Box<RawValue>> = jsonwebtoken::decode(jws, key, &validation)
             .map_err(|_| RolePolicyError::Signature)?
             .claims;
 
-        let string_claim = |name: &str| claims.get(name).and_then(Value::as_str);
-        if string_claim("iss") != Some(self.issuer.as_str()) {
+        let string_claim = |name: &str| {
+            claims
+                .get(name)
+                .and_then(|raw| serde_json::from_str::<String>(raw.get()).ok())
+        };
+        if string_claim("iss").as_deref() != Some(self.issuer.as_str()) {
             return Err(RolePolicyError::Issuer);
         }
-        if string_claim("aud") != Some(self.audience.as_str()) {
+        if string_claim("aud").as_deref() != Some(self.audience.as_str()) {
             return Err(RolePolicyError::Audience);
         }
-        if string_claim("tenant_id") != Some(tenant_id) {
+        if string_claim("tenant_id").as_deref() != Some(tenant_id) {
             return Err(RolePolicyError::TenantMismatch);
         }
         let tenant_uuid = string_claim("tenant_uuid")
-            .and_then(|raw| Uuid::parse_str(raw).ok())
+            .and_then(|raw| Uuid::parse_str(&raw).ok())
             .ok_or(RolePolicyError::TenantMismatch)?;
 
         let version = claims
             .get("version")
-            .and_then(Value::as_u64)
+            .and_then(|raw| serde_json::from_str::<u64>(raw.get()).ok())
             .filter(|&v| v > 0)
             .ok_or(RolePolicyError::Malformed)?;
 
         let issued_at = string_claim("issued_at")
-            .and_then(|raw| DateTime::parse_from_rfc3339(raw).ok())
+            .and_then(|raw| DateTime::parse_from_rfc3339(&raw).ok())
             .map(|dt| dt.with_timezone(&Utc))
             .ok_or(RolePolicyError::ValidityInvalid)?;
         let expires_at = string_claim("expires_at")
-            .and_then(|raw| DateTime::parse_from_rfc3339(raw).ok())
+            .and_then(|raw| DateTime::parse_from_rfc3339(&raw).ok())
             .map(|dt| dt.with_timezone(&Utc))
             .ok_or(RolePolicyError::ValidityInvalid)?;
 
@@ -541,12 +795,9 @@ impl RolePolicyStore {
             return Err(RolePolicyError::ValidityInvalid);
         }
 
-        let roles_val = claims
-            .get("roles")
-            .cloned()
-            .ok_or(RolePolicyError::Malformed)?;
+        let roles_raw = claims.get("roles").ok_or(RolePolicyError::Malformed)?;
         let roles: HashMap<String, RolePolicySpec> =
-            serde_json::from_value(roles_val).map_err(|_| RolePolicyError::Malformed)?;
+            serde_json::from_str(roles_raw.get()).map_err(|_| RolePolicyError::Malformed)?;
 
         let content_sha256 = compute_roles_digest(&roles);
 
@@ -752,6 +1003,38 @@ mod tests {
                 }))
                 .unwrap(),
             );
+            let input = format!("{header}.{payload}");
+            let sig = self.kp.sign(input.as_bytes());
+            format!("{input}.{}", URL_SAFE_NO_PAD.encode(sig.as_ref()))
+        }
+
+        fn sign_raw_roles(
+            &self,
+            tenant: &str,
+            version: u64,
+            ttl_secs: i64,
+            roles_json: &str,
+        ) -> String {
+            let now = Utc::now();
+            let header = URL_SAFE_NO_PAD.encode(
+                serde_json::to_vec(&json!({
+                    "alg": "EdDSA",
+                    "typ": ROLE_POLICY_ARTIFACT_TYP,
+                    "kid": self.kid
+                }))
+                .unwrap(),
+            );
+            let payload_json = format!(
+                r#"{{"iss":"stoa-poc-policy","aud":"stoa-gateway","tenant_id":{tenant},"tenant_uuid":{tenant_uuid},"version":{version},"issued_at":{issued_at},"expires_at":{expires_at},"roles":{roles_json}}}"#,
+                tenant = serde_json::to_string(tenant).unwrap(),
+                tenant_uuid = serde_json::to_string(&self.tenant_uuid.to_string()).unwrap(),
+                issued_at = serde_json::to_string(&now.to_rfc3339()).unwrap(),
+                expires_at = serde_json::to_string(
+                    &(now + chrono::Duration::seconds(ttl_secs)).to_rfc3339()
+                )
+                .unwrap(),
+            );
+            let payload = URL_SAFE_NO_PAD.encode(payload_json.as_bytes());
             let input = format!("{header}.{payload}");
             let sig = self.kp.sign(input.as_bytes());
             format!("{input}.{}", URL_SAFE_NO_PAD.encode(sig.as_ref()))
@@ -1261,5 +1544,338 @@ mod tests {
         );
         let (v4, _) = store.current_role_snapshot("acme", "reader").unwrap();
         assert!(eval("payments_export", v4).is_ok());
+    }
+
+    #[test]
+    fn max_number_exact_domain_and_literal_lexemes() {
+        // Exact bounds accepted.
+        let safe_max: ArgumentConstraint =
+            serde_json::from_str(r#"{"type":"max_number","max":9007199254740992}"#).unwrap();
+        assert_eq!(
+            safe_max,
+            ArgumentConstraint::MaxNumber {
+                max: 9_007_199_254_740_992.0
+            }
+        );
+
+        let decimal: ArgumentConstraint =
+            serde_json::from_str(r#"{"type":"max_number","max":50.01}"#).unwrap();
+        let scientific: ArgumentConstraint =
+            serde_json::from_str(r#"{"type":"max_number","max":5001e-2}"#).unwrap();
+        let trailing: ArgumentConstraint =
+            serde_json::from_str(r#"{"type":"max_number","max":50.0100}"#).unwrap();
+        assert_eq!(decimal, ArgumentConstraint::MaxNumber { max: 50.01 });
+        assert_eq!(scientific, decimal);
+        assert_eq!(trailing, decimal);
+
+        let negative: ArgumentConstraint =
+            serde_json::from_str(r#"{"type":"max_number","max":-50.01}"#).unwrap();
+        assert_eq!(negative, ArgumentConstraint::MaxNumber { max: -50.01 });
+        assert!(serde_json::from_str::<ArgumentConstraint>(
+            r#"{"type":"max_number","max":-9007199254740992}"#
+        )
+        .is_ok());
+        assert!(
+            serde_json::from_str::<ArgumentConstraint>(r#"{"type":"max_number","max":0}"#).is_ok()
+        );
+        assert!(
+            serde_json::from_str::<ArgumentConstraint>(r#"{"type":"max_number","max":-0.0}"#)
+                .is_ok()
+        );
+
+        // Imprecise, underflowing, or malformed bounds rejected at decode time.
+        for bad in [
+            r#"{"type":"max_number","max":9007199254740993}"#,
+            r#"{"type":"max_number","max":-9007199254740993}"#,
+            r#"{"type":"max_number","max":50.0100000000000000001}"#,
+            r#"{"type":"max_number","max":-50.0100000000000000001}"#,
+            r#"{"type":"max_number","max":1e-400}"#,
+            r#"{"type":"max_number","max":1e-325}"#,
+            r#"{"type":"max_number","max":-1e-400}"#,
+            r#"{"type":"max_number","max":"50.01"}"#,
+            r#"{"type":"max_number"}"#,
+            r#"{"type":"prefix"}"#,
+            r#"{"type":"allowed_values"}"#,
+        ] {
+            assert!(
+                serde_json::from_str::<ArgumentConstraint>(bad).is_err(),
+                "expected decode rejection for {bad}"
+            );
+        }
+
+        // Historical variants still decode normally.
+        assert_eq!(
+            serde_json::from_str::<ArgumentConstraint>(
+                r#"{"type":"allowed_values","values":["EUR","USD"]}"#
+            )
+            .unwrap(),
+            ArgumentConstraint::AllowedValues {
+                values: vec![json!("EUR"), json!("USD")]
+            }
+        );
+        assert_eq!(
+            serde_json::from_str::<ArgumentConstraint>(r#"{"type":"prefix","prefix":"acct-"}"#)
+                .unwrap(),
+            ArgumentConstraint::Prefix {
+                prefix: "acct-".to_string()
+            }
+        );
+
+        // Internal Values > 2^53 and imprecise raw lexemes are rejected.
+        assert!(safe_max.matches(Some(&json!(9_007_199_254_740_992_u64))));
+        assert!(!safe_max.matches(Some(&json!(9_007_199_254_740_993_u64))));
+        assert!(safe_max.matches_with_raw(
+            Some(&json!(9_007_199_254_740_992_u64)),
+            Some("9007199254740992")
+        ));
+        assert!(!safe_max.matches_with_raw(
+            Some(&json!(9_007_199_254_740_992_u64)),
+            Some("9007199254740993")
+        ));
+
+        assert!(decimal.matches_with_raw(Some(&json!(50.01)), Some("50.01")));
+        assert!(decimal.matches_with_raw(Some(&json!(50.01)), Some("5001e-2")));
+        assert!(decimal.matches_with_raw(Some(&json!(50.01)), Some("50.0100")));
+        assert!(decimal.matches_with_raw(Some(&json!(-50.01)), Some("-50.01")));
+        assert!(!decimal.matches_with_raw(Some(&json!(50.01)), Some("50.0100000000000000001")));
+        assert!(!decimal.matches_with_raw(Some(&json!(-50.01)), Some("-50.0100000000000000001")));
+        assert!(!decimal.matches_with_raw(Some(&json!(0.0)), Some("1e-400")));
+        assert!(!decimal.matches_with_raw(Some(&json!(50.01)), None));
+        assert!(!decimal.matches_with_raw(Some(&json!(10.0)), Some("50.01")));
+
+        // Positive underflow must never round down to 0.0 and satisfy max = 0.0.
+        let zero_cap = ArgumentConstraint::MaxNumber { max: 0.0 };
+        assert!(zero_cap.matches_with_raw(Some(&json!(0)), Some("0")));
+        assert!(zero_cap.matches_with_raw(Some(&json!(0.0)), Some("-0.0")));
+        assert!(!zero_cap.matches_with_raw(Some(&json!(0.0)), Some("1e-400")));
+    }
+
+    #[test]
+    fn signed_role_policy_rejects_imprecise_max_number_and_enforces_historical_and_token_lexemes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let signer = RoleSigner::new();
+        let trust_path = tmp.path().join("trust.json");
+        fs::write(&trust_path, signer.trust_jwks()).unwrap();
+        let artifacts_dir = tmp.path().join("roles");
+        let floor_dir = tmp.path().join("floors");
+        fs::create_dir_all(&artifacts_dir).unwrap();
+
+        let store = RolePolicyStore::new(
+            &artifacts_dir,
+            &floor_dir,
+            "stoa-poc-policy",
+            "stoa-gateway",
+            Some(PolicyTrustStore::open(&trust_path)),
+        );
+
+        let v1_roles = r#"{
+            "reader": {
+                "allowed_tools": ["refund_create"],
+                "argument_constraints": {
+                    "refund_create": {
+                        "amount": { "type": "max_number", "max": 50.01 }
+                    }
+                }
+            }
+        }"#;
+        fs::write(
+            artifacts_dir.join("acme.roles.jws"),
+            signer.sign_raw_roles("acme", 1, 600, v1_roles),
+        )
+        .unwrap();
+        let loaded_v1 = store.reload_tenant("acme").expect("conforming v1 loads");
+        assert_eq!(loaded_v1.version, 1);
+        assert_eq!(
+            loaded_v1.content_sha256,
+            compute_roles_digest(&loaded_v1.roles)
+        );
+        let floor_path = floor_dir.join("acme.floor.json");
+        let floor_v1 = read_persisted_floor(&floor_path).unwrap().unwrap();
+        assert_eq!(floor_v1.version, 1);
+        assert_eq!(floor_v1.content_sha256, loaded_v1.content_sha256);
+
+        // Equivalent decimal spelling produces the exact same digest and activates against the existing floor.
+        let v1_equiv = r#"{
+            "reader": {
+                "allowed_tools": ["refund_create"],
+                "argument_constraints": {
+                    "refund_create": {
+                        "amount": { "type": "max_number", "max": 5001e-2 }
+                    }
+                }
+            }
+        }"#;
+        fs::write(
+            artifacts_dir.join("acme.roles.jws"),
+            signer.sign_raw_roles("acme", 1, 600, v1_equiv),
+        )
+        .unwrap();
+        let reloaded_v1 = store
+            .reload_tenant("acme")
+            .expect("equivalent v1 matches existing floor digest");
+        assert_eq!(reloaded_v1.content_sha256, loaded_v1.content_sha256);
+
+        // Signed role artifacts with non-representable max_number bounds are rejected without advancing floor.
+        for bad_max in ["50.0100000000000000001", "9007199254740993", "1e-400"] {
+            let bad_roles = format!(
+                r#"{{
+                    "reader": {{
+                        "allowed_tools": ["refund_create"],
+                        "argument_constraints": {{
+                            "refund_create": {{
+                                "amount": {{ "type": "max_number", "max": {bad_max} }}
+                            }}
+                        }}
+                    }}
+                }}"#
+            );
+            fs::write(
+                artifacts_dir.join("acme.roles.jws"),
+                signer.sign_raw_roles("acme", 2, 600, &bad_roles),
+            )
+            .unwrap();
+            assert_eq!(
+                store.reload_tenant("acme").unwrap_err(),
+                RolePolicyError::Malformed,
+                "expected Malformed for signed max {bad_max}"
+            );
+            assert_eq!(
+                read_persisted_floor(&floor_path).unwrap().unwrap().version,
+                1
+            );
+        }
+
+        // Activate v2 without the amount cap; a token issued at v1 must STILL enforce the
+        // historical v1 max_number lexeme check while ignoring unbounded numeric arguments.
+        let v2_roles = r#"{
+            "reader": {
+                "allowed_tools": ["refund_create"],
+                "argument_constraints": {}
+            }
+        }"#;
+        fs::write(
+            artifacts_dir.join("acme.roles.jws"),
+            signer.sign_raw_roles("acme", 2, 600, v2_roles),
+        )
+        .unwrap();
+        assert_eq!(store.reload_tenant("acme").unwrap().version, 2);
+
+        let ok_raw = HashMap::from([
+            ("amount".to_string(), "5001e-2".to_string()),
+            ("unbounded_id".to_string(), "9007199254740993".to_string()),
+        ]);
+        assert!(store
+            .evaluate_call_with_raw(
+                &RoleEvalInput {
+                    tenant_id: "acme",
+                    role: "reader",
+                    tool_name: "refund_create",
+                    args: &json!({"amount": 50.01, "unbounded_id": 9_007_199_254_740_993_u64}),
+                    issued_policy_version: 1,
+                    token_allowed_tools: None,
+                    token_constraints: None,
+                },
+                &ok_raw,
+            )
+            .is_ok());
+
+        let bad_raw = HashMap::from([("amount".to_string(), "50.0100000000000000001".to_string())]);
+        assert_eq!(
+            store
+                .evaluate_call_with_raw(
+                    &RoleEvalInput {
+                        tenant_id: "acme",
+                        role: "reader",
+                        tool_name: "refund_create",
+                        args: &json!({"amount": 50.01}),
+                        issued_policy_version: 1,
+                        token_allowed_tools: None,
+                        token_constraints: None,
+                    },
+                    &bad_raw,
+                )
+                .unwrap_err(),
+            RolePolicyError::DeniedByConstraint
+        );
+
+        // Missing raw lexeme in wire mode fails closed instead of reconstructing from Value.
+        let empty_raw = HashMap::new();
+        assert_eq!(
+            store
+                .evaluate_call_with_raw(
+                    &RoleEvalInput {
+                        tenant_id: "acme",
+                        role: "reader",
+                        tool_name: "refund_create",
+                        args: &json!({"amount": 50.01}),
+                        issued_policy_version: 1,
+                        token_allowed_tools: None,
+                        token_constraints: None,
+                    },
+                    &empty_raw,
+                )
+                .unwrap_err(),
+            RolePolicyError::DeniedByConstraint
+        );
+
+        // Mismatch between Value f64 and raw lexeme f64 also fails closed.
+        let mismatched_raw = HashMap::from([("amount".to_string(), "50.01".to_string())]);
+        assert_eq!(
+            store
+                .evaluate_call_with_raw(
+                    &RoleEvalInput {
+                        tenant_id: "acme",
+                        role: "reader",
+                        tool_name: "refund_create",
+                        args: &json!({"amount": 10.0}),
+                        issued_policy_version: 1,
+                        token_allowed_tools: None,
+                        token_constraints: None,
+                    },
+                    &mismatched_raw,
+                )
+                .unwrap_err(),
+            RolePolicyError::DeniedByConstraint
+        );
+
+        // Token-carried delegated ceiling also enforces raw lexeme precision on v2 tokens.
+        let token_caps = HashMap::from([(
+            "amount".to_string(),
+            ArgumentConstraint::MaxNumber { max: 25.0 },
+        )]);
+        let tok_ok_raw = HashMap::from([("amount".to_string(), "2500e-2".to_string())]);
+        assert!(store
+            .evaluate_call_with_raw(
+                &RoleEvalInput {
+                    tenant_id: "acme",
+                    role: "reader",
+                    tool_name: "refund_create",
+                    args: &json!({"amount": 25.0}),
+                    issued_policy_version: 2,
+                    token_allowed_tools: None,
+                    token_constraints: Some(&token_caps),
+                },
+                &tok_ok_raw,
+            )
+            .is_ok());
+        let tok_bad_raw =
+            HashMap::from([("amount".to_string(), "25.000000000000000001".to_string())]);
+        assert_eq!(
+            store
+                .evaluate_call_with_raw(
+                    &RoleEvalInput {
+                        tenant_id: "acme",
+                        role: "reader",
+                        tool_name: "refund_create",
+                        args: &json!({"amount": 25.0}),
+                        issued_policy_version: 2,
+                        token_allowed_tools: None,
+                        token_constraints: Some(&token_caps),
+                    },
+                    &tok_bad_raw,
+                )
+                .unwrap_err(),
+            RolePolicyError::DeniedByConstraint
+        );
     }
 }

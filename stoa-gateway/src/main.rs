@@ -41,6 +41,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize application state
     let state = AppState::new(config.clone());
 
+    if config.poc_agents_enabled {
+        stoa_gateway::mcp::poc::load_poc_fixtures(&state)
+            .await
+            .map_err(|reason| format!("Failed to load autonomous PoC fixtures: {reason}"))?;
+    }
+
     // SIGHUP handler for policy + route hot-reload (CAB-1109, CAB-1828)
     #[cfg(unix)]
     {
@@ -346,12 +352,6 @@ fn init_tracing(config: &Config) {
 /// assigned gateway_id to scope results to this gateway's assigned APIs (CAB-1940).
 async fn register_tools(state: &AppState, registrar: Option<std::sync::Arc<GatewayRegistrar>>) {
     use stoa_gateway::mcp::tools::{api_bridge, stoa_tools};
-
-    if state.config.poc_agents_enabled {
-        if let Err(err) = stoa_gateway::mcp::poc::load_poc_fixtures(state).await {
-            error!(error = %err, "Failed to load autonomous PoC fixtures");
-        }
-    }
 
     let Some(control_plane) = state.control_plane.as_ref() else {
         if state.config.allows_explicit_local_dev_access() && state.config.native_tools_enabled {

@@ -1061,6 +1061,16 @@ pub struct Config {
     /// Env: STOA_POC_CALLER_BUDGET (default: 100)
     #[serde(default = "default_poc_caller_budget")]
     pub poc_caller_budget: u64,
+
+    /// Maximum number of entries in each PoC admission table for active chains and root callers.
+    /// Env: STOA_POC_MAX_ADMISSION_ENTRIES (default: 10000)
+    #[serde(default = "default_poc_max_admission_entries")]
+    pub poc_max_admission_entries: usize,
+
+    /// Fixed root caller budget window from the first successful debit.
+    /// Env: STOA_POC_CALLER_BUDGET_WINDOW_SECS (default: 900)
+    #[serde(default = "default_poc_caller_budget_window_secs")]
+    pub poc_caller_budget_window_secs: u32,
 }
 
 impl fmt::Debug for Config {
@@ -1319,6 +1329,11 @@ impl fmt::Debug for Config {
             .field("poc_max_revoked_chains", &self.poc_max_revoked_chains)
             .field("poc_chain_budget", &self.poc_chain_budget)
             .field("poc_caller_budget", &self.poc_caller_budget)
+            .field("poc_max_admission_entries", &self.poc_max_admission_entries)
+            .field(
+                "poc_caller_budget_window_secs",
+                &self.poc_caller_budget_window_secs,
+            )
             .finish()
     }
 }

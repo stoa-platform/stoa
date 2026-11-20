@@ -59,6 +59,10 @@ pub enum ConfigError {
     )]
     SenderConstraintWithoutBacking,
 
+    /// Local agent admission needs a positive capacity and window.
+    #[error("poc_agents_enabled=true requires positive poc_max_admission_entries and poc_caller_budget_window_secs")]
+    InvalidPocAdmissionBounds,
+
     /// An API proxy backend declares an inconsistent access setting.
     #[error("api_proxy backend `{backend}`: {reason}")]
     ApiProxyBackendAccess {
@@ -224,6 +228,12 @@ impl Config {
 
         if self.sender_constraint.enabled && !(self.mtls.enabled || self.dpop.enabled) {
             return Err(ConfigError::SenderConstraintWithoutBacking);
+        }
+
+        if self.poc_agents_enabled
+            && (self.poc_max_admission_entries == 0 || self.poc_caller_budget_window_secs == 0)
+        {
+            return Err(ConfigError::InvalidPocAdmissionBounds);
         }
 
         for (backend, b) in &self.api_proxy.backends {
@@ -527,6 +537,24 @@ mod tests {
         match config.validate() {
             Err(ConfigError::InvalidPort(0)) => {}
             other => panic!("expected InvalidPort(0), got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_validate_poc_admission_bounds() {
+        for (max_entries, window_secs) in [(0, 900), (10, 0)] {
+            let mut config = Config {
+                poc_agents_enabled: true,
+                poc_max_admission_entries: max_entries,
+                poc_caller_budget_window_secs: window_secs,
+                ..Config::default()
+            };
+            assert!(matches!(
+                config.validate(),
+                Err(ConfigError::InvalidPocAdmissionBounds)
+            ));
+            config.poc_agents_enabled = false;
+            config.validate().expect("PoC disabled");
         }
     }
 

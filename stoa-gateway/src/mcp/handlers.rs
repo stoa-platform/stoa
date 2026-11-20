@@ -138,7 +138,11 @@ pub(crate) async fn request_tool_context(
 }
 
 /// Shared OPA input: action and ownership come from the registered tool.
-fn check_tool_policy(state: &AppState, tool: &dyn Tool, ctx: &ToolContext) -> Result<(), String> {
+pub(crate) fn check_tool_policy(
+    state: &AppState,
+    tool: &dyn Tool,
+    ctx: &ToolContext,
+) -> Result<(), String> {
     state.uac_enforcer.check_with_context(
         PolicyCallerCtx {
             resource_tenant_id: tool.tenant_id().map(str::to_string),

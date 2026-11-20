@@ -184,7 +184,7 @@ impl ToolResult {
 }
 
 /// Context provided to tool during execution
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ToolContext {
     pub tenant_id: String,
     pub user_id: Option<String>,
@@ -208,6 +208,24 @@ pub struct ToolContext {
     /// True when the request originates from CP-API (X-Stoa-Source: control-plane).
     /// Prevents circular proxy: ProxyTool → CP-API → gateway → ProxyTool (infinite loop).
     pub from_control_plane: bool,
+}
+
+impl std::fmt::Debug for ToolContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ToolContext")
+            .field("tenant_id", &self.tenant_id)
+            .field("user_id", &self.user_id)
+            .field("user_email", &self.user_email)
+            .field("request_id", &self.request_id)
+            .field("roles", &self.roles)
+            .field("scopes", &self.scopes)
+            .field("raw_token", &self.raw_token.as_ref().map(|_| "[REDACTED]"))
+            .field("skill_instructions", &self.skill_instructions)
+            .field("progress_token", &self.progress_token)
+            .field("consumer_id", &self.consumer_id)
+            .field("from_control_plane", &self.from_control_plane)
+            .finish()
+    }
 }
 
 /// The Tool trait - implement this for each MCP tool
@@ -991,5 +1009,26 @@ mod tests {
         let registry = ToolRegistry::new();
         // No tool, no alias → None
         assert!(registry.get("ghost_tool").is_none());
+    }
+
+    #[test]
+    fn test_tool_context_debug_redacts_raw_token() {
+        let secret = "eyJhbGciOiJSUzI1NiJ9.super-secret-payload.signature";
+        let ctx = ToolContext {
+            tenant_id: "acme".to_string(),
+            user_id: Some("agent-1".to_string()),
+            user_email: None,
+            request_id: "req-1".to_string(),
+            roles: vec!["reader".to_string()],
+            scopes: vec![],
+            raw_token: Some(secret.to_string()),
+            skill_instructions: None,
+            progress_token: None,
+            consumer_id: "agent-1".to_string(),
+            from_control_plane: false,
+        };
+        let rendered = format!("{ctx:?}");
+        assert!(rendered.contains("[REDACTED]"));
+        assert!(!rendered.contains(secret));
     }
 }

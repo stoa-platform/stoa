@@ -93,19 +93,27 @@ pub fn build_router(state: AppState) -> Router {
     // Build TCP filter early (before state is moved into with_state)
     let tcp_filter = std::sync::Arc::new(tcp_filter::TcpFilter::from_config(&state.config));
 
-    // GW-1 P2-test-1: single source of truth for the `/admin/*` wiring.
-    // See `src/handlers/admin/router.rs` — the same factory is reused by
-    // the test harness so unit tests exercise every production route.
-    let admin_router = admin::build_admin_router(state.clone());
-
-    // Common routes for all modes: health, metrics, admin
-    let base = Router::new()
+    // Common routes for all modes: health, metrics, and optional admin
+    let mut base = Router::new()
         .route("/health", get(health))
         .route("/health/ready", get(ready))
         .route("/health/live", get(health))
         .route("/ready", get(ready))
-        .route("/metrics", get(prometheus_metrics))
-        .nest("/admin", admin_router);
+        .route("/metrics", get(prometheus_metrics));
+
+    if !state.config.admin_routes_disabled {
+        // GW-1 P2-test-1: single source of truth for the `/admin/*` wiring.
+        // See `src/handlers/admin/router.rs` — the same factory is reused by
+        // the test harness so unit tests exercise every production route.
+        let admin_router = admin::build_admin_router(state.clone());
+        base = base.nest("/admin", admin_router);
+    }
+
+    if state.config.poc_agents_enabled {
+        base = base
+            .route("/mcp/poc/bootstrap", post(mcp::poc::handle_poc_bootstrap))
+            .route("/mcp/poc", post(mcp::poc::handle_poc_mcp));
+    }
 
     // Build mTLS layers only when mTLS is enabled (CAB-864, CAB-1359 perf).
     // When disabled, skip the middleware entirely — avoids 2 async fn calls per request.

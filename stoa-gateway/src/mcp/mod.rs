@@ -14,6 +14,7 @@ pub mod elicitation;
 pub mod handlers;
 pub mod lazy_discovery;
 pub mod pending_requests;
+pub mod poc;
 pub mod protocol;
 pub mod resources;
 pub mod session;

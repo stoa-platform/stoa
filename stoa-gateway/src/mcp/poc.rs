@@ -23,6 +23,7 @@ use axum::{
     Json,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::value::RawValue;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
@@ -36,9 +37,9 @@ use crate::auth::local_agent_token::{
 };
 use crate::auth::poc_admission::{AdmissionError, AdmitCallRequest};
 use crate::control_plane::role_policy::{ArgumentConstraint, RoleEvalInput, RolePolicySpec};
-use crate::mcp::handlers::{check_tool_permission, check_tool_policy, ToolsCallRequest};
+use crate::mcp::handlers::{check_tool_permission, check_tool_policy};
 use crate::mcp::sse::{
-    JsonRpcRequest, JsonRpcResponse, INVALID_PARAMS, INVALID_REQUEST, METHOD_NOT_FOUND, PARSE_ERROR,
+    JsonRpcResponse, INVALID_PARAMS, INVALID_REQUEST, METHOD_NOT_FOUND, PARSE_ERROR,
 };
 use crate::mcp::tools::{Tool, ToolContext};
 use crate::proxy::credentials::{normalize_origin, BackendCredential, MCP_TOOL_KEY_PREFIX};
@@ -556,6 +557,21 @@ pub async fn handle_poc_revoke(
     }
 }
 
+#[derive(Debug, Deserialize)]
+struct PocJsonRpcRequest {
+    jsonrpc: String,
+    method: String,
+    #[serde(default)]
+    params: Option<Box<RawValue>>,
+    id: Option<Value>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PocToolNameOnly {
+    #[serde(default)]
+    name: Option<String>,
+}
+
 /// `POST /mcp/poc` — Streamable HTTP JSON-RPC 2.0 entrypoint with local RS256 + DPoP.
 pub async fn handle_poc_mcp(
     State(state): State<AppState>,
@@ -566,7 +582,7 @@ pub async fn handle_poc_mcp(
         return StatusCode::NOT_FOUND.into_response();
     };
 
-    let request: JsonRpcRequest = match serde_json::from_slice(&body) {
+    let request: PocJsonRpcRequest = match serde_json::from_slice(&body) {
         Ok(req) => req,
         Err(_) => {
             return (
@@ -590,14 +606,14 @@ pub async fn handle_poc_mcp(
     }
 
     // Pre-extract requested tool name for `tools/call` so child token canonical resource
-    // audience (`mcp-tool:{tenant}:{canonical_tool}`) is validated strictly at auth time.
+    // audience (`mcp-tool:{tenant}:{canonical_tool}`) is validated strictly at auth time
+    // without losing raw `params` lexemes.
     let requested_tool_name = if request.method == "tools/call" {
         request
             .params
-            .as_ref()
-            .and_then(|p| p.get("name"))
-            .and_then(Value::as_str)
-            .map(str::to_string)
+            .as_deref()
+            .and_then(|p| serde_json::from_str::<PocToolNameOnly>(p.get()).ok())
+            .and_then(|p| p.name)
     } else {
         None
     };
@@ -788,12 +804,55 @@ async fn check_poc_tool_access<'a>(
     Ok(tool)
 }
 
-/// Shared authorization and execution pipeline for primary calls and sub-calls on the PoC path.
-pub(crate) async fn authorize_and_execute_poc_tool(
+/// Parsed tool arguments paired with exact raw JSON lexemes for direct numeric fields.
+#[derive(Debug, Default)]
+struct PocCallArguments {
+    value: Value,
+    raw_number_fields: HashMap<String, String>,
+}
+
+impl PocCallArguments {
+    fn from_raw_json(raw: &str) -> Result<Self, serde_json::Error> {
+        let value: Value = serde_json::from_str(raw)?;
+        let mut raw_number_fields = HashMap::new();
+        if value.is_object() {
+            let raw_fields: HashMap<String, Box<RawValue>> = serde_json::from_str(raw)?;
+            for (key, field_raw) in raw_fields {
+                if value.get(&key).is_some_and(Value::is_number) {
+                    raw_number_fields.insert(key, field_raw.get().to_string());
+                }
+            }
+        }
+        Ok(Self {
+            value,
+            raw_number_fields,
+        })
+    }
+
+    fn set_mapped_string(&mut self, key: String, text: String) {
+        if let Some(obj) = self.value.as_object_mut() {
+            obj.insert(key.clone(), Value::String(text));
+            self.raw_number_fields.remove(&key);
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for PocCallArguments {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw = Box::<RawValue>::deserialize(deserializer)?;
+        Self::from_raw_json(raw.get()).map_err(serde::de::Error::custom)
+    }
+}
+
+/// Shared authorization and execution pipeline for primary calls, sub-call steps, and fallbacks.
+async fn authorize_and_execute_poc_tool(
     state: &AppState,
     claims: &LocalAgentClaims,
     requested_name: &str,
-    arguments: Value,
+    arguments: PocCallArguments,
 ) -> Result<Value, PocToolRejection> {
     // Provenance comes from signed claims. The local context carries no raw token.
     let ctx = poc_tool_context(claims);
@@ -812,15 +871,18 @@ pub(crate) async fn authorize_and_execute_poc_tool(
     let issued_ver = claims
         .policy_version
         .ok_or((-32003, "Role policy unavailable"))?;
-    if let Err(err) = role_store.evaluate_call(&RoleEvalInput {
-        tenant_id: &claims.tenant_id,
-        role: &claims.role,
-        tool_name: canonical_name,
-        args: &arguments,
-        issued_policy_version: issued_ver,
-        token_allowed_tools: claims.allowed_tools.as_deref(),
-        token_constraints: claims.arg_constraints.as_ref(),
-    }) {
+    if let Err(err) = role_store.evaluate_call_with_raw(
+        &RoleEvalInput {
+            tenant_id: &claims.tenant_id,
+            role: &claims.role,
+            tool_name: canonical_name,
+            args: &arguments.value,
+            issued_policy_version: issued_ver,
+            token_allowed_tools: claims.allowed_tools.as_deref(),
+            token_constraints: claims.arg_constraints.as_ref(),
+        },
+        &arguments.raw_number_fields,
+    ) {
         warn!(
             tool = %canonical_name,
             role = %claims.role,
@@ -854,7 +916,7 @@ pub(crate) async fn authorize_and_execute_poc_tool(
     // 8. Execute tool (DynamicTool applies OutboundAddressPolicy to final URL and OAuth2 URL,
     //    disables redirects, injects backend credential without forwarding caller token,
     //    and scrubs error bodies).
-    match tool.execute(arguments, &ctx).await {
+    match tool.execute(arguments.value, &ctx).await {
         Ok(result) => Ok(json!({
             "content": result.content,
             "isError": result.is_error.unwrap_or(false)
@@ -867,17 +929,24 @@ pub(crate) async fn authorize_and_execute_poc_tool(
 }
 
 #[derive(Debug, Deserialize)]
+struct PocToolsCallParams {
+    name: String,
+    #[serde(default)]
+    arguments: PocCallArguments,
+}
+
+#[derive(Debug, Deserialize)]
 struct SubcallFallbackSpec {
     name: String,
     #[serde(default)]
-    arguments: Value,
+    arguments: PocCallArguments,
 }
 
 #[derive(Debug, Deserialize)]
 struct SubcallStepSpec {
     name: String,
     #[serde(default)]
-    arguments: Value,
+    arguments: PocCallArguments,
     /// Optional argument key populated from the previous step's text output before authorization.
     #[serde(default)]
     map_prev_into_arg: Option<String>,
@@ -896,13 +965,13 @@ struct PocSubcallsParams {
 async fn handle_poc_subcalls(
     state: &AppState,
     claims: &LocalAgentClaims,
-    request: JsonRpcRequest,
+    request: PocJsonRpcRequest,
 ) -> JsonRpcResponse {
     let params = match request.params {
         Some(p) => p,
         None => return JsonRpcResponse::error(request.id, INVALID_PARAMS, "Missing params"),
     };
-    let parsed: PocSubcallsParams = match serde_json::from_value(params) {
+    let parsed: PocSubcallsParams = match serde_json::from_str(params.get()) {
         Ok(p) => p,
         Err(e) => {
             return JsonRpcResponse::error(
@@ -926,9 +995,7 @@ async fn handle_poc_subcalls(
     for (idx, step) in parsed.steps.into_iter().enumerate() {
         let mut final_args = step.arguments;
         if let (Some(ref arg_key), Some(ref prev)) = (&step.map_prev_into_arg, &prev_text) {
-            if let Some(obj) = final_args.as_object_mut() {
-                obj.insert(arg_key.clone(), Value::String(prev.clone()));
-            }
+            final_args.set_mapped_string(arg_key.clone(), prev.clone());
         }
 
         match authorize_and_execute_poc_tool(state, claims, &step.name, final_args).await {
@@ -973,13 +1040,13 @@ async fn handle_poc_subcalls(
 async fn handle_poc_tool_call(
     state: &AppState,
     claims: &LocalAgentClaims,
-    request: JsonRpcRequest,
+    request: PocJsonRpcRequest,
 ) -> JsonRpcResponse {
     let params = match request.params {
         Some(p) => p,
         None => return JsonRpcResponse::error(request.id, INVALID_PARAMS, "Missing params"),
     };
-    let call_req: ToolsCallRequest = match serde_json::from_value(params) {
+    let call_req: PocToolsCallParams = match serde_json::from_str(params.get()) {
         Ok(r) => r,
         Err(e) => {
             return JsonRpcResponse::error(
@@ -2542,5 +2609,372 @@ allow if {
             .unwrap()
             .contains("budget exceeded"));
         assert_eq!(primary_up.received_requests().await.unwrap().len(), 5);
+    }
+
+    #[tokio::test]
+    async fn ch5_max_number_precision_direct_fallback_delegation_and_mapping() {
+        let primary_up = MockServer::start().await;
+        let failing_up = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/payments"))
+            .and(header("X-API-Key", "vault-ch5"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"ok": true})))
+            .mount(&primary_up)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/fail"))
+            .respond_with(ResponseTemplate::new(502).set_body_string("upstream-err"))
+            .mount(&failing_up)
+            .await;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let signer = PolicyFixtureSigner::new();
+        let trust_file = signer.write_trust(tmp.path());
+
+        let policies_dir = tmp.path().join("policies");
+        let roles_dir = tmp.path().join("roles");
+        let floor_dir = tmp.path().join("floors");
+        let contracts_dir = tmp.path().join("contracts");
+        let opa_dir = tmp.path().join("opa");
+        for d in [&policies_dir, &roles_dir, &contracts_dir, &opa_dir] {
+            std::fs::create_dir_all(d).unwrap();
+        }
+
+        std::fs::write(
+            policies_dir.join("acme.jws"),
+            signer.sign_tool_policy("acme", &["payments_list", "payments_fail"]),
+        )
+        .unwrap();
+        std::fs::write(
+            roles_dir.join("acme.roles.jws"),
+            signer.sign_role_policy(
+                "acme",
+                1,
+                json!({
+                    "reader": {
+                        "allowed_tools": ["payments_list", "payments_fail"],
+                        "argument_constraints": {
+                            "payments_list": {
+                                "currency": { "type": "allowed_values", "values": ["EUR"] },
+                                "account": { "type": "prefix", "prefix": "acct-" },
+                                "amount": { "type": "max_number", "max": 50.01 }
+                            }
+                        }
+                    }
+                }),
+            ),
+        )
+        .unwrap();
+
+        let opa_file = opa_dir.join("policy.rego");
+        std::fs::write(
+            &opa_file,
+            r#"package stoa.authz
+import future.keywords.if
+default allow := false
+allow if {
+    input.tenant_id == "acme"
+    input.resource_tenant_id == "acme"
+    input.action == "Read"
+}
+"#,
+        )
+        .unwrap();
+
+        std::fs::write(
+            contracts_dir.join("payments.uac.json"),
+            serde_json::to_string(&json!({
+                "name": "payments",
+                "version": "1.0.0",
+                "tenant_id": "acme",
+                "display_name": "Payments CH5",
+                "description": "CH5 precision fixture",
+                "classification": "H",
+                "endpoints": [
+                    {
+                        "path": "/payments",
+                        "methods": ["GET"],
+                        "backend_url": format!("{}/payments", primary_up.uri()),
+                        "operation_id": "list_payments",
+                        "llm": {
+                            "summary": "List payments",
+                            "intent": "Read payments",
+                            "tool_name": "payments_list",
+                            "side_effects": "read",
+                            "safe_for_agents": true,
+                            "requires_human_approval": false,
+                            "examples": []
+                        }
+                    },
+                    {
+                        "path": "/fail",
+                        "methods": ["GET"],
+                        "backend_url": format!("{}/fail", failing_up.uri()),
+                        "operation_id": "failing_tool",
+                        "llm": {
+                            "summary": "Failing tool",
+                            "intent": "Trigger fallback",
+                            "tool_name": "payments_fail",
+                            "side_effects": "read",
+                            "safe_for_agents": true,
+                            "requires_human_approval": false,
+                            "examples": []
+                        }
+                    }
+                ],
+                "required_policies": [],
+                "status": "published"
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let creds_file = tmp.path().join("credentials.json");
+        std::fs::write(
+            &creds_file,
+            serde_json::to_string(&json!([{
+                "route_id": "mcp-tool:acme:payments_list",
+                "auth_type": "api_key",
+                "header_name": "X-API-Key",
+                "header_value": "vault-ch5",
+                "allowed_origin": primary_up.uri(),
+                "shared_with_tenants": false
+            }]))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let base_url = "http://stoa-gateway:8080";
+        let config = Config {
+            auto_register: false,
+            admin_routes_disabled: true,
+            policy_enabled: true,
+            policy_path: Some(opa_file.to_string_lossy().to_string()),
+            policy_boot_tenants: vec!["acme".to_string()],
+            policy_trust_jwks_file: Some(trust_file),
+            policy_local_artifacts_dir: Some(policies_dir.to_string_lossy().to_string()),
+            policy_expected_issuer: "stoa-poc-policy".to_string(),
+            policy_audience: "stoa-gateway".to_string(),
+            poc_agents_enabled: true,
+            poc_bootstrap_secret: Some("boot-secret-ch5".to_string()),
+            poc_uac_contracts_dir: Some(contracts_dir.to_string_lossy().to_string()),
+            poc_credentials_file: Some(creds_file.to_string_lossy().to_string()),
+            poc_public_base_url: Some(base_url.to_string()),
+            poc_role_artifacts_dir: Some(roles_dir.to_string_lossy().to_string()),
+            poc_role_floor_dir: Some(floor_dir.to_string_lossy().to_string()),
+            poc_outbound_allowed_origins: vec![primary_up.uri(), failing_up.uri()],
+            poc_chain_budget: 10,
+            poc_caller_budget: 10,
+            ..Config::default()
+        };
+
+        let state = AppState::new(config);
+        load_poc_fixtures(&state).await.unwrap();
+        state
+            .tool_permissions
+            .as_ref()
+            .unwrap()
+            .load_policy("acme")
+            .await
+            .unwrap();
+        let app = build_router(state.clone());
+
+        let parent_dpop = TestDpop::new();
+        let child_dpop = TestDpop::new();
+        let boot_htu = format!("{base_url}/mcp/poc/bootstrap");
+        let mcp_htu = format!("{base_url}/mcp/poc");
+        let del_htu = format!("{base_url}/mcp/poc/delegate");
+
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/mcp/poc/bootstrap")
+                    .header("content-type", "application/json")
+                    .header("X-Stoa-Poc-Bootstrap-Secret", "boot-secret-ch5")
+                    .header("DPoP", parent_dpop.proof("POST", &boot_htu, "ch5-b1", None))
+                    .body(Body::from(
+                        json!({"sub":"agent-parent","tenant_id":"acme","role":"reader"})
+                            .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let boot_json: Value = serde_json::from_slice(
+            &axum::body::to_bytes(resp.into_body(), 16 * 1024)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        let parent_tok = boot_json["access_token"].as_str().unwrap().to_string();
+        let chain_id = boot_json["chain_id"].as_str().unwrap().to_string();
+
+        let send_raw_mcp = |raw_body: &str, jti: &str| {
+            let app = app.clone();
+            let proof = parent_dpop.proof("POST", &mcp_htu, jti, Some(&parent_tok));
+            let auth_header = format!("DPoP {parent_tok}");
+            let body = raw_body.to_string();
+            async move {
+                let resp = app
+                    .oneshot(
+                        Request::builder()
+                            .method("POST")
+                            .uri("/mcp/poc")
+                            .header("content-type", "application/json")
+                            .header("Authorization", auth_header)
+                            .header("DPoP", proof)
+                            .body(Body::from(body))
+                            .unwrap(),
+                    )
+                    .await
+                    .unwrap();
+                assert_eq!(resp.status(), StatusCode::OK);
+                serde_json::from_slice::<Value>(
+                    &axum::body::to_bytes(resp.into_body(), 16 * 1024)
+                        .await
+                        .unwrap(),
+                )
+                .unwrap()
+            }
+        };
+
+        // 1. Conforming direct call using equivalent scientific notation (`5001e-2`) and an
+        //    unbounded numeric field (`9007199254740993`) passes normally.
+        let ok_rpc = send_raw_mcp(
+            r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"payments_list","arguments":{"currency":"EUR","account":"acct-1","amount":5001e-2,"unbounded_ref":9007199254740993}}}"#,
+            "ch5-ok-1",
+        )
+        .await;
+        assert!(ok_rpc.get("error").is_none(), "expected success: {ok_rpc}");
+        assert_eq!(primary_up.received_requests().await.unwrap().len(), 1);
+        assert_eq!(state.poc_admission.chain_used(&chain_id), 1);
+
+        // 2. Direct calls with imprecise or positive-underflow bounded arguments are refused
+        //    BEFORE budget debit and BEFORE reaching upstream.
+        for (jti, bad_amount) in [
+            ("ch5-bad-1", "50.0100000000000000001"),
+            ("ch5-bad-2", "1e-400"),
+        ] {
+            let body = format!(
+                r#"{{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{{"name":"payments_list","arguments":{{"currency":"EUR","account":"acct-1","amount":{bad_amount}}}}}}}"#
+            );
+            let rpc = send_raw_mcp(&body, jti).await;
+            assert_eq!(rpc["error"]["code"], -32003);
+            assert_eq!(rpc["error"]["message"], "Tool call rejected by role policy");
+        }
+        assert_eq!(primary_up.received_requests().await.unwrap().len(), 1);
+        assert_eq!(state.poc_admission.chain_used(&chain_id), 1);
+
+        // 3. Fallback step with an imprecise raw number is refused BEFORE hitting primary_up.
+        let fb_rpc = send_raw_mcp(
+            r#"{"jsonrpc":"2.0","id":3,"method":"poc/subcalls","params":{"steps":[{"name":"payments_fail","arguments":{},"fallback":{"name":"payments_list","arguments":{"currency":"EUR","account":"acct-1","amount":50.0100000000000000001}}}]}}"#,
+            "ch5-fb-1",
+        )
+        .await;
+        assert_eq!(fb_rpc["error"]["code"], -32003);
+        assert_eq!(
+            fb_rpc["error"]["message"],
+            "Tool call rejected by role policy"
+        );
+        assert_eq!(primary_up.received_requests().await.unwrap().len(), 1);
+        assert_eq!(state.poc_admission.chain_used(&chain_id), 2);
+
+        // 4. `map_prev_into_arg` replaces a numeric field with text and must NOT reuse the
+        //    replaced numeric lexeme to satisfy `max_number`.
+        let map_rpc = send_raw_mcp(
+            r#"{"jsonrpc":"2.0","id":4,"method":"poc/subcalls","params":{"steps":[{"name":"payments_list","arguments":{"currency":"EUR","account":"acct-1","amount":10}},{"name":"payments_list","arguments":{"currency":"EUR","account":"acct-1","amount":10},"map_prev_into_arg":"amount"}]}}"#,
+            "ch5-map-1",
+        )
+        .await;
+        assert_eq!(map_rpc["error"]["code"], -32003);
+        assert_eq!(
+            map_rpc["error"]["message"],
+            "Tool call rejected by role policy"
+        );
+        assert_eq!(primary_up.received_requests().await.unwrap().len(), 2);
+        assert_eq!(state.poc_admission.chain_used(&chain_id), 3);
+
+        // 5. Delegation route rejects an imprecise max_number bound (preventing silent rounding
+        //    widening) while accepting an exact equivalent bound (`5001e-2`).
+        let child_jwk_json = json!({
+            "kty": child_dpop.jwk.kty,
+            "crv": child_dpop.jwk.crv,
+            "x": child_dpop.jwk.x,
+            "y": child_dpop.jwk.y
+        })
+        .to_string();
+        let bad_delegate_body = format!(
+            r#"{{"sub":"agent-child","target_tool":"payments_list","child_dpop_jwk":{child_jwk_json},"allowed_tools":["payments_list"],"arg_constraints":{{"amount":{{"type":"max_number","max":50.0100000000000000001}}}},"ttl_secs":120}}"#
+        );
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/mcp/poc/delegate")
+                    .header("content-type", "application/json")
+                    .header("Authorization", format!("DPoP {parent_tok}"))
+                    .header(
+                        "DPoP",
+                        parent_dpop.proof("POST", &del_htu, "ch5-del-bad", Some(&parent_tok)),
+                    )
+                    .body(Body::from(bad_delegate_body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
+
+        let ok_delegate_body = format!(
+            r#"{{"sub":"agent-child","target_tool":"payments_list","child_dpop_jwk":{child_jwk_json},"allowed_tools":["payments_list"],"arg_constraints":{{"amount":{{"type":"max_number","max":5001e-2}}}},"ttl_secs":120}}"#
+        );
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/mcp/poc/delegate")
+                    .header("content-type", "application/json")
+                    .header("Authorization", format!("DPoP {parent_tok}"))
+                    .header(
+                        "DPoP",
+                        parent_dpop.proof("POST", &del_htu, "ch5-del-ok", Some(&parent_tok)),
+                    )
+                    .body(Body::from(ok_delegate_body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // Direct strict deserialization checks for delegation request and delegated JWT claims.
+        let imprecise_req = format!(
+            r#"{{"sub":"agent-child","target_tool":"payments_list","child_dpop_jwk":{child_jwk_json},"allowed_tools":["payments_list"],"arg_constraints":{{"amount":{{"type":"max_number","max":9007199254740993}}}}}}"#
+        );
+        assert!(serde_json::from_str::<PocDelegateRequest>(&imprecise_req).is_err());
+
+        let imprecise_claims = r#"{
+            "iss":"stoa-poc-delegation",
+            "sub":"agent-child",
+            "aud":"mcp-tool:acme:payments_list",
+            "tenant_id":"acme",
+            "role":"reader",
+            "chain_id":"chain-1",
+            "jti":"jti-1",
+            "depth":1,
+            "parent_jti":"jti-0",
+            "act":{"sub":"agent-parent"},
+            "policy_version":1,
+            "allowed_tools":["payments_list"],
+            "arg_constraints":{"amount":{"type":"max_number","max":9007199254740993}},
+            "iat":1700000000,
+            "exp":1700000300,
+            "cnf":{"jkt":"thumbprint"}
+        }"#;
+        assert!(serde_json::from_str::<LocalAgentClaims>(imprecise_claims).is_err());
     }
 }

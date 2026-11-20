@@ -112,6 +112,7 @@ pub fn build_router(state: AppState) -> Router {
     if state.config.poc_agents_enabled {
         base = base
             .route("/mcp/poc/bootstrap", post(mcp::poc::handle_poc_bootstrap))
+            .route("/mcp/poc/delegate", post(mcp::poc::handle_poc_delegate))
             .route("/mcp/poc", post(mcp::poc::handle_poc_mcp));
     }
 

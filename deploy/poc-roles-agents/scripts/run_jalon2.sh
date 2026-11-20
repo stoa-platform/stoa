@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$DIR"
+
+export STOA_POC_BOOTSTRAP_SECRET="${STOA_POC_BOOTSTRAP_SECRET:-poc-parent-boot-$(openssl rand -hex 12)}"
+export STOA_POC_UPSTREAM_API_KEY="${STOA_POC_UPSTREAM_API_KEY:-poc-vault-key-$(openssl rand -hex 12)}"
+
+cleanup() {
+  docker compose down -v --remove-orphans >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+
+echo "=== [1/6] Generating ephemeral signed Jalon 2 fixtures ==="
+python3 ./scripts/gen_fixtures.py ./.runtime
+
+echo "=== [2/6] Starting isolated 4-container Docker Compose stack ==="
+docker compose up -d --build --wait
+
+MOCK_IP="$(docker compose exec -T upstream-mock python3 -c 'import socket; print(socket.gethostbyname(socket.gethostname()))' | tr -d '\r\n')"
+echo "upstream-mock isolated IP on upstream-net: ${MOCK_IP}"
+
+echo "=== [3/6] Verifying persisted 0600 anti-rollback floor inside stoa-gateway ==="
+FLOOR_MODE="$(docker compose exec -T stoa-gateway stat -c '%a' /tmp/stoa-poc-floors/acme.floor.json | tr -d '\r\n')"
+if [[ "${FLOOR_MODE}" != "600" ]]; then
+  echo "FAIL: expected floor permissions 600, got ${FLOOR_MODE}" >&2
+  exit 1
+fi
+echo "PASS: /tmp/stoa-poc-floors/acme.floor.json persisted with mode ${FLOOR_MODE}"
+
+echo "=== [4/6] Generating child DPoP keypair inside agent-child (public JWK only exported) ==="
+CHILD_JWK="$(docker compose exec -T agent-child python3 /app/agent_harness.py child-init-key | tr -d '\r\n')"
+
+echo "=== [5/6] Running agent-parent and agent-child vertical proof checks ==="
+PARENT_OUT="$(docker compose exec -T agent-parent python3 /app/agent_harness.py parent "${MOCK_IP}" "${CHILD_JWK}")"
+echo "$PARENT_OUT" | grep -Ev "^(PARENT_TOKEN_FOR_NEGATIVE_TEST|CHILD_TOKEN_DELEGATED)="
+PARENT_TOK="$(echo "$PARENT_OUT" | sed -n 's/^PARENT_TOKEN_FOR_NEGATIVE_TEST=//p')"
+CHILD_TOK="$(echo "$PARENT_OUT" | sed -n 's/^CHILD_TOKEN_DELEGATED=//p')"
+
+docker compose exec -T agent-child python3 /app/agent_harness.py child "${MOCK_IP}" "${PARENT_TOK}" "${CHILD_TOK}"
+
+echo "=== [6/6] Verifying upstream-mock counters ==="
+STATS="$(docker compose exec -T upstream-mock cat /tmp/upstream_stats.json)"
+echo "$STATS"
+echo "$STATS" | python3 -c '
+import json, sys
+s = json.load(sys.stdin)
+assert s["upstream_calls"] == 2, f"expected exactly 2 authorized /payments calls (1 parent + 1 child), got {s}"
+assert s["valid_api_key_calls"] == 2, f"expected 2 valid API key calls, got {s}"
+assert s["caller_auth_headers_seen"] == 0, f"caller Authorization header leaked upstream: {s}"
+assert s["redirect_target_calls"] == 0, f"3xx redirect was followed: {s}"
+assert s["oauth2_calls"] == 0, f"unexpected oauth2 calls: {s}"
+print("PASS: upstream-mock saw exactly 2 vault-authenticated calls (parent + child), 0 caller tokens, 0 redirects followed")
+'
+
+echo "=== JALON 2 DOCKER COMPOSE VERTICAL PROOF PASSED ==="

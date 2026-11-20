@@ -151,6 +151,11 @@ pub struct AppState {
     /// Dedicated local RS256 + DPoP auth for the autonomous agent-roles PoC.
     /// Strictly separated from OIDC `jwt_validator`. None unless `STOA_POC_AGENTS_ENABLED=true`.
     pub local_agent_auth: Option<Arc<crate::auth::local_agent_token::LocalAgentAuth>>,
+    /// Signed local agent-role policy store with durable anti-rollback floor (`0600`)
+    /// and 15-minute maximum validity.
+    pub role_policy_store: Option<Arc<crate::control_plane::role_policy::RolePolicyStore>>,
+    /// Outbound address policy attached to PoC dynamic tools and OAuth2 token fetches.
+    pub outbound_policy: Arc<crate::proxy::outbound_policy::OutboundAddressPolicy>,
     /// Error snapshot store for 5xx response capture (CAB-1645).
     pub snapshot_store: Arc<SnapshotStore>,
     /// Memory budget monitor for backpressure (CAB-1829).
@@ -655,6 +660,33 @@ impl AppState {
             None
         };
 
+        let role_policy_store = if config.poc_agents_enabled {
+            config.poc_role_artifacts_dir.as_ref().map(|roles_dir| {
+                let floor_dir = config
+                    .poc_role_floor_dir
+                    .clone()
+                    .unwrap_or_else(|| format!("{roles_dir}/.floors"));
+                tracing::info!(
+                    roles_dir = %roles_dir,
+                    floor_dir = %floor_dir,
+                    "Signed local agent-role policy store enabled"
+                );
+                Arc::new(crate::control_plane::role_policy::RolePolicyStore::new(
+                    roles_dir,
+                    floor_dir,
+                    &config.policy_expected_issuer,
+                    &config.policy_audience,
+                    policy_trust.map(PolicyTrustStore::open),
+                ))
+            })
+        } else {
+            None
+        };
+
+        let outbound_policy = Arc::new(crate::proxy::outbound_policy::OutboundAddressPolicy::new(
+            config.poc_outbound_allowed_origins.iter(),
+        ));
+
         // Initialize A2A agent registry (CAB-1754)
         let a2a_registry = if config.a2a_enabled {
             let registry = crate::a2a::registry::AgentRegistry::new(
@@ -718,6 +750,8 @@ impl AppState {
             a2a_registry,
             tool_permissions,
             local_agent_auth,
+            role_policy_store,
+            outbound_policy,
             snapshot_store,
             memory_monitor,
             ebpf_client: std::env::var("STOA_EBPF_DAEMON_URL")

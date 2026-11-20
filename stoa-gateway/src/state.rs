@@ -156,6 +156,8 @@ pub struct AppState {
     pub role_policy_store: Option<Arc<crate::control_plane::role_policy::RolePolicyStore>>,
     /// Outbound address policy attached to PoC dynamic tools and OAuth2 token fetches.
     pub outbound_policy: Arc<crate::proxy::outbound_policy::OutboundAddressPolicy>,
+    /// Unified atomic admission controller for PoC revocation (`chain_id`) and 2-level budgets.
+    pub poc_admission: Arc<crate::auth::poc_admission::PocAdmissionController>,
     /// Error snapshot store for 5xx response capture (CAB-1645).
     pub snapshot_store: Arc<SnapshotStore>,
     /// Memory budget monitor for backpressure (CAB-1829).
@@ -687,6 +689,14 @@ impl AppState {
             config.poc_outbound_allowed_origins.iter(),
         ));
 
+        let poc_admission = Arc::new(crate::auth::poc_admission::PocAdmissionController::new(
+            crate::auth::poc_admission::PocAdmissionConfig {
+                max_revoked_chains: config.poc_max_revoked_chains,
+                default_chain_budget: config.poc_chain_budget,
+                default_caller_budget: config.poc_caller_budget,
+            },
+        ));
+
         // Initialize A2A agent registry (CAB-1754)
         let a2a_registry = if config.a2a_enabled {
             let registry = crate::a2a::registry::AgentRegistry::new(
@@ -752,6 +762,7 @@ impl AppState {
             local_agent_auth,
             role_policy_store,
             outbound_policy,
+            poc_admission,
             snapshot_store,
             memory_monitor,
             ebpf_client: std::env::var("STOA_EBPF_DAEMON_URL")

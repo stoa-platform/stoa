@@ -16,6 +16,7 @@ pub mod local_agent_token;
 pub mod middleware;
 pub mod mtls;
 pub mod oidc;
+pub mod poc_admission;
 pub mod profile_enforcement;
 pub mod rbac;
 pub mod sender_constraint;

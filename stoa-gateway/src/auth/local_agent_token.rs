@@ -129,6 +129,26 @@ pub struct LocalAgentClaims {
     pub cnf: CnfClaim,
 }
 
+impl LocalAgentClaims {
+    /// Return the stable root caller subject across a delegation chain.
+    ///
+    /// Walks nested RFC 8693 `act` claims to the originating depth-0 subject so delegated child
+    /// tokens debit the same caller-level budget as their root caller.
+    pub fn root_caller_sub(&self) -> &str {
+        let mut cursor = self.act.as_ref();
+        let mut root_sub: Option<&str> = None;
+        while let Some(node) = cursor {
+            if let Some(sub) = node.get("sub").and_then(Value::as_str) {
+                if !sub.is_empty() {
+                    root_sub = Some(sub);
+                }
+            }
+            cursor = node.get("act");
+        }
+        root_sub.unwrap_or(self.sub.as_str())
+    }
+}
+
 /// Request to mint an initial parent token (`depth = 0`) in autonomous PoC mode.
 #[derive(Debug, Clone)]
 pub struct IssueParentTokenRequest {

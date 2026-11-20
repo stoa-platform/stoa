@@ -221,5 +221,12 @@ expression: "Config::default()"
   "snapshot_max_count": 100,
   "snapshot_max_age_secs": 3600,
   "snapshot_body_max_bytes": 4096,
-  "snapshot_extra_pii_patterns": []
+  "snapshot_extra_pii_patterns": [],
+  "admin_routes_disabled": false,
+  "policy_local_artifacts_dir": null,
+  "poc_agents_enabled": false,
+  "poc_bootstrap_secret": null,
+  "poc_uac_contracts_dir": null,
+  "poc_credentials_file": null,
+  "poc_public_base_url": null
 }

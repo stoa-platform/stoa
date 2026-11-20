@@ -17,6 +17,7 @@
 //! 10. If access token bound, verify `ath` = SHA-256(access_token) and `cnf.jkt`
 //! 11. Record `(jkt, jti)` in the per-process replay table (after all binding checks)
 
+use axum::http::Uri;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
 use parking_lot::Mutex;
@@ -605,23 +606,130 @@ fn build_decoding_key(jwk: &DpopJwk, alg: Algorithm) -> Result<DecodingKey, Dpop
     }
 }
 
+/// Validate that a path adheres strictly to RFC 3986 path characters:
+/// segment = *( pchar / "/" )
+/// pchar   = unreserved / pct-encoded / sub-delims / ":" / "@"
+/// pct-encoded = "%" HEXDIG HEXDIG
+fn is_valid_rfc3986_path(path: &str) -> bool {
+    let bytes = path.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        let b = bytes[i];
+        match b {
+            // unreserved = ALPHA / DIGIT / "-" / "." / "_" / "~"
+            b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                i += 1;
+            }
+            // sub-delims = "!" / "$" / "&" / "'" / "(" / ")" / "*" / "+" / "," / ";" / "="
+            b'!' | b'$' | b'&' | b'\'' | b'(' | b')' | b'*' | b'+' | b',' | b';' | b'=' => {
+                i += 1;
+            }
+            // ":" / "@" / "/"
+            b':' | b'@' | b'/' => {
+                i += 1;
+            }
+            // pct-encoded = "%" HEXDIG HEXDIG
+            b'%' => {
+                if i + 2 >= bytes.len() {
+                    return false;
+                }
+                let h1 = bytes[i + 1];
+                let h2 = bytes[i + 2];
+                if !h1.is_ascii_hexdigit() || !h2.is_ascii_hexdigit() {
+                    return false;
+                }
+                i += 3;
+            }
+            _ => return false,
+        }
+    }
+    true
+}
+
+/// Extract validated HTU components for RFC 9449 comparison.
+///
+/// Returns `(scheme, host, port, path)` borrowing slices from the parsed `Uri`.
+/// Rejects relative URIs, non-HTTP(S) schemes, empty hosts, invalid/zero ports,
+/// authorities containing userinfo (`@`), and raw paths with non-RFC 3986 characters
+/// (e.g. backslashes, malformed percent-encodings).
+fn extract_htu_parts(uri: &Uri) -> Option<(&str, &str, u16, &str)> {
+    let scheme = uri.scheme_str()?;
+    let default_port = if scheme.eq_ignore_ascii_case("http") {
+        80
+    } else if scheme.eq_ignore_ascii_case("https") {
+        443
+    } else {
+        return None;
+    };
+
+    let authority = uri.authority()?;
+    if authority.as_str().contains('@') {
+        return None;
+    }
+
+    let host = authority.host();
+    if host.is_empty() {
+        return None;
+    }
+
+    let port_suffix = authority.as_str().strip_prefix(host)?;
+    let port = if port_suffix.is_empty() {
+        default_port
+    } else {
+        let port_str = port_suffix.strip_prefix(':')?;
+        if port_str.is_empty() || !port_str.chars().all(|c| c.is_ascii_digit()) {
+            return None;
+        }
+        let parsed: u16 = port_str.parse().ok()?;
+        if parsed == 0 {
+            return None;
+        }
+        parsed
+    };
+
+    let raw_path = uri.path();
+    let path = if raw_path.is_empty() { "/" } else { raw_path };
+
+    if !is_valid_rfc3986_path(path) {
+        return None;
+    }
+
+    Some((scheme, host, port, path))
+}
+
 /// Compare `htu` from the proof with the actual request URI.
-/// Per RFC 9449 Section 4.3: comparison is case-insensitive for scheme/host,
-/// and query/fragment components of the URI are ignored.
+///
+/// Per RFC 9449 Section 4.3 and RFC 3986 Section 6.2.2.1:
+/// - query and fragment components are ignored,
+/// - scheme and host are compared ASCII case-insensitively,
+/// - omitted ports match the scheme default (`80` for `http`, `443` for `https`),
+/// - path comparison is exact and case-sensitive,
+/// - invalid ports (including 0, non-numeric, or out of range) and relative URIs are rejected.
 fn htu_matches(htu: &str, request_uri: &str) -> bool {
-    let htu_clean = strip_query_fragment(htu);
-    let uri_clean = strip_query_fragment(request_uri);
-    htu_clean.eq_ignore_ascii_case(&uri_clean)
+    let Ok(uri_a) = strip_query_fragment(htu).parse::<Uri>() else {
+        return false;
+    };
+    let Ok(uri_b) = strip_query_fragment(request_uri).parse::<Uri>() else {
+        return false;
+    };
+
+    let Some((scheme_a, host_a, port_a, path_a)) = extract_htu_parts(&uri_a) else {
+        return false;
+    };
+    let Some((scheme_b, host_b, port_b, path_b)) = extract_htu_parts(&uri_b) else {
+        return false;
+    };
+
+    scheme_a.eq_ignore_ascii_case(scheme_b)
+        && host_a.eq_ignore_ascii_case(host_b)
+        && port_a == port_b
+        && path_a == path_b
 }
 
 /// Strip query string and fragment from a URI.
-fn strip_query_fragment(s: &str) -> String {
-    let without_fragment = s.split('#').next().unwrap_or(s);
-    without_fragment
-        .split('?')
-        .next()
-        .unwrap_or(without_fragment)
-        .to_string()
+fn strip_query_fragment(s: &str) -> &str {
+    let s = s.split('#').next().unwrap_or(s);
+    s.split('?').next().unwrap_or(s)
 }
 
 /// Compute the access token hash (ath) per RFC 9449 Section 6.1:
@@ -701,42 +809,224 @@ mod tests {
 
     #[test]
     fn test_htu_matches_exact() {
-        assert!(htu_matches(
-            "https://mcp.gostoa.dev/mcp/tools/call",
-            "https://mcp.gostoa.dev/mcp/tools/call"
-        ));
+        let cases = [
+            (
+                "https://mcp.gostoa.dev/mcp/tools/call",
+                "https://mcp.gostoa.dev/mcp/tools/call",
+            ),
+            ("https://mcp.gostoa.dev", "https://mcp.gostoa.dev/"),
+            (
+                "https://mcp.gostoa.dev/mcp/tools%2Fcall",
+                "https://mcp.gostoa.dev/mcp/tools%2Fcall",
+            ),
+            (
+                "https://mcp.gostoa.dev/users/@alice/tools",
+                "https://mcp.gostoa.dev/users/@alice/tools",
+            ),
+        ];
+        for (a, b) in cases {
+            assert!(htu_matches(a, b), "expected match between '{a}' and '{b}'");
+        }
     }
 
     #[test]
     fn test_htu_matches_ignores_query() {
-        assert!(htu_matches(
-            "https://mcp.gostoa.dev/mcp/tools/call",
-            "https://mcp.gostoa.dev/mcp/tools/call?foo=bar"
-        ));
+        let cases = [
+            (
+                "https://mcp.gostoa.dev/mcp/tools/call",
+                "https://mcp.gostoa.dev/mcp/tools/call?foo=bar",
+            ),
+            (
+                "https://mcp.gostoa.dev/mcp/tools/call?a=1&b=2",
+                "https://mcp.gostoa.dev/mcp/tools/call?c=3",
+            ),
+        ];
+        for (a, b) in cases {
+            assert!(htu_matches(a, b), "query should be ignored: '{a}' vs '{b}'");
+        }
     }
 
     #[test]
     fn test_htu_matches_ignores_fragment() {
-        assert!(htu_matches(
-            "https://mcp.gostoa.dev/mcp/tools/call",
-            "https://mcp.gostoa.dev/mcp/tools/call#section"
-        ));
+        let cases = [
+            (
+                "https://mcp.gostoa.dev/mcp/tools/call",
+                "https://mcp.gostoa.dev/mcp/tools/call#section",
+            ),
+            (
+                "https://mcp.gostoa.dev/mcp/tools/call?a=1#frag1",
+                "https://mcp.gostoa.dev/mcp/tools/call?b=2#frag2",
+            ),
+            (
+                "https://mcp.gostoa.dev/mcp/tools/call#frag?notquery",
+                "https://mcp.gostoa.dev/mcp/tools/call",
+            ),
+        ];
+        for (a, b) in cases {
+            assert!(
+                htu_matches(a, b),
+                "fragment/query should be ignored: '{a}' vs '{b}'"
+            );
+        }
     }
 
     #[test]
     fn test_htu_matches_case_insensitive() {
-        assert!(htu_matches(
-            "HTTPS://MCP.GOSTOA.DEV/mcp/tools/call",
-            "https://mcp.gostoa.dev/mcp/tools/call"
-        ));
+        let matching_cases = [
+            (
+                "HTTPS://MCP.GOSTOA.DEV/mcp/tools/call",
+                "https://mcp.gostoa.dev/mcp/tools/call",
+            ),
+            (
+                "Http://McP.GoStOa.DeV/mcp/tools/call",
+                "http://mcp.gostoa.dev/mcp/tools/call",
+            ),
+            (
+                "https://[2001:DB8::1]/mcp/tools/call",
+                "https://[2001:db8::1]/mcp/tools/call",
+            ),
+            (
+                "https://[2001:DB8::1]:443/mcp/tools/call",
+                "https://[2001:db8::1]/mcp/tools/call",
+            ),
+            (
+                "https://mcp.gostoa.dev:443/mcp/tools/call",
+                "https://mcp.gostoa.dev/mcp/tools/call",
+            ),
+            (
+                "https://mcp.gostoa.dev/mcp/tools/call",
+                "https://mcp.gostoa.dev:443/mcp/tools/call",
+            ),
+            (
+                "http://mcp.gostoa.dev:80/mcp/tools/call",
+                "http://mcp.gostoa.dev/mcp/tools/call",
+            ),
+            (
+                "http://mcp.gostoa.dev/mcp/tools/call",
+                "http://mcp.gostoa.dev:80/mcp/tools/call",
+            ),
+            (
+                "https://mcp.gostoa.dev:8443/mcp/tools/call",
+                "https://mcp.gostoa.dev:8443/mcp/tools/call",
+            ),
+        ];
+        for (a, b) in matching_cases {
+            assert!(htu_matches(a, b), "expected match between '{a}' and '{b}'");
+        }
     }
 
     #[test]
     fn test_htu_mismatch_different_path() {
-        assert!(!htu_matches(
-            "https://mcp.gostoa.dev/mcp/tools/list",
-            "https://mcp.gostoa.dev/mcp/tools/call"
-        ));
+        let mismatches = [
+            (
+                "https://mcp.gostoa.dev/mcp/tools/list",
+                "https://mcp.gostoa.dev/mcp/tools/call",
+            ),
+            (
+                "https://mcp.gostoa.dev/MCP/tools/call",
+                "https://mcp.gostoa.dev/mcp/tools/call",
+            ),
+            (
+                "https://mcp.gostoa.dev/mcp/Tools/Call",
+                "https://mcp.gostoa.dev/mcp/tools/call",
+            ),
+            (
+                "https://mcp.gostoa.dev/mcp/tools%2Fcall",
+                "https://mcp.gostoa.dev/mcp/tools/call",
+            ),
+            (
+                "https://mcp.gostoa.dev/mcp/tools%2fcall",
+                "https://mcp.gostoa.dev/mcp/tools%2Fcall",
+            ),
+            (
+                "https://mcp.gostoa.dev/mcp/./tools/call",
+                "https://mcp.gostoa.dev/mcp/tools/call",
+            ),
+            (
+                "https://mcp.gostoa.dev/mcp/other/../tools/call",
+                "https://mcp.gostoa.dev/mcp/tools/call",
+            ),
+            (
+                "https://mcp.gostoa.dev/mcp//tools/call",
+                "https://mcp.gostoa.dev/mcp/tools/call",
+            ),
+            (
+                "https://mcp.gostoa.dev/mcp/tools/call/",
+                "https://mcp.gostoa.dev/mcp/tools/call",
+            ),
+            (
+                "https://other.gostoa.dev/mcp/tools/call",
+                "https://mcp.gostoa.dev/mcp/tools/call",
+            ),
+            (
+                "http://mcp.gostoa.dev/mcp/tools/call",
+                "https://mcp.gostoa.dev/mcp/tools/call",
+            ),
+            (
+                "https://mcp.gostoa.dev:8443/mcp/tools/call",
+                "https://mcp.gostoa.dev/mcp/tools/call",
+            ),
+            (
+                "https://mcp.gostoa.dev:8443/mcp/tools/call",
+                "https://mcp.gostoa.dev:9443/mcp/tools/call",
+            ),
+            (
+                "http://mcp.gostoa.dev:8080/mcp/tools/call",
+                "http://mcp.gostoa.dev/mcp/tools/call",
+            ),
+            (
+                "https://mcp.gostoa.dev:80/mcp/tools/call",
+                "https://mcp.gostoa.dev/mcp/tools/call",
+            ),
+            (
+                "http://mcp.gostoa.dev:443/mcp/tools/call",
+                "http://mcp.gostoa.dev/mcp/tools/call",
+            ),
+        ];
+        for (a, b) in mismatches {
+            assert!(
+                !htu_matches(a, b),
+                "expected mismatch between '{a}' and '{b}'"
+            );
+        }
+
+        let valid = "https://mcp.gostoa.dev/mcp/tools/call";
+        let invalid_uris = [
+            "",
+            "/mcp/tools/call",
+            "mcp/tools/call",
+            "//mcp.gostoa.dev/mcp/tools/call",
+            "not a uri",
+            "https://",
+            "https:///mcp/tools/call",
+            "https://:443/mcp/tools/call",
+            "https://mcp.gostoa.dev:/mcp/tools/call",
+            "https://mcp.gostoa.dev:0/mcp/tools/call",
+            "https://mcp.gostoa.dev:0000/mcp/tools/call",
+            "https://mcp.gostoa.dev:+443/mcp/tools/call",
+            "https://mcp.gostoa.dev:99999/mcp/tools/call",
+            "https://mcp.gostoa.dev:abc/mcp/tools/call",
+            "https://mcp.gostoa.dev/bad path",
+            "https://mcp.gostoa.dev/mcp\\tools",
+            "ftp://mcp.gostoa.dev/mcp/tools/call",
+            "https://user@mcp.gostoa.dev/mcp/tools/call",
+            "https://user:pass@mcp.gostoa.dev/mcp/tools/call",
+            "https://@mcp.gostoa.dev/mcp/tools/call",
+            "https://example.com/foo\\bar",
+            "https://example.com/foo%zzbar",
+            "https://example.com/foo%",
+            "https://example.com/foo%2",
+            "https://example.com/foo%2g",
+            "https://example.com/path with spaces",
+            "https://example.com/foo^bar",
+            "https://example.com/foo{bar}",
+            "https://example.com/foo|bar",
+        ];
+        for bad in invalid_uris {
+            assert!(!htu_matches(bad, bad), "expected rejection for '{bad}'");
+            assert!(!htu_matches(bad, valid), "expected rejection for '{bad}'");
+            assert!(!htu_matches(valid, bad), "expected rejection for '{bad}'");
+        }
     }
 
     #[test]
@@ -1170,5 +1460,81 @@ mod tests {
             ),
             Err(DpopError::ReplayDetected(_))
         ));
+    }
+
+    #[test]
+    fn test_validate_htu_comparison_rules() {
+        use aws_lc_rs::signature::{EcdsaKeyPair, KeyPair, ECDSA_P256_SHA256_FIXED_SIGNING};
+
+        let pkcs8 = EcdsaKeyPair::generate_pkcs8(
+            &ECDSA_P256_SHA256_FIXED_SIGNING,
+            &aws_lc_rs::rand::SystemRandom::new(),
+        )
+        .unwrap();
+        let kp =
+            EcdsaKeyPair::from_pkcs8(&ECDSA_P256_SHA256_FIXED_SIGNING, pkcs8.as_ref()).unwrap();
+        let pub_bytes = kp.public_key().as_ref();
+        let jwk = DpopJwk {
+            kty: "EC".to_string(),
+            crv: Some("P-256".to_string()),
+            x: Some(URL_SAFE_NO_PAD.encode(&pub_bytes[1..33])),
+            y: Some(URL_SAFE_NO_PAD.encode(&pub_bytes[33..65])),
+            n: None,
+            e: None,
+            d: None,
+            p: None,
+            q: None,
+        };
+
+        let sign_proof = |jti: &str, htu: &str| -> String {
+            let header = serde_json::json!({
+                "typ": "dpop+jwt",
+                "alg": "ES256",
+                "jwk": {
+                    "kty": jwk.kty,
+                    "crv": jwk.crv,
+                    "x": jwk.x,
+                    "y": jwk.y,
+                }
+            });
+            let payload = serde_json::json!({
+                "jti": jti,
+                "htm": "POST",
+                "htu": htu,
+                "iat": chrono::Utc::now().timestamp(),
+            });
+            let input = format!(
+                "{}.{}",
+                URL_SAFE_NO_PAD.encode(serde_json::to_vec(&header).unwrap()),
+                URL_SAFE_NO_PAD.encode(serde_json::to_vec(&payload).unwrap()),
+            );
+            let sig = kp
+                .sign(&aws_lc_rs::rand::SystemRandom::new(), input.as_bytes())
+                .unwrap();
+            format!("{input}.{}", URL_SAFE_NO_PAD.encode(sig.as_ref()))
+        };
+
+        let validator = DpopValidator::new(test_config());
+        let req_uri = "https://gw.example/mcp/Tools";
+        let req_with_qf = "https://gw.example/mcp/Tools?foo=bar#frag";
+
+        // Scheme/host case-insensitivity and default port equivalence succeed.
+        let accepted = sign_proof("htu-ok-1", "HTTPS://GW.EXAMPLE:443/mcp/Tools");
+        let res = validator.validate(&accepted, "POST", req_with_qf, None, None);
+        assert!(res.is_ok());
+
+        // Path case mismatch, non-equivalent port, userinfo, and relative URI fail.
+        let rejected_htus = [
+            "https://gw.example/mcp/tools",
+            "https://gw.example:8443/mcp/Tools",
+            "https://user@gw.example/mcp/Tools",
+            "/mcp/Tools",
+        ];
+        for (idx, bad_htu) in rejected_htus.into_iter().enumerate() {
+            let jti = format!("htu-bad-{idx}");
+            let proof = sign_proof(&jti, bad_htu);
+            let res = validator.validate(&proof, "POST", req_uri, None, None);
+            assert!(matches!(res, Err(DpopError::HtuMismatch { .. })));
+        }
     }
 }

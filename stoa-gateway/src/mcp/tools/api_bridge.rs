@@ -201,7 +201,9 @@ pub async fn discover_expanded_api_tools(
 /// [`discover_expanded_api_tools`], attaching the backend credential store to
 /// each registered tool so it authenticates upstream with the credential
 /// stored under [`DynamicTool::credential_key`] for the tenant the catalog
-/// reports for that tool.
+/// reports for that tool. These tools can be called by every tenant: the
+/// credential is used for callers of that tenant only, unless it is
+/// registered with `shared_with_tenants`.
 pub async fn discover_expanded_api_tools_with_credentials(
     registry: &ToolRegistry,
     cp_base_url: &str,
@@ -973,9 +975,9 @@ mod tests {
         };
 
         // One server plays both the CP catalog and the tool's upstream. The
-        // tool is registered for tenant `demo` and called by tenant `t1`: the
-        // credential of `demo` is the one in use, not an entry of the calling
-        // tenant nor an entry without a tenant.
+        // tool is registered for tenant `demo`: a caller of `demo` gets the
+        // credential of `demo`. A caller of tenant `t1` gets none, be it the
+        // entry of `demo`, an entry of its own tenant or one without a tenant.
         let mock = orders_upstream().await;
         let tools = serde_json::json!([expanded_tool_json(
             "per-op",
@@ -993,8 +995,17 @@ mod tests {
         );
         let registry = discover_expanded_with_store(&mock, tools, &store).await;
 
-        let keys = api_keys_received(registry.get("per-op").unwrap().as_ref(), &mock).await;
+        let tool = registry.get("per-op").unwrap();
+
+        let keys = api_keys_received(tool.as_ref(), "demo", &mock).await;
         assert_eq!(keys, [api_key_for("mcp-tool:demo:per-op")]);
+
+        // The second call adds a request, and no key.
+        let keys = api_keys_received(tool.as_ref(), "t1", &mock).await;
+        assert_eq!(keys, [api_key_for("mcp-tool:demo:per-op")]);
+        let requests = mock.received_requests().await.unwrap();
+        let calls = requests.iter().filter(|r| r.url.path() == "/orders");
+        assert_eq!(calls.count(), 2);
     }
 
     #[tokio::test]
@@ -1005,7 +1016,8 @@ mod tests {
 
         // Two tenants publish a tool under the same name, each with its own
         // backend; the first one listed is the one registered. The credential
-        // of the other tenant is not used for it.
+        // of the other tenant is not used for it, whichever of the two
+        // tenants calls.
         let (mock, other_backend) = (orders_upstream().await, orders_upstream().await);
         let tool_of = |tenant: &str, backend: &MockServer| {
             let mut tool = expanded_tool_json("orders", &backend.uri(), "GET", Some("/orders"));
@@ -1019,8 +1031,11 @@ mod tests {
         let store = api_key_store(&["mcp-tool:tenant-a:orders"], &other_backend.uri());
         let registry = discover_expanded_with_store(&mock, tools, &store).await;
 
-        let keys = api_keys_received(registry.get("orders").unwrap().as_ref(), &mock).await;
-        assert!(keys.is_empty());
+        let tool = registry.get("orders").unwrap();
+        for caller in ["tenant-b", "tenant-a"] {
+            let keys = api_keys_received(tool.as_ref(), caller, &mock).await;
+            assert!(keys.is_empty(), "caller {caller}");
+        }
         assert!(other_backend.received_requests().await.unwrap().is_empty());
     }
 }

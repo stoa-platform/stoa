@@ -644,6 +644,7 @@ mod tests {
             header_value: "fixture-service-value".into(),
             oauth2: None,
             allowed_origin: None,
+            shared_with_tenants: false,
         });
         let mut req = Request::builder().uri("/proxy/t/echo");
         if let Some(a) = authz {

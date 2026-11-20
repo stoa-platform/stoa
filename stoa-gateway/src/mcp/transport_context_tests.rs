@@ -18,6 +18,7 @@ use crate::guardrails::{TenantGuardrailPolicy, TokenBudgetTracker};
 use crate::mcp::tools::dynamic_tool::DynamicTool;
 use crate::mcp::tools::{Tool, ToolContext, ToolError, ToolResult, ToolSchema};
 use crate::metering::{MeteringProducer, MeteringProducerConfig, MeteringProducerTrait};
+use crate::proxy::credentials::{AuthType, BackendCredential};
 use crate::state::AppState;
 use crate::uac::Action;
 
@@ -1075,6 +1076,73 @@ async fn dynamic_tool_upstream_never_receives_user_token() {
                 .headers
                 .values()
                 .all(|value| !String::from_utf8_lossy(value.as_bytes()).contains(&token)));
+        }
+    }
+}
+
+#[tokio::test]
+async fn dynamic_tool_credential_follows_the_tenant_of_the_token() {
+    // A tool every tenant can call, with a credential of the tenant that owns
+    // it. The caller's token is of `tenant-a` and each request also carries a
+    // tenant header naming `tenant-b`: only the tenant of the token decides
+    // whether the credential is used.
+    for (owner, shared, credential_expected) in [
+        ("tenant-b", false, false),
+        ("tenant-a", false, true),
+        ("tenant-b", true, true),
+    ] {
+        let fixture = Fixture::new(|_| {}).await;
+        Mock::given(method("GET"))
+            .and(path("/backend"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"ok": true})))
+            .mount(&fixture.server)
+            .await;
+        let store = fixture.state.credential_store.clone();
+        store.upsert(BackendCredential {
+            route_id: DynamicTool::credential_key(owner, "echo_tool"),
+            auth_type: AuthType::ApiKey,
+            header_name: "X-Api-Key".into(),
+            header_value: "fixture-backend-key".into(),
+            oauth2: None,
+            allowed_origin: Some(fixture.server.uri()),
+            shared_with_tenants: shared,
+        });
+        let tool = DynamicTool::new(
+            "echo_tool",
+            "credential tenant test",
+            format!("{}/backend", fixture.server.uri()),
+            "GET",
+            empty_schema(),
+            owner,
+        )
+        .into_public()
+        .with_credential_store(store);
+        fixture.state.tool_registry.register(Arc::new(tool));
+        let token = fixture.token(json!({}));
+        // Arguments differ so that the second call is not answered from the
+        // result cache of the first one.
+        let rpc = json!({"jsonrpc": "2.0", "id": 7, "method": "tools/call",
+            "params": {"name": "echo_tool", "arguments": {"via": "rpc"}}});
+        let rest = json!({"name": "echo_tool", "arguments": {"via": "rest"}});
+        let case = format!("owner={owner} shared={shared}");
+
+        for (uri, body) in [("/mcp", rpc), ("/mcp/tools/call", rest)] {
+            let (status, _) = fixture
+                .post_with_tenants(uri, Some(&token), body, &["tenant-b"])
+                .await;
+            assert_eq!(status, StatusCode::OK, "{case} {uri}");
+        }
+
+        let requests = fixture.server.received_requests().await.unwrap();
+        let backend: Vec<_> = requests
+            .iter()
+            .filter(|r| r.url.path() == "/backend")
+            .collect();
+        assert_eq!(backend.len(), 2, "{case}");
+        for request in backend {
+            let key = request.headers.get("X-Api-Key");
+            let expected = credential_expected.then_some("fixture-backend-key");
+            assert_eq!(key.and_then(|k| k.to_str().ok()), expected, "{case}");
         }
     }
 }

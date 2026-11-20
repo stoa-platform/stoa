@@ -38,7 +38,9 @@ pub async fn upsert_backend_credential(
 
     // A dynamic tool credential (`mcp-tool:{tenant}:{tool_name}`) is bound to
     // one upstream origin, stored in its normalized form. The field stays
-    // optional, and is not interpreted, for every other key.
+    // optional, and is not interpreted, for every other key. Likewise for
+    // `shared_with_tenants`, which needs no validation: it is read by dynamic
+    // tools only, and is stored as sent.
     if cred.route_id.starts_with(MCP_TOOL_KEY_PREFIX) {
         match cred.allowed_origin.as_deref().and_then(normalize_origin) {
             Some(origin) => cred.allowed_origin = Some(origin),
@@ -485,6 +487,71 @@ mod tests {
             let stored = state.credential_store.get(route_id).unwrap();
             assert_eq!(stored.allowed_origin.as_deref(), origin);
         }
+    }
+
+    #[tokio::test]
+    async fn tool_credential_round_trips_shared_with_tenants() {
+        let state = create_test_state(Some("secret"));
+        let app = build_full_admin_router(state.clone());
+
+        // Value sent for each key; `None` leaves the field out of the payload.
+        // The field is accepted, and not interpreted, for other keys.
+        let sent = [
+            ("mcp-tool:acme:payments", Some(true)),
+            ("mcp-tool:acme:invoices", Some(false)),
+            ("mcp-tool:acme:orders", None),
+            ("api-proxy:billing", Some(true)),
+        ];
+        for (route_id, shared) in sent {
+            let mut cred = tool_credential(Some("https://api.example.com"));
+            cred["route_id"] = route_id.into();
+            if let Some(shared) = shared {
+                cred["shared_with_tenants"] = shared.into();
+            }
+            let response = app
+                .clone()
+                .oneshot(auth_json_req("POST", "/backend-credentials", cred))
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::CREATED, "{route_id}");
+            let stored = state.credential_store.get(route_id).unwrap();
+            assert_eq!(
+                stored.shared_with_tenants,
+                shared.unwrap_or(false),
+                "{route_id}"
+            );
+        }
+
+        // Listed back as registered; the field is left out when false.
+        let response = app
+            .clone()
+            .oneshot(auth_req("GET", "/backend-credentials"))
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let listed: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(listed.len(), sent.len());
+        for (route_id, shared) in sent {
+            let entry = listed.iter().find(|e| e["route_id"] == route_id).unwrap();
+            let expected = (shared == Some(true)).then_some(serde_json::Value::Bool(true));
+            assert_eq!(
+                entry.get("shared_with_tenants"),
+                expected.as_ref(),
+                "{route_id}"
+            );
+        }
+
+        // Registering the key again without the field turns sharing off.
+        let cred = tool_credential(Some("https://api.example.com"));
+        let response = app
+            .oneshot(auth_json_req("POST", "/backend-credentials", cred))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let stored = state.credential_store.get("mcp-tool:acme:payments");
+        assert!(!stored.unwrap().shared_with_tenants);
     }
 
     #[tokio::test]

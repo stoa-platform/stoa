@@ -590,7 +590,7 @@ mod tests {
         binder.bind(&contract).await.unwrap();
 
         let tool = registry.get("uac:t1:payments:list_payments").unwrap();
-        let keys = api_keys_received(tool.as_ref(), &upstream).await;
+        let keys = api_keys_received(tool.as_ref(), "t1", &upstream).await;
         assert_eq!(keys, [api_key_for(key)]);
     }
 }

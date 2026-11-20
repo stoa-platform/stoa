@@ -59,6 +59,13 @@ pub struct BackendCredential {
     /// only used for requests to that origin. Ignored for other keys.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub allowed_origin: Option<String>,
+    /// Whether a dynamic tool credential also serves callers of other
+    /// tenants. A dynamic tool uses its credential for callers of the tenant
+    /// that owns the tool; with this set, it uses it for callers of every
+    /// tenant allowed to call the tool. Default: false. Ignored for keys
+    /// that do not start with [`MCP_TOOL_KEY_PREFIX`].
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub shared_with_tenants: bool,
 }
 
 /// Key prefix of the credentials used by dynamic MCP tools
@@ -275,6 +282,7 @@ mod tests {
             header_value: "Bearer test-token".to_string(),
             oauth2: None,
             allowed_origin: None,
+            shared_with_tenants: false,
         }
     }
 
@@ -290,6 +298,7 @@ mod tests {
                 client_secret: "test-secret".to_string(),
             }),
             allowed_origin: None,
+            shared_with_tenants: false,
         }
     }
 
@@ -312,6 +321,7 @@ mod tests {
             header_value: "new-key".to_string(),
             oauth2: None,
             allowed_origin: None,
+            shared_with_tenants: false,
         });
         assert!(prev.is_some());
         assert_eq!(prev.unwrap().auth_type, AuthType::Bearer);
@@ -499,6 +509,25 @@ mod tests {
         assert_eq!(json["allowed_origin"], "https://api.example.com:443");
         let cred: BackendCredential = serde_json::from_value(json).unwrap();
         assert_eq!(cred.allowed_origin, bound.allowed_origin);
+    }
+
+    #[test]
+    fn shared_with_tenants_defaults_to_false_in_serialized_form() {
+        // Payloads written before the field existed still deserialize, as not
+        // shared, and a credential that is not shared serializes as before.
+        let json = serde_json::to_value(make_cred("mcp-tool:acme:payments")).unwrap();
+        assert!(json.get("shared_with_tenants").is_none());
+        let cred: BackendCredential = serde_json::from_value(json).unwrap();
+        assert!(!cred.shared_with_tenants);
+
+        let shared = BackendCredential {
+            shared_with_tenants: true,
+            ..make_cred("mcp-tool:acme:payments")
+        };
+        let json = serde_json::to_value(&shared).unwrap();
+        assert_eq!(json["shared_with_tenants"], true);
+        let cred: BackendCredential = serde_json::from_value(json).unwrap();
+        assert!(cred.shared_with_tenants);
     }
 
     #[test]

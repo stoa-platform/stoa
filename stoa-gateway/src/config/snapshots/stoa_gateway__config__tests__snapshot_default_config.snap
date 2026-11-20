@@ -228,5 +228,8 @@ expression: "Config::default()"
   "poc_bootstrap_secret": null,
   "poc_uac_contracts_dir": null,
   "poc_credentials_file": null,
-  "poc_public_base_url": null
+  "poc_public_base_url": null,
+  "poc_role_artifacts_dir": null,
+  "poc_role_floor_dir": null,
+  "poc_outbound_allowed_origins": []
 }

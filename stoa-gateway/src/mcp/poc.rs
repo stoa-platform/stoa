@@ -1,12 +1,18 @@
-//! Autonomous PoC HTTP/MCP endpoints backed by dedicated local RS256 + DPoP auth.
+//! Autonomous PoC HTTP/MCP endpoints backed by dedicated local RS256 + DPoP auth,
+//! signed role policies with durable anti-rollback (`0600`, 15 min max), v1 argument
+//! constraints, gateway-native delegation, and outbound address policy enforcement.
 //!
 //! Routes (mounted only when `STOA_POC_AGENTS_ENABLED=true`):
 //! - `POST /mcp/poc/bootstrap`: mints a DPoP-bound `depth=0` parent token for the
 //!   designated parent container (`X-Stoa-Poc-Bootstrap-Secret` + valid DPoP proof).
+//! - `POST /mcp/poc/delegate`: mints a strictly narrowed DPoP-bound child token
+//!   (`iss=stoa-poc-delegation`, `aud=mcp-tool:{tenant}:{tool}`, `depth<=3`,
+//!   `exp<=parent.exp`, inherited tenant, `act`, `chain_id`, `jti`, `parent_jti`).
 //! - `POST /mcp/poc`: Streamable HTTP JSON-RPC 2.0 entrypoint enforcing strict local
 //!   RS256 validation (separate from OIDC), atomic DPoP verification (`htm`, `htu`,
-//!   `ath`, `cnf.jkt`), and the shared tool authorization chain.
+//!   `ath`, `cnf.jkt`), and the full shared tool authorization chain.
 
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use axum::{
@@ -22,9 +28,12 @@ use subtle::ConstantTimeEq;
 use tracing::{info, warn};
 use uuid::Uuid;
 
+use crate::auth::dpop::DpopJwk;
 use crate::auth::local_agent_token::{
-    IssueParentTokenRequest, LocalAgentClaims, LocalTokenError, LOCAL_AGENT_ISSUER,
+    canonical_tool_audience, DelegateChildTokenRequest, IssueParentTokenRequest, LocalAgentClaims,
+    LocalTokenError, DELEGATION_ISSUER, LOCAL_AGENT_ISSUER,
 };
+use crate::control_plane::role_policy::{ArgumentConstraint, RoleEvalInput};
 use crate::mcp::handlers::{check_tool_permission, check_tool_policy, ToolsCallRequest};
 use crate::mcp::sse::{
     JsonRpcRequest, JsonRpcResponse, INVALID_PARAMS, INVALID_REQUEST, METHOD_NOT_FOUND, PARSE_ERROR,
@@ -43,9 +52,11 @@ pub struct PocFixturesSummary {
     pub credentials_loaded: usize,
     pub contracts_loaded: usize,
     pub tools_registered: usize,
+    pub role_policies_loaded: usize,
 }
 
-/// Load local backend credentials and UAC contracts configured for autonomous PoC mode.
+/// Load local backend credentials, UAC contracts (with outbound address policy), and signed
+/// role policies configured for autonomous PoC mode.
 pub async fn load_poc_fixtures(state: &AppState) -> Result<PocFixturesSummary, String> {
     let mut summary = PocFixturesSummary::default();
 
@@ -92,7 +103,8 @@ pub async fn load_poc_fixtures(state: &AppState) -> Result<PocFixturesSummary, S
         paths.sort();
 
         let binder = McpBinder::new(state.tool_registry.clone())
-            .with_credential_store(state.credential_store.clone());
+            .with_credential_store(state.credential_store.clone())
+            .with_outbound_policy(state.outbound_policy.clone());
 
         for path in paths {
             let raw = tokio::fs::read_to_string(&path)
@@ -114,10 +126,20 @@ pub async fn load_poc_fixtures(state: &AppState) -> Result<PocFixturesSummary, S
         }
     }
 
+    if let Some(ref role_store) = state.role_policy_store {
+        for tenant in &state.config.policy_boot_tenants {
+            role_store
+                .reload_tenant(tenant)
+                .map_err(|e| format!("failed to load signed role policy for '{tenant}': {e}"))?;
+            summary.role_policies_loaded += 1;
+        }
+    }
+
     info!(
         credentials = summary.credentials_loaded,
         contracts = summary.contracts_loaded,
         tools = summary.tools_registered,
+        role_policies = summary.role_policies_loaded,
         "Loaded autonomous PoC fixtures"
     );
     Ok(summary)
@@ -151,16 +173,36 @@ pub struct PocBootstrapRequest {
     pub ttl_secs: Option<i64>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct PocDelegateRequest {
+    pub sub: String,
+    pub target_tool: String,
+    pub child_dpop_jwk: DpopJwk,
+    #[serde(default)]
+    pub allowed_tools: Vec<String>,
+    #[serde(default)]
+    pub arg_constraints: Option<HashMap<String, ArgumentConstraint>>,
+    #[serde(default)]
+    pub ttl_secs: Option<i64>,
+}
+
 #[derive(Debug, Serialize)]
-struct PocBootstrapResponse {
+struct PocTokenResponse {
     access_token: String,
     token_type: &'static str,
     expires_in: i64,
     kid: String,
+    iss: String,
     chain_id: String,
     jti: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    parent_jti: Option<String>,
     depth: u8,
     aud: String,
+    tenant_id: String,
+    role: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    act: Option<Value>,
 }
 
 /// `POST /mcp/poc/bootstrap` — mint a DPoP-bound `depth=0` parent token.
@@ -213,6 +255,23 @@ pub async fn handle_poc_bootstrap(
         }
     };
 
+    // When signed role policies are configured, verify the role exists and anchor
+    // the token's monotonic session ceiling to the current verified policy version.
+    let policy_version = match state.role_policy_store.as_ref() {
+        Some(role_store) => match role_store.current_role_snapshot(&req.tenant_id, &req.role) {
+            Ok((ver, _)) => Some(ver),
+            Err(err) => {
+                warn!(error = %err, "Rejected PoC bootstrap: role policy unavailable or role unknown");
+                return (
+                    StatusCode::FORBIDDEN,
+                    Json(json!({ "error": "role_not_permitted" })),
+                )
+                    .into_response();
+            }
+        },
+        None => None,
+    };
+
     let aud = req
         .aud
         .filter(|a| !a.trim().is_empty())
@@ -223,21 +282,27 @@ pub async fn handle_poc_bootstrap(
         sub: req.sub,
         tenant_id: req.tenant_id,
         role: req.role,
-        aud: aud.clone(),
+        aud,
         cnf_jkt,
         ttl_secs,
+        policy_version,
     }) {
         Ok(issued) => (
             StatusCode::OK,
-            Json(PocBootstrapResponse {
+            Json(PocTokenResponse {
                 access_token: issued.as_str().to_string(),
                 token_type: "DPoP",
-                expires_in: ttl_secs,
+                expires_in: issued.claims.exp - issued.claims.iat,
                 kid: auth.kid().to_string(),
+                iss: issued.claims.iss,
                 chain_id: issued.claims.chain_id,
                 jti: issued.claims.jti,
+                parent_jti: issued.claims.parent_jti,
                 depth: issued.claims.depth,
                 aud: issued.claims.aud,
+                tenant_id: issued.claims.tenant_id,
+                role: issued.claims.role,
+                act: issued.claims.act,
             }),
         )
             .into_response(),
@@ -247,6 +312,126 @@ pub async fn handle_poc_bootstrap(
         Err(_) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({ "error": "token_issuance_failed" })),
+        )
+            .into_response(),
+    }
+}
+
+/// `POST /mcp/poc/delegate` — mint a strictly narrowed, DPoP-bound child token.
+pub async fn handle_poc_delegate(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(req): Json<PocDelegateRequest>,
+) -> Response {
+    let Some(ref auth) = state.local_agent_auth else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+
+    let base = public_base_url(&state);
+    let delegate_htu = format!("{base}/mcp/poc/delegate");
+    let mcp_aud = format!("{base}/mcp/poc");
+    let target_tool = req.target_tool.trim().to_string();
+
+    // Parent may be a root token (`aud == {base}/mcp/poc`) or a child token re-delegating
+    // its own canonical tool audience (`aud == mcp-tool:{tenant}:{target_tool}`).
+    let parent_claims = match auth.validate_mcp_request_with_audience_fn(
+        &headers,
+        "POST",
+        &delegate_htu,
+        |claims| {
+            if claims.depth == 0 && claims.iss == LOCAL_AGENT_ISSUER {
+                Ok(mcp_aud.clone())
+            } else if claims.depth > 0 && claims.iss == DELEGATION_ISSUER {
+                Ok(canonical_tool_audience(&claims.tenant_id, &target_tool))
+            } else {
+                Err(LocalTokenError::InvalidClaims("unsupported token issuer"))
+            }
+        },
+    ) {
+        Ok(claims) => claims,
+        Err(err) => {
+            warn!(error = %err, "Rejected PoC delegate caller authentication");
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(json!({ "error": "unauthorized" })),
+            )
+                .into_response();
+        }
+    };
+
+    // Determine parent's currently effective tool set & constraints from signed role policy.
+    let (parent_effective_tools, parent_tool_constraints) = match state.role_policy_store.as_ref() {
+        Some(role_store) => {
+            let Ok((_, spec)) =
+                role_store.current_role_snapshot(&parent_claims.tenant_id, &parent_claims.role)
+            else {
+                return (
+                    StatusCode::FORBIDDEN,
+                    Json(json!({ "error": "role_policy_denied" })),
+                )
+                    .into_response();
+            };
+            let tool_constraints = spec.argument_constraints.get(&target_tool).cloned();
+            (spec.allowed_tools, tool_constraints)
+        }
+        None => {
+            let tools: HashSet<String> = state
+                .tool_registry
+                .list(Some(&parent_claims.tenant_id))
+                .into_iter()
+                .map(|t| t.name)
+                .collect();
+            (tools, None)
+        }
+    };
+
+    let allowed_tools = if req.allowed_tools.is_empty() {
+        vec![target_tool.clone()]
+    } else {
+        req.allowed_tools
+    };
+
+    match auth.issue_child_token(
+        &parent_claims,
+        &parent_effective_tools,
+        parent_tool_constraints.as_ref(),
+        DelegateChildTokenRequest {
+            sub: req.sub,
+            target_tool,
+            child_dpop_jwk: req.child_dpop_jwk,
+            allowed_tools,
+            arg_constraints: req.arg_constraints,
+            ttl_secs: req.ttl_secs,
+        },
+    ) {
+        Ok(issued) => (
+            StatusCode::OK,
+            Json(PocTokenResponse {
+                access_token: issued.as_str().to_string(),
+                token_type: "DPoP",
+                expires_in: issued.claims.exp - issued.claims.iat,
+                kid: auth.kid().to_string(),
+                iss: issued.claims.iss,
+                chain_id: issued.claims.chain_id,
+                jti: issued.claims.jti,
+                parent_jti: issued.claims.parent_jti,
+                depth: issued.claims.depth,
+                aud: issued.claims.aud,
+                tenant_id: issued.claims.tenant_id,
+                role: issued.claims.role,
+                act: issued.claims.act,
+            }),
+        )
+            .into_response(),
+        Err(LocalTokenError::DelegationDenied(msg)) => {
+            (StatusCode::FORBIDDEN, Json(json!({ "error": msg }))).into_response()
+        }
+        Err(LocalTokenError::InvalidRequest(msg)) => {
+            (StatusCode::BAD_REQUEST, Json(json!({ "error": msg }))).into_response()
+        }
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "delegation_failed" })),
         )
             .into_response(),
     }
@@ -285,32 +470,51 @@ pub async fn handle_poc_mcp(
             .into_response();
     }
 
-    let base = public_base_url(&state);
-    let mcp_htu = format!("{base}/mcp/poc");
-    let claims = match auth.validate_mcp_request(&headers, "POST", &mcp_htu, &mcp_htu) {
-        Ok(claims) => claims,
-        Err(err) => {
-            warn!(error = %err, "Rejected PoC MCP request");
-            return (
-                StatusCode::UNAUTHORIZED,
-                Json(JsonRpcResponse::error(request.id, -32001, "Unauthorized")),
-            )
-                .into_response();
-        }
+    // Pre-extract requested tool name for `tools/call` so child token canonical resource
+    // audience (`mcp-tool:{tenant}:{canonical_tool}`) is validated strictly at auth time.
+    let requested_tool_name = if request.method == "tools/call" {
+        request
+            .params
+            .as_ref()
+            .and_then(|p| p.get("name"))
+            .and_then(Value::as_str)
+            .map(str::to_string)
+    } else {
+        None
     };
 
-    // Child tokens (`depth > 0`) must never target the generic MCP endpoint audience.
-    if claims.depth > 0 || claims.iss != LOCAL_AGENT_ISSUER {
-        return (
-            StatusCode::FORBIDDEN,
-            Json(JsonRpcResponse::error(
-                request.id,
-                -32003,
-                "Delegated token requires a resource-scoped audience",
-            )),
-        )
-            .into_response();
-    }
+    let base = public_base_url(&state);
+    let mcp_htu = format!("{base}/mcp/poc");
+    let claims =
+        match auth.validate_mcp_request_with_audience_fn(&headers, "POST", &mcp_htu, |claims| {
+            if claims.depth == 0 && claims.iss == LOCAL_AGENT_ISSUER {
+                Ok(mcp_htu.clone())
+            } else if claims.depth > 0 && claims.iss == DELEGATION_ISSUER {
+                let Some(ref req_name) = requested_tool_name else {
+                    return Err(LocalTokenError::InvalidClaims(
+                        "child token is only valid for tool calls targeting its resource",
+                    ));
+                };
+                let canonical = state
+                    .tool_registry
+                    .get_for_tenant(req_name, &claims.tenant_id)
+                    .map(|t| t.name().to_string())
+                    .unwrap_or_else(|| req_name.clone());
+                Ok(canonical_tool_audience(&claims.tenant_id, &canonical))
+            } else {
+                Err(LocalTokenError::InvalidClaims("unsupported token issuer"))
+            }
+        }) {
+            Ok(claims) => claims,
+            Err(err) => {
+                warn!(error = %err, "Rejected PoC MCP request");
+                return (
+                    StatusCode::UNAUTHORIZED,
+                    Json(JsonRpcResponse::error(request.id, -32001, "Unauthorized")),
+                )
+                    .into_response();
+            }
+        };
 
     let response = match request.method.as_str() {
         "ping" => JsonRpcResponse::success(request.id, json!({})),
@@ -348,42 +552,31 @@ pub async fn handle_poc_mcp(
     (StatusCode::OK, Json(response)).into_response()
 }
 
-async fn handle_poc_tool_call(
+/// Shared authorization and execution pipeline for primary calls and sub-calls on the PoC path.
+pub(crate) async fn authorize_and_execute_poc_tool(
     state: &AppState,
     claims: &LocalAgentClaims,
-    request: JsonRpcRequest,
-) -> JsonRpcResponse {
-    let params = match request.params {
-        Some(p) => p,
-        None => return JsonRpcResponse::error(request.id, INVALID_PARAMS, "Missing params"),
-    };
-    let call_req: ToolsCallRequest = match serde_json::from_value(params) {
-        Ok(r) => r,
-        Err(e) => {
-            return JsonRpcResponse::error(
-                request.id,
-                INVALID_PARAMS,
-                format!("Invalid tools/call params: {e}"),
-            );
-        }
-    };
-
+    requested_name: &str,
+    arguments: Value,
+) -> Result<Value, (i32, &'static str)> {
     // 1. Resolve tenant-scoped tool.
     let tool = state
         .tool_registry
-        .get_for_tenant(&call_req.name, &claims.tenant_id);
-    let canonical_name = tool.as_ref().map_or(call_req.name.as_str(), |t| t.name());
+        .get_for_tenant(requested_name, &claims.tenant_id);
+    let canonical_name = tool
+        .as_ref()
+        .map_or_else(|| requested_name.to_string(), |t| t.name().to_string());
 
-    // 2. Signed tool permission check (fail-closed).
-    if check_tool_permission(state, &claims.tenant_id, &call_req.name, canonical_name)
+    // 2. Signed tenant tool permission check (fail-closed).
+    if check_tool_permission(state, &claims.tenant_id, requested_name, &canonical_name)
         .await
         .is_err()
     {
-        return JsonRpcResponse::error(request.id, -32003, "Tool call rejected");
+        return Err((-32003, "Tool call rejected"));
     }
 
     let Some(tool) = tool else {
-        return JsonRpcResponse::error(request.id, -32004, "Tool not found");
+        return Err((-32004, "Tool not found"));
     };
 
     // 3. Admin actions are never granted to local agent tokens.
@@ -391,7 +584,7 @@ async fn handle_poc_tool_call(
         tool.required_action(),
         Action::ManageTenants | Action::ManageUsers | Action::ManageContracts
     ) {
-        return JsonRpcResponse::error(request.id, -32003, "Admin action not permitted");
+        return Err((-32003, "Admin action not permitted"));
     }
 
     // 4. Build local ToolContext: no raw_token, provenance strictly from signed claims
@@ -412,32 +605,84 @@ async fn handle_poc_tool_call(
 
     // 5. OPA policy check.
     if check_tool_policy(state, tool.as_ref(), &ctx).is_err() {
-        return JsonRpcResponse::error(request.id, -32003, "Tool call rejected by policy");
+        return Err((-32003, "Tool call rejected by policy"));
     }
 
-    // 6. Execute tool (DynamicTool injects backend credential from CredentialStore
-    //    without ever forwarding the caller token).
-    match tool.execute(call_req.arguments, &ctx).await {
-        Ok(result) => JsonRpcResponse::success(
-            request.id,
-            json!({
-                "content": result.content,
-                "isError": result.is_error.unwrap_or(false)
-            }),
-        ),
+    // 6. Signed role policy intersection (restrictive only) + anti-rollback + session
+    //    anti-widening + deterministic v1 argument constraints + delegated token narrowing.
+    if let Some(ref role_store) = state.role_policy_store {
+        let issued_ver = claims.policy_version.unwrap_or(0);
+        if let Err(err) = role_store.evaluate_call(&RoleEvalInput {
+            tenant_id: &claims.tenant_id,
+            role: &claims.role,
+            tool_name: &canonical_name,
+            args: &arguments,
+            issued_policy_version: issued_ver,
+            token_allowed_tools: claims.allowed_tools.as_deref(),
+            token_constraints: claims.arg_constraints.as_ref(),
+        }) {
+            warn!(
+                tool = %canonical_name,
+                role = %claims.role,
+                error = %err,
+                "PoC call denied by role policy or argument constraint"
+            );
+            return Err((-32003, "Tool call rejected by role policy"));
+        }
+    } else if let Some(ref allowed) = claims.allowed_tools {
+        if !allowed.iter().any(|t| t == &canonical_name) {
+            return Err((-32003, "Tool call outside delegated scope"));
+        }
+    }
+
+    // 7. Execute tool (DynamicTool applies OutboundAddressPolicy to final URL and OAuth2 URL,
+    //    disables redirects, injects backend credential without forwarding caller token,
+    //    and scrubs error bodies).
+    match tool.execute(arguments, &ctx).await {
+        Ok(result) => Ok(json!({
+            "content": result.content,
+            "isError": result.is_error.unwrap_or(false)
+        })),
         Err(err) => {
             warn!(tool = %tool.name(), error = %err, "PoC tool execution failed");
-            JsonRpcResponse::error(request.id, -32000, "Tool execution failed")
+            Err((-32000, "Tool execution failed"))
         }
+    }
+}
+
+async fn handle_poc_tool_call(
+    state: &AppState,
+    claims: &LocalAgentClaims,
+    request: JsonRpcRequest,
+) -> JsonRpcResponse {
+    let params = match request.params {
+        Some(p) => p,
+        None => return JsonRpcResponse::error(request.id, INVALID_PARAMS, "Missing params"),
+    };
+    let call_req: ToolsCallRequest = match serde_json::from_value(params) {
+        Ok(r) => r,
+        Err(e) => {
+            return JsonRpcResponse::error(
+                request.id,
+                INVALID_PARAMS,
+                format!("Invalid tools/call params: {e}"),
+            );
+        }
+    };
+
+    match authorize_and_execute_poc_tool(state, claims, &call_req.name, call_req.arguments).await {
+        Ok(result) => JsonRpcResponse::success(request.id, result),
+        Err((code, msg)) => JsonRpcResponse::error(request.id, code, msg),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::auth::dpop::{compute_ath, compute_jwk_thumbprint, DpopJwk};
+    use crate::auth::dpop::{compute_ath, compute_jwk_thumbprint};
     use crate::build_router;
     use crate::config::Config;
+    use crate::control_plane::role_policy::ROLE_POLICY_ARTIFACT_TYP;
     use aws_lc_rs::signature::{
         EcdsaKeyPair, Ed25519KeyPair, KeyPair as _, ECDSA_P256_SHA256_FIXED_SIGNING,
     };
@@ -509,67 +754,104 @@ mod tests {
         }
     }
 
-    fn write_signed_policy_fixtures(dir: &Path, tenant: &str, tool_name: &str) -> (String, String) {
-        let pkcs8 = Ed25519KeyPair::generate_pkcs8(&aws_lc_rs::rand::SystemRandom::new()).unwrap();
-        let kp = Ed25519KeyPair::from_pkcs8(pkcs8.as_ref()).unwrap();
-        let x = URL_SAFE_NO_PAD.encode(kp.public_key().as_ref());
-        let kid = "cp-policy-202611-1";
+    struct PolicyFixtureSigner {
+        kp: Ed25519KeyPair,
+        kid: String,
+        tenant_uuid: Uuid,
+    }
 
-        let trust_path = dir.join("trust-jwks.json");
-        std::fs::write(
-            &trust_path,
-            serde_json::to_string(&json!({
-                "keys": [{
-                    "kty": "OKP",
-                    "crv": "Ed25519",
+    impl PolicyFixtureSigner {
+        fn new() -> Self {
+            let pkcs8 =
+                Ed25519KeyPair::generate_pkcs8(&aws_lc_rs::rand::SystemRandom::new()).unwrap();
+            let kp = Ed25519KeyPair::from_pkcs8(pkcs8.as_ref()).unwrap();
+            Self {
+                kp,
+                kid: "cp-policy-202611-1".to_string(),
+                tenant_uuid: Uuid::new_v4(),
+            }
+        }
+
+        fn write_trust(&self, dir: &Path) -> String {
+            let x = URL_SAFE_NO_PAD.encode(self.kp.public_key().as_ref());
+            let trust_path = dir.join("trust-jwks.json");
+            std::fs::write(
+                &trust_path,
+                serde_json::to_string(&json!({
+                    "keys": [{
+                        "kty": "OKP",
+                        "crv": "Ed25519",
+                        "alg": "EdDSA",
+                        "use": "sig",
+                        "kid": self.kid,
+                        "x": x
+                    }]
+                }))
+                .unwrap(),
+            )
+            .unwrap();
+            trust_path.to_string_lossy().to_string()
+        }
+
+        fn sign_tool_policy(&self, tenant: &str, tools: &[&str]) -> String {
+            let now = chrono::Utc::now();
+            let h = URL_SAFE_NO_PAD.encode(
+                serde_json::to_vec(&json!({
                     "alg": "EdDSA",
-                    "use": "sig",
-                    "kid": kid,
-                    "x": x
-                }]
-            }))
-            .unwrap(),
-        )
-        .unwrap();
+                    "typ": "stoa-tool-policy+jws",
+                    "kid": self.kid
+                }))
+                .unwrap(),
+            );
+            let perms: Vec<Value> = tools
+                .iter()
+                .map(|t| json!({"mcp_server": "poc-payments", "tool": t, "allowed": true}))
+                .collect();
+            let p = URL_SAFE_NO_PAD.encode(
+                serde_json::to_vec(&json!({
+                    "iss": "stoa-poc-policy",
+                    "aud": "stoa-gateway",
+                    "tenant_id": tenant,
+                    "tenant_uuid": self.tenant_uuid.to_string(),
+                    "version": 1,
+                    "issued_at": now.to_rfc3339(),
+                    "expires_at": (now + chrono::Duration::minutes(10)).to_rfc3339(),
+                    "permissions": perms
+                }))
+                .unwrap(),
+            );
+            let input = format!("{h}.{p}");
+            let sig = self.kp.sign(input.as_bytes());
+            format!("{input}.{}", URL_SAFE_NO_PAD.encode(sig.as_ref()))
+        }
 
-        let now = chrono::Utc::now();
-        let jws_header = URL_SAFE_NO_PAD.encode(
-            serde_json::to_vec(&json!({
-                "alg": "EdDSA",
-                "typ": "stoa-tool-policy+jws",
-                "kid": kid
-            }))
-            .unwrap(),
-        );
-        let jws_payload = URL_SAFE_NO_PAD.encode(
-            serde_json::to_vec(&json!({
-                "iss": "stoa-poc-policy",
-                "aud": "stoa-gateway",
-                "tenant_id": tenant,
-                "tenant_uuid": Uuid::new_v4().to_string(),
-                "version": 1,
-                "issued_at": now.to_rfc3339(),
-                "expires_at": (now + chrono::Duration::minutes(10)).to_rfc3339(),
-                "permissions": [{
-                    "mcp_server": "poc-payments",
-                    "tool": tool_name,
-                    "allowed": true
-                }]
-            }))
-            .unwrap(),
-        );
-        let signing_input = format!("{jws_header}.{jws_payload}");
-        let sig = kp.sign(signing_input.as_bytes());
-        let compact = format!("{signing_input}.{}", URL_SAFE_NO_PAD.encode(sig.as_ref()));
-
-        let policies_dir = dir.join("policies");
-        std::fs::create_dir_all(&policies_dir).unwrap();
-        std::fs::write(policies_dir.join(format!("{tenant}.jws")), compact).unwrap();
-
-        (
-            trust_path.to_string_lossy().to_string(),
-            policies_dir.to_string_lossy().to_string(),
-        )
+        fn sign_role_policy(&self, tenant: &str, version: u64, roles: Value) -> String {
+            let now = chrono::Utc::now();
+            let h = URL_SAFE_NO_PAD.encode(
+                serde_json::to_vec(&json!({
+                    "alg": "EdDSA",
+                    "typ": ROLE_POLICY_ARTIFACT_TYP,
+                    "kid": self.kid
+                }))
+                .unwrap(),
+            );
+            let p = URL_SAFE_NO_PAD.encode(
+                serde_json::to_vec(&json!({
+                    "iss": "stoa-poc-policy",
+                    "aud": "stoa-gateway",
+                    "tenant_id": tenant,
+                    "tenant_uuid": self.tenant_uuid.to_string(),
+                    "version": version,
+                    "issued_at": now.to_rfc3339(),
+                    "expires_at": (now + chrono::Duration::minutes(10)).to_rfc3339(),
+                    "roles": roles
+                }))
+                .unwrap(),
+            );
+            let input = format!("{h}.{p}");
+            let sig = self.kp.sign(input.as_bytes());
+            format!("{input}.{}", URL_SAFE_NO_PAD.encode(sig.as_ref()))
+        }
     }
 
     #[tokio::test]
@@ -585,8 +867,15 @@ mod tests {
 
         let tmp = tempfile::tempdir().unwrap();
         let tool_name = "payments_list";
-        let (trust_file, policies_dir) =
-            write_signed_policy_fixtures(tmp.path(), "acme", tool_name);
+        let signer = PolicyFixtureSigner::new();
+        let trust_file = signer.write_trust(tmp.path());
+        let policies_dir = tmp.path().join("policies");
+        std::fs::create_dir_all(&policies_dir).unwrap();
+        std::fs::write(
+            policies_dir.join("acme.jws"),
+            signer.sign_tool_policy("acme", &[tool_name]),
+        )
+        .unwrap();
 
         let contracts_dir = tmp.path().join("contracts");
         std::fs::create_dir_all(&contracts_dir).unwrap();
@@ -643,7 +932,7 @@ mod tests {
             policy_enabled: false,
             policy_boot_tenants: vec!["acme".to_string()],
             policy_trust_jwks_file: Some(trust_file),
-            policy_local_artifacts_dir: Some(policies_dir),
+            policy_local_artifacts_dir: Some(policies_dir.to_string_lossy().to_string()),
             policy_expected_issuer: "stoa-poc-policy".to_string(),
             policy_audience: "stoa-gateway".to_string(),
             poc_agents_enabled: true,
@@ -651,6 +940,7 @@ mod tests {
             poc_uac_contracts_dir: Some(contracts_dir.to_string_lossy().to_string()),
             poc_credentials_file: Some(creds_file.to_string_lossy().to_string()),
             poc_public_base_url: Some(base_url.to_string()),
+            poc_outbound_allowed_origins: vec![upstream.uri()],
             ..Config::default()
         };
 
@@ -662,7 +952,6 @@ mod tests {
 
         let app = build_router(state.clone());
 
-        // 1. /ready fails before startup policy load, succeeds once local signed policy is loaded.
         let resp = app
             .clone()
             .oneshot(
@@ -695,7 +984,6 @@ mod tests {
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
 
-        // 2. /admin/* is completely absent (404) when admin_routes_disabled=true.
         let resp = app
             .clone()
             .oneshot(
@@ -708,7 +996,6 @@ mod tests {
             .unwrap();
         assert_eq!(resp.status(), StatusCode::NOT_FOUND);
 
-        // 3. Bootstrap rejected without parent secret (child cannot mint a parent token).
         let dpop = TestDpop::new();
         let boot_htu = format!("{base_url}/mcp/poc/bootstrap");
         let resp = app
@@ -731,7 +1018,6 @@ mod tests {
             .unwrap();
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
 
-        // 4. Bootstrap succeeds with parent secret + valid DPoP proof.
         let resp = app
             .clone()
             .oneshot(
@@ -758,11 +1044,7 @@ mod tests {
             .unwrap();
         let boot_json: Value = serde_json::from_slice(&body).unwrap();
         let token = boot_json["access_token"].as_str().unwrap().to_string();
-        assert_eq!(boot_json["token_type"], "DPoP");
-        assert_eq!(boot_json["depth"], 0);
 
-        // 5. MCP tools/call with valid RS256 token + DPoP proof succeeds and injects vault key
-        //    without forwarding the caller token.
         let mcp_htu = format!("{base_url}/mcp/poc");
         let call_body = json!({
             "jsonrpc": "2.0",
@@ -794,7 +1076,6 @@ mod tests {
         let rpc: Value = serde_json::from_slice(&body).unwrap();
         assert!(rpc.get("error").is_none(), "unexpected RPC error: {rpc}");
 
-        // 6. Replaying the exact same DPoP proof is rejected (and upstream still saw only 1 request).
         let resp = app
             .clone()
             .oneshot(
@@ -804,25 +1085,540 @@ mod tests {
                     .header("content-type", "application/json")
                     .header("Authorization", format!("DPoP {token}"))
                     .header("DPoP", &proof)
-                    .body(Body::from(call_body.clone()))
+                    .body(Body::from(call_body))
                     .unwrap(),
             )
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
 
-        // Verify wiremock saw NO Authorization header on the single upstream request.
         let received = upstream.received_requests().await.unwrap();
         assert_eq!(received.len(), 1);
         assert!(received[0].headers.get("authorization").is_none());
-        assert_eq!(
-            received[0]
-                .headers
-                .get("x-api-key")
-                .and_then(|v| v.to_str().ok()),
-            Some("backend-vault-secret")
-        );
-        // Verify compute_jwk_thumbprint matches non-empty output
         assert!(!compute_jwk_thumbprint(&dpop.jwk).is_empty());
+    }
+
+    #[tokio::test]
+    async fn jalon2_vertical_proof_roles_delegation_constraints_opa_outbound_and_redirects() {
+        let upstream = MockServer::start().await;
+        let redirect_target = MockServer::start().await;
+        let blocked_internal = MockServer::start().await;
+
+        // Allowed upstream endpoint
+        Mock::given(method("GET"))
+            .and(path("/payments"))
+            .and(header("X-API-Key", "vault-secret-j2"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"ok": true})))
+            .mount(&upstream)
+            .await;
+
+        // 3xx redirect endpoint (must NOT follow redirect to redirect_target)
+        Mock::given(method("GET"))
+            .and(path("/redirect"))
+            .respond_with(
+                ResponseTemplate::new(302)
+                    .insert_header("Location", format!("{}/secret", redirect_target.uri()))
+                    .set_body_string("sensitive-upstream-redirect-body"),
+            )
+            .mount(&upstream)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/secret"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("should-not-reach"))
+            .expect(0)
+            .mount(&redirect_target)
+            .await;
+
+        // Blocked internal target (NOT in poc_outbound_allowed_origins)
+        Mock::given(method("GET"))
+            .and(path("/internal"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("internal-data"))
+            .expect(0)
+            .mount(&blocked_internal)
+            .await;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let signer = PolicyFixtureSigner::new();
+        let trust_file = signer.write_trust(tmp.path());
+
+        let policies_dir = tmp.path().join("policies");
+        let roles_dir = tmp.path().join("roles");
+        let floor_dir = tmp.path().join("floors");
+        let contracts_dir = tmp.path().join("contracts");
+        let opa_dir = tmp.path().join("opa");
+        for d in [&policies_dir, &roles_dir, &contracts_dir, &opa_dir] {
+            std::fs::create_dir_all(d).unwrap();
+        }
+
+        // Tenant tool permissions allow all 4 fixture tools; OPA & role policy restrict further!
+        std::fs::write(
+            policies_dir.join("acme.jws"),
+            signer.sign_tool_policy(
+                "acme",
+                &[
+                    "payments_list",
+                    "payments_opa_denied",
+                    "payments_redirect",
+                    "payments_outbound_blocked",
+                ],
+            ),
+        )
+        .unwrap();
+
+        // OPA allows payments_list, payments_redirect, payments_outbound_blocked; explicitly denies payments_opa_denied.
+        let opa_file = opa_dir.join("policy.rego");
+        std::fs::write(
+            &opa_file,
+            r#"package stoa.authz
+import future.keywords.if
+default allow := false
+allow if {
+    input.tenant_id == "acme"
+    input.resource_tenant_id == "acme"
+    input.tool_name != "payments_opa_denied"
+    input.action == "Read"
+}
+"#,
+        )
+        .unwrap();
+
+        // Signed role artifact v1 with all 3 argument constraint types on payments_list.
+        std::fs::write(
+            roles_dir.join("acme.roles.jws"),
+            signer.sign_role_policy(
+                "acme",
+                1,
+                json!({
+                    "reader": {
+                        "allowed_tools": [
+                            "payments_list",
+                            "payments_opa_denied",
+                            "payments_redirect",
+                            "payments_outbound_blocked"
+                        ],
+                        "argument_constraints": {
+                            "payments_list": {
+                                "currency": { "type": "allowed_values", "values": ["EUR", "USD"] },
+                                "account": { "type": "prefix", "prefix": "acct-" },
+                                "limit": { "type": "max_number", "max": 100.0 }
+                            }
+                        }
+                    }
+                }),
+            ),
+        )
+        .unwrap();
+
+        std::fs::write(
+            contracts_dir.join("payments.uac.json"),
+            serde_json::to_string(&json!({
+                "name": "payments",
+                "version": "1.0.0",
+                "tenant_id": "acme",
+                "display_name": "Payments",
+                "description": "Jalon 2 fixture",
+                "classification": "H",
+                "endpoints": [
+                    {
+                        "path": "/payments",
+                        "methods": ["GET"],
+                        "backend_url": format!("{}/payments", upstream.uri()),
+                        "operation_id": "list_payments",
+                        "llm": {
+                            "summary": "List payments",
+                            "intent": "Read payments",
+                            "tool_name": "payments_list",
+                            "side_effects": "read",
+                            "safe_for_agents": true,
+                            "requires_human_approval": false,
+                            "examples": []
+                        }
+                    },
+                    {
+                        "path": "/opa-denied",
+                        "methods": ["GET"],
+                        "backend_url": format!("{}/payments", upstream.uri()),
+                        "operation_id": "opa_denied",
+                        "llm": {
+                            "summary": "OPA denied tool",
+                            "intent": "Negative OPA test",
+                            "tool_name": "payments_opa_denied",
+                            "side_effects": "read",
+                            "safe_for_agents": true,
+                            "requires_human_approval": false,
+                            "examples": []
+                        }
+                    },
+                    {
+                        "path": "/redirect",
+                        "methods": ["GET"],
+                        "backend_url": format!("{}/redirect", upstream.uri()),
+                        "operation_id": "redirect_tool",
+                        "llm": {
+                            "summary": "Redirect test tool",
+                            "intent": "Verify redirects are not followed",
+                            "tool_name": "payments_redirect",
+                            "side_effects": "read",
+                            "safe_for_agents": true,
+                            "requires_human_approval": false,
+                            "examples": []
+                        }
+                    },
+                    {
+                        "path": "/internal",
+                        "methods": ["GET"],
+                        "backend_url": format!("{}/internal", blocked_internal.uri()),
+                        "operation_id": "outbound_blocked",
+                        "llm": {
+                            "summary": "Blocked internal tool",
+                            "intent": "Verify outbound address policy blocks non-allowlisted loopback",
+                            "tool_name": "payments_outbound_blocked",
+                            "side_effects": "read",
+                            "safe_for_agents": true,
+                            "requires_human_approval": false,
+                            "examples": []
+                        }
+                    }
+                ],
+                "required_policies": [],
+                "status": "published"
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let creds_file = tmp.path().join("credentials.json");
+        std::fs::write(
+            &creds_file,
+            serde_json::to_string(&json!([{
+                "route_id": "mcp-tool:acme:payments_list",
+                "auth_type": "api_key",
+                "header_name": "X-API-Key",
+                "header_value": "vault-secret-j2",
+                "allowed_origin": upstream.uri(),
+                "shared_with_tenants": false
+            }]))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let base_url = "http://stoa-gateway:8080";
+        let config = Config {
+            auto_register: false,
+            admin_routes_disabled: true,
+            policy_enabled: true,
+            policy_path: Some(opa_file.to_string_lossy().to_string()),
+            policy_boot_tenants: vec!["acme".to_string()],
+            policy_trust_jwks_file: Some(trust_file),
+            policy_local_artifacts_dir: Some(policies_dir.to_string_lossy().to_string()),
+            policy_expected_issuer: "stoa-poc-policy".to_string(),
+            policy_audience: "stoa-gateway".to_string(),
+            poc_agents_enabled: true,
+            poc_bootstrap_secret: Some("boot-secret-j2".to_string()),
+            poc_uac_contracts_dir: Some(contracts_dir.to_string_lossy().to_string()),
+            poc_credentials_file: Some(creds_file.to_string_lossy().to_string()),
+            poc_public_base_url: Some(base_url.to_string()),
+            poc_role_artifacts_dir: Some(roles_dir.to_string_lossy().to_string()),
+            poc_role_floor_dir: Some(floor_dir.to_string_lossy().to_string()),
+            // Allow ONLY `upstream`; `blocked_internal` and `redirect_target` are NOT allowed!
+            poc_outbound_allowed_origins: vec![upstream.uri()],
+            ..Config::default()
+        };
+
+        let state = AppState::new(config);
+        let summary = load_poc_fixtures(&state).await.expect("load j2 fixtures");
+        assert_eq!(summary.role_policies_loaded, 1);
+        state
+            .tool_permissions
+            .as_ref()
+            .unwrap()
+            .load_policy("acme")
+            .await
+            .unwrap();
+        let app = build_router(state);
+
+        // 1. Parent bootstraps token.
+        let parent_dpop = TestDpop::new();
+        let child_dpop = TestDpop::new();
+        let boot_htu = format!("{base_url}/mcp/poc/bootstrap");
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/mcp/poc/bootstrap")
+                    .header("content-type", "application/json")
+                    .header("X-Stoa-Poc-Bootstrap-Secret", "boot-secret-j2")
+                    .header("DPoP", parent_dpop.proof("POST", &boot_htu, "b1", None))
+                    .body(Body::from(
+                        json!({"sub":"agent-parent","tenant_id":"acme","role":"reader","ttl_secs":300})
+                            .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let parent_tok = serde_json::from_slice::<Value>(
+            &axum::body::to_bytes(resp.into_body(), 16 * 1024)
+                .await
+                .unwrap(),
+        )
+        .unwrap()["access_token"]
+            .as_str()
+            .unwrap()
+            .to_string();
+
+        // 2. Parent delegates narrowed child token (EUR only, limit <= 25).
+        let del_htu = format!("{base_url}/mcp/poc/delegate");
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/mcp/poc/delegate")
+                    .header("content-type", "application/json")
+                    .header("Authorization", format!("DPoP {parent_tok}"))
+                    .header(
+                        "DPoP",
+                        parent_dpop.proof("POST", &del_htu, "d1", Some(&parent_tok)),
+                    )
+                    .body(Body::from(
+                        json!({
+                            "sub": "agent-child",
+                            "target_tool": "payments_list",
+                            "child_dpop_jwk": {
+                                "kty": child_dpop.jwk.kty,
+                                "crv": child_dpop.jwk.crv,
+                                "x": child_dpop.jwk.x,
+                                "y": child_dpop.jwk.y
+                            },
+                            "allowed_tools": ["payments_list"],
+                            "arg_constraints": {
+                                "currency": { "type": "allowed_values", "values": ["EUR"] },
+                                "limit": { "type": "max_number", "max": 25.0 }
+                            },
+                            "ttl_secs": 120
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let child_json: Value = serde_json::from_slice(
+            &axum::body::to_bytes(resp.into_body(), 16 * 1024)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(child_json["iss"], DELEGATION_ISSUER);
+        assert_eq!(child_json["aud"], "mcp-tool:acme:payments_list");
+        assert_eq!(child_json["depth"], 1);
+        assert_eq!(child_json["tenant_id"], "acme");
+        let child_tok = child_json["access_token"].as_str().unwrap().to_string();
+
+        // 3. Child call with conforming args succeeds!
+        let mcp_htu = format!("{base_url}/mcp/poc");
+        let ok_call = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "payments_list",
+                "arguments": { "currency": "EUR", "account": "acct-123", "limit": 20 }
+            }
+        })
+        .to_string();
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/mcp/poc")
+                    .header("content-type", "application/json")
+                    .header("Authorization", format!("DPoP {child_tok}"))
+                    .header(
+                        "DPoP",
+                        child_dpop.proof("POST", &mcp_htu, "c1", Some(&child_tok)),
+                    )
+                    .body(Body::from(ok_call))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let rpc: Value = serde_json::from_slice(
+            &axum::body::to_bytes(resp.into_body(), 16 * 1024)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(rpc.get("error").is_none(), "child call should pass: {rpc}");
+
+        // 4. Child call violating narrowed child constraint (USD allowed by parent, denied for child;
+        //    limit=50 allowed by parent, denied for child; bad prefix) -> denied with ZERO upstream calls!
+        let bad_args_cases = [
+            json!({ "currency": "USD", "account": "acct-123", "limit": 20 }),
+            json!({ "currency": "EUR", "account": "other-123", "limit": 20 }),
+            json!({ "currency": "EUR", "account": "acct-123", "limit": 50 }),
+        ];
+        for (idx, args) in bad_args_cases.iter().enumerate() {
+            let body = json!({
+                "jsonrpc": "2.0",
+                "id": 10 + idx,
+                "method": "tools/call",
+                "params": { "name": "payments_list", "arguments": args }
+            })
+            .to_string();
+            let resp = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/mcp/poc")
+                        .header("content-type", "application/json")
+                        .header("Authorization", format!("DPoP {child_tok}"))
+                        .header(
+                            "DPoP",
+                            child_dpop.proof(
+                                "POST",
+                                &mcp_htu,
+                                &format!("bad-{idx}"),
+                                Some(&child_tok),
+                            ),
+                        )
+                        .body(Body::from(body))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            let rpc: Value = serde_json::from_slice(
+                &axum::body::to_bytes(resp.into_body(), 16 * 1024)
+                    .await
+                    .unwrap(),
+            )
+            .unwrap();
+            assert!(
+                rpc.get("error").is_some(),
+                "expected constraint denial for {args}"
+            );
+        }
+
+        // 5. OPA negative case (parent calls payments_opa_denied -> denied, zero upstream calls!)
+        let opa_denied_body = json!({
+            "jsonrpc": "2.0",
+            "id": 20,
+            "method": "tools/call",
+            "params": { "name": "payments_opa_denied", "arguments": {} }
+        })
+        .to_string();
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/mcp/poc")
+                    .header("content-type", "application/json")
+                    .header("Authorization", format!("DPoP {parent_tok}"))
+                    .header(
+                        "DPoP",
+                        parent_dpop.proof("POST", &mcp_htu, "opa-neg", Some(&parent_tok)),
+                    )
+                    .body(Body::from(opa_denied_body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let rpc: Value = serde_json::from_slice(
+            &axum::body::to_bytes(resp.into_body(), 16 * 1024)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(rpc["error"]["message"], "Tool call rejected by policy");
+
+        // 6. Outbound address policy blocks non-allowlisted internal target (zero requests to blocked_internal!)
+        let blocked_body = json!({
+            "jsonrpc": "2.0",
+            "id": 21,
+            "method": "tools/call",
+            "params": { "name": "payments_outbound_blocked", "arguments": {} }
+        })
+        .to_string();
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/mcp/poc")
+                    .header("content-type", "application/json")
+                    .header("Authorization", format!("DPoP {parent_tok}"))
+                    .header(
+                        "DPoP",
+                        parent_dpop.proof("POST", &mcp_htu, "outbound-neg", Some(&parent_tok)),
+                    )
+                    .body(Body::from(blocked_body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let rpc: Value = serde_json::from_slice(
+            &axum::body::to_bytes(resp.into_body(), 16 * 1024)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(rpc.get("error").is_some());
+
+        // 7. 3xx redirect is NOT followed and upstream body is scrubbed!
+        let redir_body = json!({
+            "jsonrpc": "2.0",
+            "id": 22,
+            "method": "tools/call",
+            "params": { "name": "payments_redirect", "arguments": {} }
+        })
+        .to_string();
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/mcp/poc")
+                    .header("content-type", "application/json")
+                    .header("Authorization", format!("DPoP {parent_tok}"))
+                    .header(
+                        "DPoP",
+                        parent_dpop.proof("POST", &mcp_htu, "redir-neg", Some(&parent_tok)),
+                    )
+                    .body(Body::from(redir_body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let body_str = String::from_utf8(
+            axum::body::to_bytes(resp.into_body(), 16 * 1024)
+                .await
+                .unwrap()
+                .to_vec(),
+        )
+        .unwrap();
+        assert!(body_str.contains("Tool execution failed"));
+        assert!(!body_str.contains("sensitive-upstream-redirect-body"));
+
+        // Verify exact upstream counters:
+        // - upstream saw ONLY 1 /payments call (from child) + 1 /redirect call (302 not followed)
+        // - redirect_target saw 0 calls
+        // - blocked_internal saw 0 calls
+        let up_reqs = upstream.received_requests().await.unwrap();
+        let payment_calls: Vec<_> = up_reqs
+            .iter()
+            .filter(|r| r.url.path() == "/payments")
+            .collect();
+        assert_eq!(payment_calls.len(), 1);
+        assert!(payment_calls[0].headers.get("authorization").is_none());
+        assert_eq!(redirect_target.received_requests().await.unwrap().len(), 0);
+        assert_eq!(blocked_internal.received_requests().await.unwrap().len(), 0);
     }
 }

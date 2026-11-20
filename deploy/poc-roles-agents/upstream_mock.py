@@ -48,6 +48,15 @@ class MockHandler(BaseHTTPRequestHandler):
             persist_stats()
             self._send_json(200, {"reached": "redirect-target"})
             return
+        if self.path.startswith("/redirect"):
+            body = b"sensitive-upstream-redirect-body"
+            self.send_response(302)
+            self.send_header("Location", "http://upstream-mock:9000/redirect-target")
+            self.send_header("Content-Type", "text/plain")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
 
         STATS["upstream_calls"] += 1
         if self.headers.get("Authorization") is not None:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""In-container verification harness for `agent-parent` and `agent-child` (Jalon 1)."""
+"""In-container verification harness for `agent-parent` and `agent-child` (Jalons 1 & 2)."""
 
 import base64
 import hashlib
@@ -12,10 +12,13 @@ import time
 import urllib.error
 import urllib.request
 import uuid
+from pathlib import Path
 
-from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
+
+CHILD_KEY_FILE = Path("/tmp/child_dpop_key.pem")
 
 
 def b64url(data: bytes) -> str:
@@ -28,8 +31,8 @@ def int_to_b64url(n: int, length: int | None = None) -> str:
 
 
 class DpopKey:
-    def __init__(self) -> None:
-        self._key = ec.generate_private_key(ec.SECP256R1())
+    def __init__(self, key: ec.EllipticCurvePrivateKey | None = None) -> None:
+        self._key = key or ec.generate_private_key(ec.SECP256R1())
         pub = self._key.public_key().public_numbers()
         self.jwk = {
             "kty": "EC",
@@ -37,6 +40,21 @@ class DpopKey:
             "x": int_to_b64url(pub.x, 32),
             "y": int_to_b64url(pub.y, 32),
         }
+
+    def save(self, path: Path) -> None:
+        pem = self._key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
+        path.write_bytes(pem)
+        path.chmod(0o600)
+
+    @classmethod
+    def load(cls, path: Path) -> "DpopKey":
+        key = serialization.load_pem_private_key(path.read_bytes(), password=None)
+        assert isinstance(key, ec.EllipticCurvePrivateKey)
+        return cls(key)
 
     def sign_proof(
         self, htm: str, htu: str, access_token: str | None = None, jti: str | None = None
@@ -132,15 +150,13 @@ def make_external_rs256_token(kid: str | None, aud: str) -> str:
     return f"{inp}.{b64url(sig)}"
 
 
-def run_parent(gateway_url: str, upstream_ip: str) -> str:
+def run_parent(gateway_url: str, upstream_ip: str, child_jwk_json: str | None) -> tuple[str, str | None]:
     upstream_host = os.environ["UPSTREAM_MOCK_HOST"]
     bootstrap_secret = os.environ["STOA_POC_BOOTSTRAP_SECRET"]
 
-    # 1. Network isolation: upstream-mock unreachable by DNS name AND by IP
     assert_tcp_unreachable(upstream_host, 9000, "agent-parent -> upstream-mock (DNS)")
     assert_tcp_unreachable(upstream_ip, 9000, "agent-parent -> upstream-mock (IP)")
 
-    # 2. /ready is 200 READY and /admin/* is isolated (404)
     code, body = http_req("GET", f"{gateway_url}/ready")
     assert code == 200 and body.strip() == "READY", f"/ready failed: {code} {body}"
     print("PASS: /ready returned 200 READY with local signed policy loaded", flush=True)
@@ -149,7 +165,6 @@ def run_parent(gateway_url: str, upstream_ip: str) -> str:
     assert code == 404, f"/admin/health expected 404, got {code}"
     print("PASS: /admin/health returned 404 (isolated from agent containers)", flush=True)
 
-    # 3. Bootstrap parent token with DPoP proof
     dpop = DpopKey()
     boot_url = f"{gateway_url}/mcp/poc/bootstrap"
     code, body = http_req(
@@ -159,7 +174,7 @@ def run_parent(gateway_url: str, upstream_ip: str) -> str:
             "X-Stoa-Poc-Bootstrap-Secret": bootstrap_secret,
             "DPoP": dpop.sign_proof("POST", boot_url),
         },
-        body={"sub": "agent-parent", "tenant_id": "acme", "role": "reader"},
+        body={"sub": "agent-parent", "tenant_id": "acme", "role": "reader", "ttl_secs": 300},
     )
     assert code == 200, f"bootstrap failed: {code} {body}"
     boot = json.loads(body)
@@ -168,13 +183,13 @@ def run_parent(gateway_url: str, upstream_ip: str) -> str:
     assert boot["token_type"] == "DPoP" and boot["depth"] == 0
     print(f"PASS: agent-parent bootstrapped RS256 DPoP token (kid={kid})", flush=True)
 
-    # 4. Positive MCP tools/call with DPoP proof -> hits upstream-mock via gateway
     mcp_url = f"{gateway_url}/mcp/poc"
+    valid_args = {"currency": "USD", "account": "acct-parent-1", "limit": 80}
     call_body = {
         "jsonrpc": "2.0",
         "id": 1,
         "method": "tools/call",
-        "params": {"name": "payments_list", "arguments": {}},
+        "params": {"name": "payments_list", "arguments": valid_args},
     }
     first_proof = dpop.sign_proof("POST", mcp_url, access_token=token)
     code, body = http_req(
@@ -186,10 +201,10 @@ def run_parent(gateway_url: str, upstream_ip: str) -> str:
     assert code == 200, f"MCP tools/call failed: {code} {body}"
     rpc = json.loads(body)
     assert "error" not in rpc, f"unexpected JSON-RPC error: {rpc}"
-    assert "pay_001" in body, f"expected upstream mock payload, got: {body}"
-    print("PASS: agent-parent MCP tools/call with DPoP succeeded via gateway", flush=True)
+    assert "pay_001" in body
+    print("PASS: agent-parent MCP tools/call with DPoP + conforming args succeeded", flush=True)
 
-    # 5. Negative auth checks (all must be 401 and send ZERO requests upstream)
+    # Negative auth checks
     negatives = [
         ("replayed DPoP proof", {"Authorization": f"DPoP {token}", "DPoP": first_proof}),
         (
@@ -227,24 +242,133 @@ def run_parent(gateway_url: str, upstream_ip: str) -> str:
         assert c == 401, f"FAIL: {label} expected 401, got {c}"
         print(f"PASS: {label} -> 401", flush=True)
 
-    return token
+    child_tok = None
+    if child_jwk_json is not None:
+        # Jalon 2 parent checks: OPA negative, outbound address policy block, 3xx non-follow + scrubbed error
+        for label, tool_name, expected_err in [
+            ("OPA negative case (payments_opa_denied)", "payments_opa_denied", "policy"),
+            ("Outbound address policy blocks link-local IP", "payments_outbound_blocked", "failed"),
+        ]:
+            c, b = http_req(
+                "POST",
+                mcp_url,
+                headers={
+                    "Authorization": f"DPoP {token}",
+                    "DPoP": dpop.sign_proof("POST", mcp_url, access_token=token),
+                },
+                body={
+                    "jsonrpc": "2.0",
+                    "id": 20,
+                    "method": "tools/call",
+                    "params": {"name": tool_name, "arguments": {}},
+                },
+            )
+            assert c == 200 and "error" in json.loads(b) and expected_err in b.lower(), f"{label} failed: {c} {b}"
+            print(f"PASS: {label} denied (zero upstream calls)", flush=True)
+
+        c, b = http_req(
+            "POST",
+            mcp_url,
+            headers={
+                "Authorization": f"DPoP {token}",
+                "DPoP": dpop.sign_proof("POST", mcp_url, access_token=token),
+            },
+            body={
+                "jsonrpc": "2.0",
+                "id": 21,
+                "method": "tools/call",
+                "params": {"name": "payments_redirect", "arguments": {}},
+            },
+        )
+        assert c == 200 and "error" in json.loads(b) and "sensitive-upstream-redirect-body" not in b
+        print("PASS: 3xx redirect not followed and error body scrubbed", flush=True)
+
+        # Delegation checks: widening or TTL > parent rejected (403); narrowed child succeeds (200)
+        child_jwk = json.loads(child_jwk_json)
+        del_url = f"{gateway_url}/mcp/poc/delegate"
+
+        c, _ = http_req(
+            "POST",
+            del_url,
+            headers={
+                "Authorization": f"DPoP {token}",
+                "DPoP": dpop.sign_proof("POST", del_url, access_token=token),
+            },
+            body={
+                "sub": "agent-child",
+                "target_tool": "payments_list",
+                "child_dpop_jwk": child_jwk,
+                "allowed_tools": ["payments_list"],
+                "arg_constraints": {"limit": {"type": "max_number", "max": 250.0}},
+                "ttl_secs": 90,
+            },
+        )
+        assert c == 403, f"widened delegation expected 403, got {c}"
+        print("PASS: delegation widening parent constraint -> 403", flush=True)
+
+        c, _ = http_req(
+            "POST",
+            del_url,
+            headers={
+                "Authorization": f"DPoP {token}",
+                "DPoP": dpop.sign_proof("POST", del_url, access_token=token),
+            },
+            body={
+                "sub": "agent-child",
+                "target_tool": "payments_list",
+                "child_dpop_jwk": child_jwk,
+                "allowed_tools": ["payments_list"],
+                "ttl_secs": 600,
+            },
+        )
+        assert c == 403, f"TTL > parent expected 403, got {c}"
+        print("PASS: delegation with TTL > parent exp -> 403", flush=True)
+
+        c, b = http_req(
+            "POST",
+            del_url,
+            headers={
+                "Authorization": f"DPoP {token}",
+                "DPoP": dpop.sign_proof("POST", del_url, access_token=token),
+            },
+            body={
+                "sub": "agent-child",
+                "target_tool": "payments_list",
+                "child_dpop_jwk": child_jwk,
+                "allowed_tools": ["payments_list"],
+                "arg_constraints": {
+                    "currency": {"type": "allowed_values", "values": ["EUR"]},
+                    "limit": {"type": "max_number", "max": 25.0},
+                },
+                "ttl_secs": 120,
+            },
+        )
+        assert c == 200, f"valid delegation failed: {c} {b}"
+        del_resp = json.loads(b)
+        assert del_resp["iss"] == "stoa-poc-delegation"
+        assert del_resp["aud"] == "mcp-tool:acme:payments_list"
+        assert del_resp["depth"] == 1
+        assert del_resp["tenant_id"] == "acme"
+        child_tok = del_resp["access_token"]
+        print("PASS: agent-parent delegated narrowed child token (iss=stoa-poc-delegation, aud=mcp-tool:acme:payments_list, depth=1)", flush=True)
+
+    return token, child_tok
 
 
-def run_child(gateway_url: str, upstream_ip: str, leaked_parent_token: str) -> None:
+def run_child(
+    gateway_url: str, upstream_ip: str, leaked_parent_token: str, child_token: str | None
+) -> None:
     upstream_host = os.environ["UPSTREAM_MOCK_HOST"]
 
-    # 1. Network isolation: upstream-mock unreachable by DNS name AND by IP
     assert_tcp_unreachable(upstream_host, 9000, "agent-child -> upstream-mock (DNS)")
     assert_tcp_unreachable(upstream_ip, 9000, "agent-child -> upstream-mock (IP)")
 
-    # 2. /admin/* unreachable
     code, _ = http_req("GET", f"{gateway_url}/admin/health")
     assert code == 404, f"agent-child /admin/health expected 404, got {code}"
     print("PASS: agent-child /admin/health -> 404", flush=True)
 
-    # 3. Child has no bootstrap secret and cannot mint a parent token
     assert "STOA_POC_BOOTSTRAP_SECRET" not in os.environ
-    child_dpop = DpopKey()
+    child_dpop = DpopKey.load(CHILD_KEY_FILE) if CHILD_KEY_FILE.exists() else DpopKey()
     boot_url = f"{gateway_url}/mcp/poc/bootstrap"
     code, _ = http_req(
         "POST",
@@ -255,14 +379,7 @@ def run_child(gateway_url: str, upstream_ip: str, leaked_parent_token: str) -> N
     assert code == 401, f"agent-child bootstrap expected 401, got {code}"
     print("PASS: agent-child cannot bootstrap a parent token -> 401", flush=True)
 
-    # 4. Even if agent-child obtains parent's JWT, DPoP cnf.jkt binding rejects it
     mcp_url = f"{gateway_url}/mcp/poc"
-    call_body = {
-        "jsonrpc": "2.0",
-        "id": 99,
-        "method": "tools/call",
-        "params": {"name": "payments_list", "arguments": {}},
-    }
     code, _ = http_req(
         "POST",
         mcp_url,
@@ -270,22 +387,141 @@ def run_child(gateway_url: str, upstream_ip: str, leaked_parent_token: str) -> N
             "Authorization": f"DPoP {leaked_parent_token}",
             "DPoP": child_dpop.sign_proof("POST", mcp_url, access_token=leaked_parent_token),
         },
-        body=call_body,
+        body={
+            "jsonrpc": "2.0",
+            "id": 99,
+            "method": "tools/call",
+            "params": {
+                "name": "payments_list",
+                "arguments": {"currency": "EUR", "account": "acct-1", "limit": 10},
+            },
+        },
     )
     assert code == 401, f"agent-child parent token reuse expected 401, got {code}"
     print("PASS: agent-child cannot reuse parent token (DPoP cnf.jkt mismatch) -> 401", flush=True)
 
+    if child_token is not None:
+        # 1. Valid narrowed child call passes
+        c, b = http_req(
+            "POST",
+            mcp_url,
+            headers={
+                "Authorization": f"DPoP {child_token}",
+                "DPoP": child_dpop.sign_proof("POST", mcp_url, access_token=child_token),
+            },
+            body={
+                "jsonrpc": "2.0",
+                "id": 101,
+                "method": "tools/call",
+                "params": {
+                    "name": "payments_list",
+                    "arguments": {"currency": "EUR", "account": "acct-child-1", "limit": 20},
+                },
+            },
+        )
+        assert c == 200 and "error" not in json.loads(b) and "pay_001" in b, f"child call failed: {c} {b}"
+        print("PASS: agent-child delegated call with conforming narrowed args succeeded", flush=True)
+
+        # 2. All 3 argument constraint types enforced (allowed_values, prefix, max_number)
+        for label, bad_args in [
+            ("allowed_values (USD excluded for child)", {"currency": "USD", "account": "acct-1", "limit": 20}),
+            ("prefix (missing acct-)", {"currency": "EUR", "account": "other-1", "limit": 20}),
+            ("max_number (50 > child cap 25)", {"currency": "EUR", "account": "acct-1", "limit": 50}),
+        ]:
+            c, b = http_req(
+                "POST",
+                mcp_url,
+                headers={
+                    "Authorization": f"DPoP {child_token}",
+                    "DPoP": child_dpop.sign_proof("POST", mcp_url, access_token=child_token),
+                },
+                body={
+                    "jsonrpc": "2.0",
+                    "id": 102,
+                    "method": "tools/call",
+                    "params": {"name": "payments_list", "arguments": bad_args},
+                },
+            )
+            assert c == 200 and "error" in json.loads(b), f"expected constraint deny for {label}: {c} {b}"
+            print(f"PASS: agent-child constraint denied ({label})", flush=True)
+
+        # 3. Calling another tool mismatches child canonical resource `aud` -> 401
+        c, _ = http_req(
+            "POST",
+            mcp_url,
+            headers={
+                "Authorization": f"DPoP {child_token}",
+                "DPoP": child_dpop.sign_proof("POST", mcp_url, access_token=child_token),
+            },
+            body={
+                "jsonrpc": "2.0",
+                "id": 103,
+                "method": "tools/call",
+                "params": {"name": "payments_redirect", "arguments": {}},
+            },
+        )
+        assert c == 401, f"wrong tool audience for child expected 401, got {c}"
+        print("PASS: agent-child calling different tool rejected on audience mismatch -> 401", flush=True)
+
+        # 4. Depth chain 1 -> 2 -> 3 succeeds, 3 -> 4 is rejected (403)
+        del_url = f"{gateway_url}/mcp/poc/delegate"
+        curr_tok = child_token
+        for next_depth in (2, 3):
+            c, b = http_req(
+                "POST",
+                del_url,
+                headers={
+                    "Authorization": f"DPoP {curr_tok}",
+                    "DPoP": child_dpop.sign_proof("POST", del_url, access_token=curr_tok),
+                },
+                body={
+                    "sub": f"agent-child-d{next_depth}",
+                    "target_tool": "payments_list",
+                    "child_dpop_jwk": child_dpop.jwk,
+                    "allowed_tools": ["payments_list"],
+                    "ttl_secs": 60,
+                },
+            )
+            assert c == 200 and json.loads(b)["depth"] == next_depth, f"depth {next_depth} failed: {c} {b}"
+            curr_tok = json.loads(b)["access_token"]
+        c, _ = http_req(
+            "POST",
+            del_url,
+            headers={
+                "Authorization": f"DPoP {curr_tok}",
+                "DPoP": child_dpop.sign_proof("POST", del_url, access_token=curr_tok),
+            },
+            body={
+                "sub": "agent-child-d4",
+                "target_tool": "payments_list",
+                "child_dpop_jwk": child_dpop.jwk,
+                "allowed_tools": ["payments_list"],
+                "ttl_secs": 30,
+            },
+        )
+        assert c == 403, f"depth 3 -> 4 expected 403, got {c}"
+        print("PASS: delegation depth bound 1 -> 2 -> 3 allowed, 3 -> 4 -> 403", flush=True)
+
 
 if __name__ == "__main__":
     mode = sys.argv[1]
+    if mode == "child-init-key":
+        k = DpopKey()
+        k.save(CHILD_KEY_FILE)
+        print(json.dumps(k.jwk), flush=True)
+        sys.exit(0)
+
     gateway = os.environ["STOA_GATEWAY_URL"]
     mock_ip = sys.argv[2]
     if mode == "parent":
-        tok = run_parent(gateway, mock_ip)
-        # Emit token on stdout marker line ONLY for in-memory handoff to child negative test.
+        child_jwk = sys.argv[3] if len(sys.argv) > 3 else None
+        tok, child_tok = run_parent(gateway, mock_ip, child_jwk)
         print(f"PARENT_TOKEN_FOR_NEGATIVE_TEST={tok}", flush=True)
+        if child_tok is not None:
+            print(f"CHILD_TOKEN_DELEGATED={child_tok}", flush=True)
     elif mode == "child":
         parent_tok = sys.argv[3]
-        run_child(gateway, mock_ip, parent_tok)
+        child_tok = sys.argv[4] if len(sys.argv) > 4 else None
+        run_child(gateway, mock_ip, parent_tok, child_tok)
     else:
         raise SystemExit(f"unknown mode: {mode}")

@@ -6,6 +6,7 @@ pub mod client;
 pub mod policy_artifact;
 pub mod policy_trust;
 pub mod registration;
+pub mod role_policy;
 pub mod tool_permissions;
 pub mod tool_proxy;
 

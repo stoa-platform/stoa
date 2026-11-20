@@ -31,6 +31,8 @@ services:
       STOA_POC_CHAIN_BUDGET: "${STOA_POC_CHAIN_BUDGET:-50}"
       STOA_POC_CALLER_BUDGET: "${STOA_POC_CALLER_BUDGET:-100}"
       STOA_POC_MAX_REVOKED_CHAINS: "${STOA_POC_MAX_REVOKED_CHAINS:-10000}"
+      STOA_POC_MAX_ADMISSION_ENTRIES: "${STOA_POC_MAX_ADMISSION_ENTRIES:-10000}"
+      STOA_POC_CALLER_BUDGET_WINDOW_SECS: "${STOA_POC_CALLER_BUDGET_WINDOW_SECS:-900}"
     volumes:
       - role-floors:/tmp/stoa-poc-floors
       - "${STOA_POC_RUNTIME_DIR:-./.runtime}/trust-jwks.json:/etc/stoa/poc/trust-jwks.json:ro"

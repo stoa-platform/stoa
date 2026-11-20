@@ -290,9 +290,13 @@ pub async fn handle_poc_bootstrap(
         policy_version: Some(policy_version),
     }) {
         Ok(issued) => {
-            state
-                .poc_admission
-                .record_token_expiry(&issued.claims.chain_id, issued.claims.exp);
+            if let Err(err) = state.poc_admission.register_chain(
+                &issued.claims.chain_id,
+                issued.claims.exp,
+                chrono::Utc::now().timestamp(),
+            ) {
+                return admission_http_rejection(err);
+            }
             (
                 StatusCode::OK,
                 Json(PocTokenResponse {
@@ -357,6 +361,11 @@ pub async fn handle_poc_delegate(
     ) {
         Ok(claims) => claims,
         Err(err) => {
+            if matches!(err, LocalTokenError::InvalidToken) {
+                state
+                    .poc_admission
+                    .observe_time(chrono::Utc::now().timestamp());
+            }
             warn!(error = %err, "Rejected PoC delegate caller authentication");
             return (
                 StatusCode::UNAUTHORIZED,
@@ -366,17 +375,14 @@ pub async fn handle_poc_delegate(
         }
     };
 
-    // Refuse delegation if the chain is revoked or the revocation table is saturated.
+    // Check the chain before evaluating the narrower child scope.
     let now_epoch = chrono::Utc::now().timestamp();
-    if let Err(err) = state
-        .poc_admission
-        .check_chain_active(&parent_claims.chain_id, now_epoch)
-    {
-        let status = match err {
-            AdmissionError::RevocationTableFull => StatusCode::SERVICE_UNAVAILABLE,
-            _ => StatusCode::FORBIDDEN,
-        };
-        return (status, Json(json!({ "error": err.to_string() }))).into_response();
+    if let Err(err) = state.poc_admission.check_chain_active(
+        &parent_claims.chain_id,
+        parent_claims.exp,
+        now_epoch,
+    ) {
+        return admission_http_rejection(err);
     }
 
     let Ok((_, parent_effective_tools, active_role)) =
@@ -430,9 +436,13 @@ pub async fn handle_poc_delegate(
         },
     ) {
         Ok(issued) => {
-            state
-                .poc_admission
-                .record_token_expiry(&issued.claims.chain_id, issued.claims.exp);
+            if let Err(err) = state.poc_admission.check_chain_active(
+                &issued.claims.chain_id,
+                issued.claims.exp,
+                chrono::Utc::now().timestamp(),
+            ) {
+                return admission_http_rejection(err);
+            }
             (
                 StatusCode::OK,
                 Json(PocTokenResponse {
@@ -616,6 +626,11 @@ pub async fn handle_poc_mcp(
         }) {
             Ok(claims) => claims,
             Err(err) => {
+                if matches!(err, LocalTokenError::InvalidToken) {
+                    state
+                        .poc_admission
+                        .observe_time(chrono::Utc::now().timestamp());
+                }
                 warn!(error = %err, "Rejected PoC MCP request");
                 return (
                     StatusCode::UNAUTHORIZED,
@@ -635,13 +650,12 @@ pub async fn handle_poc_mcp(
                 "serverInfo": { "name": "stoa-gateway-poc", "version": env!("CARGO_PKG_VERSION") }
             }),
         ),
-        "tools/list" => match active_session_time(&claims).and_then(|now| {
-            state
-                .poc_admission
-                .check_chain_active(&claims.chain_id, now)
-                .map_err(admission_rejection)?;
-            effective_poc_allowed_tools(&state, &claims)
-        }) {
+        "tools/list" => match state
+            .poc_admission
+            .check_chain_active(&claims.chain_id, claims.exp, chrono::Utc::now().timestamp())
+            .map_err(admission_rejection)
+            .and_then(|()| effective_poc_allowed_tools(&state, &claims))
+        {
             Ok((_, allowed_tools, _)) => {
                 let tools: Vec<Value> = state
                     .tool_registry
@@ -724,20 +738,27 @@ fn caller_identity_key(tenant: &str, root_subject: &str) -> String {
         .collect()
 }
 
-fn active_session_time(claims: &LocalAgentClaims) -> Result<i64, PocToolRejection> {
-    let now = chrono::Utc::now().timestamp();
-    if claims.exp <= now {
-        return Err((-32001, "Session expired"));
-    }
-    Ok(now)
+fn admission_http_rejection(err: AdmissionError) -> Response {
+    let status = match err {
+        AdmissionError::AdmissionTableFull | AdmissionError::RevocationTableFull => {
+            StatusCode::SERVICE_UNAVAILABLE
+        }
+        AdmissionError::SessionExpired => StatusCode::UNAUTHORIZED,
+        _ => StatusCode::FORBIDDEN,
+    };
+    (status, Json(json!({ "error": err.to_string() }))).into_response()
 }
 
 fn admission_rejection(err: AdmissionError) -> PocToolRejection {
     match err {
+        AdmissionError::SessionExpired => (-32001, "Session expired"),
         AdmissionError::ChainRevoked => (-32003, "Chain revoked"),
+        AdmissionError::ChainInactive => (-32003, "Chain inactive"),
         AdmissionError::ChainBudgetExceeded => (-32003, "Chain budget exceeded"),
         AdmissionError::CallerBudgetExceeded => (-32003, "Caller budget exceeded"),
-        AdmissionError::RevocationTableFull => (-32005, "Admission unavailable"),
+        AdmissionError::AdmissionTableFull | AdmissionError::RevocationTableFull => {
+            (-32005, "Admission unavailable")
+        }
         AdmissionError::InvalidInput(_) => (-32003, "Admission rejected"),
     }
 }
@@ -818,7 +839,8 @@ pub(crate) async fn authorize_and_execute_poc_tool(
         cost: 1,
         chain_limit: None,
         caller_limit: None,
-        now_epoch: active_session_time(claims)?,
+        session_expires_at: claims.exp,
+        now_epoch: chrono::Utc::now().timestamp(),
     }) {
         warn!(
             chain_id = %claims.chain_id,
@@ -1176,6 +1198,7 @@ mod tests {
 
         let admission = PocAdmissionController::new(Default::default());
         for (chain, caller) in [("first-chain", &first), ("second-chain", &second)] {
+            admission.register_chain(chain, 61, 1).unwrap();
             admission
                 .admit_call(&AdmitCallRequest {
                     chain_id: chain,
@@ -1183,6 +1206,7 @@ mod tests {
                     cost: 1,
                     chain_limit: Some(1),
                     caller_limit: Some(1),
+                    session_expires_at: 61,
                     now_epoch: 1,
                 })
                 .unwrap();

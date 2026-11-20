@@ -694,6 +694,8 @@ impl AppState {
                 max_revoked_chains: config.poc_max_revoked_chains,
                 default_chain_budget: config.poc_chain_budget,
                 default_caller_budget: config.poc_caller_budget,
+                max_admission_entries: config.poc_max_admission_entries,
+                caller_budget_window_secs: config.poc_caller_budget_window_secs,
             },
         ));
 

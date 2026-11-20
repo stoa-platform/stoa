@@ -234,5 +234,7 @@ expression: "Config::default()"
   "poc_outbound_allowed_origins": [],
   "poc_max_revoked_chains": 10000,
   "poc_chain_budget": 50,
-  "poc_caller_budget": 100
+  "poc_caller_budget": 100,
+  "poc_max_admission_entries": 10000,
+  "poc_caller_budget_window_secs": 900
 }

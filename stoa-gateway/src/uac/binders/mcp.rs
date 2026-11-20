@@ -11,6 +11,7 @@ use parking_lot::RwLock;
 
 use crate::mcp::tools::dynamic_tool::DynamicTool;
 use crate::mcp::tools::{ToolAnnotations, ToolDefinition, ToolRegistry, ToolSchema};
+use crate::proxy::credentials::CredentialStore;
 use crate::uac::schema::{EndpointSideEffects, UacContractSpec, UacEndpoint};
 use crate::uac::Action;
 
@@ -20,6 +21,8 @@ use super::{BindingOutput, ProtocolBinder};
 pub struct McpBinder {
     tool_registry: Arc<ToolRegistry>,
     contract_tool_names: RwLock<HashMap<String, Vec<String>>>,
+    /// Backend credential store attached to the generated tools.
+    credential_store: Option<Arc<CredentialStore>>,
 }
 
 impl McpBinder {
@@ -28,7 +31,15 @@ impl McpBinder {
         Self {
             tool_registry,
             contract_tool_names: RwLock::new(HashMap::new()),
+            credential_store: None,
         }
+    }
+
+    /// Attach the backend credential store so generated tools authenticate
+    /// upstream with the credential stored under `DynamicTool::credential_key`.
+    pub fn with_credential_store(mut self, store: Arc<CredentialStore>) -> Self {
+        self.credential_store = Some(store);
+        self
     }
 
     /// Tool name prefix for a contract (used for cascade deletion).
@@ -159,7 +170,10 @@ impl McpBinder {
     }
 
     /// Create DynamicTool instances from a contract for registration.
-    fn create_dynamic_tools(contract: &UacContractSpec) -> Vec<Arc<dyn crate::mcp::tools::Tool>> {
+    fn create_dynamic_tools(
+        &self,
+        contract: &UacContractSpec,
+    ) -> Vec<Arc<dyn crate::mcp::tools::Tool>> {
         contract
             .endpoints
             .iter()
@@ -193,7 +207,8 @@ impl McpBinder {
                     &contract.tenant_id,
                 )
                 .with_action(action)
-                .with_annotations(ToolAnnotations::from_action(action));
+                .with_annotations(ToolAnnotations::from_action(action))
+                .with_credential_store(self.credential_store.clone());
 
                 Arc::new(tool) as Arc<dyn crate::mcp::tools::Tool>
             })
@@ -215,7 +230,7 @@ impl ProtocolBinder for McpBinder {
         }
 
         // Create and register new tools
-        let tools = Self::create_dynamic_tools(contract);
+        let tools = self.create_dynamic_tools(contract);
         let count = tools.len();
         let definitions = Self::generate_tool_definitions(contract);
 
@@ -555,5 +570,27 @@ mod tests {
         let defs = McpBinder::generate_tool_definitions(&contract);
         // Classification is route-level concern, tools still generated
         assert_eq!(defs.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn bound_tools_authenticate_upstream_with_backend_credentials() {
+        use crate::mcp::tools::dynamic_tool::tests::{
+            api_key_for, api_key_store, api_keys_received, orders_upstream,
+        };
+
+        // The credential key carries the contract tenant, then the tool name.
+        let key = "mcp-tool:t1:uac:t1:payments:list_payments";
+        let upstream = orders_upstream().await;
+        let mut contract = sample_contract();
+        contract.tenant_id = "t1".to_string();
+        contract.endpoints[0].backend_url = format!("{}/orders", upstream.uri());
+        let registry = Arc::new(ToolRegistry::new());
+        let binder = McpBinder::new(registry.clone())
+            .with_credential_store(api_key_store(&[key], &upstream.uri()));
+        binder.bind(&contract).await.unwrap();
+
+        let tool = registry.get("uac:t1:payments:list_payments").unwrap();
+        let keys = api_keys_received(tool.as_ref(), "t1", &upstream).await;
+        assert_eq!(keys, [api_key_for(key)]);
     }
 }

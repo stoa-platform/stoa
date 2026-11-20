@@ -5,13 +5,24 @@
 
 #![allow(dead_code)]
 
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use reqwest::Client;
 use serde_json::Value;
 use tracing::{debug, warn};
 
 use super::{Tool, ToolAnnotations, ToolContext, ToolError, ToolResult, ToolSchema};
+use crate::proxy::credentials::{url_origin, AuthType, CredentialStore, MCP_TOOL_KEY_PREFIX};
 use crate::uac::Action;
+
+/// Tenant marker of shared catalog tools that are registered for no tenant
+/// in particular (coarse catalog discovery).
+pub(crate) const PUBLIC_TENANT_MARKER: &str = "_public";
+
+/// Value standing for an identity that is not known (see
+/// [`ToolContext::consumer_id`]). It is never taken as a caller tenant.
+const UNKNOWN_CALLER: &str = "unknown";
 
 /// Classify the actual HTTP operation; unknown methods require write permission.
 pub(super) fn action_for_http_method(method: &str) -> Action {
@@ -54,6 +65,8 @@ pub struct DynamicTool {
     /// Tokens are pulled from the tool args and removed before the remainder is
     /// sent as query string (GET/DELETE) or JSON body (POST/PUT/PATCH).
     path_pattern: Option<String>,
+    /// Backend credential store used to authenticate the upstream call.
+    credential_store: Option<Arc<CredentialStore>>,
     /// HTTP client
     client: Client,
 }
@@ -82,7 +95,11 @@ impl DynamicTool {
             tenant_id: tenant_id.into(),
             public: false,
             path_pattern: None,
+            credential_store: None,
+            // Redirects are not followed: the request, and the backend
+            // credential it carries, only go to the configured endpoint.
             client: Client::builder()
+                .redirect(reqwest::redirect::Policy::none())
                 .timeout(std::time::Duration::from_secs(30))
                 .build()
                 .expect("HTTP client"),
@@ -119,6 +136,153 @@ impl DynamicTool {
     pub fn into_public(mut self) -> Self {
         self.public = true;
         self
+    }
+
+    /// Attach the gateway's backend credential store. The upstream call is
+    /// then authenticated with the credential registered under
+    /// [`DynamicTool::credential_key`] for the tool's own tenant, when there
+    /// is one, it serves the caller's tenant and it is bound to the origin of
+    /// the tool endpoint.
+    pub fn with_credential_store(mut self, store: impl Into<Option<Arc<CredentialStore>>>) -> Self {
+        self.credential_store = store.into();
+        self
+    }
+
+    /// Credential-store key holding the upstream credential of a dynamic tool:
+    /// `mcp-tool:{tenant}:{tool_name}`, following the `api-proxy:{backend}`
+    /// convention. `tenant` is the tenant the tool is registered for (CRD
+    /// namespace, contract tenant, catalog tenant), never the caller's
+    /// tenant, and `tool_name` is the name returned by `tools/list`. The
+    /// prefix keeps tool credentials apart from proxy route credentials held
+    /// in the same store.
+    ///
+    /// Operators register it through `POST /admin/backend-credentials`, with
+    /// the key as `route_id` and the upstream origin as `allowed_origin`, e.g.
+    /// `{"route_id": "mcp-tool:acme:payments", "auth_type": "api_key",
+    /// "header_name": "X-API-Key", "header_value": "...",
+    /// "allowed_origin": "https://api.example.com:443"}`.
+    ///
+    /// The credential is used for callers of the owning tenant only (`acme`
+    /// above). A tool that other tenants can call (per-operation catalog
+    /// tools) calls its upstream without a credential for them, unless the
+    /// entry sets `"shared_with_tenants": true`, which makes it serve the
+    /// callers of every tenant allowed to call the tool.
+    ///
+    /// The credential is used only when the tool's request targets its
+    /// `allowed_origin`; otherwise the call fails before anything is sent. A
+    /// tool that is registered for no tenant in particular (coarse catalog
+    /// tools) never uses a credential.
+    pub fn credential_key(tenant_id: &str, tool_name: &str) -> String {
+        format!("{MCP_TOOL_KEY_PREFIX}{tenant_id}:{tool_name}")
+    }
+
+    /// Tenant under which this tool's credential is registered: the tenant
+    /// the tool itself is registered for.
+    ///
+    /// `None` when the tool has no tenant of its own (empty tenant or the
+    /// [`PUBLIC_TENANT_MARKER`] of shared catalog tools): such a tool always
+    /// calls its upstream without a credential. Likewise for a tenant id
+    /// containing `:`, the key separator, which no key can address
+    /// unambiguously.
+    fn credential_tenant(&self) -> Option<&str> {
+        let tenant = self.tenant_id.as_str();
+        let has_own_tenant =
+            !tenant.trim().is_empty() && tenant != PUBLIC_TENANT_MARKER && !tenant.contains(':');
+        has_own_tenant.then_some(tenant)
+    }
+
+    /// Tenant of the caller, taken from the call context, which the
+    /// transports fill from the validated token.
+    ///
+    /// `None` when the context names no tenant: an empty value, a value that
+    /// `auth::tenant::require_tenant` does not accept as a tenant identity
+    /// (which includes placeholders such as `default`), or
+    /// [`UNKNOWN_CALLER`].
+    fn caller_tenant(ctx: &ToolContext) -> Option<&str> {
+        let tenant = ctx.tenant_id.as_str();
+        let is_known =
+            tenant != UNKNOWN_CALLER && crate::telemetry::validated_tenant(Some(tenant)).is_some();
+        is_known.then_some(tenant)
+    }
+
+    /// Resolve the upstream auth header from the backend credential store,
+    /// for a request to `final_url` made on behalf of the caller of `ctx`.
+    ///
+    /// `Ok(None)`, in which case the upstream request carries no auth header
+    /// and no OAuth2 token is requested, when:
+    /// - no store is attached, the tool has no tenant of its own, or no
+    ///   credential is registered for it;
+    /// - the caller's tenant is not known;
+    /// - the caller belongs to another tenant than the tool's and the
+    ///   credential is not `shared_with_tenants`.
+    ///
+    /// A credential that serves the caller but whose `allowed_origin` is not
+    /// the origin of `final_url` fails the call; this is checked before the
+    /// OAuth2 token is requested.
+    async fn backend_auth_header(
+        &self,
+        final_url: &str,
+        ctx: &ToolContext,
+    ) -> Result<Option<(String, String)>, ToolError> {
+        let (Some(store), Some(tenant)) = (&self.credential_store, self.credential_tenant()) else {
+            return Ok(None);
+        };
+        let key = Self::credential_key(tenant, &self.name);
+        let Some(cred) = store.get(&key) else {
+            return Ok(None);
+        };
+        // The credential belongs to the tool's tenant. It serves a caller of
+        // that tenant, or of any known tenant when it is shared. For anyone
+        // else the call proceeds as it does for a tool without a credential.
+        let Some(caller) = Self::caller_tenant(ctx) else {
+            debug!(
+                tool = %self.name,
+                tool_tenant = %tenant,
+                "Backend credential not used: caller tenant is not known"
+            );
+            return Ok(None);
+        };
+        if caller != tenant && !cred.shared_with_tenants {
+            debug!(
+                tool = %self.name,
+                tool_tenant = %tenant,
+                caller_tenant = %caller,
+                "Backend credential not used: not shared with the caller's tenant"
+            );
+            return Ok(None);
+        }
+        if !cred.is_bound_to_origin_of(final_url) {
+            warn!(
+                tool = %self.name,
+                credential_key = %key,
+                allowed_origin = ?cred.allowed_origin,
+                request_origin = ?url_origin(final_url),
+                "Backend credential is not bound to the origin of the tool endpoint"
+            );
+            return Err(ToolError::ExecutionFailed(
+                "Backend credential does not apply to this tool endpoint".to_string(),
+            ));
+        }
+        if cred.auth_type != AuthType::OAuth2ClientCredentials {
+            return Ok(Some((cred.header_name, cred.header_value)));
+        }
+        match store.get_oauth2_token(&key, &self.client).await {
+            Ok(token) => Ok(Some((
+                "Authorization".to_string(),
+                format!("Bearer {token}"),
+            ))),
+            Err(e) => {
+                warn!(
+                    tool = %self.name,
+                    credential_key = %key,
+                    error = %e,
+                    "Backend OAuth2 token fetch failed"
+                );
+                Err(ToolError::ExecutionFailed(
+                    "Failed to authenticate with upstream".to_string(),
+                ))
+            }
+        }
     }
 }
 
@@ -200,9 +364,13 @@ impl Tool for DynamicTool {
             }
         };
 
-        // Forward auth token if available
-        if let Some(ref token) = ctx.raw_token {
-            req = req.header("Authorization", format!("Bearer {}", token));
+        // Upstream auth comes from the backend credential store only; the
+        // caller's own token is for this gateway and is never sent upstream.
+        // The context only tells whether the credential serves the caller's
+        // tenant. Nothing has been sent at this point: a credential that is
+        // not bound to the origin of `final_url` ends the call here.
+        if let Some((name, value)) = self.backend_auth_header(&final_url, ctx).await? {
+            req = req.header(name, value);
         }
 
         // Inject skill context header if present (CAB-1365)
@@ -362,8 +530,9 @@ pub fn schema_from_value(value: &Value) -> ToolSchema {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
+    use crate::proxy::credentials::{BackendCredential, OAuth2Config};
     use serde_json::json;
     use std::collections::HashMap;
 
@@ -857,5 +1026,619 @@ mod tests {
                 .any(|t| t.name == "demo:bank:get-customer-by-number"),
             "per-op public tool must surface via standard discovery (CAB-2123)"
         );
+    }
+
+    // === Upstream authentication comes from the backend credential store ===
+
+    const CALLER_BEARER: &str = "fixture-caller-bearer";
+
+    /// Credential key of [`orders_tool`]: tenant `t1`, tool `t1_orders`.
+    const ORDERS_KEY: &str = "mcp-tool:t1:t1_orders";
+
+    /// Context of a caller from `tenant`, carrying a caller bearer.
+    fn ctx_for_tenant(tenant: &str) -> ToolContext {
+        ToolContext {
+            tenant_id: tenant.to_string(),
+            user_id: None,
+            user_email: None,
+            request_id: "req-1".to_string(),
+            roles: vec![],
+            scopes: vec![],
+            raw_token: Some(CALLER_BEARER.to_string()),
+            skill_instructions: None,
+            progress_token: None,
+            consumer_id: "test-consumer".to_string(),
+            from_control_plane: false,
+        }
+    }
+
+    fn ctx_with_caller_bearer() -> ToolContext {
+        ctx_for_tenant("t1")
+    }
+
+    fn assert_caller_bearer_absent(request: &wiremock::Request) {
+        for (name, value) in request.headers.iter() {
+            assert!(
+                !String::from_utf8_lossy(value.as_bytes()).contains(CALLER_BEARER),
+                "caller bearer found in upstream header {name}"
+            );
+        }
+    }
+
+    /// Static credential stored under `key` and bound to `allowed_origin`.
+    fn static_credential(
+        key: &str,
+        auth_type: AuthType,
+        header_name: &str,
+        header_value: &str,
+        allowed_origin: Option<&str>,
+    ) -> BackendCredential {
+        BackendCredential {
+            route_id: key.to_string(),
+            auth_type,
+            header_name: header_name.to_string(),
+            header_value: header_value.to_string(),
+            oauth2: None,
+            allowed_origin: allowed_origin.map(str::to_string),
+            shared_with_tenants: false,
+        }
+    }
+
+    /// `credential`, also serving callers of other tenants.
+    fn shared(credential: BackendCredential) -> BackendCredential {
+        BackendCredential {
+            shared_with_tenants: true,
+            ..credential
+        }
+    }
+
+    /// OAuth2 client-credentials entry of [`orders_tool`], with its token
+    /// endpoint on `upstream` and bound to `allowed_origin`.
+    fn oauth2_credential(
+        upstream: &wiremock::MockServer,
+        allowed_origin: Option<&str>,
+    ) -> BackendCredential {
+        BackendCredential {
+            oauth2: Some(OAuth2Config {
+                token_url: format!("{}/token", upstream.uri()),
+                client_id: "fixture-client".to_string(),
+                client_secret: "fixture-client-credential".to_string(),
+            }),
+            ..static_credential(
+                ORDERS_KEY,
+                AuthType::OAuth2ClientCredentials,
+                "Authorization",
+                "unused",
+                allowed_origin,
+            )
+        }
+    }
+
+    fn store_of(credential: BackendCredential) -> Arc<CredentialStore> {
+        let store = Arc::new(CredentialStore::new());
+        store.upsert(credential);
+        store
+    }
+
+    /// API key that [`api_key_store`] holds under the credential key `key`.
+    pub(crate) fn api_key_for(key: &str) -> String {
+        format!("fixture-backend-key-of-{key}")
+    }
+
+    /// API-key entry ([`api_key_for`]) stored under `key` and bound to
+    /// `allowed_origin`.
+    fn api_key_credential(key: &str, allowed_origin: &str) -> BackendCredential {
+        let (name, value) = ("X-Api-Key", api_key_for(key));
+        static_credential(key, AuthType::ApiKey, name, &value, Some(allowed_origin))
+    }
+
+    /// Store holding an API key ([`api_key_for`]) under each of `keys`, all
+    /// bound to `allowed_origin`.
+    pub(crate) fn api_key_store(keys: &[&str], allowed_origin: &str) -> Arc<CredentialStore> {
+        let store = Arc::new(CredentialStore::new());
+        for key in keys {
+            store.upsert(api_key_credential(key, allowed_origin));
+        }
+        store
+    }
+
+    /// Upstream answering 200 on `/orders` (any method) and 404 elsewhere.
+    pub(crate) async fn orders_upstream() -> wiremock::MockServer {
+        let upstream = wiremock::MockServer::start().await;
+        wiremock::Mock::given(wiremock::matchers::path("/orders"))
+            .respond_with(wiremock::ResponseTemplate::new(200))
+            .mount(&upstream)
+            .await;
+        upstream
+    }
+
+    /// Tool `name` registered for `tenant`, calling `GET {upstream}/orders`.
+    fn tool_for_tenant(name: &str, tenant: &str, upstream: &wiremock::MockServer) -> DynamicTool {
+        DynamicTool::new(
+            name,
+            "Orders",
+            format!("{}/orders", upstream.uri()),
+            "GET",
+            schema_empty_object(),
+            tenant,
+        )
+    }
+
+    fn orders_tool(upstream: &wiremock::MockServer) -> DynamicTool {
+        tool_for_tenant("t1_orders", "t1", upstream)
+    }
+
+    /// Call `tool` as a caller of tenant `caller`, with a caller bearer in
+    /// the context, then return the `X-Api-Key` values `upstream` has
+    /// received on `/orders`.
+    pub(crate) async fn api_keys_received(
+        tool: &dyn Tool,
+        caller: &str,
+        upstream: &wiremock::MockServer,
+    ) -> Vec<String> {
+        let ctx = ctx_for_tenant(caller);
+        tool.execute(json!({}), &ctx).await.unwrap();
+        let requests = upstream.received_requests().await.unwrap();
+        let orders = requests.iter().filter(|r| r.url.path() == "/orders");
+        orders
+            .inspect(|request| assert_caller_bearer_absent(request))
+            .flat_map(|request| request.headers.get_all("X-Api-Key"))
+            .map(|value| value.to_str().unwrap().to_string())
+            .collect()
+    }
+
+    #[test]
+    fn credential_key_names_the_tenant_and_the_tool() {
+        assert_eq!(
+            DynamicTool::credential_key("acme", "payments"),
+            "mcp-tool:acme:payments"
+        );
+        assert_eq!(DynamicTool::credential_key("t1", "t1_orders"), ORDERS_KEY);
+    }
+
+    #[tokio::test]
+    async fn upstream_request_has_no_authorization_without_backend_credential() {
+        for with_other_entries in [false, true] {
+            let upstream = orders_upstream().await;
+            // Entries of another tool, of another tenant, and without a tenant.
+            let other_entries = [
+                "mcp-tool:t1:t1_invoices",
+                "mcp-tool:t2:t1_orders",
+                "mcp-tool:t1_orders",
+            ];
+            let store = with_other_entries.then(|| api_key_store(&other_entries, &upstream.uri()));
+            let tool = orders_tool(&upstream).with_credential_store(store);
+
+            tool.execute(json!({}), &ctx_with_caller_bearer())
+                .await
+                .unwrap();
+
+            let requests = upstream.received_requests().await.unwrap();
+            assert_eq!(requests.len(), 1);
+            assert!(!requests[0].headers.contains_key("Authorization"));
+            assert!(!requests[0].headers.contains_key("X-Api-Key"));
+            assert_caller_bearer_absent(&requests[0]);
+        }
+    }
+
+    #[tokio::test]
+    async fn upstream_request_carries_configured_backend_credential() {
+        for (auth_type, header_name, header_value) in [
+            (AuthType::ApiKey, "X-Api-Key", "fixture-backend-key"),
+            (
+                AuthType::Bearer,
+                "Authorization",
+                "Bearer fixture-backend-key",
+            ),
+        ] {
+            let upstream = orders_upstream().await;
+            // Origins are compared in normalized form: another spelling of
+            // the endpoint origin is the same origin.
+            let allowed_origin = format!("{}/", upstream.uri().to_uppercase());
+            let tool = orders_tool(&upstream).with_credential_store(store_of(static_credential(
+                ORDERS_KEY,
+                auth_type,
+                header_name,
+                header_value,
+                Some(&allowed_origin),
+            )));
+
+            tool.execute(json!({}), &ctx_with_caller_bearer())
+                .await
+                .unwrap();
+
+            let requests = upstream.received_requests().await.unwrap();
+            assert_eq!(requests.len(), 1);
+            let sent: Vec<_> = requests[0].headers.get_all(header_name).iter().collect();
+            assert_eq!(sent, [header_value]);
+            assert_eq!(
+                requests[0].headers.contains_key("Authorization"),
+                header_name == "Authorization"
+            );
+            assert_caller_bearer_absent(&requests[0]);
+        }
+    }
+
+    #[tokio::test]
+    async fn upstream_request_carries_oauth2_client_credentials_token() {
+        use wiremock::matchers::{body_string_contains, method, path};
+        use wiremock::{Mock, ResponseTemplate};
+
+        let upstream = orders_upstream().await;
+        Mock::given(method("POST"))
+            .and(path("/token"))
+            .and(body_string_contains("grant_type=client_credentials"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(
+                json!({"access_token": "fixture-backend-access", "expires_in": 300}),
+            ))
+            .mount(&upstream)
+            .await;
+        let credential = oauth2_credential(&upstream, Some(&upstream.uri()));
+        let tool = orders_tool(&upstream).with_credential_store(store_of(credential));
+
+        tool.execute(json!({}), &ctx_with_caller_bearer())
+            .await
+            .unwrap();
+
+        let requests = upstream.received_requests().await.unwrap();
+        let orders: Vec<_> = requests
+            .iter()
+            .filter(|r| r.url.path() == "/orders")
+            .collect();
+        assert_eq!(orders.len(), 1);
+        assert_eq!(
+            orders[0].headers.get("Authorization").unwrap(),
+            "Bearer fixture-backend-access"
+        );
+        for request in &requests {
+            assert_caller_bearer_absent(request);
+        }
+    }
+
+    #[tokio::test]
+    async fn tool_call_fails_without_reaching_upstream_when_oauth2_token_is_unavailable() {
+        // No token endpoint is mounted, so the token request gets a 404.
+        let upstream = orders_upstream().await;
+        let credential = oauth2_credential(&upstream, Some(&upstream.uri()));
+        let tool = orders_tool(&upstream).with_credential_store(store_of(credential));
+
+        let result = tool.execute(json!({}), &ctx_with_caller_bearer()).await;
+
+        assert!(result.is_err());
+        let requests = upstream.received_requests().await.unwrap();
+        assert!(requests.iter().all(|r| r.url.path() != "/orders"));
+    }
+
+    #[tokio::test]
+    async fn upstream_redirect_is_not_followed() {
+        let redirect_target = orders_upstream().await;
+        let upstream = wiremock::MockServer::start().await;
+        wiremock::Mock::given(wiremock::matchers::path("/orders"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(302)
+                    .insert_header("Location", format!("{}/orders", redirect_target.uri())),
+            )
+            .mount(&upstream)
+            .await;
+        let tool = orders_tool(&upstream)
+            .with_credential_store(api_key_store(&[ORDERS_KEY], &upstream.uri()));
+
+        let result = tool.execute(json!({}), &ctx_with_caller_bearer()).await;
+
+        assert!(result.is_err());
+        assert_eq!(upstream.received_requests().await.unwrap().len(), 1);
+        assert!(redirect_target
+            .received_requests()
+            .await
+            .unwrap()
+            .is_empty());
+    }
+
+    // === A credential is bound to the tool's tenant and to one origin ===
+
+    #[tokio::test]
+    async fn same_named_tools_of_different_tenants_use_their_own_credential() {
+        // Three tenants register a tool under the same name, each with its
+        // own backend. Two of them have a credential, bound to their backend.
+        let store = Arc::new(CredentialStore::new());
+        let mut tools = Vec::new();
+        for tenant in ["tenant-a", "tenant-b", "tenant-c"] {
+            let upstream = orders_upstream().await;
+            let key = DynamicTool::credential_key(tenant, "orders");
+            if tenant != "tenant-c" {
+                store.upsert(static_credential(
+                    &key,
+                    AuthType::ApiKey,
+                    "X-Api-Key",
+                    &api_key_for(&key),
+                    Some(&upstream.uri()),
+                ));
+            }
+            let tool =
+                tool_for_tenant("orders", tenant, &upstream).with_credential_store(store.clone());
+            tools.push((tenant, key, tool, upstream));
+        }
+
+        for (tenant, key, tool, upstream) in &tools {
+            let received = api_keys_received(tool, tenant, upstream).await;
+            if *tenant == "tenant-c" {
+                assert!(received.is_empty(), "{tenant} has no credential");
+            } else {
+                assert_eq!(received, [api_key_for(key)], "{tenant}");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn credential_bound_to_another_origin_fails_the_call_before_any_request() {
+        let elsewhere = orders_upstream().await;
+        for oauth2 in [false, true] {
+            // Bound to another server, to another host, or to no origin.
+            for allowed_origin in [
+                Some(elsewhere.uri()),
+                Some("https://api.example.com:443".to_string()),
+                None,
+            ] {
+                // `upstream` serves both the tool endpoint and the token endpoint.
+                let upstream = orders_upstream().await;
+                let allowed_origin = allowed_origin.as_deref();
+                let credential = if oauth2 {
+                    oauth2_credential(&upstream, allowed_origin)
+                } else {
+                    let (name, value) = ("X-Api-Key", "fixture-backend-key");
+                    static_credential(ORDERS_KEY, AuthType::ApiKey, name, value, allowed_origin)
+                };
+                let tool = orders_tool(&upstream).with_credential_store(store_of(credential));
+
+                let error = tool
+                    .execute(json!({}), &ctx_with_caller_bearer())
+                    .await
+                    .unwrap_err();
+
+                let case = format!("oauth2={oauth2} allowed_origin={allowed_origin:?}");
+                assert!(error.to_string().contains("does not apply"), "{case}");
+                let requests = upstream.received_requests().await.unwrap();
+                assert!(requests.is_empty(), "{case}");
+            }
+        }
+        assert!(elsewhere.received_requests().await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn credential_origin_is_checked_on_the_url_resolved_from_the_path_pattern() {
+        // The path pattern is appended to the endpoint. Here the resolved URL
+        // points at `elsewhere`, while the credential is bound to the origin
+        // of the endpoint.
+        let (upstream, elsewhere) = (orders_upstream().await, orders_upstream().await);
+        let tool = DynamicTool::new(
+            "t1_orders",
+            "Orders",
+            upstream.uri(),
+            "GET",
+            schema_empty_object(),
+            "t1",
+        )
+        .with_path_pattern(format!("@{}/orders", elsewhere.address()))
+        .with_credential_store(api_key_store(&[ORDERS_KEY], &upstream.uri()));
+
+        let result = tool.execute(json!({}), &ctx_with_caller_bearer()).await;
+
+        assert!(result.unwrap_err().to_string().contains("does not apply"));
+        for server in [&upstream, &elsewhere] {
+            assert!(server.received_requests().await.unwrap().is_empty());
+        }
+    }
+
+    #[tokio::test]
+    async fn tool_registered_for_no_tenant_never_receives_a_credential() {
+        // Shared catalog tools carry the public marker, or no tenant at all.
+        // An entry stored under the key such a tenant would give is not used,
+        // nor is one stored without a tenant, even when the entry is shared
+        // with the callers of every tenant. Same for a tenant id that holds
+        // the key separator.
+        for tenant in [PUBLIC_TENANT_MARKER, "", "a:b"] {
+            let upstream = orders_upstream().await;
+            let key = DynamicTool::credential_key(tenant, "orders");
+            let store = Arc::new(CredentialStore::new());
+            for key in [key.as_str(), "mcp-tool:orders"] {
+                store.upsert(shared(api_key_credential(key, &upstream.uri())));
+            }
+            let tool = tool_for_tenant("orders", tenant, &upstream)
+                .into_public()
+                .with_credential_store(store);
+
+            let received = api_keys_received(&tool, "t1", &upstream).await;
+
+            assert!(received.is_empty(), "tenant {tenant:?}");
+            let requests = upstream.received_requests().await.unwrap();
+            assert_eq!(requests.len(), 1, "tenant {tenant:?}");
+            assert!(!requests[0].headers.contains_key("Authorization"));
+        }
+    }
+
+    // === A credential serves the callers of the tool's own tenant, unless shared ===
+
+    /// What the upstream of a tool has received: requests on the tool
+    /// endpoint, the credential headers they carried, and requests on the
+    /// token endpoint.
+    #[derive(Debug, Default, PartialEq)]
+    struct Received {
+        tool_requests: usize,
+        credential_headers: Vec<(String, String)>,
+        token_requests: usize,
+    }
+
+    impl Received {
+        /// One upstream call, without a credential and without a token request.
+        fn one_call_without_credential() -> Self {
+            Self {
+                tool_requests: 1,
+                ..Self::default()
+            }
+        }
+
+        /// One upstream call carrying the entry of [`orders_credential`].
+        fn one_call_with_credential(oauth2: bool) -> Self {
+            let header = if oauth2 {
+                ("authorization", "Bearer fixture-backend-access".to_string())
+            } else {
+                ("x-api-key", api_key_for(ORDERS_KEY))
+            };
+            Self {
+                tool_requests: 1,
+                credential_headers: vec![(header.0.to_string(), header.1)],
+                token_requests: usize::from(oauth2),
+            }
+        }
+    }
+
+    async fn received_by(upstream: &wiremock::MockServer) -> Received {
+        let requests = upstream.received_requests().await.unwrap();
+        let (token, tool): (Vec<_>, Vec<_>) =
+            requests.iter().partition(|r| r.url.path() == "/token");
+        let mut credential_headers = Vec::new();
+        for request in &tool {
+            assert_caller_bearer_absent(request);
+            for name in ["authorization", "x-api-key"] {
+                for value in request.headers.get_all(name) {
+                    let value = value.to_str().unwrap().to_string();
+                    credential_headers.push((name.to_string(), value));
+                }
+            }
+        }
+        Received {
+            tool_requests: tool.len(),
+            credential_headers,
+            token_requests: token.len(),
+        }
+    }
+
+    /// Entry of [`orders_tool`], bound to the origin of `upstream`: an API
+    /// key, or OAuth2 client credentials with their token endpoint on
+    /// `upstream`.
+    fn orders_credential(oauth2: bool, upstream: &wiremock::MockServer) -> BackendCredential {
+        if oauth2 {
+            oauth2_credential(upstream, Some(&upstream.uri()))
+        } else {
+            api_key_credential(ORDERS_KEY, &upstream.uri())
+        }
+    }
+
+    /// Call, as a caller of tenant `caller`, a tool that tenant `t1` owns and
+    /// that every tenant can call (as per-operation catalog tools are),
+    /// holding the entry `credential` builds. Returns the result of the call
+    /// and what the upstream, which also serves the token endpoint, received.
+    async fn call_public_tool(
+        caller: &str,
+        credential: impl FnOnce(&wiremock::MockServer) -> BackendCredential,
+    ) -> (Result<ToolResult, ToolError>, Received) {
+        let upstream = orders_upstream().await;
+        wiremock::Mock::given(wiremock::matchers::path("/token"))
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_json(
+                json!({"access_token": "fixture-backend-access", "expires_in": 300}),
+            ))
+            .mount(&upstream)
+            .await;
+        let tool = orders_tool(&upstream)
+            .into_public()
+            .with_credential_store(store_of(credential(&upstream)));
+
+        let result = tool.execute(json!({}), &ctx_for_tenant(caller)).await;
+
+        (result, received_by(&upstream).await)
+    }
+
+    #[tokio::test]
+    async fn caller_of_another_tenant_gets_no_credential_and_no_token_is_requested() {
+        for oauth2 in [false, true] {
+            let (result, received) =
+                call_public_tool("t2", |upstream| orders_credential(oauth2, upstream)).await;
+
+            // The call goes through, as it does for a tool without a credential.
+            assert!(result.is_ok(), "oauth2={oauth2}");
+            let expected = Received::one_call_without_credential();
+            assert_eq!(received, expected, "oauth2={oauth2}");
+        }
+    }
+
+    #[tokio::test]
+    async fn caller_of_the_owning_tenant_gets_the_credential() {
+        for oauth2 in [false, true] {
+            let (result, received) =
+                call_public_tool("t1", |upstream| orders_credential(oauth2, upstream)).await;
+
+            assert!(result.is_ok(), "oauth2={oauth2}");
+            let expected = Received::one_call_with_credential(oauth2);
+            assert_eq!(received, expected, "oauth2={oauth2}");
+        }
+    }
+
+    #[tokio::test]
+    async fn caller_of_another_tenant_gets_a_credential_shared_with_tenants() {
+        for oauth2 in [false, true] {
+            let (result, received) =
+                call_public_tool("t2", |upstream| shared(orders_credential(oauth2, upstream)))
+                    .await;
+
+            assert!(result.is_ok(), "oauth2={oauth2}");
+            let expected = Received::one_call_with_credential(oauth2);
+            assert_eq!(received, expected, "oauth2={oauth2}");
+        }
+    }
+
+    #[tokio::test]
+    async fn caller_without_a_known_tenant_gets_no_credential() {
+        // No tenant, or a value that stands for none. A shared entry is for
+        // the callers of other tenants, not for a caller without one.
+        for caller in ["", " ", "unknown", "default", PUBLIC_TENANT_MARKER] {
+            for (oauth2, share) in [(false, false), (false, true), (true, false), (true, true)] {
+                let (result, received) = call_public_tool(caller, |upstream| {
+                    let credential = orders_credential(oauth2, upstream);
+                    if share {
+                        shared(credential)
+                    } else {
+                        credential
+                    }
+                })
+                .await;
+
+                let case = format!("caller={caller:?} oauth2={oauth2} shared={share}");
+                assert!(result.is_ok(), "{case}");
+                assert_eq!(received, Received::one_call_without_credential(), "{case}");
+            }
+        }
+
+        // Likewise when the tool itself is registered under such a value and
+        // called with it.
+        for tenant in ["unknown", "default"] {
+            let upstream = orders_upstream().await;
+            let key = DynamicTool::credential_key(tenant, "orders");
+            let entry = shared(api_key_credential(&key, &upstream.uri()));
+            let tool =
+                tool_for_tenant("orders", tenant, &upstream).with_credential_store(store_of(entry));
+
+            let received = api_keys_received(&tool, tenant, &upstream).await;
+
+            assert!(received.is_empty(), "tenant {tenant:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn caller_tenant_is_considered_before_the_credential_origin() {
+        // An entry bound to another origin fails the calls it would serve.
+        // For a caller it does not serve, it is as if there was no entry: the
+        // call goes through without a credential.
+        let bound_elsewhere = || api_key_credential(ORDERS_KEY, "https://api.example.com");
+
+        let (result, received) = call_public_tool("t2", |_| bound_elsewhere()).await;
+        assert!(result.is_ok());
+        assert_eq!(received, Received::one_call_without_credential());
+
+        for (caller, credential) in [("t1", bound_elsewhere()), ("t2", shared(bound_elsewhere()))] {
+            let (result, received) = call_public_tool(caller, |_| credential).await;
+            let error = result.unwrap_err().to_string();
+            assert!(error.contains("does not apply"), "caller={caller}");
+            assert_eq!(received, Received::default(), "caller={caller}");
+        }
     }
 }

@@ -398,12 +398,13 @@ async fn register_tools(state: &AppState, registrar: Option<std::sync::Arc<Gatew
                     .await
                 }
                 stoa_gateway::config::ExpansionMode::PerOp => {
-                    api_bridge::discover_expanded_api_tools(
+                    api_bridge::discover_expanded_api_tools_with_credentials(
                         &state.tool_registry,
                         &cp_url,
                         &http_client,
                         gw_id,
                         state.config.control_plane_api_key.as_deref(),
+                        Some(&state.credential_store),
                     )
                     .await
                 }
@@ -429,6 +430,7 @@ async fn register_tools(state: &AppState, registrar: Option<std::sync::Arc<Gatew
             registrar,
             expansion_mode,
             state.config.control_plane_api_key.clone(),
+            Some(state.credential_store.clone()),
         );
     } else {
         info!(mode = %state.config.gateway_mode, "Skipping API catalog discovery (sidecar/shadow mode)");
@@ -511,7 +513,8 @@ async fn init_k8s_watcher(config: &Config, _state: &AppState) {
                     _state.skill_resolver.clone(),
                     _state.session_manager.clone(),
                     _state.guardrail_policy_store.clone(),
-                );
+                )
+                .with_credential_store(_state.credential_store.clone());
                 tokio::spawn(async move {
                     watcher.start().await;
                 });

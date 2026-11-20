@@ -89,8 +89,15 @@ pub struct Config {
     #[serde(default)]
     pub keycloak_internal_url: Option<String>,
 
-    /// Forward the validated user JWT to MCP tool backends. Default: false.
-    /// Enable only for trusted backends that explicitly accept this audience.
+    /// Relay the caller's validated JWT to the control-plane API on calls made
+    /// by the control-plane-backed tools. Default: false. The Kafka bridge
+    /// tools also need it enabled, as they only run with a caller token in
+    /// the tool context. Dynamic tools (Tool CRDs, catalog APIs, UAC
+    /// contracts) are not affected by this setting: they never send the
+    /// caller token and authenticate upstream with the
+    /// `mcp-tool:{tenant}:{tool}` backend credential, bound to an allowed
+    /// origin and used for callers of the owning tenant only unless it sets
+    /// `shared_with_tenants`.
     /// Env: STOA_MCP_FORWARD_USER_TOKEN
     #[serde(default)]
     pub mcp_forward_user_token: bool,

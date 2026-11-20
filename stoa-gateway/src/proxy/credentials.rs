@@ -53,6 +53,65 @@ pub struct BackendCredential {
     /// OAuth2 configuration (required when auth_type is OAuth2ClientCredentials)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub oauth2: Option<OAuth2Config>,
+    /// Upstream origin this credential is bound to: scheme, host and port,
+    /// e.g. `https://api.example.com:443`. Mandatory for dynamic tool
+    /// credentials (keys starting with [`MCP_TOOL_KEY_PREFIX`]), which are
+    /// only used for requests to that origin. Ignored for other keys.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allowed_origin: Option<String>,
+    /// Whether a dynamic tool credential also serves callers of other
+    /// tenants. A dynamic tool uses its credential for callers of the tenant
+    /// that owns the tool; with this set, it uses it for callers of every
+    /// tenant allowed to call the tool. Default: false. Ignored for keys
+    /// that do not start with [`MCP_TOOL_KEY_PREFIX`].
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub shared_with_tenants: bool,
+}
+
+/// Key prefix of the credentials used by dynamic MCP tools
+/// (`mcp-tool:{tenant}:{tool_name}`).
+pub const MCP_TOOL_KEY_PREFIX: &str = "mcp-tool:";
+
+impl BackendCredential {
+    /// Whether `url` targets this credential's `allowed_origin`. False when
+    /// the credential has no valid `allowed_origin` or `url` has no origin.
+    pub fn is_bound_to_origin_of(&self, url: &str) -> bool {
+        let allowed = self.allowed_origin.as_deref().and_then(normalize_origin);
+        allowed.is_some() && allowed == url_origin(url)
+    }
+}
+
+/// Normalize an origin given as `scheme://host[:port]` (an optional trailing
+/// `/` is accepted). Scheme and host are lowercased and the port is always
+/// explicit (80 for http, 443 for https when omitted), so two spellings of
+/// the same origin compare equal. `None` when `value` is not an http(s)
+/// origin: other scheme, no host, or user info, path, query or fragment.
+pub fn normalize_origin(value: &str) -> Option<String> {
+    let parsed = url::Url::parse(value).ok()?;
+    let is_bare_origin = parsed.username().is_empty()
+        && parsed.password().is_none()
+        && parsed.path() == "/"
+        && parsed.query().is_none()
+        && parsed.fragment().is_none();
+    if is_bare_origin {
+        origin_of(&parsed)
+    } else {
+        None
+    }
+}
+
+/// Origin of an http(s) URL, in the form produced by [`normalize_origin`].
+pub fn url_origin(url: &str) -> Option<String> {
+    origin_of(&url::Url::parse(url).ok()?)
+}
+
+fn origin_of(parsed: &url::Url) -> Option<String> {
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return None;
+    }
+    let host = parsed.host_str().filter(|host| !host.is_empty())?;
+    let port = parsed.port_or_known_default()?;
+    Some(format!("{}://{host}:{port}", parsed.scheme()))
 }
 
 /// Cached OAuth2 access token with expiry tracking.
@@ -222,6 +281,8 @@ mod tests {
             header_name: "Authorization".to_string(),
             header_value: "Bearer test-token".to_string(),
             oauth2: None,
+            allowed_origin: None,
+            shared_with_tenants: false,
         }
     }
 
@@ -236,6 +297,8 @@ mod tests {
                 client_id: "test-client".to_string(),
                 client_secret: "test-secret".to_string(),
             }),
+            allowed_origin: None,
+            shared_with_tenants: false,
         }
     }
 
@@ -257,6 +320,8 @@ mod tests {
             header_name: "X-API-Key".to_string(),
             header_value: "new-key".to_string(),
             oauth2: None,
+            allowed_origin: None,
+            shared_with_tenants: false,
         });
         assert!(prev.is_some());
         assert_eq!(prev.unwrap().auth_type, AuthType::Bearer);
@@ -425,5 +490,136 @@ mod tests {
         let json = serde_json::to_value(&cred).unwrap();
         // oauth2 field should be absent (skip_serializing_if = "Option::is_none")
         assert!(json.get("oauth2").is_none());
+    }
+
+    #[test]
+    fn allowed_origin_is_optional_in_serialized_form() {
+        // Payloads written before the field existed still deserialize, and a
+        // credential without an origin serializes as it did before.
+        let json = serde_json::to_value(make_cred("r1")).unwrap();
+        assert!(json.get("allowed_origin").is_none());
+        let cred: BackendCredential = serde_json::from_value(json).unwrap();
+        assert_eq!(cred.allowed_origin, None);
+
+        let bound = BackendCredential {
+            allowed_origin: Some("https://api.example.com:443".to_string()),
+            ..make_cred("mcp-tool:acme:payments")
+        };
+        let json = serde_json::to_value(&bound).unwrap();
+        assert_eq!(json["allowed_origin"], "https://api.example.com:443");
+        let cred: BackendCredential = serde_json::from_value(json).unwrap();
+        assert_eq!(cred.allowed_origin, bound.allowed_origin);
+    }
+
+    #[test]
+    fn shared_with_tenants_defaults_to_false_in_serialized_form() {
+        // Payloads written before the field existed still deserialize, as not
+        // shared, and a credential that is not shared serializes as before.
+        let json = serde_json::to_value(make_cred("mcp-tool:acme:payments")).unwrap();
+        assert!(json.get("shared_with_tenants").is_none());
+        let cred: BackendCredential = serde_json::from_value(json).unwrap();
+        assert!(!cred.shared_with_tenants);
+
+        let shared = BackendCredential {
+            shared_with_tenants: true,
+            ..make_cred("mcp-tool:acme:payments")
+        };
+        let json = serde_json::to_value(&shared).unwrap();
+        assert_eq!(json["shared_with_tenants"], true);
+        let cred: BackendCredential = serde_json::from_value(json).unwrap();
+        assert!(cred.shared_with_tenants);
+    }
+
+    #[test]
+    fn normalize_origin_lowercases_and_makes_the_port_explicit() {
+        for (input, expected) in [
+            ("https://api.example.com", "https://api.example.com:443"),
+            ("https://api.example.com:443", "https://api.example.com:443"),
+            ("HTTPS://API.Example.COM/", "https://api.example.com:443"),
+            ("http://api.example.com", "http://api.example.com:80"),
+            ("http://api.example.com:80/", "http://api.example.com:80"),
+            ("http://backend:8080", "http://backend:8080"),
+            (
+                "https://api.example.com:8443",
+                "https://api.example.com:8443",
+            ),
+            ("http://127.0.0.1:9000", "http://127.0.0.1:9000"),
+            ("http://[::1]:9000", "http://[::1]:9000"),
+        ] {
+            assert_eq!(
+                normalize_origin(input).as_deref(),
+                Some(expected),
+                "{input}"
+            );
+        }
+    }
+
+    #[test]
+    fn normalize_origin_rejects_values_that_are_not_an_origin() {
+        for input in [
+            "",
+            "api.example.com",
+            "api.example.com:443",
+            "ftp://api.example.com",
+            "https://",
+            "https://api.example.com/v1",
+            "https://api.example.com/?tenant=acme",
+            "https://api.example.com/#top",
+            "https://user@api.example.com",
+            "https://user:pass@api.example.com",
+            "https://api.example.com:notaport",
+        ] {
+            assert_eq!(normalize_origin(input), None, "{input}");
+        }
+    }
+
+    #[test]
+    fn url_origin_ignores_path_query_and_user_info() {
+        for (url, expected) in [
+            (
+                "https://api.example.com/v1/orders?limit=5",
+                "https://api.example.com:443",
+            ),
+            ("HTTP://Backend:8080/orders", "http://backend:8080"),
+            (
+                "http://api.example.com:8080@other.example.com/orders",
+                "http://other.example.com:80",
+            ),
+        ] {
+            assert_eq!(url_origin(url).as_deref(), Some(expected), "{url}");
+        }
+        for url in ["", "/orders", "ftp://api.example.com/orders"] {
+            assert_eq!(url_origin(url), None, "{url}");
+        }
+    }
+
+    #[test]
+    fn credential_is_bound_to_its_allowed_origin_only() {
+        let bound = |origin: Option<&str>| BackendCredential {
+            allowed_origin: origin.map(str::to_string),
+            ..make_cred("mcp-tool:acme:payments")
+        };
+        let url = "https://api.example.com/v1/orders";
+
+        // Any spelling of the same origin matches.
+        for origin in ["https://api.example.com:443", "HTTPS://API.example.com"] {
+            assert!(bound(Some(origin)).is_bound_to_origin_of(url), "{origin}");
+        }
+        // Another scheme, host or port does not, nor does a missing or
+        // malformed origin.
+        for origin in [
+            Some("http://api.example.com"),
+            Some("https://api.example.com:8443"),
+            Some("https://other.example.com"),
+            Some("https://example.com"),
+            Some("https://api.example.com/v1"),
+            Some("not an origin"),
+            None,
+        ] {
+            assert!(!bound(origin).is_bound_to_origin_of(url), "{origin:?}");
+        }
+        // A target without an origin never matches.
+        let cred = bound(Some("https://api.example.com"));
+        assert!(!cred.is_bound_to_origin_of("/v1/orders"));
     }
 }

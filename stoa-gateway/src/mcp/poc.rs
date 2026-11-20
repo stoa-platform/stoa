@@ -24,6 +24,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
 use tracing::{info, warn};
 use uuid::Uuid;
@@ -34,18 +35,20 @@ use crate::auth::local_agent_token::{
     LocalTokenError, DELEGATION_ISSUER, LOCAL_AGENT_ISSUER,
 };
 use crate::auth::poc_admission::{AdmissionError, AdmitCallRequest};
-use crate::control_plane::role_policy::{ArgumentConstraint, RoleEvalInput};
+use crate::control_plane::role_policy::{ArgumentConstraint, RoleEvalInput, RolePolicySpec};
 use crate::mcp::handlers::{check_tool_permission, check_tool_policy, ToolsCallRequest};
 use crate::mcp::sse::{
     JsonRpcRequest, JsonRpcResponse, INVALID_PARAMS, INVALID_REQUEST, METHOD_NOT_FOUND, PARSE_ERROR,
 };
-use crate::mcp::tools::ToolContext;
+use crate::mcp::tools::{Tool, ToolContext};
 use crate::proxy::credentials::{normalize_origin, BackendCredential, MCP_TOOL_KEY_PREFIX};
 use crate::state::AppState;
 use crate::uac::binders::mcp::McpBinder;
 use crate::uac::binders::{BindingOutput, ProtocolBinder};
 use crate::uac::schema::UacContractSpec;
 use crate::uac::Action;
+
+type PocToolRejection = (i32, &'static str);
 
 /// Summary of local PoC fixtures loaded at gateway boot.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -60,6 +63,16 @@ pub struct PocFixturesSummary {
 /// role policies configured for autonomous PoC mode.
 pub async fn load_poc_fixtures(state: &AppState) -> Result<PocFixturesSummary, String> {
     let mut summary = PocFixturesSummary::default();
+    let role_store = state
+        .role_policy_store
+        .as_ref()
+        .ok_or_else(|| "Role policy is not configured".to_string())?;
+    for tenant in &state.config.policy_boot_tenants {
+        role_store
+            .reload_tenant(tenant)
+            .map_err(|e| format!("failed to load signed role policy for '{tenant}': {e}"))?;
+        summary.role_policies_loaded += 1;
+    }
 
     if let Some(ref cred_path) = state.config.poc_credentials_file {
         let raw = tokio::fs::read_to_string(cred_path)
@@ -105,7 +118,8 @@ pub async fn load_poc_fixtures(state: &AppState) -> Result<PocFixturesSummary, S
 
         let binder = McpBinder::new(state.tool_registry.clone())
             .with_credential_store(state.credential_store.clone())
-            .with_outbound_policy(state.outbound_policy.clone());
+            .with_outbound_policy(state.outbound_policy.clone())
+            .with_uac_output_schemas();
 
         for path in paths {
             let raw = tokio::fs::read_to_string(&path)
@@ -124,15 +138,6 @@ pub async fn load_poc_fixtures(state: &AppState) -> Result<PocFixturesSummary, S
             if let BindingOutput::Tools(defs) = output {
                 summary.tools_registered += defs.len();
             }
-        }
-    }
-
-    if let Some(ref role_store) = state.role_policy_store {
-        for tenant in &state.config.policy_boot_tenants {
-            role_store
-                .reload_tenant(tenant)
-                .map_err(|e| format!("failed to load signed role policy for '{tenant}': {e}"))?;
-            summary.role_policies_loaded += 1;
         }
     }
 
@@ -256,21 +261,17 @@ pub async fn handle_poc_bootstrap(
         }
     };
 
-    // When signed role policies are configured, verify the role exists and anchor
-    // the token's monotonic session ceiling to the current verified policy version.
-    let policy_version = match state.role_policy_store.as_ref() {
-        Some(role_store) => match role_store.current_role_snapshot(&req.tenant_id, &req.role) {
-            Ok((ver, _)) => Some(ver),
-            Err(err) => {
-                warn!(error = %err, "Rejected PoC bootstrap: role policy unavailable or role unknown");
-                return (
-                    StatusCode::FORBIDDEN,
-                    Json(json!({ "error": "role_not_permitted" })),
-                )
-                    .into_response();
-            }
-        },
-        None => None,
+    let Some(policy_version) = state
+        .role_policy_store
+        .as_ref()
+        .and_then(|store| store.current_role_snapshot(&req.tenant_id, &req.role).ok())
+        .map(|(version, _)| version)
+    else {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({ "error": "role_not_permitted" })),
+        )
+            .into_response();
     };
 
     let aud = req
@@ -286,7 +287,7 @@ pub async fn handle_poc_bootstrap(
         aud,
         cnf_jkt,
         ttl_secs,
-        policy_version,
+        policy_version: Some(policy_version),
     }) {
         Ok(issued) => {
             state
@@ -378,31 +379,36 @@ pub async fn handle_poc_delegate(
         return (status, Json(json!({ "error": err.to_string() }))).into_response();
     }
 
-    // Determine parent's currently effective tool set & constraints from signed role policy.
-    let (parent_effective_tools, parent_tool_constraints) = match state.role_policy_store.as_ref() {
-        Some(role_store) => {
-            let Ok((_, spec)) =
-                role_store.current_role_snapshot(&parent_claims.tenant_id, &parent_claims.role)
-            else {
-                return (
-                    StatusCode::FORBIDDEN,
-                    Json(json!({ "error": "role_policy_denied" })),
-                )
-                    .into_response();
-            };
-            let tool_constraints = spec.argument_constraints.get(&target_tool).cloned();
-            (spec.allowed_tools, tool_constraints)
-        }
-        None => {
-            let tools: HashSet<String> = state
-                .tool_registry
-                .list(Some(&parent_claims.tenant_id))
-                .into_iter()
-                .map(|t| t.name)
-                .collect();
-            (tools, None)
-        }
+    let Ok((_, parent_effective_tools, active_role)) =
+        effective_poc_allowed_tools(&state, &parent_claims)
+    else {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({ "error": "role_policy_denied" })),
+        )
+            .into_response();
     };
+
+    let target = state
+        .tool_registry
+        .get_for_tenant(&target_tool, &parent_claims.tenant_id);
+    let permitted = check_poc_tool_access(
+        &state,
+        &poc_tool_context(&parent_claims),
+        &target_tool,
+        target.as_deref(),
+    )
+    .await
+    .is_ok_and(|tool| tool.name() == target_tool);
+    if !permitted {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({ "error": "tool_not_permitted" })),
+        )
+            .into_response();
+    }
+
+    let parent_tool_constraints = active_role.argument_constraints.get(&target_tool);
 
     let allowed_tools = if req.allowed_tools.is_empty() {
         vec![target_tool.clone()]
@@ -413,7 +419,7 @@ pub async fn handle_poc_delegate(
     match auth.issue_child_token(
         &parent_claims,
         &parent_effective_tools,
-        parent_tool_constraints.as_ref(),
+        parent_tool_constraints,
         DelegateChildTokenRequest {
             sub: req.sub,
             target_tool,
@@ -629,41 +635,31 @@ pub async fn handle_poc_mcp(
                 "serverInfo": { "name": "stoa-gateway-poc", "version": env!("CARGO_PKG_VERSION") }
             }),
         ),
-        "tools/list" => {
-            let role_allowed: Option<HashSet<String>> = state
-                .role_policy_store
-                .as_ref()
-                .and_then(|store| {
-                    store
-                        .current_role_snapshot(&claims.tenant_id, &claims.role)
-                        .ok()
-                })
-                .map(|(_, spec)| spec.allowed_tools);
-            let tools: Vec<Value> = state
-                .tool_registry
-                .list(Some(&claims.tenant_id))
-                .into_iter()
-                .filter(|def| {
-                    role_allowed
-                        .as_ref()
-                        .is_none_or(|allowed| allowed.contains(&def.name))
-                })
-                .filter(|def| {
-                    claims
-                        .allowed_tools
-                        .as_ref()
-                        .is_none_or(|allowed| allowed.iter().any(|t| t == &def.name))
-                })
-                .map(|def| {
-                    json!({
-                        "name": def.name,
-                        "description": def.description,
-                        "inputSchema": def.input_schema
+        "tools/list" => match active_session_time(&claims).and_then(|now| {
+            state
+                .poc_admission
+                .check_chain_active(&claims.chain_id, now)
+                .map_err(admission_rejection)?;
+            effective_poc_allowed_tools(&state, &claims)
+        }) {
+            Ok((_, allowed_tools, _)) => {
+                let tools: Vec<Value> = state
+                    .tool_registry
+                    .list(Some(&claims.tenant_id))
+                    .into_iter()
+                    .filter(|def| allowed_tools.contains(&def.name))
+                    .map(|def| {
+                        json!({
+                            "name": def.name,
+                            "description": def.description,
+                            "inputSchema": def.input_schema
+                        })
                     })
-                })
-                .collect();
-            JsonRpcResponse::success(request.id, json!({ "tools": tools }))
-        }
+                    .collect();
+                JsonRpcResponse::success(request.id, json!({ "tools": tools }))
+            }
+            Err((code, msg)) => JsonRpcResponse::error(request.id, code, msg),
+        },
         "tools/call" => handle_poc_tool_call(&state, &claims, request).await,
         "poc/subcalls" => handle_poc_subcalls(&state, &claims, request).await,
         other => JsonRpcResponse::error(
@@ -676,44 +672,8 @@ pub async fn handle_poc_mcp(
     (StatusCode::OK, Json(response)).into_response()
 }
 
-/// Shared authorization and execution pipeline for primary calls and sub-calls on the PoC path.
-pub(crate) async fn authorize_and_execute_poc_tool(
-    state: &AppState,
-    claims: &LocalAgentClaims,
-    requested_name: &str,
-    arguments: Value,
-) -> Result<Value, (i32, &'static str)> {
-    // 1. Resolve tenant-scoped tool.
-    let tool = state
-        .tool_registry
-        .get_for_tenant(requested_name, &claims.tenant_id);
-    let canonical_name = tool
-        .as_ref()
-        .map_or_else(|| requested_name.to_string(), |t| t.name().to_string());
-
-    // 2. Signed tenant tool permission check (fail-closed).
-    if check_tool_permission(state, &claims.tenant_id, requested_name, &canonical_name)
-        .await
-        .is_err()
-    {
-        return Err((-32003, "Tool call rejected"));
-    }
-
-    let Some(tool) = tool else {
-        return Err((-32004, "Tool not found"));
-    };
-
-    // 3. Admin actions are never granted to local agent tokens.
-    if matches!(
-        tool.required_action(),
-        Action::ManageTenants | Action::ManageUsers | Action::ManageContracts
-    ) {
-        return Err((-32003, "Admin action not permitted"));
-    }
-
-    // 4. Build local ToolContext: no raw_token, provenance strictly from signed claims
-    //    (X-Stoa-Source and any provenance headers are ignored).
-    let ctx = ToolContext {
+fn poc_tool_context(claims: &LocalAgentClaims) -> ToolContext {
+    ToolContext {
         tenant_id: claims.tenant_id.clone(),
         user_id: Some(claims.sub.clone()),
         user_email: None,
@@ -725,50 +685,140 @@ pub(crate) async fn authorize_and_execute_poc_tool(
         progress_token: None,
         consumer_id: claims.sub.clone(),
         from_control_plane: false,
-    };
-
-    // 5. OPA policy check.
-    if check_tool_policy(state, tool.as_ref(), &ctx).is_err() {
-        return Err((-32003, "Tool call rejected by policy"));
     }
+}
+
+fn effective_poc_allowed_tools(
+    state: &AppState,
+    claims: &LocalAgentClaims,
+) -> Result<(u64, HashSet<String>, RolePolicySpec), PocToolRejection> {
+    let store = state
+        .role_policy_store
+        .as_ref()
+        .ok_or((-32003, "Role policy unavailable"))?;
+    let version = claims
+        .policy_version
+        .ok_or((-32003, "Role policy unavailable"))?;
+    store
+        .effective_allowed_tools(
+            &claims.tenant_id,
+            &claims.role,
+            version,
+            claims.allowed_tools.as_deref(),
+        )
+        .map_err(|_| (-32003, "Role policy unavailable"))
+}
+
+fn poc_caller_id(claims: &LocalAgentClaims) -> String {
+    caller_identity_key(&claims.tenant_id, claims.root_caller_sub())
+}
+
+fn caller_identity_key(tenant: &str, root_subject: &str) -> String {
+    let mut hash = Sha256::new();
+    hash.update((tenant.len() as u64).to_be_bytes());
+    hash.update(tenant.as_bytes());
+    hash.update(root_subject.as_bytes());
+    hash.finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+fn active_session_time(claims: &LocalAgentClaims) -> Result<i64, PocToolRejection> {
+    let now = chrono::Utc::now().timestamp();
+    if claims.exp <= now {
+        return Err((-32001, "Session expired"));
+    }
+    Ok(now)
+}
+
+fn admission_rejection(err: AdmissionError) -> PocToolRejection {
+    match err {
+        AdmissionError::ChainRevoked => (-32003, "Chain revoked"),
+        AdmissionError::ChainBudgetExceeded => (-32003, "Chain budget exceeded"),
+        AdmissionError::CallerBudgetExceeded => (-32003, "Caller budget exceeded"),
+        AdmissionError::RevocationTableFull => (-32005, "Admission unavailable"),
+        AdmissionError::InvalidInput(_) => (-32003, "Admission rejected"),
+    }
+}
+
+async fn check_poc_tool_access<'a>(
+    state: &AppState,
+    ctx: &ToolContext,
+    requested_name: &str,
+    tool: Option<&'a dyn Tool>,
+) -> Result<&'a dyn Tool, PocToolRejection> {
+    // Check signed tenant permissions with requested and canonical names.
+    let canonical_name = tool.map_or(requested_name, Tool::name);
+    check_tool_permission(state, &ctx.tenant_id, requested_name, canonical_name)
+        .await
+        .map_err(|_| (-32003, "Tool call rejected"))?;
+    let tool = tool.ok_or((-32004, "Tool not found"))?;
+
+    // Admin actions are never granted to local agent tokens.
+    if matches!(
+        tool.required_action(),
+        Action::ManageTenants | Action::ManageUsers | Action::ManageContracts
+    ) {
+        return Err((-32003, "Admin action not permitted"));
+    }
+
+    check_tool_policy(state, tool, ctx).map_err(|_| (-32003, "Tool call rejected by policy"))?;
+    Ok(tool)
+}
+
+/// Shared authorization and execution pipeline for primary calls and sub-calls on the PoC path.
+pub(crate) async fn authorize_and_execute_poc_tool(
+    state: &AppState,
+    claims: &LocalAgentClaims,
+    requested_name: &str,
+    arguments: Value,
+) -> Result<Value, PocToolRejection> {
+    // Provenance comes from signed claims. The local context carries no raw token.
+    let ctx = poc_tool_context(claims);
+    let registered = state
+        .tool_registry
+        .get_for_tenant(requested_name, &claims.tenant_id);
+    let tool = check_poc_tool_access(state, &ctx, requested_name, registered.as_deref()).await?;
+    let canonical_name = tool.name();
 
     // 6. Signed role policy intersection (restrictive only) + anti-rollback + session
     //    anti-widening + deterministic v1 argument constraints + delegated token narrowing.
-    if let Some(ref role_store) = state.role_policy_store {
-        let issued_ver = claims.policy_version.unwrap_or(0);
-        if let Err(err) = role_store.evaluate_call(&RoleEvalInput {
-            tenant_id: &claims.tenant_id,
-            role: &claims.role,
-            tool_name: &canonical_name,
-            args: &arguments,
-            issued_policy_version: issued_ver,
-            token_allowed_tools: claims.allowed_tools.as_deref(),
-            token_constraints: claims.arg_constraints.as_ref(),
-        }) {
-            warn!(
-                tool = %canonical_name,
-                role = %claims.role,
-                error = %err,
-                "PoC call denied by role policy or argument constraint"
-            );
-            return Err((-32003, "Tool call rejected by role policy"));
-        }
-    } else if let Some(ref allowed) = claims.allowed_tools {
-        if !allowed.iter().any(|t| t == &canonical_name) {
-            return Err((-32003, "Tool call outside delegated scope"));
-        }
+    let role_store = state
+        .role_policy_store
+        .as_ref()
+        .ok_or((-32003, "Role policy unavailable"))?;
+    let issued_ver = claims
+        .policy_version
+        .ok_or((-32003, "Role policy unavailable"))?;
+    if let Err(err) = role_store.evaluate_call(&RoleEvalInput {
+        tenant_id: &claims.tenant_id,
+        role: &claims.role,
+        tool_name: canonical_name,
+        args: &arguments,
+        issued_policy_version: issued_ver,
+        token_allowed_tools: claims.allowed_tools.as_deref(),
+        token_constraints: claims.arg_constraints.as_ref(),
+    }) {
+        warn!(
+            tool = %canonical_name,
+            role = %claims.role,
+            error = %err,
+            "PoC call denied by role policy or argument constraint"
+        );
+        return Err((-32003, "Tool call rejected by role policy"));
     }
 
     // 7. Unified atomic admission: bounded chain revocation + all-or-nothing 2-level budget debit
     //    (chain + stable root caller). Executed AFTER authorization passes and BEFORE any upstream call.
-    let caller_id = format!("{}:{}", claims.tenant_id, claims.root_caller_sub());
+    let caller_id = poc_caller_id(claims);
     if let Err(err) = state.poc_admission.admit_call(&AdmitCallRequest {
         chain_id: &claims.chain_id,
         caller_id: &caller_id,
         cost: 1,
         chain_limit: None,
         caller_limit: None,
-        now_epoch: chrono::Utc::now().timestamp(),
+        now_epoch: active_session_time(claims)?,
     }) {
         warn!(
             chain_id = %claims.chain_id,
@@ -776,13 +826,7 @@ pub(crate) async fn authorize_and_execute_poc_tool(
             error = %err,
             "PoC call rejected by atomic admission controller"
         );
-        return match err {
-            AdmissionError::ChainRevoked => Err((-32003, "Chain revoked")),
-            AdmissionError::ChainBudgetExceeded => Err((-32003, "Chain budget exceeded")),
-            AdmissionError::CallerBudgetExceeded => Err((-32003, "Caller budget exceeded")),
-            AdmissionError::RevocationTableFull => Err((-32005, "Admission unavailable")),
-            AdmissionError::InvalidInput(_) => Err((-32003, "Admission rejected")),
-        };
+        return Err(admission_rejection(err));
     }
 
     // 8. Execute tool (DynamicTool applies OutboundAddressPolicy to final URL and OAuth2 URL,
@@ -1109,6 +1153,45 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn local_fixtures_require_a_role_policy_store() {
+        let state = AppState::new(Config {
+            poc_agents_enabled: true,
+            auto_register: false,
+            ..Config::default()
+        });
+        let error = load_poc_fixtures(&state).await.unwrap_err();
+        assert_eq!(error, "Role policy is not configured");
+    }
+
+    #[test]
+    fn caller_budgets_use_qualified_identities() {
+        use crate::auth::poc_admission::{PocAdmissionController, MAX_ADMISSION_ID_LEN};
+
+        let first = caller_identity_key("example:lab", "operator");
+        let second = caller_identity_key("example", "lab:operator");
+        assert_ne!(first, second);
+        assert!(
+            caller_identity_key(&"x".repeat(128), &"y".repeat(256)).len() <= MAX_ADMISSION_ID_LEN
+        );
+
+        let admission = PocAdmissionController::new(Default::default());
+        for (chain, caller) in [("first-chain", &first), ("second-chain", &second)] {
+            admission
+                .admit_call(&AdmitCallRequest {
+                    chain_id: chain,
+                    caller_id: caller,
+                    cost: 1,
+                    chain_limit: Some(1),
+                    caller_limit: Some(1),
+                    now_epoch: 1,
+                })
+                .unwrap();
+        }
+        assert_eq!(admission.caller_used(&first), 1);
+        assert_eq!(admission.caller_used(&second), 1);
+    }
+
+    #[tokio::test]
     async fn jalon1_autonomous_bootstrap_dpop_ready_and_admin_isolation() {
         let upstream = MockServer::start().await;
         Mock::given(method("GET"))
@@ -1128,6 +1211,20 @@ mod tests {
         std::fs::write(
             policies_dir.join("acme.jws"),
             signer.sign_tool_policy("acme", &[tool_name]),
+        )
+        .unwrap();
+
+        let roles_dir = tmp.path().join("roles");
+        std::fs::create_dir(&roles_dir).unwrap();
+        std::fs::write(
+            roles_dir.join("acme.roles.jws"),
+            signer.sign_role_policy(
+                "acme",
+                1,
+                json!({
+                    "reader": { "allowed_tools": [tool_name] }
+                }),
+            ),
         )
         .unwrap();
 
@@ -1191,6 +1288,7 @@ mod tests {
             policy_audience: "stoa-gateway".to_string(),
             poc_agents_enabled: true,
             poc_bootstrap_secret: Some("parent-only-bootstrap-secret".to_string()),
+            poc_role_artifacts_dir: Some(roles_dir.to_string_lossy().into_owned()),
             poc_uac_contracts_dir: Some(contracts_dir.to_string_lossy().to_string()),
             poc_credentials_file: Some(creds_file.to_string_lossy().to_string()),
             poc_public_base_url: Some(base_url.to_string()),
@@ -1202,6 +1300,7 @@ mod tests {
         let loaded = load_poc_fixtures(&state).await.expect("load poc fixtures");
         assert_eq!(loaded.credentials_loaded, 1);
         assert_eq!(loaded.contracts_loaded, 1);
+        assert_eq!(loaded.role_policies_loaded, 1);
         assert_eq!(loaded.tools_registered, 1);
 
         let app = build_router(state.clone());
@@ -2332,7 +2431,7 @@ allow if {
         .unwrap();
         assert_eq!(rev_rpc["error"]["message"], "Chain revoked");
 
-        // Chain B (same caller `acme:agent-parent`, caller_used already 2 out of 6):
+        // Chain B (same caller `agent-parent`, caller_used already 2 out of 6):
         // 4 calls succeed (caller_used -> 6 == caller_budget AND chain_b_used == 4 == chain_budget),
         // 5th call fails with budget exceeded!
         for i in 0..4 {
@@ -2372,7 +2471,12 @@ allow if {
             .unwrap();
             assert!(rpc.get("error").is_none(), "chain B call {i} failed: {rpc}");
         }
-        assert_eq!(state.poc_admission.caller_used("acme:agent-parent"), 6);
+        assert_eq!(
+            state
+                .poc_admission
+                .caller_used(&caller_identity_key("acme", "agent-parent")),
+            6
+        );
 
         // 5th call on chain B exceeds budget -> denied, zero extra upstream request!
         let resp = app

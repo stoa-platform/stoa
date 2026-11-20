@@ -531,7 +531,7 @@ impl LocalAgentAuth {
         validation.validate_exp = true;
         validation.validate_nbf = true;
         validation.validate_aud = false; // Checked strictly below via expected_aud_for.
-        validation.leeway = 5;
+        validation.leeway = 0;
         validation.set_required_spec_claims(&["exp", "iss", "aud", "sub"]);
         if let Some(iss) = expected_issuer {
             validation.set_issuer(&[iss]);
@@ -542,6 +542,10 @@ impl LocalAgentAuth {
         let data = decode::<LocalAgentClaims>(token, &self.decoding_key, &validation)
             .map_err(|_| LocalTokenError::InvalidToken)?;
         let claims = data.claims;
+
+        if claims.exp <= chrono::Utc::now().timestamp() {
+            return Err(LocalTokenError::InvalidToken);
+        }
 
         let expected_audience = expected_aud_for(&claims)?;
         if expected_audience.trim().is_empty() {
@@ -838,6 +842,21 @@ mod tests {
             .validate_token(&token, None, "http://stoa-gateway:8080/mcp/poc")
             .unwrap_err();
         assert!(matches!(err, LocalTokenError::UnsupportedAlgorithm));
+    }
+
+    #[test]
+    fn local_token_is_inactive_at_expiration() {
+        let auth = LocalAgentAuth::new().unwrap();
+        let key = TestDpopKey::generate();
+        let mut claims = issue_sample_parent(&auth, &key).claims;
+        let audience = claims.aud.clone();
+        claims.exp = chrono::Utc::now().timestamp();
+        let issued = auth.sign_claims(claims).unwrap();
+
+        assert!(matches!(
+            auth.validate_token(issued.as_str(), None, &audience),
+            Err(LocalTokenError::InvalidToken)
+        ));
     }
 
     #[test]

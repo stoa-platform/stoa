@@ -12,24 +12,19 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "=== [1/5] Generating ephemeral signed Jalon 1 fixtures ==="
+echo "=== [1/4] Generating ephemeral signed Jalon 1 fixtures ==="
 python3 ./scripts/gen_fixtures.py ./.runtime
 
-echo "=== [2/5] Starting isolated 4-container Docker Compose stack ==="
+echo "=== [2/4] Starting isolated 4-container Docker Compose stack ==="
 docker compose up -d --build --wait
 
 MOCK_IP="$(docker compose exec -T upstream-mock python3 -c 'import socket; print(socket.gethostbyname(socket.gethostname()))' | tr -d '\r\n')"
 echo "upstream-mock isolated IP on upstream-net: ${MOCK_IP}"
 
-echo "=== [3/5] Running agent-parent container checks ==="
-PARENT_OUT="$(docker compose exec -T agent-parent python3 /app/agent_harness.py parent "${MOCK_IP}")"
-echo "$PARENT_OUT" | grep -v "^PARENT_TOKEN_FOR_NEGATIVE_TEST="
-PARENT_TOK="$(echo "$PARENT_OUT" | sed -n 's/^PARENT_TOKEN_FOR_NEGATIVE_TEST=//p')"
+echo "=== [3/4] Running isolated agent-parent and agent-child checks ==="
+python3 -B ./jalon12.py host jalon1 "${MOCK_IP}"
 
-echo "=== [4/5] Running agent-child container checks ==="
-docker compose exec -T agent-child python3 /app/agent_harness.py child "${MOCK_IP}" "${PARENT_TOK}"
-
-echo "=== [5/5] Verifying upstream-mock counters ==="
+echo "=== [4/4] Verifying upstream-mock counters ==="
 STATS="$(docker compose exec -T upstream-mock cat /tmp/upstream_stats.json)"
 echo "$STATS"
 echo "$STATS" | python3 -c '

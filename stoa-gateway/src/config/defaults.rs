@@ -511,8 +511,23 @@ impl Default for Config {
             poc_role_artifacts_dir: None,
             poc_role_floor_dir: None,
             poc_outbound_allowed_origins: vec![],
+            poc_max_revoked_chains: default_poc_max_revoked_chains(),
+            poc_chain_budget: default_poc_chain_budget(),
+            poc_caller_budget: default_poc_caller_budget(),
         }
     }
+}
+
+pub(super) fn default_poc_max_revoked_chains() -> usize {
+    crate::auth::poc_admission::DEFAULT_MAX_REVOKED_CHAINS
+}
+
+pub(super) fn default_poc_chain_budget() -> u64 {
+    crate::auth::poc_admission::DEFAULT_CHAIN_BUDGET
+}
+
+pub(super) fn default_poc_caller_budget() -> u64 {
+    crate::auth::poc_admission::DEFAULT_CALLER_BUDGET
 }
 
 pub(super) fn default_service_token_max_ttl_secs() -> u64 {

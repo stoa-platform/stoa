@@ -231,5 +231,8 @@ expression: "Config::default()"
   "poc_public_base_url": null,
   "poc_role_artifacts_dir": null,
   "poc_role_floor_dir": null,
-  "poc_outbound_allowed_origins": []
+  "poc_outbound_allowed_origins": [],
+  "poc_max_revoked_chains": 10000,
+  "poc_chain_budget": 50,
+  "poc_caller_budget": 100
 }

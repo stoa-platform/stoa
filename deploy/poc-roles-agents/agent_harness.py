@@ -2,12 +2,14 @@
 """In-container verification harness for `agent-parent` and `agent-child` (Jalons 1 & 2)."""
 
 import base64
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import hmac
 import json
 import os
 import socket
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -19,6 +21,10 @@ from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
 
 CHILD_KEY_FILE = Path("/tmp/child_dpop_key.pem")
+PARENT_KEY_FILE = Path("/tmp/parent_dpop_key.pem")
+PARENT_CHAIN_A_FILE = Path("/tmp/parent_chain_a.json")
+PARENT_PRERESTART_FILE = Path("/tmp/parent_pre_restart.json")
+CHILD_CHAIN_A_FILE = Path("/tmp/child_chain_a_token.txt")
 
 
 def b64url(data: bytes) -> str:
@@ -503,6 +509,383 @@ def run_child(
         print("PASS: delegation depth bound 1 -> 2 -> 3 allowed, 3 -> 4 -> 403", flush=True)
 
 
+def run_jalon3_parent_phase1(gateway_url: str, upstream_ip: str, child_jwk_json: str) -> str:
+    upstream_host = os.environ["UPSTREAM_MOCK_HOST"]
+    bootstrap_secret = os.environ["STOA_POC_BOOTSTRAP_SECRET"]
+
+    assert_tcp_unreachable(upstream_host, 9000, "agent-parent -> upstream-mock (DNS)")
+    assert_tcp_unreachable(upstream_ip, 9000, "agent-parent -> upstream-mock (IP)")
+
+    dpop = DpopKey()
+    dpop.save(PARENT_KEY_FILE)
+
+    boot_url = f"{gateway_url}/mcp/poc/bootstrap"
+    code, body = http_req(
+        "POST",
+        boot_url,
+        headers={
+            "X-Stoa-Poc-Bootstrap-Secret": bootstrap_secret,
+            "DPoP": dpop.sign_proof("POST", boot_url),
+        },
+        body={"sub": "agent-parent", "tenant_id": "acme", "role": "reader", "ttl_secs": 300},
+    )
+    assert code == 200, f"bootstrap chain A failed: {code} {body}"
+    boot = json.loads(body)
+    token = boot["access_token"]
+    chain_id = boot["chain_id"]
+    PARENT_CHAIN_A_FILE.write_text(
+        json.dumps({"token": token, "chain_id": chain_id}), encoding="utf-8"
+    )
+    PARENT_CHAIN_A_FILE.chmod(0o600)
+
+    mcp_url = f"{gateway_url}/mcp/poc"
+
+    # 1. Filtered tools/list excludes `payments_hidden` (not in reader role)
+    c, b = http_req(
+        "POST",
+        mcp_url,
+        headers={
+            "Authorization": f"DPoP {token}",
+            "DPoP": dpop.sign_proof("POST", mcp_url, access_token=token),
+        },
+        body={"jsonrpc": "2.0", "id": 301, "method": "tools/list", "params": {}},
+    )
+    assert c == 200, f"tools/list failed: {c} {b}"
+    listed_names = [t["name"] for t in json.loads(b)["result"]["tools"]]
+    assert "payments_list" in listed_names and "payments_hidden" not in listed_names, (
+        f"tools/list did not filter out payments_hidden: {listed_names}"
+    )
+    print(f"PASS: tools/list filtered by role ({len(listed_names)} tools, payments_hidden excluded)", flush=True)
+
+    # 2. Direct call to payments_hidden with spoofed X-Stoa-Source header denied (0 upstream calls)
+    c, b = http_req(
+        "POST",
+        mcp_url,
+        headers={
+            "Authorization": f"DPoP {token}",
+            "DPoP": dpop.sign_proof("POST", mcp_url, access_token=token),
+            "X-Stoa-Source": "control-plane",
+        },
+        body={
+            "jsonrpc": "2.0",
+            "id": 302,
+            "method": "tools/call",
+            "params": {"name": "payments_hidden", "arguments": {}},
+        },
+    )
+    assert c == 200 and "error" in json.loads(b), f"payments_hidden direct call expected deny: {c} {b}"
+    print("PASS: direct call to payments_hidden denied (X-Stoa-Source ignored)", flush=True)
+
+    # 3. poc/subcalls: step 1 (payments_list) succeeds [chain_A=1, caller=1], step 2 (payments_hidden) denied
+    valid_args = {"currency": "EUR", "account": "acct-j3-1", "limit": 20}
+    c, b = http_req(
+        "POST",
+        mcp_url,
+        headers={
+            "Authorization": f"DPoP {token}",
+            "DPoP": dpop.sign_proof("POST", mcp_url, access_token=token),
+        },
+        body={
+            "jsonrpc": "2.0",
+            "id": 303,
+            "method": "poc/subcalls",
+            "params": {
+                "steps": [
+                    {"name": "payments_list", "arguments": valid_args},
+                    {"name": "payments_hidden", "arguments": {}},
+                ]
+            },
+        },
+    )
+    assert c == 200 and "error" in json.loads(b), f"subcall step 2 expected deny: {c} {b}"
+    print("PASS: poc/subcalls denied out-of-role step 2 (payments_hidden never reached)", flush=True)
+
+    # 4. poc/subcalls fallback with invalid constraint args denied [payments_fail => chain_A=2, caller=2]
+    c, b = http_req(
+        "POST",
+        mcp_url,
+        headers={
+            "Authorization": f"DPoP {token}",
+            "DPoP": dpop.sign_proof("POST", mcp_url, access_token=token),
+        },
+        body={
+            "jsonrpc": "2.0",
+            "id": 304,
+            "method": "poc/subcalls",
+            "params": {
+                "steps": [
+                    {
+                        "name": "payments_fail",
+                        "arguments": {},
+                        "fallback": {
+                            "name": "payments_list",
+                            "arguments": {"currency": "GBP", "account": "acct-fb", "limit": 10},
+                        },
+                    }
+                ]
+            },
+        },
+    )
+    assert c == 200 and "error" in json.loads(b), f"invalid fallback expected deny: {c} {b}"
+    print("PASS: poc/subcalls fallback violating argument constraint denied (0 upstream call)", flush=True)
+
+    # 5. poc/subcalls fallback with valid args succeeds [payments_fail => 3, fallback payments_list => 4]
+    c, b = http_req(
+        "POST",
+        mcp_url,
+        headers={
+            "Authorization": f"DPoP {token}",
+            "DPoP": dpop.sign_proof("POST", mcp_url, access_token=token),
+        },
+        body={
+            "jsonrpc": "2.0",
+            "id": 305,
+            "method": "poc/subcalls",
+            "params": {
+                "steps": [
+                    {
+                        "name": "payments_fail",
+                        "arguments": {},
+                        "fallback": {
+                            "name": "payments_list",
+                            "arguments": valid_args,
+                        },
+                    }
+                ]
+            },
+        },
+    )
+    assert c == 200, f"valid fallback failed: {c} {b}"
+    rpc = json.loads(b)
+    assert "error" not in rpc and rpc["result"]["steps"][0]["fallback_used"] is True, f"bad fallback resp: {rpc}"
+    print("PASS: poc/subcalls fallback with conforming args succeeded", flush=True)
+
+    # 6. Delegate child token on chain A
+    del_url = f"{gateway_url}/mcp/poc/delegate"
+    c, b = http_req(
+        "POST",
+        del_url,
+        headers={
+            "Authorization": f"DPoP {token}",
+            "DPoP": dpop.sign_proof("POST", del_url, access_token=token),
+        },
+        body={
+            "sub": "agent-child",
+            "target_tool": "payments_list",
+            "child_dpop_jwk": json.loads(child_jwk_json),
+            "allowed_tools": ["payments_list"],
+            "arg_constraints": {
+                "currency": {"type": "allowed_values", "values": ["EUR"]},
+                "limit": {"type": "max_number", "max": 25.0},
+            },
+            "ttl_secs": 180,
+        },
+    )
+    assert c == 200, f"delegation failed: {c} {b}"
+    child_tok = json.loads(b)["access_token"]
+    print("PASS: agent-parent delegated chain A child token to agent-child", flush=True)
+    return child_tok
+
+
+def run_jalon3_child_use(gateway_url: str, child_token: str) -> None:
+    child_dpop = DpopKey.load(CHILD_KEY_FILE)
+    CHILD_CHAIN_A_FILE.write_text(child_token, encoding="utf-8")
+    CHILD_CHAIN_A_FILE.chmod(0o600)
+
+    mcp_url = f"{gateway_url}/mcp/poc"
+    c, b = http_req(
+        "POST",
+        mcp_url,
+        headers={
+            "Authorization": f"DPoP {child_token}",
+            "DPoP": child_dpop.sign_proof("POST", mcp_url, access_token=child_token),
+        },
+        body={
+            "jsonrpc": "2.0",
+            "id": 310,
+            "method": "tools/call",
+            "params": {
+                "name": "payments_list",
+                "arguments": {"currency": "EUR", "account": "acct-child-j3", "limit": 15},
+            },
+        },
+    )
+    assert c == 200 and "error" not in json.loads(b) and "pay_001" in b, f"child call failed: {c} {b}"
+    print("PASS: agent-child executed 1 valid call on chain A (chain_A=5/5, root caller=5/8)", flush=True)
+
+
+def run_concurrent_calls(
+    gateway_url: str, dpop: DpopKey, token: str, workers: int, label: str
+) -> tuple[int, int, list[str]]:
+    mcp_url = f"{gateway_url}/mcp/poc"
+    barrier = threading.Barrier(workers)
+
+    def one_call(idx: int) -> tuple[bool, str]:
+        proof = dpop.sign_proof("POST", mcp_url, access_token=token)
+        barrier.wait()
+        c, b = http_req(
+            "POST",
+            mcp_url,
+            headers={"Authorization": f"DPoP {token}", "DPoP": proof},
+            body={
+                "jsonrpc": "2.0",
+                "id": 400 + idx,
+                "method": "tools/call",
+                "params": {
+                    "name": "payments_list",
+                    "arguments": {"currency": "EUR", "account": f"acct-race-{idx}", "limit": 10},
+                },
+            },
+        )
+        assert c == 200, f"{label} worker {idx} unexpected HTTP {c}: {b}"
+        rpc = json.loads(b)
+        if "error" in rpc:
+            return False, str(rpc["error"].get("message", ""))
+        return True, "ok"
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        outcomes = list(pool.map(one_call, range(workers)))
+
+    admitted = sum(1 for ok, _ in outcomes if ok)
+    denied_msgs = [msg for ok, msg in outcomes if not ok]
+    return admitted, len(denied_msgs), denied_msgs
+
+
+def run_jalon3_parent_revoke_and_race(gateway_url: str) -> None:
+    bootstrap_secret = os.environ["STOA_POC_BOOTSTRAP_SECRET"]
+    dpop = DpopKey.load(PARENT_KEY_FILE)
+    saved = json.loads(PARENT_CHAIN_A_FILE.read_text(encoding="utf-8"))
+    token_a = saved["token"]
+    chain_a = saved["chain_id"]
+
+    # 1. Atomically revoke chain A using parent DPoP token
+    revoke_url = f"{gateway_url}/mcp/poc/revoke"
+    c, b = http_req(
+        "POST",
+        revoke_url,
+        headers={
+            "Authorization": f"DPoP {token_a}",
+            "DPoP": dpop.sign_proof("POST", revoke_url, access_token=token_a),
+        },
+        body={"chain_id": chain_a},
+    )
+    assert c == 200 and json.loads(b).get("revoked") is True, f"revoke failed: {c} {b}"
+    print(f"PASS: POST /mcp/poc/revoke atomically revoked {chain_a}", flush=True)
+
+    # 2. Parent on chain A is immediately denied
+    mcp_url = f"{gateway_url}/mcp/poc"
+    c, b = http_req(
+        "POST",
+        mcp_url,
+        headers={
+            "Authorization": f"DPoP {token_a}",
+            "DPoP": dpop.sign_proof("POST", mcp_url, access_token=token_a),
+        },
+        body={
+            "jsonrpc": "2.0",
+            "id": 320,
+            "method": "tools/call",
+            "params": {
+                "name": "payments_list",
+                "arguments": {"currency": "EUR", "account": "acct-revoked", "limit": 10},
+            },
+        },
+    )
+    assert c == 200 and "revoked" in b.lower(), f"revoked parent expected deny: {c} {b}"
+    print("PASS: agent-parent call on revoked chain A immediately denied", flush=True)
+
+    # 3. Chain B for SAME caller (`agent-parent`, already used 5/8 across parent+child of chain A):
+    #    16 concurrent HTTP threads -> exact 3 admitted, 13 denied (`Caller budget exceeded`).
+    boot_url = f"{gateway_url}/mcp/poc/bootstrap"
+    c, b = http_req(
+        "POST",
+        boot_url,
+        headers={
+            "X-Stoa-Poc-Bootstrap-Secret": bootstrap_secret,
+            "DPoP": dpop.sign_proof("POST", boot_url),
+        },
+        body={"sub": "agent-parent", "tenant_id": "acme", "role": "reader", "ttl_secs": 300},
+    )
+    assert c == 200, f"bootstrap chain B failed: {c} {b}"
+    token_b = json.loads(b)["access_token"]
+
+    ok_b, no_b, msgs_b = run_concurrent_calls(gateway_url, dpop, token_b, 16, "chain-B-caller-cap")
+    assert ok_b == 3 and no_b == 13, f"chain B race expected 3 ok / 13 denied, got {ok_b}/{no_b} ({msgs_b})"
+    assert all("caller budget" in m.lower() for m in msgs_b), f"unexpected chain B error messages: {msgs_b}"
+    print(
+        "PASS: 16 concurrent HTTP calls on chain B (shared caller 5/8 used, chain cap 5) -> "
+        "exact 3 admitted / 13 denied (Caller budget exceeded, 0 double debit)",
+        flush=True,
+    )
+
+    # 4. Chain C for fresh caller (`agent-parent-race`, caller 0/8, chain C 0/5):
+    #    16 concurrent HTTP threads -> exact 5 admitted, 11 denied (`Chain budget exceeded`).
+    c, b = http_req(
+        "POST",
+        boot_url,
+        headers={
+            "X-Stoa-Poc-Bootstrap-Secret": bootstrap_secret,
+            "DPoP": dpop.sign_proof("POST", boot_url),
+        },
+        body={"sub": "agent-parent-race", "tenant_id": "acme", "role": "reader", "ttl_secs": 300},
+    )
+    assert c == 200, f"bootstrap chain C failed: {c} {b}"
+    token_c = json.loads(b)["access_token"]
+    PARENT_PRERESTART_FILE.write_text(json.dumps({"token": token_c}), encoding="utf-8")
+    PARENT_PRERESTART_FILE.chmod(0o600)
+
+    ok_c, no_c, msgs_c = run_concurrent_calls(gateway_url, dpop, token_c, 16, "chain-C-chain-cap")
+    assert ok_c == 5 and no_c == 11, f"chain C race expected 5 ok / 11 denied, got {ok_c}/{no_c} ({msgs_c})"
+    assert all("chain budget" in m.lower() for m in msgs_c), f"unexpected chain C error messages: {msgs_c}"
+    print(
+        "PASS: 16 concurrent HTTP calls on chain C (chain cap 5, caller cap 8) -> "
+        "exact 5 admitted / 11 denied (Chain budget exceeded, 0 double debit)",
+        flush=True,
+    )
+
+
+def run_jalon3_child_post_revoke(gateway_url: str) -> None:
+    child_dpop = DpopKey.load(CHILD_KEY_FILE)
+    child_tok = CHILD_CHAIN_A_FILE.read_text(encoding="utf-8").strip()
+    mcp_url = f"{gateway_url}/mcp/poc"
+    c, b = http_req(
+        "POST",
+        mcp_url,
+        headers={
+            "Authorization": f"DPoP {child_tok}",
+            "DPoP": child_dpop.sign_proof("POST", mcp_url, access_token=child_tok),
+        },
+        body={
+            "jsonrpc": "2.0",
+            "id": 330,
+            "method": "tools/call",
+            "params": {
+                "name": "payments_list",
+                "arguments": {"currency": "EUR", "account": "acct-child-revoked", "limit": 10},
+            },
+        },
+    )
+    assert c == 200 and "revoked" in b.lower(), f"revoked child expected deny: {c} {b}"
+    print("PASS: agent-child call on revoked chain A immediately denied (atomic cascade)", flush=True)
+
+
+def run_jalon3_post_restart(gateway_url: str) -> None:
+    dpop = DpopKey.load(PARENT_KEY_FILE)
+    token_c = json.loads(PARENT_PRERESTART_FILE.read_text(encoding="utf-8"))["token"]
+    mcp_url = f"{gateway_url}/mcp/poc"
+    c, _ = http_req(
+        "POST",
+        mcp_url,
+        headers={
+            "Authorization": f"DPoP {token_c}",
+            "DPoP": dpop.sign_proof("POST", mcp_url, access_token=token_c),
+        },
+        body={"jsonrpc": "2.0", "id": 340, "method": "ping", "params": {}},
+    )
+    assert c == 401, f"pre-restart token after gateway restart expected 401, got {c}"
+    print("PASS: pre-restart token rejected with 401 after real stoa-gateway restart (ephemeral RS256 rotated)", flush=True)
+
+
 if __name__ == "__main__":
     mode = sys.argv[1]
     if mode == "child-init-key":
@@ -512,6 +895,16 @@ if __name__ == "__main__":
         sys.exit(0)
 
     gateway = os.environ["STOA_GATEWAY_URL"]
+    if mode == "jalon3-parent-revoke-and-race":
+        run_jalon3_parent_revoke_and_race(gateway)
+        sys.exit(0)
+    if mode == "jalon3-child-post-revoke":
+        run_jalon3_child_post_revoke(gateway)
+        sys.exit(0)
+    if mode == "jalon3-post-restart":
+        run_jalon3_post_restart(gateway)
+        sys.exit(0)
+
     mock_ip = sys.argv[2]
     if mode == "parent":
         child_jwk = sys.argv[3] if len(sys.argv) > 3 else None
@@ -523,5 +916,11 @@ if __name__ == "__main__":
         parent_tok = sys.argv[3]
         child_tok = sys.argv[4] if len(sys.argv) > 4 else None
         run_child(gateway, mock_ip, parent_tok, child_tok)
+    elif mode == "jalon3-parent-phase1":
+        child_jwk = sys.argv[3]
+        child_tok = run_jalon3_parent_phase1(gateway, mock_ip, child_jwk)
+        print(f"CHILD_TOKEN_DELEGATED={child_tok}", flush=True)
+    elif mode == "jalon3-child-use":
+        run_jalon3_child_use(gateway, sys.argv[3])
     else:
         raise SystemExit(f"unknown mode: {mode}")

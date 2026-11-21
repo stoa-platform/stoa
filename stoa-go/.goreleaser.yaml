@@ -72,7 +72,7 @@ checksum:
   algorithm: sha256
 
 snapshot:
-  version_template: "{{ incpatch .Version }}-next"
+  version_template: '{{ with index .Env "RELEASE_VERSION" }}{{ . }}{{ else }}{{ incpatch .Version }}-next{{ end }}'
 
 changelog:
   sort: asc

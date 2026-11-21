@@ -42,6 +42,7 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
+          ref: refs/tags/${{ inputs.tag }}
 
       - name: Set up Go
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
@@ -61,9 +62,13 @@ jobs:
         with:
           distribution: goreleaser
           version: latest
-          args: release --clean
+          args: release --snapshot --clean --skip=docker,homebrew
           workdir: stoa-go
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GORELEASER_CURRENT_TAG: ${{ inputs.tag }}
+          RELEASE_VERSION: ${{ inputs.version }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      - name: Attach archives to the existing release
+        env: {GH_TOKEN: '${{ github.token }}', RELEASE_TAG: '${{ inputs.tag }}'}
+        run: gh release upload "$RELEASE_TAG" stoa-go/dist/stoactl_*.tar.gz stoa-go/dist/stoactl_*.zip stoa-go/dist/stoa-connect_*.tar.gz stoa-go/dist/checksums.txt

@@ -408,7 +408,7 @@ Legacy guardrail counters remain readable during the compatibility window:
 
 Window closes only when **all five** conditions hold (A7 expansion — `prometheus_engine_queries_total` alone is insufficient):
 
-1. **Phase 6.6 smoke prod archived (A19 lock — safe states only)** — production smoke validates the states reachable without degrading telemetry: `evaluations_zero_trips` and/or `trips_observed`, plus bounded-label evidence. `metrics_unavailable`, `no_evaluations`, and `stale_data` are validated separately in dev/k3d or staging via controlled fault injection; production fault injection is forbidden unless separately approved by SRE in a dedicated chaos-injection plan. Archive prod smoke under `docs/audits/<YYYY-MM-DD>-phase-6-rollout/findings.md`.
+1. **Phase 6.6 smoke prod archived (A19 lock — safe states only)** — production smoke validates the states reachable without degrading telemetry: `evaluations_zero_trips` and/or `trips_observed`, plus bounded-label evidence. `metrics_unavailable`, `no_evaluations`, and `stale_data` are validated separately in dev/k3d or staging via controlled fault injection; production fault injection is forbidden unless separately approved by SRE in a dedicated chaos-injection plan. Archive prod smoke under `<private-audit-archive>/<YYYY-MM-DD>-phase-6-rollout/findings.md`.
 2. **14 days without legacy cp-api field consumers** — verified by API access logs / dashboard queries / internal script audit (not just Prometheus engine stats). cp-api fields surfaced by PR-3A that map to legacy counters must show zero reads.
 3. **14 days without legacy PromQL consumers observed where observable** — Prometheus query-stats audit (`prometheus_engine_queries_total{query=~".*stoa_guardrails_(pii_detected|injection_blocked|content_filtered)_total.*"}`) shows zero non-canary reads. Explicit caveat: this metric **does not catch** Grafana dashboards via external Prometheus, ops scripts hitting Prometheus directly, bookmarks / exports outside the measured engine.
 4. **Release note / migration note published** — internal release notes + customer-facing changelog if any external consumer exists, naming the legacy counters being deprecated and the replacement counters.
@@ -604,7 +604,7 @@ DoD (A12 lock — no real PII / no real customer prompt content):
 - [ ] **No real customer prompt content in payloads**. All test prompts are deterministic, pre-approved synthetic strings.
 - [ ] Synthetic payload fixtures committed in `docs/observability/phase-6-smoke-fixtures.md` with verbatim payload examples. Operator reviews fixtures before each prod run.
 - [ ] Cleanup / rollback steps documented: how to delete probe traces from OpenSearch, how to filter probe metrics from Prometheus dashboards, how to drop the synthetic tenant.
-- [ ] Smoke output archived with UTC timestamp under `docs/audits/<YYYY-MM-DD>-phase-6-rollout/findings.md`, including verdict per-state and any failure mode observed.
+- [ ] Smoke output archived with UTC timestamp under `<private-audit-archive>/<YYYY-MM-DD>-phase-6-rollout/findings.md`, including verdict per-state and any failure mode observed.
 - [ ] Audit archive references this plan + decision-log for traceability.
 
 ## Acceptance Criteria

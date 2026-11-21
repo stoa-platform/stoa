@@ -2,7 +2,7 @@
 title: "Plan correctif — Souscription UAC API + MCP Tools"
 date: 2026-05-11
 updated_at: 2026-05-13
-source_audit: "docs/audits/2026-05-11-uac-subscription-mcp/AUDIT-RESULTS.md"
+source_audit: "<private-audit-archive>/2026-05-11-uac-subscription-mcp/AUDIT-RESULTS.md"
 validation_status: validated
 validated_at: "2026-05-13"
 validated_by: "operator (solo project mode)"
@@ -10,16 +10,16 @@ validated_for_code_execution: true
 conditions_pending: false
 decision_record: "docs/decisions/2026-05-11-uac-subscription-mcp-corrective.md"
 decision_verdict: "GO_WITH_CONDITIONS"
-operator_approvals_record: "docs/decisions/2026-05-13-cab-2225-2229-operator-approvals.md"
+operator_approvals_record: "2026-05-13 operator approvals record (docs/decisions/)"
 last_challenger_verdict: "GO_WITH_CONDITIONS"
 challenged_at: "2026-05-13"
 challenger: "GPT-5.5 Pro — external non-Claude challenger"
 decision_gate: closed
 decision_gate_closed_at: "2026-05-13"
 implementation_pending:
-  - "PR #2781 Vault wrap on _wrap_pseudonymization_key (CAB-2226 condition)"
+  - "PR #2781 Vault wrap on _wrap_pseudonymization_key (ADR-068/069 condition)"
   - "P0-MCP-1 approval-token runtime (gated on PR #2781 + #2780 lock-step deploy)"
-  - "P0-GW-1 / P0-GW-2 gateway fail-closed runtime (CAB-2227)"
+  - "P0-GW-1 / P0-GW-2 gateway fail-closed runtime (ADR-070)"
   - "P0-AUD-2 minimal Gateway↔CP audit emit (in ADR-070 §4.6)"
 scope:
   - control-plane-api/
@@ -40,11 +40,11 @@ owners:
   external_challenger: "GPT-5.5 Pro (external non-Claude challenger, 2026-05-13)"
 ---
 
-> **2026-05-13 — Operator validation closed (CAB-2229).**
-> Status: `challenged → validated`. Operator approvals on CAB-2225..2229 recorded in `docs/decisions/2026-05-13-cab-2225-2229-operator-approvals.md`. The 7 challenger conditions (C1-C7) are integrated below in §1.4. Code execution authorised within the accepted ADR scope.
+> **2026-05-13 — Operator validation closed.**
+> Status: `challenged → validated`. Operator approvals on ADR-067..071 recorded in the 2026-05-13 operator approvals decision record (`docs/decisions/`). The 7 challenger conditions (C1-C7) are integrated below in §1.4. Code execution authorised within the accepted ADR scope.
 >
 > **Refused at this stage** (in spite of plan validation):
-> - PR #2781 merge before Vault wrap lands on `_wrap_pseudonymization_key` (CAB-2226 binding condition).
+> - PR #2781 merge before Vault wrap lands on `_wrap_pseudonymization_key` (ADR-068/069 binding condition).
 > - PR #2780 merge before PR #2781 deploys to a given environment (lock-step ordering codified in `control-plane-api/alembic/versions/107_README.md`).
 > - Any future move to raw storage for `pseudonymization_key` without a NEW ADR explicitly narrowing the trust boundary.
 > - Multi-role sign-off framing on new artefacts — solo project mode applies (per `feedback_solo_project_mode_signoffs`).
@@ -136,23 +136,23 @@ Le gate doit refuser le démarrage si au moins une condition est vraie :
 - Les ADR-067 et ADR-068 restent non versionnées.
 - Les tests de preuve DORA/NIS2 ne sont pas identifiés avant implémentation.
 
-### 1.6 Intégration des conditions C1-C7 (CAB-2229, opérateur 2026-05-13)
+### 1.6 Intégration des conditions C1-C7 (opérateur 2026-05-13)
 
-Le gate est fermé : opérateur GO_WITH_CONDITIONS, validation_status flippé à `validated`. Les 7 conditions du challenger sont addressées comme suit. Sources canoniques : `docs/decisions/2026-05-11-uac-subscription-mcp-corrective.md` (challenger verdict) + `docs/decisions/2026-05-13-cab-2225-2229-operator-approvals.md` (operator approvals).
+Le gate est fermé : opérateur GO_WITH_CONDITIONS, validation_status flippé à `validated`. Les 7 conditions du challenger sont addressées comme suit. Sources canoniques : `docs/decisions/2026-05-11-uac-subscription-mcp-corrective.md` (challenger verdict) + 2026-05-13 operator approvals record (`docs/decisions/`).
 
 | # | Condition | Statut | Référence canonique |
 |---|-----------|--------|---------------------|
-| C1 | Split Phase 0 / NOGO régulateur — Option A (Phase 0 minimal audit chain) ou SPLIT_GATE explicite | **CLOSED — Option A** | ADR-070 §4.6 codifie la chain minimum Phase 0 (denies + approval-gated, durable spool). Operator approval CAB-2227 confirme C1 Option A. |
-| C2 | Sign-off business du fail-closed | **CLOSED — operator** | Operator approval CAB-2227 enregistré : `validated_for_code_execution: true` côté opérateur, SLA impact accepté. Frontmatter §C2 conditions intégrées dans ADR-070 §4.1. |
+| C1 | Split Phase 0 / NOGO régulateur — Option A (Phase 0 minimal audit chain) ou SPLIT_GATE explicite | **CLOSED — Option A** | ADR-070 §4.6 codifie la chain minimum Phase 0 (denies + approval-gated, durable spool). Operator approval ADR-070 confirme C1 Option A. |
+| C2 | Sign-off business du fail-closed | **CLOSED — operator** | Operator approval ADR-070 enregistré : `validated_for_code_execution: true` côté opérateur, SLA impact accepté. Frontmatter §C2 conditions intégrées dans ADR-070 §4.1. |
 | C3 | Cache permissions = artefact signé non extensible | **CLOSED** | ADR-070 §4.2 codifie le `policy_cache_artefact` (policy_version, issued_at, expires_at ≤ 60 min, signature, deny_default). Operator parameters : TTL = 60 min, jamais extensible localement. |
-| C4 | Approval token avec intent binding + preuve 4-eyes | **CLOSED** | ADR-067 §4.4 codifie les 6 invariants approval token (jti single-use atomic, arguments_hash, policy_version, contract_version, requester/approver séparés, audit issued/used/rejected). Operator approval CAB-2225 confirme conditions binding. |
-| C5 | Audit immutability : trigger strict + procédure migration séparée | **CLOSED** | ADR-068 §4.4 (trigger + 3 exceptions break-glass), ADR-069 §4.2 (pseudo aux table). Operator approval CAB-2226 : key disposition = retrievable-with-dual-control ; **Vault wrap mandatory** sur PR #2781 (`implementation_pending`). |
-| C6 | State machine partial provisioning + failure states | **CLOSED** | ADR-071 §4.1 codifie `PARTIALLY_PROVISIONED`, `PROVISIONING_FAILED`, `DEPROVISIONING_FAILED`. Operator approval CAB-2228 : visibility consumer-visible avec target breakdown, 4-eyes strict 2 tenant-admins, time budget 15 min. PR #2782 (DEPROVISIONING_FAILED) + PR #2784 (suspend/reactivate webhooks) déjà mergées. |
+| C4 | Approval token avec intent binding + preuve 4-eyes | **CLOSED** | ADR-067 §4.4 codifie les 6 invariants approval token (jti single-use atomic, arguments_hash, policy_version, contract_version, requester/approver séparés, audit issued/used/rejected). Operator approval ADR-067 confirme conditions binding. |
+| C5 | Audit immutability : trigger strict + procédure migration séparée | **CLOSED** | ADR-068 §4.4 (trigger + 3 exceptions break-glass), ADR-069 §4.2 (pseudo aux table). Operator approval ADR-068/069 : key disposition = retrievable-with-dual-control ; **Vault wrap mandatory** sur PR #2781 (`implementation_pending`). |
+| C6 | State machine partial provisioning + failure states | **CLOSED** | ADR-071 §4.1 codifie `PARTIALLY_PROVISIONED`, `PROVISIONING_FAILED`, `DEPROVISIONING_FAILED`. Operator approval ADR-071 : visibility consumer-visible avec target breakdown, 4-eyes strict 2 tenant-admins, time budget 15 min. PR #2782 (DEPROVISIONING_FAILED) + PR #2784 (suspend/reactivate webhooks) déjà mergées. |
 | C7 | Planning 9 semaines conditionnel staffing parallèle | **CLOSED — solo mode** | Solo project mode (`feedback_solo_project_mode_signoffs`) : l'opérateur s'engage personnellement sur le timeline. Si la capacité solo s'avère insuffisante en cours d'exécution, le plan rebase à 12-14 semaines sans drame. Aucun staffing tiers requis. |
 
 **Implications sur les PRs en cours** (cf. `implementation_pending` du frontmatter) :
 
-- **PR #2781** (Codex iter2 — code rewrite DRAFT) : reste DRAFT jusqu'au commit Vault wrap iter3 (CAB-2226 condition). Quand Vault wrap landed + review clean → Ready-for-Review.
+- **PR #2781** (Codex iter2 — code rewrite DRAFT) : reste DRAFT jusqu'au commit Vault wrap iter3 (ADR-068/069 condition). Quand Vault wrap landed + review clean → Ready-for-Review.
 - **PR #2780** (alembic 107 DRAFT) : reste DRAFT, lock-step ordering codifié dans `107_README.md`. Merge UNIQUEMENT après que PR #2781 est mergée ET déployée sur l'environnement cible.
 - **P0-MCP-1, P0-GW-1/2, P0-AUD-2** : maintenant autorisés (`validated_for_code_execution: true`). Prompts Codex à venir par item.
 
@@ -961,7 +961,7 @@ But :
 
 Statut cible : `accepted` avant Phase 2.
 
-Draft : `docs/audits/2026-05-11-uac-subscription-mcp/adrs-drafts/adr-071-api-subscription-lifecycle.md`.
+Draft : `<private-audit-archive>/2026-05-11-uac-subscription-mcp/adrs-drafts/adr-071-api-subscription-lifecycle.md`.
 
 ---
 
@@ -1235,7 +1235,7 @@ Ordre recommandé :
 title: "Decision — UAC Subscription MCP Corrective Plan"
 date: 2026-05-XX
 source_plan: "docs/plans/2026-05-11-uac-subscription-mcp-corrective.md"
-source_audit: "docs/audits/2026-05-11-uac-subscription-mcp/AUDIT-RESULTS.md"
+source_audit: "<private-audit-archive>/2026-05-11-uac-subscription-mcp/AUDIT-RESULTS.md"
 decision: "GO | GO_WITH_CONDITIONS | NOGO | SPLIT_GATE"
 challenger: "TBD"
 validation_status: "draft | accepted | rejected"

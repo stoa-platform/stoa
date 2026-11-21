@@ -1,9 +1,9 @@
 """
-Regression for CAB-2225 SUB-2 — TTL extension uses commit() not flush().
+Regression for SUB-2 — TTL extension uses commit() not flush().
 
-# regression for CAB-2225
+# regression for subscription TTL commit
 
-Source audit: docs/audits/2026-05-11-uac-subscription-mcp/AUDIT-RESULTS.md (SUB-2, P0)
+Source audit: 2026-05-11-uac-subscription-mcp/AUDIT-RESULTS.md (SUB-2, P0; archived privately)
 Plan ref:    docs/plans/2026-05-11-uac-subscription-mcp-corrective.md §5.6
 
 The bug: extend_subscription_ttl used `await db.flush()`. flush() emits the

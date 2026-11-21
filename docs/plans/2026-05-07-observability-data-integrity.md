@@ -11,7 +11,7 @@ challenge_ref: ""                      # not required (no triggers); add only if
 
 Restaurer la cohérence et la véracité des trois pages observability (`/observability/live-calls`, `/audit-log`, `/observability/security`) après la consolidation routes faite par codex (PR #2713 + #2715), qui a livré une façade propre devant des composants encore branchés sur des données incohérentes, vides, ou mockées.
 
-**Source audit**: `docs/audits/2026-05-07-observability/AUDIT.md` (28 findings priorisés HIGH/MED/LOW).
+**Source audit**: `<private-audit-archive>/2026-05-07-observability/AUDIT.md` (28 findings priorisés HIGH/MED/LOW).
 
 ## Scope
 
@@ -49,7 +49,7 @@ Restaurer la cohérence et la véracité des trois pages observability (`/observ
 
 ## Assumptions
 
-- L'audit `docs/audits/2026-05-07-observability/AUDIT.md` reflète l'état prod 2026-05-07 (tenant `free-aech`, CPI Admin role).
+- L'audit `<private-audit-archive>/2026-05-07-observability/AUDIT.md` reflète l'état prod 2026-05-07 (tenant `free-aech`, CPI Admin role).
 - Les PRs codex #2713 + #2715 ont bien été déployés (`control-plane-ui` ≥ 1.7.3).
 - Accès kubectl read-only OVH prod disponible pour PR-1A (ou délégation à un SRE).
 - L'équipe gateway Rust est joignable si PR-2 conclut à un fix Rust (peu probable — voir section PR-2 step 0).
@@ -75,7 +75,7 @@ Ces décisions doivent être tranchées par le product owner **avant que codex d
 
 ### PR-1A — Audit ingestion (#2721 merged)
 
-Evidence: `docs/audits/2026-05-08-audit-ingestion/findings.md`
+Evidence: `<private-audit-archive>/2026-05-08-audit-ingestion/findings.md`
 
 **Verdict: BLOCKED_FOR_PR-1B_SCOPING.**
 
@@ -89,7 +89,7 @@ This was the explicit **No-Go condition** in the plan's Go/No-Go criteria. The p
 
 ### PR-1A2 — Audit consumer restore scope (#2723 merged)
 
-Evidence: `docs/audits/2026-05-08-audit-consumer-restore/scoping.md`
+Evidence: `<private-audit-archive>/2026-05-08-audit-consumer-restore/scoping.md`
 
 **Verdict: CONSUMER_IMPLEMENTATION_NOT_FOUND** (Case C from the PR-1A2 codex prompt).
 
@@ -121,7 +121,7 @@ Phase 7 — PR-1B   Audit Log API + UI (gated on PR-1A6 PASS)
 
 ### PR-2 step 0 — Live Calls PromQL evidence (#2720 merged)
 
-Evidence: `docs/audits/2026-05-08-live-calls-investigation/promql-evidence.md`
+Evidence: `<private-audit-archive>/2026-05-08-live-calls-investigation/promql-evidence.md`
 
 **Verdict: READY_FOR_PR-2_CODE_SCOPING.**
 
@@ -162,13 +162,13 @@ Status note: the context that opened this plan-update still treated stoa-infra #
 - Post-merge runbook is in the stoa-infra #75 PR body; do not duplicate it here.
 - Rollback path: open a follow-up PR flipping back to `"false"` and re-sync ArgoCD. Kafka retention 7 days mitigates short OFF windows.
 - Defense-in-depth: after activation, the consumer starts only if master gate `STOA_ENABLE_KAFKA_CONSUMERS` is effectively true in prod and chart override `=true`. The cp-api code default is `"false"` (#2730), which is a fail-closed last line of defense if the chart gate is removed.
-- After activation, evidence file `docs/audits/2026-05-09-audit-consumer-verification/findings.md` must be amended (or a follow-up file opened) with a verdict line like: `**VERDICT: PR-1B_UNBLOCKED — continuous ingestion verified <UTC timestamp>.**`
+- After activation, evidence file `<private-audit-archive>/2026-05-09-audit-consumer-verification/findings.md` must be amended (or a follow-up file opened) with a verdict line like: `**VERDICT: PR-1B_UNBLOCKED — continuous ingestion verified <UTC timestamp>.**`
 
 ---
 
 ## Specs policy
 
-Ce plan **ne crée pas** de spec produit complète: le travail est une remédiation tactique post-audit, pas une nouvelle feature. Le triptyque suffisant est: **(1) audit factuel** (`docs/audits/2026-05-07-observability/AUDIT.md`) + **(2) plan canonique** (ce document) + **(3) prompts codex avec acceptance criteria + tests** (sections PR ci-dessous).
+Ce plan **ne crée pas** de spec produit complète: le travail est une remédiation tactique post-audit, pas une nouvelle feature. Le triptyque suffisant est: **(1) audit factuel** (`<private-audit-archive>/2026-05-07-observability/AUDIT.md`) + **(2) plan canonique** (ce document) + **(3) prompts codex avec acceptance criteria + tests** (sections PR ci-dessous).
 
 Codex peut implémenter directement à partir de ce plan pour les PRs où la surface API/UI est bornée. **Mini-specs contractuelles requises** uniquement quand codex risque d'inventer la forme de réponse ou de masquer des sémantiques `null/0/disabled/stale/error` mal distinguées. Voir tableau:
 
@@ -297,7 +297,7 @@ Out of scope:
 
 Commit message: chore(ui): observability quick wins — titles, rate-limit filter, audit date params
 
-Open as PR with body referencing docs/audits/2026-05-07-observability/AUDIT.md findings L7, S1, S6, S7, A4.
+Open as PR with body referencing <private-audit-archive>/2026-05-07-observability/AUDIT.md findings L7, S1, S6, S7, A4.
 ```
 
 ## Acceptance criteria (binary)
@@ -396,7 +396,7 @@ kubectl exec deploy/control-plane-api -- env | grep -iE 'audit|demo'
 ```
 You are an SRE running a read-only investigation on production STOA platform.
 
-Goal: produce an evidence pack at docs/audits/2026-05-08-audit-ingestion/findings.md that explains why the /audit-log page on console.gostoa.dev shows only chat-related events for tenant free-aech, despite 20+ audit emit sites across the cp-api codebase.
+Goal: produce an evidence pack at <private-audit-archive>/2026-05-08-audit-ingestion/findings.md that explains why the /audit-log page on console.gostoa.dev shows only chat-related events for tenant free-aech, despite 20+ audit emit sites across the cp-api codebase.
 
 Required sections in findings.md:
 1. Inventory of audit emit sites (grep `emit_audit_event` across control-plane-api/src/).
@@ -421,7 +421,7 @@ Required sections in findings.md:
 
 DO NOT write any production code or modify any service. DO NOT delete or migrate audit data.
 DO use kubectl exec --readonly via the cp-api pod (the `-i` flag is required to pipe Python heredocs — see memory note `reference_ovh_prod_sql_via_cp_api_pod.md`).
-DO archive the raw kubectl outputs in docs/audits/2026-05-08-audit-ingestion/raw/.
+DO archive the raw kubectl outputs in <private-audit-archive>/2026-05-08-audit-ingestion/raw/.
 
 Deliverable: a single markdown file. No code changes. PR description: "Investigation only — no code changes. Evidence pack for MEGA-A PR-1B scoping."
 ```
@@ -441,8 +441,8 @@ Deliverable: a single markdown file. No code changes. PR description: "Investiga
 
 ## Files probably touched
 
-- `docs/audits/2026-05-08-audit-ingestion/findings.md` (new)
-- `docs/audits/2026-05-08-audit-ingestion/raw/*.txt` (new)
+- `<private-audit-archive>/2026-05-08-audit-ingestion/findings.md` (new)
+- `<private-audit-archive>/2026-05-08-audit-ingestion/raw/*.txt` (new)
 - 0 source files modified.
 
 ## Risk + dependencies
@@ -512,7 +512,7 @@ A1, A2, A3, A5, A6 (reformulé), A7, A8, A9.
 ```
 You are working on STOA control-plane-api (Python 3.11, FastAPI, SQLAlchemy 2.0 async) and control-plane-ui (React 18, TS, Vite).
 
-Context: PR-1A produced an evidence pack at docs/audits/2026-05-08-audit-ingestion/findings.md identifying broken audit ingestion paths. Read it before starting. Findings reference docs/audits/2026-05-07-observability/AUDIT.md sections A1-A9.
+Context: PR-1A produced an evidence pack at <private-audit-archive>/2026-05-08-audit-ingestion/findings.md identifying broken audit ingestion paths. Read it before starting. Findings reference <private-audit-archive>/2026-05-07-observability/AUDIT.md sections A1-A9.
 
 This PR fixes the broken emit paths AND adds new UI/API surface for stats + actor resolution + UX state.
 
@@ -686,8 +686,8 @@ Branch: `fix/live-calls-http-route-metric-integrity`
 
 Context:
 - Plan: docs/plans/2026-05-07-observability-data-integrity.md
-- Original audit: docs/audits/2026-05-07-observability/AUDIT.md
-- PR-2 step 0 PromQL evidence: docs/audits/2026-05-08-live-calls-investigation/promql-evidence.md
+- Original audit: <private-audit-archive>/2026-05-07-observability/AUDIT.md
+- PR-2 step 0 PromQL evidence: <private-audit-archive>/2026-05-08-live-calls-investigation/promql-evidence.md
 
 Important evidence (#2720 merged):
 - Current production `stoa_http_requests_total` exposes `http_route` on 306/306 series, `path` on 0/306.
@@ -883,7 +883,7 @@ Changes:
 
 ## Acceptance criteria (binary)
 
-- [ ] `docs/audits/2026-05-08-live-calls-investigation/promql-evidence.md` exists.
+- [ ] `<private-audit-archive>/2026-05-08-live-calls-investigation/promql-evidence.md` exists.
 - [ ] All 7 page queries use the same MODE_FILTER constant.
 - [ ] `'unknown'` no longer appears in the UI; replaced by `'(unlabelled)'` semantics + EmptyState.
 - [ ] Heatmap synthetic code deleted; placeholder EmptyState shown.
@@ -907,7 +907,7 @@ Changes:
 - `control-plane-ui/src/pages/CallFlow/components/TrafficHeatmap.tsx` (potential, ~10 LOC)
 - 5 new test files
 - (Conditional) `stoa-gateway/src/lib.rs` (~10 LOC + cargo test)
-- `docs/audits/2026-05-08-live-calls-investigation/promql-evidence.md` (new)
+- `<private-audit-archive>/2026-05-08-live-calls-investigation/promql-evidence.md` (new)
 
 ## Risk + dependencies
 
@@ -1170,7 +1170,7 @@ Updated 2026-05-08 after PR-1A4 incident, PR-1A5 evidence (#2733), and A1b activ
 
 ## PR-1A2 — Audit consumer restore/scope (DONE)
 
-**Status**: ✅ Merged #2723 on 2026-05-08. Verdict `CONSUMER_IMPLEMENTATION_NOT_FOUND` (Case C). Evidence: `docs/audits/2026-05-08-audit-consumer-restore/scoping.md`.
+**Status**: ✅ Merged #2723 on 2026-05-08. Verdict `CONSUMER_IMPLEMENTATION_NOT_FOUND` (Case C). Evidence: `<private-audit-archive>/2026-05-08-audit-consumer-restore/scoping.md`.
 
 At PR-1A2 time, the repository contained Kafka audit producers and 5 generic consumer patterns, but no audit consumer implementation that persisted `stoa.audit.trail`/`audit-log`/`stoa.audit.events` into PostgreSQL `audit_events`. Building a consumer was **new ingestion architecture, not a restore** — hence the explicit insertion of PR-1A3 (mini-spec) -> PR-1A4 (implementation) -> PR-1A5 (verification), later extended with PR-1A6 (activation + post-activation evidence amend) before PR-1B can start.
 
@@ -1230,8 +1230,8 @@ Branch: `feat/audit-consumer-implementation`
 Context:
 - Plan: docs/plans/2026-05-07-observability-data-integrity.md
 - Mini-spec: docs/plans/2026-05-08-audit-consumer-ingestion-contract.md  (PR-1A3)
-- PR-1A evidence: docs/audits/2026-05-08-audit-ingestion/findings.md
-- PR-1A2 scoping: docs/audits/2026-05-08-audit-consumer-restore/scoping.md
+- PR-1A evidence: <private-audit-archive>/2026-05-08-audit-ingestion/findings.md
+- PR-1A2 scoping: <private-audit-archive>/2026-05-08-audit-consumer-restore/scoping.md
 
 PRECONDITION: read docs/plans/2026-05-08-audit-consumer-ingestion-contract.md first. If the mini-spec is not on main yet, STOP and request that PR-1A3 be merged before proceeding.
 
@@ -1356,7 +1356,7 @@ Context:
 - Implementation: PR-1A4 merged + deployed to OVH prod
 
 Goal: prove the consumer is operational and produce an evidence pack at
-  docs/audits/2026-05-XX-audit-ingestion-verification/proof.md
+  <private-audit-archive>/2026-05-XX-audit-ingestion-verification/proof.md
 
 Required sections in proof.md:
 
@@ -1420,7 +1420,7 @@ PR body must reference:
 
 ### Acceptance criteria (binary)
 
-- [ ] `docs/audits/2026-05-XX-audit-ingestion-verification/proof.md` with 5 sections.
+- [ ] `<private-audit-archive>/2026-05-XX-audit-ingestion-verification/proof.md` with 5 sections.
 - [ ] Single manual mutation documented and cleaned up.
 - [ ] Consumer activity proven (lag dropped, audit_events incremented, /v1/audit returns the row).
 - [ ] Verdict PASS or FAIL.
@@ -1428,7 +1428,7 @@ PR body must reference:
 
 ### Files probably touched
 
-- `docs/audits/2026-05-09-audit-consumer-verification/findings.md` (new evidence pack in #2733)
+- `<private-audit-archive>/2026-05-09-audit-consumer-verification/findings.md` (new evidence pack in #2733)
 - (no source change)
 
 ### Risk + dependencies
@@ -1451,7 +1451,7 @@ Activate `ENABLE_AUDIT_TRAIL_CONSUMER` through the prod-effective stoa-infra cha
 ### Scope
 
 - stoa-infra #75 chart flip: `charts/control-plane-api/values.yaml` changes `ENABLE_AUDIT_TRAIL_CONSUMER` from `"false"` to `"true"`.
-- stoa evidence amend: update `docs/audits/2026-05-09-audit-consumer-verification/findings.md` or add a follow-up evidence file.
+- stoa evidence amend: update `<private-audit-archive>/2026-05-09-audit-consumer-verification/findings.md` or add a follow-up evidence file.
 - Evidence must include the same signal as PR-1A5, but after activation: group `audit-trail-pg-consumer` `STATE=Stable`, `MEMBERS>=1`, acceptable lag, a controlled non-chat mutation, PostgreSQL row, and `/v1/audit/{tenant_id}` visibility.
 
 ### Current status

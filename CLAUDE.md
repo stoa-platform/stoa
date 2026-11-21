@@ -184,7 +184,7 @@ Règles binaires GO/NOGO. Détail on-demand dans `.claude/docs/<rule>.md`.
 - Toujours `--squash` + `--delete-branch`. Jamais push direct sur `main`.
 - `--force`, `git reset --hard`, suppression branche tiers = demander avant.
 - Conventional commits obligatoires. Ticket ID sur 1er commit.
-- Évidence archive obligatoire après Playwright: `docs/audits/<date>-<topic>/`.
+- Évidence archive obligatoire après Playwright: archive privée hors dépôt public (voir `.claude/docs/e2e-audit.md`).
 
 ### Council & MEGA
 - Impact Score ≥ HIGH (16+) → Council obligatoire avant code.

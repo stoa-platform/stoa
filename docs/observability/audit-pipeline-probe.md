@@ -3,7 +3,7 @@
 Plan: `docs/plans/2026-05-09-observability-data-visibility.md`; phase: 5A. Decisions:
 `docs/decisions/2026-05-09-observability-data-visibility.md`,
 `docs/decisions/2026-05-09-seed-vs-runtime-contract.md`,
-`docs/audits/2026-05-09-observability-data-visibility/probe-trace-walk.md`.
+`2026-05-09-observability-data-visibility/probe-trace-walk.md` (archived privately).
 
 Implementation shape: Option A, `control-plane-api/scripts/probes/audit_pipeline_probe.py`.
 The probe validates only:

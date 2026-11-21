@@ -51,7 +51,7 @@ paths = [
   '''control-plane-ui/src/lib/__tests__/crypto\.test\.ts''',
   # UI component test fixtures — mock PEM keys for certificate wizard tests
   '''control-plane-ui/src/components/__tests__/CertificateGenerationWizard\.test\.tsx''',
-  # Gateway secrets detection plugin — inline test fixtures with fake secrets (CAB-1936)
+  # Gateway secrets detection plugin — inline test fixtures with fake secrets
   '''stoa-gateway/src/plugin/builtin/secrets_detection\.rs''',
   # Vault local dev init script — env var defaults for quickstart (not real secrets)
   '''deploy/local/vault/init-vault-local\.sh''',
@@ -64,7 +64,7 @@ paths = [
   # Ops scripts (vault credential verification, infra fixes, VPS inventory)
   '''scripts/ops/.*''',
   '''scripts/verify-vault-db-credentials\.sh''',
-  '''scripts/cab-964-infra-fix\.sh''',
+  '''scripts/cab-[0-9]+-infra-fix\.sh''',
   # Demo scripts (smoke tests, live demos with dev credentials)
   '''scripts/demo/.*''',
   # Traffic scripts (arena benchmarks with VPS IPs)
@@ -77,8 +77,6 @@ paths = [
   '''docs/guides/.*''',
   '''docs/MCP-CLAUDEAI-INTEGRATION\.md''',
   '''docs/PORTAL\.md''',
-  # Audit HTML reports (contain shell password patterns in Playwright traces)
-  '''docs/audits/.*''',
   # Demo POC scripts (one-off demo with dev creds)
   '''demo/.*''',
   # State files (contain IP references in text, not actual secrets)
@@ -112,7 +110,7 @@ commits = [
   "4e9b396296cc68dbff36a3f90b95014d4365bdd1",  # Historical ansible playbook db_password comment
   "ef2e357f4fab1ec2011cb0583d8d1f78604546fa",  # Historical ansible playbook db_password comment (dup)
   "64b5c3c76c34e746d43ff76ba6ba97ab9245b849",  # E2E deploy script curl-auth-header false positive (test key "not-a-real-key")
-  # Historical files deleted in OpSec purge (CAB-2057) — commits remain in git history
+  # Historical files deleted in OpSec purge — commits remain in git history
   "7ece421e32d821291575e7068e848f66b73cc218",  # ansible/roles/webmethods/README.md default password (file deleted)
   "b7d4d189d0c6e30cadea16eab28cf207ced38045",  # docs/ibm/webmethods-gateway-api.md curl-auth-user examples (file deleted)
   "24565ac9cf1d3c8e704dd4c21ca69deb2482d194",  # README.md historical example URL with auth header
@@ -190,7 +188,7 @@ allowlist = { paths = [
 ]}
 
 # ============================================
-# OpSec rules — infrastructure & business intelligence (CAB-2057)
+# OpSec rules — infrastructure & business intelligence
 # ============================================
 
 # STOA VPS infrastructure IPs (OVH, Contabo, Hetzner ranges)

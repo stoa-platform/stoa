@@ -35,7 +35,7 @@ scripts/demo/scenarios/<name>/
   scenario.yaml     # Manifest: tenant, APIs, personas, plans, compliance
   README.md         # Walkthrough and talking points
 
-tenants/<tenant-id>/
+platform/tenants/<tenant-id>/
   tenant.yaml       # GitOps tenant definition
   apis/<api-id>/
     api.yaml        # API catalog entry
@@ -49,7 +49,7 @@ STOA's catalog sync feature.
 ## Creating a New Scenario
 
 1. Copy the schema: `cp scenarios/scenario-schema.yaml scenarios/<name>/scenario.yaml`
-2. Create the tenant dir: `mkdir -p tenants/<tenant-id>/apis/<api-id>`
+2. Create the tenant dir: `mkdir -p platform/tenants/<tenant-id>/apis/<api-id>`
 3. Define APIs with `api.yaml` + `openapi.yaml` per API
 4. Add compliance disclaimers (see `DISCLAIMER-TEMPLATE.md`)
 5. Test: `./scripts/demo/setup.sh --scenario=<name> --dry-run`

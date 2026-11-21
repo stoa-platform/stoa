@@ -68,7 +68,7 @@
           },
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/hegemon/tools/state/hook-state-tracker.sh\""
+            "command": "bash \"$CLAUDE_PROJECT_DIR/labs/hegemon/tools/state/hook-state-tracker.sh\""
           },
           {
             "type": "command",
@@ -176,7 +176,7 @@
           },
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/hegemon/tools/state/hook-session-end.sh\""
+            "command": "bash \"$CLAUDE_PROJECT_DIR/labs/hegemon/tools/state/hook-session-end.sh\""
           }
         ]
       }

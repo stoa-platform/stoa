@@ -1,7 +1,7 @@
 <!-- Chargé à la demande par skills/commands. Jamais auto-chargé. -->
 
 ---
-globs: ".claude/claims/**,hegemon/**"
+globs: ".claude/claims/**,labs/hegemon/**"
 ---
 
 # Phase Ownership — Multi-Instance Coordination Protocol
@@ -31,22 +31,22 @@ Claims live in `.claude/claims/` (gitignored, machine-local). Two schemas:
 
 ### MEGA Claims (decomposed tickets with phases)
 
-Filename: `.claude/claims/<MEGA-ID>.json` (e.g., `CAB-1290.json`)
+Filename: `.claude/claims/<MEGA-ID>.json` (e.g., `EPIC-XXXX.json`)
 
 ```json
 {
-  "mega": "CAB-1290",
+  "mega": "EPIC-XXXX",
   "title": "Gateway Live-Code MEGA",
   "created": "2026-02-16T14:00",
   "phases": [
     {
       "id": 1,
       "name": "API + Gateway (parallel)",
-      "tickets": ["CAB-1350", "CAB-1351"],
+      "tickets": ["TASK-A", "TASK-B"],
       "owner": "t48217-a3f2",
       "claimed_at": "2026-02-16T14:05",
       "hostname": "macbook-pro.local",
-      "branch": "feat/CAB-1350-traceparent-injection",
+      "branch": "feat/topic-traceparent-injection",
       "mode": "parallel",
       "deps": [],
       "completed_at": null
@@ -54,7 +54,7 @@ Filename: `.claude/claims/<MEGA-ID>.json` (e.g., `CAB-1290.json`)
     {
       "id": 2,
       "name": "E2E Integration Tests",
-      "tickets": ["CAB-1352"],
+      "tickets": ["TASK-C"],
       "owner": null,
       "claimed_at": null,
       "hostname": null,
@@ -69,17 +69,17 @@ Filename: `.claude/claims/<MEGA-ID>.json` (e.g., `CAB-1290.json`)
 
 ### Standalone Claims (single ticket, no phases)
 
-Filename: `.claude/claims/<CAB-XXXX>.json` (e.g., `CAB-1321.json`)
+Filename: `.claude/claims/<TICKET-ID>.json` (e.g., `TICKET-A.json`)
 
 ```json
 {
-  "ticket": "CAB-1321",
+  "ticket": "TICKET-A",
   "title": "Portal ToS link fix",
   "owner": "t48217-a3f2",
   "pid": 12345,
   "hostname": "macbook-pro.local",
   "claimed_at": "2026-02-16T14:10",
-  "branch": "fix/CAB-1321-tos-link",
+  "branch": "fix/topic-tos-link",
   "completed_at": null
 }
 ```
@@ -185,12 +185,12 @@ PID checks only work on the same machine. For truly distributed scenarios (multi
 MEGA entries with phases use this format:
 
 ```markdown
-- [~] CAB-1290: [MEGA] Gateway Live-Code (13 pts) — 2 phases
+- [~] EPIC-XXXX: [MEGA] Gateway Live-Code (13 pts) — 2 phases
   - **Phase 1** (parallel) [owner: t4821]
-    - [~] CAB-1350 [gateway] Traceparent injection — PR #578
-    - [ ] CAB-1351 [gateway] Resource listing
+    - [~] TASK-A [gateway] Traceparent injection — PR #578
+    - [ ] TASK-B [gateway] Resource listing
   - **Phase 2** (after Phase 1) [owner: —]
-    - [ ] CAB-1352 [e2e] Integration tests
+    - [ ] TASK-C [e2e] Integration tests
 ```
 
 **Markers**:
@@ -229,8 +229,8 @@ MEGA entries with phases use this format:
 ### Example 1: Two Terminals on a MEGA
 
 ```
-Terminal 1 starts → reads claims/CAB-1290.json → Phase 1 unclaimed → claims Phase 1
-Terminal 2 starts → reads claims/CAB-1290.json → Phase 1 claimed → Phase 2 blocked (deps:[1])
+Terminal 1 starts → reads claims/EPIC-XXXX.json → Phase 1 unclaimed → claims Phase 1
+Terminal 2 starts → reads claims/EPIC-XXXX.json → Phase 1 claimed → Phase 2 blocked (deps:[1])
   → No unclaimed unblocked phases → "All phases claimed or blocked"
 
 Terminal 1 finishes Phase 1 → releases → Phase 2 now unblocked
@@ -240,14 +240,14 @@ Terminal 2 (next session or retry) → claims Phase 2 → works it
 ### Example 2: Standalone Ticket
 
 ```
-Terminal 1 starts → no MEGA phases → picks CAB-1321 → creates claims/CAB-1321.json
-Terminal 2 starts → sees claims/CAB-1321.json exists, PID alive → skips → picks CAB-1322
+Terminal 1 starts → no MEGA phases → picks TICKET-A → creates claims/TICKET-A.json
+Terminal 2 starts → sees claims/TICKET-A.json exists, PID alive → skips → picks TICKET-B
 ```
 
 ### Example 3: Crash Recovery
 
 ```
-Terminal 1 claims Phase 1 of CAB-1290 → crashes mid-work
+Terminal 1 claims Phase 1 of EPIC-XXXX → crashes mid-work
 Terminal 1 (new session) → Step 0 detects crash → checkpoint has claimed_phase
   → Resume: verify claim still valid (PID matches) → continue Phase 1
 ```

@@ -3,26 +3,31 @@
 # Chiffrés sur GitHub public, transparents en local
 # ══════════════════════════════════════════════════
 
-# Audit files — vulnérabilités, surface d'attaque, endpoints internes
+# Audit files — security findings, attack surface, internal endpoints
 docs/audit/** filter=git-crypt diff=git-crypt
+docs/internal/audit/** filter=git-crypt diff=git-crypt
 
 # Impact Analysis DB — contrats, risques, scores
 docs/stoa-impact.db filter=git-crypt diff=git-crypt
+docs/internal/stoa-impact.db filter=git-crypt diff=git-crypt
 
 # Context packs — analyse d'impact par ticket, fichiers concernés
 docs/context-packs/** filter=git-crypt diff=git-crypt
+docs/internal/context-packs/** filter=git-crypt diff=git-crypt
 
 # Learning reports — précision du compilateur, false negatives
 docs/learning/** filter=git-crypt diff=git-crypt
+docs/internal/learning/** filter=git-crypt diff=git-crypt
 
 # File mapping — structure interne du repo, paths sensibles
 docs/file-map.json filter=git-crypt diff=git-crypt
+docs/internal/file-map.json filter=git-crypt diff=git-crypt
 
 # Seed data — contient les mêmes données que la DB
 docs/scripts/seed.sql filter=git-crypt diff=git-crypt
 
 # ══════════════════════════════════════════════════
-# Phase 0.5 harness OpenAPI snapshots (CAB-2116)
+# Phase 0.5 harness OpenAPI snapshots (tracking issue archived)
 # Pinned by sha256 in README; treated as binary blobs
 # to keep reviewer diffs focused on code, not specs.
 # ══════════════════════════════════════════════════

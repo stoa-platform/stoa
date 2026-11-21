@@ -3,7 +3,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-DB="$SCRIPT_DIR/../stoa-impact.db"
+DB="$SCRIPT_DIR/../internal/stoa-impact.db"
 
 if [ ! -f "$DB" ]; then
     echo "ERROR: Database not found at $DB"

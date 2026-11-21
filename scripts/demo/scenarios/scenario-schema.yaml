@@ -19,8 +19,8 @@ compliance:
 
 # Tenant definition (required)
 tenant:
-  id: example                           # must match tenants/<id>/tenant.yaml
-  ref: tenants/example/tenant.yaml      # path to GitOps tenant YAML
+  id: example                                    # must match platform/tenants/<id>/tenant.yaml
+  ref: platform/tenants/example/tenant.yaml      # path to GitOps tenant YAML
 
 # Personas to create in Keycloak (optional, requires ADMIN_PASSWORD)
 personas:
@@ -47,5 +47,5 @@ plans:
 applications:
   - name: "My App"
     plan: standard
-    apis:                               # list of API ids from tenants/<id>/apis/
+    apis:                               # list of API ids from platform/tenants/<id>/apis/
       - example-api

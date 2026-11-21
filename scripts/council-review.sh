@@ -19,13 +19,13 @@
 #   2 — Technical error (missing deps, gitleaks block, >=2 axes failed, etc.)
 #
 # See .claude/rules/council-s3.md for full documentation.
-# CAB-2047 Step 1: skeleton + args parsing + Étape 0 pre-checks.
-# CAB-2047 Step 2a: cost guardrails (disable + daily cap + SHA dedup).
-# CAB-2047 Step 2b: anthropic_call + evaluate_axis(conformance) + MOCK_API.
-# CAB-2047 Step 3a: externalize prompts to scripts/council-prompts/*.md.
-# CAB-2047 Step 3b: fetch_linear_ticket + fetch_db_context + evaluate_axis context injection.
-# CAB-2047 Step 3c: parallel 4-axis orchestration + aggregate_scores + council-history.jsonl.
-# CAB-2047 Step 4: source guard for bats test suite + .claude/rules/council-s3.md + skill update.
+# Step 1: skeleton + args parsing + Étape 0 pre-checks.
+# Step 2a: cost guardrails (disable + daily cap + SHA dedup).
+# Step 2b: anthropic_call + evaluate_axis(conformance) + MOCK_API.
+# Step 3a: externalize prompts to scripts/council-prompts/*.md.
+# Step 3b: fetch_linear_ticket + fetch_db_context + evaluate_axis context injection.
+# Step 3c: parallel 4-axis orchestration + aggregate_scores + council-history.jsonl.
+# Step 4: source guard for bats test suite + .claude/rules/council-s3.md + skill update.
 
 set -euo pipefail
 
@@ -45,7 +45,7 @@ DIFF_RANGE="origin/main..HEAD"
 TICKET=""
 TRIVY_REPORT=""
 MAX_DIFF_LINES=10000
-DB_PATH="${REPO_ROOT}/docs/stoa-impact.db"
+DB_PATH="${REPO_ROOT}/docs/internal/stoa-impact.db"
 DB_STALE_DAYS=7
 DIFF_TRUNCATED=false
 COUNCIL_TMPDIR=""
@@ -91,7 +91,7 @@ now_ms() {
 }
 
 # =============================================================================
-# Secrets resolution (CAB-2046 follow-up; CAB-1795: OpenBao replaces Infisical)
+# Secrets resolution (OpenBao replaces Infisical)
 # =============================================================================
 
 # Resolve ANTHROPIC_API_KEY from the environment, with an OpenBao fallback
@@ -180,7 +180,7 @@ EXIT CODES:
 
 EXAMPLES:
   # Review staged changes against main
-  council-review.sh --diff origin/main..HEAD --ticket CAB-2047
+  council-review.sh --diff origin/main..HEAD --ticket TICKET-XXXX
 
   # Review last 5 commits with Trivy context
   council-review.sh --diff HEAD~5..HEAD --trivy-report /tmp/trivy.json
@@ -264,7 +264,7 @@ check_dependencies() {
 
 # =============================================================================
 # Cost guardrail 1: COUNCIL_DISABLE kill-switch (Step 2a)
-# Fast-path exit before anything else runs. Redundant with CAB-2048's
+# Fast-path exit before anything else runs. Redundant with
 # DISABLE_COUNCIL_GATE=1 from the pre-push hook, but also covers CI and
 # manual invocation scenarios.
 # =============================================================================
@@ -615,7 +615,7 @@ fetch_linear_ticket() {
     fi
 
     if [[ ! "$TICKET" =~ ^[A-Z]+-[0-9]+$ ]]; then
-        log_warn "fetch_linear_ticket: invalid ticket format '${TICKET}' (expected e.g. CAB-2047)"
+        log_warn "fetch_linear_ticket: invalid ticket format '${TICKET}' (expected e.g. PROJ-123)"
         return 0
     fi
 
@@ -1003,7 +1003,7 @@ compute_cost_eur() {
 
 # =============================================================================
 # Step 3c: write_history — append one JSONL entry to council-history.jsonl.
-# Fields match the spec in CAB-2047 description. All numeric fields are real
+# Fields match the Council S3 JSONL schema. All numeric fields are real
 # JSON numbers (via --argjson), booleans are real JSON booleans, strings are
 # real JSON strings. Never fails the script — a history write error just logs
 # a warning, since the review verdict has already been computed.

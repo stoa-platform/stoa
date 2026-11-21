@@ -1,10 +1,11 @@
-"""CAB-2214 red tests for the CAB-2213 Phase 6.0 guardrails contract.
+"""Red tests for the Phase 6.0 guardrails contract.
 
 These tests intentionally fail until Phase 6.1+ implements the validated plan.
 They lock the API/docs side of the contract before any production reader or UI
 behavior is changed.
 """
 
+import os
 from pathlib import Path
 
 import pytest
@@ -66,7 +67,7 @@ def test_spec_ac8_phase66_smoke_fixtures_are_committed_and_synthetic_only() -> N
 
 @pytest.mark.skip(reason="TODO Phase 6.4 - cp-api reader")
 def test_spec_ac9_legacy_metric_removal_requires_separate_plan_marker() -> None:
-    removal_plan = REPO_ROOT / "docs/plans/2026-05-11-guardrails-legacy-metric-removal.md"
+    removal_plan = REPO_ROOT / "docs/internal/plans/2026-05-11-guardrails-legacy-metric-removal.md"
 
     assert removal_plan.exists(), "AC9 red: legacy removal must be tracked by a separate future plan"
     body = removal_plan.read_text(encoding="utf-8").lower()
@@ -134,9 +135,10 @@ def test_spec_ac14_per_guardrail_health_is_independent() -> None:
     assert aggregate_state != "stale_data", "AC14 red: one stale guardrail must not flip top-level state"
 
 
-@pytest.mark.skip(reason="TODO Phase 6.4 - cp-api reader")
+@pytest.mark.skip(reason="TODO Phase 6.4 - cp-api reader (audit archives stored privately outside repo)")
 def test_spec_ac15_prod_smoke_archive_is_safe_state_only() -> None:
-    archives = sorted((REPO_ROOT / "docs/audits").glob("*phase-6-rollout*/findings.md"))
+    archive_root = Path(os.environ["STOA_AUDIT_ARCHIVE_DIR"])
+    archives = sorted(archive_root.glob("*phase-6-rollout*/findings.md"))
 
     assert archives, "AC15 red: Phase 6 rollout audit archive does not exist yet"
     body = archives[-1].read_text(encoding="utf-8")
@@ -147,12 +149,13 @@ def test_spec_ac15_prod_smoke_archive_is_safe_state_only() -> None:
         ), f"AC15 red: production smoke must not validate fault-injection state {forbidden_state}"
 
 
-@pytest.mark.skip(reason="TODO Phase 6.4 - cp-api reader")
+@pytest.mark.skip(reason="TODO Phase 6.4 - cp-api reader (audit archives stored privately outside repo)")
 def test_spec_ac16_council_gate_has_machine_readable_archive() -> None:
-    council_report = REPO_ROOT / "docs/audits/2026-05-11-cab-2213-council/findings.md"
+    archive_root = Path(os.environ["STOA_AUDIT_ARCHIVE_DIR"])
+    council_reports = sorted(archive_root.glob("2026-05-11-*-council/findings.md"))
 
-    assert council_report.exists(), "AC16 red: Council report artifact is not archived in docs/audits yet"
-    body = council_report.read_text(encoding="utf-8")
+    assert council_reports, "AC16 red: Council report artifact is not archived yet"
+    body = council_reports[-1].read_text(encoding="utf-8")
     assert "8.0/10" in body
     assert "go" in body.lower()
 

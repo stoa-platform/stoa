@@ -2,9 +2,8 @@
 
 The shortest path from a fresh clone to a merged pull request. This page links
 the existing material instead of repeating it: product overview and Docker
-quick start in [README.md](../../README.md), one-page component setup in
-[DEVELOPMENT.md](../../DEVELOPMENT.md), the longer developer guide with
-troubleshooting in [DEVELOPER.md](../../DEVELOPER.md), and the conventions in
+quick start in [README.md](../../README.md), local setup and troubleshooting in
+[DEVELOPMENT.md](../../DEVELOPMENT.md), and the conventions in
 [CONTRIBUTING.md](../../CONTRIBUTING.md). Every command below exists in the
 repository; the file that defines it is cited next to it.
 
@@ -19,9 +18,9 @@ repository; the file that defines it is cited next to it.
 - Every pull request needs one maintainer approval
   ([GOVERNANCE.md](../../GOVERNANCE.md#code-changes)); reviewers are assigned
   through [`.github/CODEOWNERS`](../../.github/CODEOWNERS).
-- Keep changes small. The maintainers' working rules in
-  [CLAUDE.md](../../CLAUDE.md#qualité--ci) cap a pull request at 300 changed
-  lines; split larger work into several pull requests.
+- Keep changes small. Aim to keep a pull request under 300 changed lines
+  (see [CONTRIBUTING.md](../../CONTRIBUTING.md)); split larger work into
+  several pull requests.
 
 ## 2. Prepare your environment
 
@@ -45,10 +44,10 @@ the root; return there before running a block from another terminal.
 
 | Component | Runtime | Source |
 |---|---|---|
-| `control-plane-api/`, `cli/` | Python 3.11 | [CLAUDE.md](../../CLAUDE.md#runtime-versions) |
-| `control-plane-ui/`, `portal/`, `e2e/` | Node.js 20 | [CLAUDE.md](../../CLAUDE.md#runtime-versions) |
+| `control-plane-api/` | Python 3.11 | [CONTRIBUTING.md](../../CONTRIBUTING.md#prerequisites) |
+| `control-plane-ui/`, `portal/`, `e2e/` | Node.js 20 | [CONTRIBUTING.md](../../CONTRIBUTING.md#prerequisites) |
 | `stoa-gateway/` | Rust stable; `cmake` and `librdkafka` only for the Kafka feature | [stoa-gateway/README.md](../../stoa-gateway/README.md#prerequisites) |
-| `stoa-go/` | Go 1.25 | [stoa-go/go.mod](../../stoa-go/go.mod) |
+| `stoa-go/` | Go 1.26 | [stoa-go/go.mod](../../stoa-go/go.mod) |
 | Full stack | Docker Desktop 4.x+ with 8 GB RAM, Docker Compose v2 | [deploy/docker-compose/README.md](../../deploy/docker-compose/README.md#prerequisites) |
 
 Install commands per tool are in the
@@ -75,7 +74,7 @@ make setup
 ```
 
 The `setup` target of the [Makefile](../../Makefile) installs the API, both
-front ends, the gateway and the Python CLI. CI installs the API with its dev
+front ends, the gateway and builds the Go CLI (`stoa-go/`). CI installs the API with its dev
 extras ([`.github/actions/setup-python-env/action.yml`](../../.github/actions/setup-python-env/action.yml));
 do the same before running its tests:
 
@@ -114,7 +113,7 @@ GitHub identity also keeps the DCO trailer consistent after the squash merge
 ## 3. Start the components locally
 
 **Full stack with Docker Compose.** Follow the
-[Quick start of README.md](../../README.md#quick-start): from
+[Quick start in docs/platform.md](../platform.md#quick-start): from
 `deploy/docker-compose/`, `cp .env.example .env`, `docker compose up -d`, then
 `../../scripts/demo/check-health.sh --wait`. Service URLs and troubleshooting
 are in [deploy/docker-compose/README.md](../../deploy/docker-compose/README.md).
@@ -159,13 +158,11 @@ workflows for reference. These targets do not reproduce every CI check:
 | Console UI | `make test-ui` (vitest) | `make lint-ui` (eslint ≤ 110 warnings, prettier, tsc) | [control-plane-ui-ci.yml](../../.github/workflows/control-plane-ui-ci.yml) |
 | Developer Portal | `make test-portal` (vitest) | `make lint-portal` (eslint 0 warnings, prettier, tsc) | [stoa-portal-ci.yml](../../.github/workflows/stoa-portal-ci.yml) |
 | STOA Gateway | `make test-gateway` (`cargo test`); `make test-gateway-all-features` adds Kafka and checks `cmake` first | `make lint-gateway` (fmt, clippy `-D warnings`) | [stoa-gateway-ci.yml](../../.github/workflows/stoa-gateway-ci.yml) |
-| Python CLI | `make test-cli` | `make lint-cli` | not wired in `ci-gate` |
-| stoactl, stoa-connect | `make -C stoa-go test` | `make -C stoa-go lint` (needs `golangci-lint`) | [stoa-go-ci.yml](../../.github/workflows/stoa-go-ci.yml) |
+| stoactl, stoa-connect (`stoa-go/`) | `make test-cli` (`go -C stoa-go test ./...`) | `make lint-cli` (`go -C stoa-go vet ./...`; full CI uses `golangci-lint`) | [stoa-go-ci.yml](../../.github/workflows/stoa-go-ci.yml) |
 
-`make test` and `make lint` cover the API, Console UI, Portal, Rust gateway
-and Python CLI sequentially; `make test-all` and `make lint-all` cover those
-same five components in parallel. They exclude Go. Run its checks separately
-from the repository root with `make -C stoa-go test` and `make -C stoa-go lint`.
+`make test` and `make lint` cover the API, Console UI, Portal, Rust gateway,
+and Go CLI (`stoa-go/`) sequentially; `make test-all` and `make lint-all` cover
+those same five components in parallel.
 The ESLint thresholds are the `lint` scripts
 of [control-plane-ui/package.json](../../control-plane-ui/package.json) and
 [portal/package.json](../../portal/package.json).

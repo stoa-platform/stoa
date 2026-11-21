@@ -1,51 +1,16 @@
-# STOA CLI
+# Legacy Python CLI (Archived Notice)
 
-Command-line interface for STOA Platform management. Authenticate, browse APIs, deploy configurations via YAML manifests.
+> **Status: Retired.** STOA has a single official CLI: **`stoactl`** (Go), maintained in [`stoa-go/`](../stoa-go/README.md).
 
-## Tech Stack
+This directory no longer ships an installable Python CLI package (`pyproject.toml` and source modules were retired when the CLI moved to Go).
 
-- Python 3.11, Typer (CLI framework), Rich (terminal formatting)
-- OIDC/PKCE browser-based auth via Keycloak
+## Use `stoactl` (Go)
 
-## Prerequisites
-
-- Python 3.11+
-
-## Quick Start
+Build `stoactl` from this repository:
 
 ```bash
-pip install -e ".[dev]"
-stoa --help
+go -C stoa-go build -o stoactl ./cmd/stoactl
+./stoa-go/stoactl --help
 ```
 
-## Commands
-
-| Command | Description |
-|---------|-------------|
-| `stoa login` | OIDC/PKCE browser-based auth |
-| `stoa logout` | Clear stored tokens |
-| `stoa get apis` | List APIs (table/json/wide) |
-| `stoa get api <id>` | Get API details |
-| `stoa apply -f <file>` | Create/update from YAML manifest |
-| `stoa status` | Connection health + token state |
-| `stoa deploy create` | Create a deployment |
-| `stoa deploy list` | List deployments |
-| `stoa deploy get <id>` | Get deployment details |
-| `stoa deploy rollback <id>` | Rollback a deployment |
-
-## Development
-
-```bash
-pip install -e ".[dev]"
-pytest tests/ -q              # Tests
-ruff check .                  # Lint
-```
-
-## CI
-
-No dedicated CI workflow exists for the CLI yet. Lint and test locally before pushing.
-
-## Dependencies
-
-- **Depends on**: control-plane-api (REST API), Keycloak (auth)
-- **Depended on by**: nothing (end-user tool)
+See [`stoa-go/README.md`](../stoa-go/README.md) for commands, contexts, authentication, and development checks (`make test-cli`, `make lint-cli`).

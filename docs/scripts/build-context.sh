@@ -2,14 +2,14 @@
 # Context Pack Builder — generates structured impact context for a ticket/component/file
 # Usage:
 #   ./build-context.sh --component control-plane-api --intent "ajouter endpoint audit-log"
-#   ./build-context.sh --ticket "CAB-1900"
+#   ./build-context.sh --ticket "TICKET-ID"
 #   ./build-context.sh --file "control-plane-api/src/routers/tenants.py"
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-DB="$SCRIPT_DIR/../stoa-impact.db"
-FILE_MAP="$SCRIPT_DIR/../file-map.json"
-OUTPUT_DIR="$SCRIPT_DIR/../context-packs"
+DB="$SCRIPT_DIR/../internal/stoa-impact.db"
+FILE_MAP="$SCRIPT_DIR/../internal/file-map.json"
+OUTPUT_DIR="$SCRIPT_DIR/../internal/context-packs"
 
 if [ ! -f "$DB" ]; then
     echo "ERROR: Database not found at $DB"

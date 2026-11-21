@@ -39,8 +39,8 @@ if [ -x "${HOME}/.local/bin/heg-state" ]; then
   HEG_STATE="${HOME}/.local/bin/heg-state"
 elif command -v heg-state &>/dev/null; then
   HEG_STATE="heg-state"
-elif [ -n "$PROJECT_DIR" ] && [ -f "${PROJECT_DIR}/hegemon/tools/state/heg_state.py" ]; then
-  HEG_STATE="python3 ${PROJECT_DIR}/hegemon/tools/state/heg_state.py"
+elif [ -n "$PROJECT_DIR" ] && [ -f "${PROJECT_DIR}/labs/hegemon/tools/state/heg_state.py" ]; then
+  HEG_STATE="python3 ${PROJECT_DIR}/labs/hegemon/tools/state/heg_state.py"
 fi
 [ -z "$HEG_STATE" ] && exit 0
 

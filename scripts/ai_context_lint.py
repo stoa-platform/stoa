@@ -19,6 +19,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 TOP_LEVEL_FILES = ("CLAUDE.md", "AGENTS.md", "README.md")
+REQUIRED_CONTRACT_FILES = ("CLAUDE.md", "AGENTS.md")
 CLAUDE_SUBTREE_GLOB = ".claude/**/*.md"
 
 # Stale stack-version markers — always blocked (current stack: React 19, Go 1.25).
@@ -150,14 +151,16 @@ def _check_contextual(path: Path, lines: list[str], errors: list[str]) -> None:
 
 
 def _check_agents_references_claude(errors: list[str]) -> None:
-    agents = REPO_ROOT / "AGENTS.md"
-    if not agents.is_file():
-        return
-    text = agents.read_text(encoding="utf-8")
-    if "CLAUDE.md" not in text:
-        errors.append(
-            f"{_rel(agents)}: must reference CLAUDE.md as the canonical contract"
-        )
+    for rel in REQUIRED_CONTRACT_FILES:
+        path = REPO_ROOT / rel
+        if not path.is_file():
+            errors.append(f"{rel}: required AI context contract file is missing")
+            continue
+        text = path.read_text(encoding="utf-8")
+        if "CONTRIBUTING.md" not in text and "CLAUDE.md" not in text:
+            errors.append(
+                f"{rel}: must reference CONTRIBUTING.md (or CLAUDE.md)"
+            )
 
 
 def _advisory_line_counts(warnings: list[str]) -> None:

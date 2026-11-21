@@ -73,14 +73,14 @@ Détail on-demand: `.claude/docs/code-style-python.md`, `testing-standards.md`, 
 - mypy strict: `disallow_untyped_defs = true`. Type hints obligatoires.
 - Async par défaut. Pydantic v2. Python 3.11.
 - Coverage ≥ 70%: `pytest --cov=src --cov-fail-under=70 --ignore=tests/test_opensearch.py -q`.
-- Test-first pour feat/fix. `test_regression_cab_XXXX_*` pour fix (regression-guard bloquant).
+- Test-first pour feat/fix. `test_regression_<slug>_*` pour fix (regression-guard bloquant).
 - Boundary Integrity: jamais mocker la boundary sous test. `httpx.MockTransport` > `AsyncMock`. FastAPI TestClient + DB in-memory > patch repo.
 - Adapters gateway: implémenter les 16 méthodes de `GatewayAdapterInterface`. `AdapterResult(success=False)` pour unsupported, jamais raise. `httpx.AsyncClient` obligatoire. Tests ≥ 30.
 - Alembic: `alembic revision --autogenerate -m "..."` puis `upgrade head`. COMMIT avant `ADD VALUE` sur enum.
 
 ## BASE_DOMAIN — derived URLs recompute on Settings instantiation
 
-Per CAB-2199 / INFRA-1a S2, the module-level `_BASE_DOMAIN = os.getenv(...)` was
+The module-level `_BASE_DOMAIN = os.getenv(...)` was
 removed. `BASE_DOMAIN` is now a normal Pydantic field, and derived URLs
 (`KEYCLOAK_URL`, `GATEWAY_URL`, `GATEWAY_ADMIN_PROXY_URL`, `ARGOCD_URL`,
 `ARGOCD_EXTERNAL_URL`, `GRAFANA_URL`, `PROMETHEUS_URL`, `LOGS_URL`,
@@ -109,7 +109,7 @@ mis-templated Helm values (`baseDomain: ""`).
 
 ## ENVIRONMENT — fail-closed alias map (Phase 3-A)
 
-Per CAB-2199 / INFRA-1a Phase 3-A, the `_normalize_environment` validator
+The `_normalize_environment` validator
 is fail-closed:
 
 - Whitespace-strip + casefold the input.
@@ -133,8 +133,7 @@ canonical output (e.g., `prod` → `production`, `Prod` → `production`).
 
 ## OpenSearch — audit endpoint vs docs/embedding endpoint
 
-Per CAB-2199 / INFRA-1a S3 (Christophe arbitrage 2026-04-29 §3.1 = Option A),
-the former standalone `OpenSearchSettings` class (lived in
+The former standalone `OpenSearchSettings` class (lived in
 `src/opensearch/opensearch_integration.py`) is now `Settings.opensearch_audit`
 — an `OpenSearchAuditConfig` sub-model in main Settings, mirroring the
 `GitProviderConfig` pattern. Hydrated from flat env vars
@@ -160,14 +159,13 @@ Absence of the kwarg triggers flat-field hydration. The validator emits
 a `DEBUG`-level breadcrumb on each path so operators can tell which
 branch fired during boot.
 
-**SecretStr boundary**: `opensearch_audit.password` is a `SecretStr` (CAB-2199
-§3.1). Consumer code passing it to OpenSearch client must unwrap with
+**SecretStr boundary**: `opensearch_audit.password` is a `SecretStr`.
+Consumer code passing it to OpenSearch client must unwrap with
 `.get_secret_value()` (see `src/opensearch/opensearch_integration.py`
 `OpenSearchService.connect`).
 
 **Long-term**: rename `OPENSEARCH_URL` → `DOCS_SEARCH_OPENSEARCH_URL` for
-disambiguation (deferred to INFRA-1b or Bug Hunt). Phase 1a does not change
-this.
+disambiguation (deferred to a future cleanup).
 
 **Legacy import compat**: `from src.opensearch.opensearch_integration import
 get_settings` still works — the function now returns
@@ -178,8 +176,7 @@ The legacy class export `OpenSearchSettings` was removed from
 
 ## STOA_API_SNAPSHOT_* — error-snapshot config (renamed from STOA_SNAPSHOTS_*)
 
-Per CAB-2199 / INFRA-1a S6 (Christophe arbitrage 2026-04-29 §3.3 = A1), the
-error-snapshot Pydantic Settings env prefix was renamed from
+The error-snapshot Pydantic Settings env prefix was renamed from
 `STOA_SNAPSHOTS_*` (plural) to `STOA_API_SNAPSHOT_*` (singular + `_API_`
 namespace) to disambiguate from the unrelated `STOA_SNAPSHOT_*` (singular,
 in-process ring buffer) on the Rust gateway.
@@ -226,15 +223,15 @@ remain available in the module for any future log path that includes
 values. They are NOT called by the Phase 3-B validator — the design
 contract is "values never leave the process via this path".
 
-**Sunset**: tracked on **CAB-2203** — the alias surface (per-field
+**Sunset**: the alias surface (per-field
 `AliasChoices`, conflict scanner, masking helpers) can be removed once the
-Prometheus Counter reads 0 in prod for 30 consecutive days. Evidence-driven,
-no calendar (per HLFH policy `feedback_no_schedule_arbitrary_timers.md`).
+Prometheus Counter reads 0 in prod for 30 consecutive days (evidence-driven,
+no fixed calendar).
 
 **Migration**: rename ops env vars from `STOA_SNAPSHOTS_*` to
 `STOA_API_SNAPSHOT_*`. Either prefix alone works; both with matching values
 work; conflicting values fail boot.
 
 **Schema metadata**: `SnapshotSettings.DEPRECATED_PREFIX_ALIASES: ClassVar[dict[str, str]]`
-declares the alias mapping for the INFRA-1c CI gate to consume.
+declares the alias mapping for the CI config-deprecation gate to consume.
 

@@ -1,0 +1,30 @@
+services:
+  stoa-gateway:
+    environment:
+      STOA_CONTROL_PLANE_URL: "http://control-plane-mock:8000"
+      STOA_KEYCLOAK_URL: "http://control-plane-mock:8000"
+      STOA_MCP_AUDIENCE: "registry-fixture-mcp"
+      STOA_MCP_FORWARD_USER_TOKEN: "false"
+    networks:
+      - control-plane-net
+    depends_on:
+      control-plane-mock:
+        condition: service_healthy
+
+  control-plane-mock:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+    command: ["python3", "-B", "/app/registry_isolation.py", "serve"]
+    networks:
+      - control-plane-net
+    healthcheck:
+      test: ["CMD", "python3", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/health', timeout=2)"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+networks:
+  control-plane-net:
+    driver: bridge
+    internal: true

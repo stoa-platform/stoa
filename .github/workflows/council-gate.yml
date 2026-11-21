@@ -1,11 +1,11 @@
-# Council Stage 3 — Automated 4-axis Code Review (CAB-2046 / CAB-2049)
+# Council Stage 3 — Automated 4-axis Code Review
 # Runs scripts/council-review.sh on every PR in SHADOW MODE.
 # - Does NOT block merges (continue-on-error: true on the job)
 # - Posts review results as a PR comment (scores + 4 axes + blockers)
 # - Feature flag: set vars.COUNCIL_S3_ENABLED=false in repo variables to disable
 # - Kill-switch: secrets.ANTHROPIC_API_KEY missing → script exits 0 (no-op)
 #
-# Shadow mode window: 2-3 weeks (CAB-2051). After metrics validation,
+# Shadow mode window: 2-3 weeks. After metrics validation,
 # remove `continue-on-error: true` to promote to required check.
 
 name: Council Gate S3
@@ -67,9 +67,11 @@ jobs:
         run: |
           BASE_SHA="${{ github.event.pull_request.base.sha }}"
           HEAD_SHA="${{ github.event.pull_request.head.sha }}"
-          echo "base=${BASE_SHA}" >> "$GITHUB_OUTPUT"
-          echo "head=${HEAD_SHA}" >> "$GITHUB_OUTPUT"
-          echo "range=${BASE_SHA}..${HEAD_SHA}" >> "$GITHUB_OUTPUT"
+          {
+            echo "base=${BASE_SHA}"
+            echo "head=${HEAD_SHA}"
+            echo "range=${BASE_SHA}..${HEAD_SHA}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Extract ticket ID from branch/title
         id: ticket
@@ -77,7 +79,7 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BRANCH: ${{ github.event.pull_request.head.ref }}
         run: |
-          # Try branch first (e.g. feat/cab-2049-description), then title
+          # Try branch first (e.g. feat/topic-description), then title
           TICKET=$(echo "${PR_BRANCH}" | grep -oiE 'cab-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]')
           if [ -z "$TICKET" ]; then
             TICKET=$(echo "${PR_TITLE}" | grep -oiE 'cab-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]')
@@ -98,17 +100,21 @@ jobs:
             exit 0
           fi
 
-          TICKET_FLAG=""
-          [ -n "${{ steps.ticket.outputs.id }}" ] && TICKET_FLAG="--ticket ${{ steps.ticket.outputs.id }}"
+          TICKET_FLAG=()
+          if [ -n "${{ steps.ticket.outputs.id }}" ]; then
+            TICKET_FLAG=(--ticket "${{ steps.ticket.outputs.id }}")
+          fi
 
-          TRIVY_FLAG=""
-          [ -f trivy-report.json ] && TRIVY_FLAG="--trivy-report trivy-report.json"
+          TRIVY_FLAG=()
+          if [ -f trivy-report.json ]; then
+            TRIVY_FLAG=(--trivy-report trivy-report.json)
+          fi
 
           set +e
           ./scripts/council-review.sh \
             --diff "${{ steps.range.outputs.range }}" \
-            $TICKET_FLAG \
-            $TRIVY_FLAG
+            "${TICKET_FLAG[@]}" \
+            "${TRIVY_FLAG[@]}"
           SCRIPT_EXIT=$?
           set -e
 
@@ -147,7 +153,7 @@ jobs:
               BYPASSED: '🔕', ERROR: '🚨',
             }[status] || '❓';
             const dbWarning = dbFresh === false
-              ? '\n\n> ⚠️ **DB stale** — `docs/stoa-impact.db` > 7 days old, `contract_impact` axis skipped. Score computed over 3 axes only.'
+              ? '\n\n> ⚠️ **DB stale** — `docs/internal/stoa-impact.db` > 7 days old, `contract_impact` axis skipped. Score computed over 3 axes only.'
               : '';
             const body = [
               `## ${emoji} Council Stage 3 — ${status}`,
@@ -163,7 +169,7 @@ jobs:
               dbWarning,
               '',
               `<sub>🌑 **Shadow mode** — non-blocking. Kill-switch: \`vars.COUNCIL_S3_ENABLED=false\` in repo variables.`,
-              `Refs CAB-2046 · [workflow source](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/.github/workflows/council-gate.yml)</sub>`,
+              `[workflow source](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/.github/workflows/council-gate.yml)</sub>`,
             ].join('\n');
             try {
               await github.rest.issues.createComment({

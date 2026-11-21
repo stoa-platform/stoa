@@ -104,8 +104,8 @@ def load_tenant_yaml(scenario: dict) -> dict | None:
 
 
 def discover_apis(tenant_id: str) -> list[dict]:
-    """Discover API definitions from the tenants/<id>/apis/ directory."""
-    apis_dir = REPO_ROOT / "tenants" / tenant_id / "apis"
+    """Discover API definitions from the platform/tenants/<id>/apis/ directory."""
+    apis_dir = REPO_ROOT / "platform" / "tenants" / tenant_id / "apis"
     if not apis_dir.exists():
         return []
     apis = []

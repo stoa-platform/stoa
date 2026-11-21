@@ -9,7 +9,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DOCS_DIR="$(dirname "$SCRIPT_DIR")"
 REPO_ROOT="$(dirname "$DOCS_DIR")"
-DB_PATH="$DOCS_DIR/stoa-impact.db"
+DB_PATH="$DOCS_DIR/internal/stoa-impact.db"
 
 echo "=== STOA Impact Analysis Bootstrap ==="
 echo ""

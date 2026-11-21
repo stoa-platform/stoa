@@ -12,7 +12,7 @@ import os
 from datetime import datetime
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(SCRIPT_DIR, "..", "stoa-impact.db")
+DB_PATH = os.path.join(SCRIPT_DIR, "..", "internal", "stoa-impact.db")
 DEPS_PATH = os.path.join(SCRIPT_DIR, "..", "DEPENDENCIES.md")
 SCENARIOS_PATH = os.path.join(SCRIPT_DIR, "..", "SCENARIOS.md")
 

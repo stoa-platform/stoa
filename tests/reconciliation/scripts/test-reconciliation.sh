@@ -100,7 +100,7 @@ get_gateway_apis() {
 
 # Get list of APIs from Git
 get_git_apis() {
-    find "${GITOPS_REPO}/webmethods/apis" -name "*.yaml" -exec basename {} .yaml \; | sort
+    find "${GITOPS_REPO}/platform/webmethods/apis" -name "*.yaml" -exec basename {} .yaml \; | sort
 }
 
 # Trigger AWX reconciliation
@@ -288,7 +288,7 @@ test_add_api() {
     log_section "SCENARIO 3: Add New API via Git"
 
     local test_api_name="test-api-$(date +%s)"
-    local test_api_file="${GITOPS_REPO}/webmethods/apis/${test_api_name}.yaml"
+    local test_api_file="${GITOPS_REPO}/platform/webmethods/apis/${test_api_name}.yaml"
 
     # Step 1: Create new API file
     log_info "Step 1: Creating new API file in Git..."
@@ -351,7 +351,7 @@ test_delete_api() {
 
     # Step 1: Create a temporary API first
     local test_api_name="delete-test-api-$(date +%s)"
-    local test_api_file="${GITOPS_REPO}/webmethods/apis/${test_api_name}.yaml"
+    local test_api_file="${GITOPS_REPO}/platform/webmethods/apis/${test_api_name}.yaml"
 
     log_info "Step 1: Creating temporary API..."
     cat > "$test_api_file" << EOF

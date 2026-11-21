@@ -112,12 +112,12 @@ dockers:
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
       - "--label=org.opencontainers.image.version={{.Version}}"
-      - "--label=org.opencontainers.image.source=https://github.com/stoa-platform/stoactl"
+      - "--label=org.opencontainers.image.source=https://github.com/stoa-platform/stoa"
 
 release:
   github:
     owner: stoa-platform
-    name: stoactl
+    name: stoa
   draft: false
   prerelease: auto
   name_template: "v{{.Version}}"

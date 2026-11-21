@@ -4,7 +4,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-DB="$SCRIPT_DIR/../stoa-impact.db"
+DB="$SCRIPT_DIR/../internal/stoa-impact.db"
 SEVERITY=${1:-""}
 
 if [ ! -f "$DB" ]; then

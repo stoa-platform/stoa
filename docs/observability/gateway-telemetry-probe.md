@@ -3,7 +3,7 @@
 - Plan ref: `docs/plans/2026-05-09-observability-data-visibility.md`
 - Phase: 5B - gateway runtime telemetry probe
 - Decision ref: `docs/decisions/2026-05-09-observability-data-visibility.md`
-- Phase 0 trace walk: `docs/audits/2026-05-09-observability-data-visibility/probe-trace-walk.md`
+- Phase 0 trace walk: `2026-05-09-observability-data-visibility/probe-trace-walk.md` (archived privately)
 
 This probe is manual only. It must never run automatically in production; use
 `OPERATOR_OPT_IN=operator-approved` for any production execution.
@@ -38,7 +38,7 @@ Production shape:
 
 OPERATOR_OPT_IN=operator-approved \
 STOA_OPERATOR_KEY="<operator key from Vault/Kubernetes>" \
-OPENSEARCH_URL="https://127.0.0.1:9200" \
+OPENSEARCH_URL="https://localhost:9200" \
 OPENSEARCH_USER="<vault-backed user>" \
 OPENSEARCH_PASSWORD="<vault-backed password>" \
 STOA_GATEWAY_LOG_LOOKUP=1 \
@@ -46,7 +46,7 @@ KUBECONFIG=/Users/torpedo/.kube/config-stoa-ovh \
 stoa-gateway/probes/runtime_telemetry_probe.py \
   --environment production \
   --phase0-verdict pipeline_partial \
-  --prometheus-url http://127.0.0.1:9090
+  --prometheus-url http://localhost:9090
 ```
 
 The script emits one JSON document with binary hop statuses. Required hops fail

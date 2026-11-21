@@ -18,7 +18,7 @@ See ADR-061 (stoa-docs) for the architectural decision record.
 
 This skill drives **Stage 1 (ticket pertinence)** and **Stage 2 (plan validation)** — both prose-based, **8-persona scoring** per the canonical Team Coca jury (HEG-PAT-003).
 
-**Stage 3 (code review)** runs **after implementation** on the actual diff, via `scripts/council-review.sh` (4-axis: conformance, debt, attack_surface, contract_impact). It is **not** invoked by this skill — it is wired to the pre-push hook (CAB-2048) and `council-gate.yml` CI workflow (CAB-2049). See `.claude/docs/council-s3.md` for full docs.
+**Stage 3 (code review)** runs **after implementation** on the actual diff, via `scripts/council-review.sh` (4-axis: conformance, debt, attack_surface, contract_impact). It is **not** invoked by this skill — it is wired to the pre-push hook and `council-gate.yml` CI workflow. See `.claude/docs/council-s3.md` for full docs.
 
 ```
 S1 (this skill, prose)  →  S2 (this skill, plan)  →  implementation  →  S3 (council-review.sh, diff)  →  merge
@@ -38,7 +38,7 @@ Run the Context Compiler to get the blast radius **before** scoring:
 1. Determine the primary component from $ARGUMENTS (or from the ticket description if CAB-XXXX is provided)
 2. Run: `docs/scripts/build-context.sh --component <component> --intent "$ARGUMENTS"`
    - If a ticket ID is available: add `--ticket "CAB-XXXX"`
-3. Read the generated context pack in `docs/context-packs/`
+3. Read the generated context pack in `docs/internal/context-packs/`
 4. Extract the **Impact Score** and level (LOW/MEDIUM/HIGH/CRITICAL)
 5. Include the Impact Score in each persona's evaluation context
 6. If **CRITICAL (>= 31)**: flag it explicitly in the Council report header
@@ -49,7 +49,7 @@ If `build-context.sh` or `stoa-impact.db` is not available, skip this step with 
 
 Evaluate $ARGUMENTS through each of the 8 canonical personas. **All 8 are mandatory** — no subset selection, no quick mode. The canonical roster is defined in `hegemon/patterns/validation/HEG-PAT-003-team-coca-adversarial-validation.md`.
 
-**Domain N/A baseline (calibration rule from CAB-2054 Phase 4)**: when a ticket does not touch a persona's domain (e.g., a backend infra ticket has no webapp surface for N3m0), score the persona at **8/10** (neutral-positive: "no concern detected"), not 6-7. Lower scores must be backed by an actual identified concern. This rule keeps the 8-persona average stable vs the historical 4-persona baseline (calibration drift < ±0.3 on 4/5 historic tickets).
+**Domain N/A baseline (calibration rule)**: when a ticket does not touch a persona's domain (e.g., a backend infra ticket has no webapp surface for N3m0), score the persona at **8/10** (neutral-positive: "no concern detected"), not 6-7. Lower scores must be backed by an actual identified concern. This rule keeps the 8-persona average stable vs the historical 4-persona baseline (calibration drift < ±0.3 on 4/5 historic tickets).
 
 ### 1. Chucky (Devil's Advocate) — Score /10
 - Challenges assumptions and finds weaknesses
@@ -375,7 +375,7 @@ Stage 3 is **not run by this skill**. It runs automatically against the diff onc
 | `conformance` | Repo conventions, style, naming, structure |
 | `debt` | Shortcuts, TODOs, test gaps, premature abstractions |
 | `attack_surface` | Input validation, authn/z, secrets, SSRF, PII, CORS, deps |
-| `contract_impact` | Cross-component contracts (skipped when `docs/stoa-impact.db` is stale) |
+| `contract_impact` | Cross-component contracts (skipped when `docs/internal/stoa-impact.db` is stale) |
 
 Exit codes: `0` APPROVED (avg >= 8.0), `1` REWORK, `2` technical failure.
 
@@ -383,8 +383,8 @@ Trigger points (when wired):
 
 | Level | Trigger | How |
 |-------|---------|-----|
-| Local pre-push | `git push` | Pre-push hook extension (CAB-2048) |
-| CI | PR opened | `.github/workflows/council-gate.yml` feature-flagged via `vars.COUNCIL_S3_ENABLED` (CAB-2049) |
+| Local pre-push | `git push` | Pre-push hook extension |
+| CI | PR opened | `.github/workflows/council-gate.yml` feature-flagged via `vars.COUNCIL_S3_ENABLED` |
 | Manual | Any diff | `scripts/council-review.sh --ticket CAB-XXXX --diff <range>` |
 
 When S3 returns REWORK, address the per-axis blockers/warnings and re-run. Full documentation: `.claude/docs/council-s3.md`.

@@ -1,0 +1,12 @@
+FROM python:3.12-slim
+
+RUN pip install --no-cache-dir cryptography==46.0.3 \
+    && groupadd -r -g 1000 agent \
+    && useradd -r -u 1000 -g agent -d /app agent
+
+WORKDIR /app
+COPY agent_harness.py agent_pipes.py demo.py jalon12.py jalon3.py jalon4.py registry_isolation.py upstream_mock.py /app/
+RUN chown -R agent:agent /app
+
+USER 1000:1000
+CMD ["sleep", "infinity"]

@@ -10,11 +10,11 @@
 
 set -e
 
-STOA_REPO="https://github.com/gostoa/stoa.git"
+STOA_REPO="https://github.com/stoa-platform/stoa.git"
 STOA_VERSION="${STOA_VERSION:-latest}"
 STOA_INSTALL_DIR="${STOA_INSTALL_DIR:-./stoa}"
 STOA_QUICKSTART_PATH="deploy/docker-compose"
-STOA_CLI_RELEASES="https://github.com/gostoa/stoactl/releases"
+STOA_CLI_RELEASES="https://github.com/stoa-platform/stoa/releases"
 STOA_HELM_REPO="https://charts.gostoa.dev"
 
 CONSOLE_PORT="${CONSOLE_PORT:-3000}"
@@ -52,7 +52,7 @@ banner() {
 
 EOF
     printf "${NC}"
-    printf "  ${BOLD}The European Agent Gateway${NC}\n"
+    printf "  ${BOLD}Keep your coding agents, take their API keys away.${NC}\n"
     printf "  ${DIM}https://gostoa.dev${NC}\n\n"
 }
 
@@ -174,12 +174,25 @@ install_quickstart() {
 install_cli() {
     step "Installing stoactl CLI"
     INSTALL_PATH="${STOA_CLI_PATH:-/usr/local/bin}"; TMP_DIR=$(mktemp -d); trap 'rm -rf "$TMP_DIR"' EXIT
+    OS_LOWER=$(printf '%s' "$OS" | tr '[:upper:]' '[:lower:]')
     if [ "$STOA_VERSION" = "latest" ]; then
-        URL="${STOA_CLI_RELEASES}/latest/download/stoactl_${OS}_${ARCH}.tar.gz"
+        URL=$(curl -fsSL "https://api.github.com/repos/stoa-platform/stoa/releases?per_page=100" \
+            | sed -n "s|.*\"browser_download_url\"[[:space:]]*:[[:space:]]*\"\([^\"]*stoactl_[^\"]*_${OS_LOWER}_${ARCH}\.tar\.gz\)\".*|\1|p" \
+            | head -n 1)
+        [ -n "$URL" ] || fatal "No prebuilt stoactl archive published on GitHub Releases for ${OS_LOWER}/${ARCH}. Install via Homebrew (brew install stoa-platform/tap/stoactl) or build from source (go -C stoa-go build -o stoactl ./cmd/stoactl)."
     else
-        URL="${STOA_CLI_RELEASES}/download/${STOA_VERSION}/stoactl_${OS}_${ARCH}.tar.gz"
+        case "$STOA_VERSION" in
+            stoa-go-v*) TAG="$STOA_VERSION" ;;
+            v*) TAG="stoa-go-${STOA_VERSION}" ;;
+            *) TAG="stoa-go-v${STOA_VERSION}" ;;
+        esac
+        VERSION="${TAG#stoa-go-v}"
+        URL="${STOA_CLI_RELEASES}/download/${TAG}/stoactl_${VERSION}_${OS_LOWER}_${ARCH}.tar.gz"
     fi
-    info "Downloading stoactl..."; curl -fsSL "$URL" | tar -xz -C "$TMP_DIR"
+    info "Downloading stoactl from ${URL}..."
+    if ! curl -fsSL "$URL" | tar -xz -C "$TMP_DIR"; then
+        fatal "Failed to download ${URL}. Install via Homebrew (brew install stoa-platform/tap/stoactl) or build from source (go -C stoa-go build -o stoactl ./cmd/stoactl)."
+    fi
     if [ -w "$INSTALL_PATH" ]; then
         mv "${TMP_DIR}/stoactl" "${INSTALL_PATH}/stoactl"
     else

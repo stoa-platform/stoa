@@ -16,7 +16,7 @@ compliance:
 
 tenant:
   id: middle-earth-bank
-  ref: tenants/middle-earth-bank/tenant.yaml
+  ref: platform/tenants/middle-earth-bank/tenant.yaml
 
 personas:
   - username: gandalf

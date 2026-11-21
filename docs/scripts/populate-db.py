@@ -13,7 +13,7 @@ import os
 import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(SCRIPT_DIR, "..", "stoa-impact.db")
+DB_PATH = os.path.join(SCRIPT_DIR, "..", "internal", "stoa-impact.db")
 SCHEMA_PATH = os.path.join(SCRIPT_DIR, "schema.sql")
 
 # ============================================================================
@@ -648,7 +648,7 @@ RISKS = [
      "control-plane-api,stoa-gateway,console,portal",
      "cp-rest-006",
      "Standardize on single health response schema: {status, version, components}.",
-     "mitigated", "CAB-1916"),
+     "mitigated", "historical-tracking-issue"),
 
     ("RISK-007", "MEDIUM",
      "OpenSearch Optional Dependency",

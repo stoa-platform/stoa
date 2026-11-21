@@ -1,6 +1,6 @@
 # Phase 6 Rollout Findings Template
 
-Copy this template to `docs/audits/<YYYY-MM-DD>-phase-6-rollout/findings.md`
+Copy this template to `<private-audit-archive>/<YYYY-MM-DD>-phase-6-rollout/findings.md`
 after the operator-reviewed smoke run. Do not archive a prod finding until the
 dev/k3d five-state evidence exists.
 

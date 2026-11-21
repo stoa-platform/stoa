@@ -4,9 +4,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-DB="$SCRIPT_DIR/../stoa-impact.db"
-FILE_MAP="$SCRIPT_DIR/../file-map.json"
-LEARNING_DIR="$SCRIPT_DIR/../learning"
+DB="$SCRIPT_DIR/../internal/stoa-impact.db"
+FILE_MAP="$SCRIPT_DIR/../internal/file-map.json"
+LEARNING_DIR="$SCRIPT_DIR/../internal/learning"
 
 if [ ! -f "$DB" ]; then
     echo "ERROR: Database not found at $DB"

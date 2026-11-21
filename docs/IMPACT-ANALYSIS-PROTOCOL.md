@@ -1,7 +1,7 @@
 # Impact Analysis Protocol
 
 > MANDATORY before each MEGA-ticket and cross-component change.
-> Source of truth: `docs/stoa-impact.db` (SQLite)
+> Source of truth: `docs/internal/stoa-impact.db` (SQLite)
 
 ## Before Coding
 
@@ -75,7 +75,7 @@ Edit `SCENARIOS` and `SCENARIO_STEPS` lists
 
 ### Quick SQL query (ad-hoc)
 ```bash
-sqlite3 docs/stoa-impact.db "SELECT * FROM impact_analysis WHERE priority = 'P0'"
+sqlite3 docs/internal/stoa-impact.db "SELECT * FROM impact_analysis WHERE priority = 'P0'"
 ```
 
 ## Convention
@@ -90,7 +90,7 @@ sqlite3 docs/stoa-impact.db "SELECT * FROM impact_analysis WHERE priority = 'P0'
 
 | File | Purpose | Editable? |
 |------|---------|-----------|
-| `docs/stoa-impact.db` | SQLite database (source of truth) | Via scripts only |
+| `docs/internal/stoa-impact.db` | SQLite database (source of truth) | Via scripts only |
 | `docs/scripts/populate-db.py` | Data definitions + DB creation | Yes (edit data here) |
 | `docs/scripts/regenerate-docs.py` | Markdown generator | Rarely |
 | `docs/scripts/schema.sql` | DB schema | Rarely |

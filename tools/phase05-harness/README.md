@@ -6,7 +6,7 @@
 
 Gate before Phase 1 (catalog CRDs): evaluate whether `per-op` or `enriched-single` beats `coarse` on LLM tool-selection accuracy, on a non-demo workload, with a pre-registered binary decision rule — so Phase 1 cannot be p-hacked ex post.
 
-Ticket: [CAB-2116](https://linear.app/hlfh-workspace/issue/CAB-2116) — parent: CAB-2113.
+Tracking: historical tracking issue.
 
 ---
 
@@ -29,7 +29,7 @@ These snapshots are **substitutes** for the ticket's named APIs. At the time of 
 | Snapshot name (ticket) | Actual source | Rationale |
 |------------------------|---------------|-----------|
 | `banking-services-v1-2.yaml` | OBIE UK Open Banking Read/Write v3.1, AIS + PIS merged | Need ≥50 ops, banking domain, public & stable |
-| `payment-api.yaml` | `tenants/middle-earth-bank/apis/payment-api/openapi.yaml` (repo) | STOA's own demo spec — identical to what live tenants expose |
+| `payment-api.yaml` | `platform/tenants/middle-earth-bank/apis/payment-api/openapi.yaml` (repo) | STOA's own demo spec — identical to what live tenants expose |
 | `fapi-accounts.yaml` | OBIE UK Open Banking Confirmation of Funds v3.1 | FAPI-shaped, banking domain |
 
 **Pre-P2 action:** when MCP audience is fixed, re-fetch the 3 canonical CP-API specs into `specs.candidate/`, diff vs pinned snapshots, open a Decision Gate log to ratify (or reject) the swap. If ratified, update sha256 pins and re-freeze.
@@ -158,7 +158,7 @@ python3 run_bench.py \
 python3 score.py --prompts prompts.jsonl --runs runs.jsonl --out report.json
 ```
 
-Artefacts (raw `runs.jsonl` + `report.json` + any prompts diff) land in `docs/audits/2026-XX-XX-phase05-harness/`. Per-variant verdict is computed **mechanically** by `score.py` — humans read, do not override.
+Artefacts (raw `runs.jsonl` + `report.json` + any prompts diff) land in `<private-audit-archive>/2026-XX-XX-phase05-harness/` (outside the public repository). Per-variant verdict is computed **mechanically** by `score.py` — humans read, do not override.
 
 ---
 

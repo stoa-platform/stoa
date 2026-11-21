@@ -86,7 +86,7 @@ to the backend, it calls a STOA container in the same Kubernetes pod at
 **Proof rule** ([topology spec §4](../../specs/gateway-topology-normalization.md)):
 a deployment is `sidecar` only if it is declared in Kubernetes desired state,
 its pod contains the target gateway container and `stoa-sidecar`, and the
-target gateway calls STOA over `localhost` or `127.0.0.1`. Otherwise classify it
+target gateway calls STOA over `localhost` (loopback). Otherwise classify it
 as `connect` / `remote-agent`.
 
 **Implemented today.**
@@ -101,8 +101,8 @@ as `connect` / `remote-agent`.
   only if required scopes are set on the engine; the `/authz` router sets none.
   OPA evaluation and Kafka metering are not part of `DecisionEngine`.
 - `/authz` trusts the user and tenant sent by the calling gateway; it does not
-  validate a token. The Helm template sets `STOA_HOST=127.0.0.1` and
-  `STOA_PORT=8081`, but the HTTP listener binds `0.0.0.0:<port>` and ignores
+  validate a token. The Helm template sets `STOA_HOST` to loopback and
+  `STOA_PORT=8081`, but the HTTP listener binds all interfaces (`*:<port>`) and ignores
   `STOA_HOST` ([`stoa-gateway/src/main.rs`](../../stoa-gateway/src/main.rs)),
   so `/authz` also listens on the pod IP, not only on loopback. The Service
   does not expose port 8081.
@@ -124,13 +124,11 @@ as `connect` / `remote-agent`.
 
 **Not proven or planned.**
 
-- The 2026-04-25 audit
-  ([verification](../audits/2026-04-25-sidecar-deployment-reality/02-verification.md))
-  proved the route split with Rust tests and the topology with `helm template`.
+- The 2026-04-25 audit proved the route split with Rust tests and the topology with `helm template`.
   It ran no live webMethods or Kong smoke test and built no container image.
 - Loopback-only binding is not implemented. The "STOA binding" invariant in
   the [sidecar contract](../../specs/gateway-sidecar-contract.md) (§4) expects
-  STOA on `127.0.0.1:8081`; the chart sets `STOA_HOST`, but the binary does not
+  STOA on `localhost:8081` (loopback); the chart sets `STOA_HOST`, but the binary does not
   use it for the listener.
 - Whether a given gateway honours the injected variables (`EXT_AUTHZ_URL` in the
   chart, `apigw_ext_authz_*` in the
@@ -226,10 +224,7 @@ YAML.
   `stoa-gateway/src/config.rs`, `stoa-go/internal/connect/`.
 - Specs: [`gateway-sidecar-contract.md`](../../specs/gateway-sidecar-contract.md),
   [`gateway-topology-normalization.md`](../../specs/gateway-topology-normalization.md).
-- Audit (point-in-time):
-  [`00-council-preflight.md`](../audits/2026-04-25-sidecar-deployment-reality/00-council-preflight.md),
-  [`01-implementation-inventory.md`](../audits/2026-04-25-sidecar-deployment-reality/01-implementation-inventory.md),
-  [`02-verification.md`](../audits/2026-04-25-sidecar-deployment-reality/02-verification.md).
+- A 2026-04-25 point-in-time audit recorded the route-split and topology checks.
 - Existing guides: [webMethods sidecar integration](../integrations/webmethods-sidecar-integration.md),
   [Docker sidecar demo](../../deploy/docker-compose/sidecar/README.md),
   [gateway auto-registration](../guides/gateway-auto-registration.md).

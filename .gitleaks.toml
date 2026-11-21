@@ -117,6 +117,8 @@ commits = [
   "502e1488",                                     # deploy/vps/webmethods/README.md infrastructure IPs (file deleted)
   # memory-archive.md introduced then deleted in same branch (CLAUDE.md refacto) — financial-data = internal API cost logs (€0.05-0.12 Council S3 runs), not secrets
   "a2c47bd775d96300db43459abcf4f0869dc1d04e",     # refactor: nuke .claude/rules/ (memory-archive.md added here)
+  # OPERATOR.md financial-data false positive on wording later rephrased
+  "98be6fcc9f7572453a8ef4c8e6515c81b5e16111",
 ]
 
 # Rules to modify or disable

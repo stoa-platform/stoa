@@ -1,4 +1,4 @@
-"""Regression test for CAB-2083 (Security P0-02).
+"""Regression test for hardcoded tenant admin password removal (Security P0-02).
 
 The literal `***TENANT_ADMIN_PASSWORD_REMOVED***` was committed as a fallback in five files of the
 public repository. This test prevents the pattern from being re-introduced:
@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+SELF_RELPATH = Path(__file__).resolve().relative_to(REPO_ROOT).as_posix()
 FORBIDDEN_LITERAL = "***TENANT_ADMIN_PASSWORD_REMOVED***"
 
 
@@ -29,8 +30,6 @@ def test_parzival_password_is_never_hardcoded() -> None:
     # .gitignore automatically, so vendored copies in node_modules, venv,
     # target, etc. don't leak into the scan.
     # CHANGELOG files are release-please-generated history of commit titles.
-    # Audit archives under docs/audits/** are historical incident reports that
-    # legitimately quote the literal for traceability. Neither is a regression.
     result = subprocess.run(  # noqa: S603 — fixed args, no user input
         [  # noqa: S607
             "git",
@@ -40,7 +39,6 @@ def test_parzival_password_is_never_hardcoded() -> None:
             FORBIDDEN_LITERAL,
             "--",
             ":!**/CHANGELOG.md",
-            ":!docs/audits/**",
         ],
         capture_output=True,
         text=True,
@@ -52,11 +50,11 @@ def test_parzival_password_is_never_hardcoded() -> None:
     offenders = [
         line
         for line in result.stdout.splitlines()
-        if not line.startswith("control-plane-api/tests/test_regression_cab_2083_")
+        if not line.startswith(f"{SELF_RELPATH}:")
     ]
 
     assert offenders == [], (
-        "CAB-2083 regression: the Parzival password literal reappeared in:\n"
+        "Security regression: the Parzival password literal reappeared in:\n"
         + "\n".join(offenders)
         + "\n\nRead it from the PARZIVAL_PASSWORD env var instead."
     )

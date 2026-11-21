@@ -1,2 +1,0 @@
-{"error":"unauthorized","message":"Missing Authorization header"}
-HTTP 401

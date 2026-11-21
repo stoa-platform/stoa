@@ -7,8 +7,8 @@ verdict_history:
   - 2026-05-09 v1 challenged (9 amendments A1-A9 + 6 Q answers)
   - 2026-05-09 v2 validated (after E1+E2 micro-corrections)
   - 2026-05-09 v3 addendum (Claude Review Contract section 11 added — operator-side guardrail, no plan content change)
-audit_ref: docs/audits/2026-05-09-observability-data-visibility/findings.md
-prior_verdict_ref: docs/audits/2026-05-09-observability-data-visibility/challenger-verdict.md
+audit_ref: "2026-05-09-observability-data-visibility/findings.md (archived privately)"
+prior_verdict_ref: "2026-05-09-observability-data-visibility/challenger-verdict.md (archived privately)"
 decision_gate_log: "#12 (HLFH Decision Gate)"
 ---
 

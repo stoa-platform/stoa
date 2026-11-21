@@ -2,7 +2,7 @@
 title: "Decision — UAC Subscription MCP Corrective Plan"
 date: 2026-05-13
 source_plan: "docs/plans/2026-05-11-uac-subscription-mcp-corrective.md"
-source_audit: "docs/audits/2026-05-11-uac-subscription-mcp/AUDIT-RESULTS.md"
+source_audit: "2026-05-11-uac-subscription-mcp/AUDIT-RESULTS.md (archived privately)"
 verdict: "GO_WITH_CONDITIONS"
 challenger: "GPT-5.5 Pro — external non-Claude challenger"
 validation_status: "accepted"

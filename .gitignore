@@ -65,7 +65,7 @@ coverage/
 e2e/test-results/
 e2e/reports/
 
-# Legacy audit path — use docs/audits/ instead (see e2e-audit.md)
+# Legacy audit path — archive reports outside the public repository (see e2e-audit.md)
 /audit/
 
 # Temporary files
@@ -188,7 +188,7 @@ kubeconfig*
 tools/phase05-harness/report.json
 tools/phase05-harness/runs.jsonl
 
-# Council S3 (CAB-2047) — history + metrics, never commit
+# Council S3 — history + metrics, never commit
 council-history.jsonl
 council-history-*.jsonl
 
@@ -215,7 +215,7 @@ memory-archive.md
 /FIX-PLAN-CI1-PHASE-2D.md
 /SECURITY-AUDIT-REPORT.md
 /audit-report-20260126-075638.md
-/docs/audits/2026-04-04-*/
+/docs/audits/
 /test-results/
 /.github/CI-1-*.md
 /.github/CI-SURFACE.md

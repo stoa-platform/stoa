@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""CAB-2343: manifest-only edits keep code gates and live E2E scoped."""
-import json
+"""Regression test: manifest-only edits keep code gates and live E2E scoped."""
 import os
 import re
 import subprocess
@@ -13,6 +12,21 @@ HOOK = ROOT / ".claude/hooks/pre-push-quality-gate.sh"
 WORKFLOW = ROOT / ".github/workflows/e2e-tests.yml"
 FLAGS = ("HAS_PYTHON_API", "HAS_CONSOLE", "HAS_PORTAL", "HAS_GATEWAY", "HAS_E2E", "ONLY_DOCS")
 COMPONENTS = (("control-plane-ui", "HAS_CONSOLE"), ("portal", "HAS_PORTAL"), ("stoa-gateway", "HAS_GATEWAY"))
+# Registry-verified immutable peer references (audit proof archived privately).
+VERIFIED_GATEWAY_E2E_IMAGES = (
+    (
+        "wiremock/wiremock@sha256:c3cf12f602139e3ffb4e042b246887ff6cadf3bcbb32625392d45f12e8f634d4",
+        "sha256:c3cf12f602139e3ffb4e042b246887ff6cadf3bcbb32625392d45f12e8f634d4",
+    ),
+    (
+        "kennethreitz/httpbin@sha256:599fe5e5073102dbb0ee3dbb65f049dab44fa9fc251f6835c9990f8fb196a72b",
+        "sha256:599fe5e5073102dbb0ee3dbb65f049dab44fa9fc251f6835c9990f8fb196a72b",
+    ),
+    (
+        "quay.io/keycloak/keycloak@sha256:5a236ae4dd8ece77490115bace15a11a4d15e9cbcf58a490b95a7da2cd71d32a",
+        "sha256:5a236ae4dd8ece77490115bace15a11a4d15e9cbcf58a490b95a7da2cd71d32a",
+    ),
+)
 
 
 def classified(paths):
@@ -56,13 +70,11 @@ class ManifestImagePinningGateRegressionTests(unittest.TestCase):
     def test_regression_gateway_e2e_compose_matches_verified_peer_images(self):
         source = (ROOT / "stoa-gateway/tests/e2e/docker-compose-test.yml").read_text()
         images = re.findall(r"(?m)^    image: (.+)$", source)
-        proof = json.loads((ROOT / "docs/audits/2026-11-01-cab2343-digest-pinning/gateway-local-e2e-registry.json").read_text())
         self.assertEqual(len(images), 3)
-        self.assertEqual(len(proof["images"]), 3)
-        for entry, reference in zip(proof["images"], images, strict=True):
-            self.assertTrue(entry["verified"])
-            self.assertEqual(reference, entry["immutable"])
-            self.assertTrue(reference.endswith("@" + entry["digest"]))
+        self.assertEqual(len(VERIFIED_GATEWAY_E2E_IMAGES), 3)
+        for (immutable, digest), reference in zip(VERIFIED_GATEWAY_E2E_IMAGES, images, strict=True):
+            self.assertEqual(reference, immutable)
+            self.assertTrue(reference.endswith("@" + digest))
         self.assertEqual(source.count("    pull_policy: missing"), 3)
 
     def test_regression_api_and_e2e_checks_remain_enabled(self):

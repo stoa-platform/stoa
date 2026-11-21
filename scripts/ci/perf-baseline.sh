@@ -14,7 +14,7 @@
 # =============================================================================
 set -euo pipefail
 
-OUTPUT="${1:-.perf-baseline/gateway.json}"
+OUTPUT="${1:-docs/internal/baselines/gateway.json}"
 GATEWAY_URL="${GATEWAY_URL:-http://localhost:8080}"
 K6_SCRIPT="${K6_SCRIPT:-scripts/traffic/arena/benchmark.js}"
 RUNS="${RUNS:-3}"

@@ -1,7 +1,7 @@
 <!-- Chargé à la demande par skills/commands. Jamais auto-chargé. -->
 
 ---
-globs: ".claude/hooks/**,hegemon/tools/state/**"
+globs: ".claude/hooks/**,labs/hegemon/tools/state/**"
 ---
 
 # Crash Recovery Protocol
@@ -134,9 +134,9 @@ Example: `2026-02-12T14-30-task-traceability.json`
     "blockers": []
   },
   "claimed_phase": {
-    "mega_id": "CAB-1290",
+    "mega_id": "EPIC-XXXX",
     "phase_id": 1,
-    "claim_file": ".claude/claims/CAB-1290.json"
+    "claim_file": ".claude/claims/EPIC-XXXX.json"
   }
 }
 ```

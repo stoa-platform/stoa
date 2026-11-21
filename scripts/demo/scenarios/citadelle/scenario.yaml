@@ -15,7 +15,7 @@ compliance:
 
 tenant:
   id: citadelle
-  ref: tenants/citadelle/tenant.yaml
+  ref: platform/tenants/citadelle/tenant.yaml
 
 personas:
   - username: durand

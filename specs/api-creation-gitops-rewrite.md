@@ -15,7 +15,7 @@ L'audit Phase 1 et 4 requêtes SQL diagnostiques sur `api_catalog` ont révélé
 | **B-CATALOG** | Le code utilise `api_catalog`, pas `apis`. La spec v0.3.1 parlait à côté. | Corrigé (mapping aligné) |
 | **B10** | `git_sync_worker` produit `git_path = "tenants/{tid}/apis/{UUID}/api.yaml"` au lieu de `"…/{slug}/api.yaml"`. 7 rows tenant `demo` 404 sur Git. | **In-scope partiel** : le nouveau chemin GitOps ne reproduit jamais ce bug. La migration destructive des 7 rows existantes reste hors scope. |
 | **B11** | Le sync engine ne propage pas la disparition Git en soft-delete DB. `banking-services-v1-2` synced 2026-04-18, absent Git HEAD au 2026-04-26, row active. | **Out-of-scope complet** : cycle delete/prune séparé. Documenté dans le backlog Phase 2, jamais fixé dans ce rewrite. |
-| **B-INDEX** | `uq_api_catalog_tenant_api` UNIQUE complet (sans `WHERE deleted_at IS NULL`) en doublon avec `ix_api_catalog_tenant_api_active`. Bloque la recréation après soft-delete (contredit CAB-1938). | **Résolu 2026-05-02** : migration 106 supprime la contrainte globale et garde l'unicité active-only. |
+| **B-INDEX** | `uq_api_catalog_tenant_api` UNIQUE complet (sans `WHERE deleted_at IS NULL`) en doublon avec `ix_api_catalog_tenant_api_active`. Bloque la recréation après soft-delete (contredit le contrat d'unicité active-only). | **Résolu 2026-05-02** : migration 106 supprime la contrainte globale et garde l'unicité active-only. |
 | **B-SPEC-HASH** | `_compute_spec_hash` privé tronqué à 16 chars sur OpenAPI dict. `demo-httpbin.uac.json` portait un hash 64 chars opaque. | **Résolu** : hash supprimé du fixture en commit `0aba7f4a9` (non utilisé). UAC V2 (cycle séparé) tranchera si hash UAC public nécessaire. |
 
 État `api_catalog` du tenant `demo` au 2026-04-26 (13 rows actives) :
@@ -70,7 +70,7 @@ Doctrine résultante :
 | `GET /v1/tenants/{tid}/apis/{id}` → 200 + `{id, name, backend_url}` | [`architecture-rules.md`](./architecture-rules.md) §2.1 | AT-1 du smoke en dépend |
 | Format public de `api_catalog.api_id` (string actuel) | Audit Phase 1 §03 + diagnostic SQL | Subscriptions, deployments, gateway routes y référencent |
 | Schéma `api_catalog` existant (cf. §6.3) | `\d api_catalog` 2026-04-26 | 18 colonnes, 9 index, 0 FK. Migration additive seulement. |
-| Index actif-only `ix_api_catalog_tenant_api_active` | CAB-1938 + migration 106 | Garantit l'unicité de routage active sans bloquer la réutilisation d'un slug soft-deleted. |
+| Index actif-only `ix_api_catalog_tenant_api_active` | Migration 106 | Garantit l'unicité de routage active sans bloquer la réutilisation d'un slug soft-deleted. |
 | Format `api.yaml` actuel (cf. §6.9 — référence : `payment-api/api.yaml`) | Inspection terrain 2026-04-26 | 12 APIs réelles l'utilisent |
 | Fixture `specs/uac/demo-httpbin.uac.json` (forme depuis commit `0aba7f4a9`, sans `spec_hash`) | [`architecture-rules.md`](./architecture-rules.md) §2.2bis | Contrat UAC démo figé |
 | Verdict `REAL_PASS — DEMO READY` du smoke | [`demo-acceptance-tests.md`](./demo-acceptance-tests.md) | Garde-fou universel |
@@ -148,7 +148,7 @@ Si pendant l'exécution une question type *« et si on en profitait pour... »* 
 | Phase | Livrable | Critère de fin | Durée cible |
 |---|---|---|---|
 | 0 | **Cette spec validée** | Christophe valide v1.0 | ½ jour |
-| 1 | `specs/audits/2026-04-26-api-creation-current-state/` | **DONE** — audit livré | — |
+| 1 | `docs/internal/specs/audits/2026-04-26-api-creation-current-state/` | **DONE** — audit livré | — |
 | 2 | Backlog Linear `label:api-creation-rewrite-backlog` | ≥ 14 tickets, **dont B10 (in-scope partiel) et B11 (out-of-scope deferred)** | 1 jour |
 | 3 | Décisions Phase 3 + scaffold | (a) format helper CLI catalogue YAML défini ; (b) interface `CatalogGitClient` figée ; (c) migration Alembic mergeable (ajout `catalog_content_hash` uniquement) ; (d) PR scaffold avec `NotImplementedError` partout, CI verte | 1 jour |
 | 4 | Implémentation `gitops_writer.create_api()` + reconciler asyncio + helper CLI | Le POST avec flag ON écrit dans `stoa-catalog` via le mode configuré: `direct` compatibilité ou `pull_request` canonique (branche + PR + merge + tag release), puis projette. Le reconciler boucle. Le helper produit un `api.yaml` valide. | 2-3 jours |
@@ -622,7 +622,7 @@ Flag ON par défaut **uniquement** sur :
 
 Tenants contenant des catégories B ou C non résolues restent sur l'ancien chemin.
 
-**Verdict audit B14 (CAB-2193, exécuté 2026-04-27)** : scénario **β — drift sur 2-3 tenants minoritaires** (PAS γ systémique, PAS α isolé `demo`). Détail dans §11. Hypothèse défensive γ levée.
+**Verdict audit B14 (exécuté 2026-04-27)** : scénario **β — drift sur 2-3 tenants minoritaires** (PAS γ systémique, PAS α isolé `demo`). Détail dans §11. Hypothèse défensive γ levée.
 
 #### Catégorie D — Pré-GitOps DB-only (nouveau, surfacé par B14)
 
@@ -784,7 +784,7 @@ psql -c "SELECT api_id FROM api_catalog WHERE tenant_id='demo' AND api_id='banki
 - Format UAC : [`uac/README.md`](./uac/README.md)
 - Démo client/prospect (cycle séparé) : [`client-prospect-demo-scope.md`](./client-prospect-demo-scope.md)
 - Flow déploiement runtime (cycle séparé) : [`api-deployment-flow.md`](./api-deployment-flow.md)
-- Audit Phase 1 : `specs/audits/2026-04-26-api-creation-current-state/`
+- Audit Phase 1 : `docs/internal/specs/audits/2026-04-26-api-creation-current-state/`
 - Diagnostic SQL terrain : §0 de cette spec
 
 ## 11. Sortie de ce rewrite
@@ -807,7 +807,7 @@ Une fois clôturée, cette spec sert de pattern de référence pour les rewrites
 
 ### 11.1 Bascule Phase 10 — Politique audit-informed
 
-**Verdict B14** (CAB-2193, exécuté 2026-04-27) : scénario **β confirmé** — drift sur 3/6 tenants actifs. Hypothèse défensive γ levée.
+**Verdict B14** (exécuté 2026-04-27) : scénario **β confirmé** — drift sur 3/6 tenants actifs. Hypothèse défensive γ levée.
 
 #### Tenants éligibles à l'activation GitOps create par défaut
 
@@ -833,7 +833,7 @@ Soit 8 rows actives sur 42 (~19%) dans des tenants immédiatement éligibles à 
 1. `GITOPS_CREATE_API_ENABLED=true` est activé par défaut **uniquement** sur les tenants éligibles ci-dessus.
 2. Les nouveaux tenants créés post-Phase 10 sont éligibles **par construction** si le flow §6.5 refuse les `api_name` UUID-shaped (étape 2) et projette un `git_path` canonique depuis le fichier Git réel (étapes 6+12).
 3. Les tenants exclus restent sur l'ancien chemin DB-first jusqu'à résolution de leur cycle cible : migration legacy (cat B) ou backfill (cat D).
-4. Phase 6.5 (CAB-2189) cible **spécifiquement** les 5 APIs catégorie A du tenant `demo`. Elle n'affecte aucune autre row.
+4. Phase 6.5 cible **spécifiquement** les 5 APIs catégorie A du tenant `demo`. Elle n'affecte aucune autre row.
 5. **Cette bascule n'est pas une migration automatique des lignes existantes** : elle active le nouveau chemin de création GitOps pour les tenants éligibles. Les rows pré-existantes des tenants exclus ne sont **jamais** touchées par ce rewrite.
 
 #### Pattern UUID drift uniforme (cat B)
@@ -875,7 +875,7 @@ production.
 | stoa-infra #63 | infra | Alembic `PreSync` Job in chart — applies migrations 096 + 097 |
 | stoa-infra #64 | infra | First flag flip (broken — CSV value tripped pydantic-settings JSON decode) |
 | stoa-infra #65 | infra | JSON-array fix: `GITOPS_ELIGIBLE_TENANTS: '["demo-gitops"]'` |
-| stoa #2613 | code | `git_service` singleton made provider-aware (CAB-2197) — unblocks reconciler |
+| stoa #2613 | code | `git_service` singleton made provider-aware — unblocks reconciler |
 | stoa-infra `16f0be1` | infra | Image tag bump to `dev-ec9da59d` (PR #2613 deployed) |
 
 Two ops gotchas surfaced and are now in memory for the next strangler:
@@ -912,7 +912,7 @@ Projection landed 44 s after the catalog PUT, well within
 reconciler reads the commit from GitHub Contents API and pins it, instead of
 re-deriving it.
 
-Residual fixture left in place intentionally per **B11 deferred** (CAB-2191):
+Residual fixture left in place intentionally per **B11 deferred**:
 the `manual-test-1777312098` file + DB row remain in prod as a future cycle
 input for delete/prune.
 
@@ -930,15 +930,15 @@ on both replicas, 0 restarts.
 
 ### What this unlocks
 
-- **Phase 6.5** (CAB-2189) — controlled re-adoption of 5 healthy category-A
+- **Phase 6.5** — controlled re-adoption of 5 healthy category-A
   APIs from the `demo` tenant.
-- **Phase 10** — broader rollout per CAB-2193 B14 audit verdict β: eligible
+- **Phase 10** — broader rollout per B14 audit verdict β: eligible
   tenants are `banking-demo`, `high-five`, `ioi`, `demo-gitops` (excluding
   `demo`, `free-aech`, `oasis` for the reasons in §11).
 
 ### What is still open
 
-- **B11** (CAB-2191) — sync engine no soft-delete. Out-of-scope of this
+- **B11** — sync engine no soft-delete. Out-of-scope of this
   rewrite; required for the eventual delete/prune cycle. The §7 fixture row
   becomes a natural test input.
 - Code follow-up on `control-plane-api/src/config.py:269-278` — drop the

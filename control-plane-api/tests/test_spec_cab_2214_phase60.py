@@ -67,7 +67,7 @@ def test_spec_ac8_phase66_smoke_fixtures_are_committed_and_synthetic_only() -> N
 
 @pytest.mark.skip(reason="TODO Phase 6.4 - cp-api reader")
 def test_spec_ac9_legacy_metric_removal_requires_separate_plan_marker() -> None:
-    removal_plan = REPO_ROOT / "docs/plans/2026-05-11-guardrails-legacy-metric-removal.md"
+    removal_plan = REPO_ROOT / "docs/internal/plans/2026-05-11-guardrails-legacy-metric-removal.md"
 
     assert removal_plan.exists(), "AC9 red: legacy removal must be tracked by a separate future plan"
     body = removal_plan.read_text(encoding="utf-8").lower()

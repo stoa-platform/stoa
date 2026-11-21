@@ -29,7 +29,7 @@ These snapshots are **substitutes** for the ticket's named APIs. At the time of 
 | Snapshot name (ticket) | Actual source | Rationale |
 |------------------------|---------------|-----------|
 | `banking-services-v1-2.yaml` | OBIE UK Open Banking Read/Write v3.1, AIS + PIS merged | Need ≥50 ops, banking domain, public & stable |
-| `payment-api.yaml` | `tenants/middle-earth-bank/apis/payment-api/openapi.yaml` (repo) | STOA's own demo spec — identical to what live tenants expose |
+| `payment-api.yaml` | `platform/tenants/middle-earth-bank/apis/payment-api/openapi.yaml` (repo) | STOA's own demo spec — identical to what live tenants expose |
 | `fapi-accounts.yaml` | OBIE UK Open Banking Confirmation of Funds v3.1 | FAPI-shaped, banking domain |
 
 **Pre-P2 action:** when MCP audience is fixed, re-fetch the 3 canonical CP-API specs into `specs.candidate`, diff vs pinned snapshots, open a Decision Gate log to ratify (or reject) the swap. If ratified, update sha256 pins and re-freeze.

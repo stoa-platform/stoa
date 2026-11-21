@@ -37,7 +37,7 @@ echo "   Found: $GATEWAY_COUNT APIs"
 
 # Get APIs from Git
 echo "📁 Fetching APIs from Git..."
-GIT_APIS=$(find "${GITOPS_DIR}/webmethods/apis" -name "*.yaml" 2>/dev/null \
+GIT_APIS=$(find "${GITOPS_DIR}/platform/webmethods/apis" -name "*.yaml" 2>/dev/null \
     | xargs -I {} basename {} .yaml | sort)
 
 GIT_COUNT=$(echo "$GIT_APIS" | grep -c . || echo 0)

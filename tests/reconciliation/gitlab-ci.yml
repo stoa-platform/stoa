@@ -167,7 +167,7 @@ validate-state:
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
       changes:
-        - webmethods/**/*
+        - platform/webmethods/**/*
     - when: manual
   tags:
     - docker

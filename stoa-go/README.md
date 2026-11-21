@@ -1,22 +1,22 @@
 <div align="center">
-  <h1>🚀 stoactl</h1>
-  <p><strong>GitOps-native CLI for STOA Platform</strong></p>
+  <h1>stoactl</h1>
+  <p><strong>Official Go CLI for STOA — keep your coding agents, take their API keys away.</strong></p>
   <p>
-    <a href="https://github.com/stoa-platform/stoactl/releases">
-      <img src="https://img.shields.io/github/v/release/stoa-platform/stoactl?style=flat-square" alt="Release">
+    <a href="https://github.com/stoa-platform/stoa/releases">
+      <img src="https://img.shields.io/github/v/release/stoa-platform/stoa?style=flat-square" alt="Release">
     </a>
     <a href="LICENSE">
       <img src="https://img.shields.io/badge/license-Apache%202.0-blue?style=flat-square" alt="License">
     </a>
-    <a href="https://goreportcard.com/report/github.com/stoa-platform/stoactl">
-      <img src="https://goreportcard.com/badge/github.com/stoa-platform/stoactl?style=flat-square" alt="Go Report Card">
+    <a href="https://github.com/stoa-platform/stoa/actions/workflows/stoa-go-ci.yml">
+      <img src="https://github.com/stoa-platform/stoa/actions/workflows/stoa-go-ci.yml/badge.svg" alt="stoa-go CI">
     </a>
   </p>
 </div>
 
 ---
 
-`stoactl` is a command-line interface for [STOA Platform](https://gostoa.dev) — The European Agent Gateway. It provides a declarative, kubectl-like experience for managing APIs, subscriptions, and other STOA resources through infrastructure-as-code patterns.
+`stoactl` is the single official command-line interface for [STOA](https://gostoa.dev) (source: [`stoa-go/`](https://github.com/stoa-platform/stoa/tree/main/stoa-go); the standalone `stoa-platform/stoactl` repository is archived). It provides a declarative, kubectl-like workflow for managing APIs, subscriptions, contexts, and STOA resources.
 
 ## Features
 
@@ -35,21 +35,25 @@ brew install stoa-platform/tap/stoactl
 
 ### Binary (Linux/macOS)
 
+Download release binaries from [STOA GitHub Releases](https://github.com/stoa-platform/stoa/releases).
+
+### From Source (Monorepo)
+
 ```bash
-## See GitHub Releases for binary downloads:
-## https://github.com/stoa-platform/stoactl/releases
+git clone https://github.com/stoa-platform/stoa.git
+cd stoa
+go -C stoa-go build -o stoactl ./cmd/stoactl
+./stoa-go/stoactl version
 ```
 
 ### Docker
 
-```bash
-docker run ghcr.io/stoa-platform/stoactl:latest version
-```
-
-### From Source
+Build a static Linux binary and package it with [`stoa-go/Dockerfile`](Dockerfile):
 
 ```bash
-go install github.com/stoa-platform/stoactl/cmd/stoactl@latest
+GOOS=linux GOARCH="$(go env GOARCH)" CGO_ENABLED=0 go -C stoa-go build -o stoactl ./cmd/stoactl
+docker build -f stoa-go/Dockerfile -t stoactl:local stoa-go
+Start the locally tagged stoactl image and pass the `version` command
 ```
 
 ## Quick Start
@@ -117,7 +121,7 @@ stoactl apply -f api.yaml
 ## Scoping flags: `--tenant` vs `--namespace`
 
 `stoactl` exposes two **distinct** scoping flags. They look similar but mean
-different things and live at different layers (CAB-2117).
+different things and live at different layers.
 
 | Flag | Scope | Where it applies |
 |------|-------|------------------|
@@ -199,5 +203,5 @@ Apache License 2.0 - see [LICENSE](LICENSE) for details.
 
 <div align="center">
   <p>Part of the <a href="https://github.com/stoa-platform">STOA Platform</a> project</p>
-  <p>🇪🇺 Built in Europe for European sovereignty</p>
+  <p>STOA — keep your coding agents, take their API keys away.</p>
 </div>

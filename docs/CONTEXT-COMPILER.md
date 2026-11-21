@@ -105,7 +105,7 @@ There is no kill switch any more: no Context Compiler hook runs in CI, so the fo
 
 ## Database
 
-**Location**: `docs/stoa-impact.db` (SQLite, committed to repo)
+**Location**: `docs/internal/stoa-impact.db` (SQLite, committed to repo)
 
 Key tables:
 - `components` — platform components with repo paths

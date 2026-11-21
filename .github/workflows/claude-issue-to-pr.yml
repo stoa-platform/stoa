@@ -82,13 +82,12 @@ jobs:
           BODY=$(printf  '%s' "$RAW" | python3 -c 'import json,sys; print(json.loads(sys.stdin.read())["body"] or "")')
           TICKET=$(extract_ticket_id "$TITLE $BODY")
 
-          echo "number=${ISSUE_NUMBER}" >> "$GITHUB_OUTPUT"
-          echo "title=${TITLE}" >> "$GITHUB_OUTPUT"
-          echo "url=${URL}" >> "$GITHUB_OUTPUT"
-          echo "ticket-id=${TICKET}" >> "$GITHUB_OUTPUT"
-
-          # Multi-line body via heredoc delimiter.
           {
+            echo "number=${ISSUE_NUMBER}"
+            echo "title=${TITLE}"
+            echo "url=${URL}"
+            echo "ticket-id=${TICKET}"
+            # Multi-line body via heredoc delimiter.
             echo "body<<CI1_BODY_EOF"
             printf '%s\n' "$BODY"
             echo "CI1_BODY_EOF"
@@ -272,7 +271,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
       - uses: ./.github/actions/verify-stage1
-        # CAB-2177: prevent /go (or workflow_dispatch stage=plan) from
+        # Prevent /go (or workflow_dispatch stage=plan) from
         # running Stage 2 without a current Stage 1 pass. Outputs
         # `validated=true|false`; downstream operational steps gate
         # on it. The composite checks only the `council-validated`
@@ -557,7 +556,7 @@ jobs:
 
             Read the Stage 2 plan validation comment (posted earlier on this issue).
             Follow the implementation plan from the Stage 2 comment.
-            Follow code style rules in CLAUDE.md and .claude/rules/ (but skip workflow/session rules).
+            Follow code style rules in CONTRIBUTING.md and .claude/docs/ (but skip workflow/session rules).
 
             Steps:
             1. Create a feature branch: feat/issue-${{ needs.prepare.outputs.number }}-<slug>

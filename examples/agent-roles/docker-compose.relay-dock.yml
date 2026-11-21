@@ -1,0 +1,129 @@
+# Profil Compose dédié à la preuve locale d'isolation conteneur Linux du relais stoactl.
+# S'utilise en surcharge de docker-compose.yml :
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.relay-dock.yml
+#
+# Topologie d'isolation :
+# - stoa-gateway + upstream-mock : fixtures refund signées, URL publique DPoP exacte http://127.0.0.1:8080
+# - relay-broker : network_mode: "service:stoa-gateway" (loopback interne uniquement),
+#   détient config/preuve/socket contrôle privés (volume relay-op) et publie 2 volumes socket distincts
+# - relay-parent : network_mode: "none", caps drop ALL, read_only, monte uniquement relay-parent-sock
+# - relay-child  : network_mode: "none", caps drop ALL, read_only, monte uniquement relay-child-sock
+# - Aucun service ne monte le socket Docker hôte ; aucun profil utilisateur réel n'est monté.
+
+services:
+  stoa-gateway:
+    # stoa-roles-relay-dock-local/gateway:dock
+    environment:
+      STOA_POC_PUBLIC_BASE_URL: "http://127.0.0.1:8080"
+      STOA_POC_RELAY_ENROLLMENTS_FILE: "/etc/stoa/poc/relay-enrollments.json"
+    volumes:
+      - "${STOA_POC_DOCK_ENROLLMENTS_FILE:-/dev/null}:/etc/stoa/poc/relay-enrollments.json:ro"
+
+  upstream-mock:
+    # stoa-roles-relay-dock-local/mock:dock
+
+  relay-init:
+    # stoa-roles-relay-dock-local/agent:dock
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+    network_mode: "none"
+    user: "0:0"
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - FOWNER
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
+    volumes:
+      - relay-op:/run/stoa-relay/op
+      - relay-parent-sock:/run/stoa-relay/parent
+      - relay-child-sock:/run/stoa-relay/child
+    command:
+      - sh
+      - -eu
+      - -c
+      - >-
+        chown 1000:1000 /run/stoa-relay/op /run/stoa-relay/parent /run/stoa-relay/child
+        && chmod 0700 /run/stoa-relay/op /run/stoa-relay/parent /run/stoa-relay/child
+
+  relay-broker:
+    # stoa-roles-relay-dock-local/agent:dock
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+    network_mode: "service:stoa-gateway"
+    user: "1000:1000"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,uid=1000,gid=1000,mode=0700
+    volumes:
+      - relay-op:/run/stoa-relay/op
+      - relay-parent-sock:/run/stoa-relay/parent
+      - relay-child-sock:/run/stoa-relay/child
+      - "${STOA_POC_STOACTL_LINUX_BIN:-/dev/null}:/usr/local/bin/stoactl:ro"
+      - ./scripts/relay_smoke.py:/opt/stoa-proof/relay_smoke.py:ro
+      - ./scripts/relay_dock_smoke.py:/opt/stoa-proof/relay_dock_smoke.py:ro
+    depends_on:
+      stoa-gateway:
+        condition: service_healthy
+      relay-init:
+        condition: service_completed_successfully
+
+  relay-parent:
+    # stoa-roles-relay-dock-local/agent:dock
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+    network_mode: "none"
+    user: "1000:1000"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,uid=1000,gid=1000,mode=0700
+    volumes:
+      - relay-parent-sock:/run/stoa-relay/parent
+      - "${STOA_POC_STOACTL_LINUX_BIN:-/dev/null}:/usr/local/bin/stoactl:ro"
+      - ./scripts/relay_smoke.py:/opt/stoa-proof/relay_smoke.py:ro
+      - ./scripts/relay_dock_smoke.py:/opt/stoa-proof/relay_dock_smoke.py:ro
+    depends_on:
+      relay-init:
+        condition: service_completed_successfully
+
+  relay-child:
+    # stoa-roles-relay-dock-local/agent:dock
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+    network_mode: "none"
+    user: "1000:1000"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,uid=1000,gid=1000,mode=0700
+    volumes:
+      - relay-child-sock:/run/stoa-relay/child
+      - "${STOA_POC_STOACTL_LINUX_BIN:-/dev/null}:/usr/local/bin/stoactl:ro"
+      - ./scripts/relay_smoke.py:/opt/stoa-proof/relay_smoke.py:ro
+      - ./scripts/relay_dock_smoke.py:/opt/stoa-proof/relay_dock_smoke.py:ro
+    depends_on:
+      relay-init:
+        condition: service_completed_successfully
+
+volumes:
+  relay-op:
+  relay-parent-sock:
+  relay-child-sock:

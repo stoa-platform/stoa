@@ -1,6 +1,5 @@
 # Hegemon Cost Tuning — Ops Runbook
 
-> **Ticket**: CAB-1825 (parent: CAB-1824)
 > **Last updated**: 2026-03-15
 
 ## Overview
@@ -95,7 +94,7 @@ curl -s https://push.gostoa.dev/metrics | grep 'worker="w6-new-worker"'
 
 ### 4. Update daemon config
 
-Add the worker to the daemon's worker list in `hegemon/daemon/config.yaml` and restart the daemon.
+Add the worker to the daemon's worker list in `labs/hegemon/daemon/config.yaml` and restart the daemon.
 
 ## Rotating Pushgateway Credentials
 

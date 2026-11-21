@@ -21,7 +21,7 @@ Helm 3 chart for deploying the STOA Platform to Kubernetes. Manages gateway depl
 ## Values Structure
 ```yaml
 gateway:              # Python mcp-gateway (current production)
-  image: ...
+  # container image pinned by digest
   edgeMcp: ...        # Edge-MCP mode config
   sidecar: ...        # Future
   proxy: ...          # Future
@@ -29,7 +29,7 @@ gateway:              # Python mcp-gateway (current production)
 
 stoaGateway:          # Rust gateway (emerging, disabled by default)
   enabled: false
-  image: ...
+  # container image pinned by digest
   replicas: 1
   controlPlaneUrl: ...
   keycloakUrl: ...
@@ -76,6 +76,6 @@ Détail on-demand: `.claude/docs/k8s-deploy.md`, `secrets-management.md`.
 - `proxy_pass` nginx: TOUJOURS via variable (`set $be "$VAR"; proxy_pass $be;`). Jamais hostname statique (crash au startup).
 - envsubst: custom script dans `/docker-entrypoint.d/19-*.sh` + template dans `/etc/nginx/custom-templates/`. JAMAIS `NGINX_ENVSUBST_FILTER`.
 - Probes sur `/health` dédié, jamais `/`.
-- Port services: doit matcher `charts/*/values.yaml` côté stoa-infra. Mismatch = connexion silencieusement cassée.
+- Port services: doit matcher les `values.yaml` de déploiement. Mismatch = connexion silencieusement cassée.
 - CI: `apply-manifest` obligatoire entre `docker` et `deploy`. Jamais `kubectl replace --force` ni `--server-side`.
 - Secrets K8s: `REPLACE_FROM_VAULT` placeholder. Jamais valeur réelle (gitleaks + pre-edit hook bloquent).

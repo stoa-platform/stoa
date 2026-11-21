@@ -140,12 +140,12 @@ journal.md
 
 # Database dumps (may contain PII)
 *.sql
-!hegemon/tools/state/schema.sql
+!labs/hegemon/tools/state/schema.sql
 !docs/scripts/schema.sql
 !docs/scripts/seed.sql
 *.dump
 *.db
-!docs/stoa-impact.db
+!docs/internal/stoa-impact.db
 *.sqlite
 *.sqlite3
 backups/
@@ -216,6 +216,7 @@ memory-archive.md
 /SECURITY-AUDIT-REPORT.md
 /audit-report-20260126-075638.md
 /docs/audits/
+/docs/internal/audits/
 /test-results/
 /.github/CI-1-*.md
 /.github/CI-SURFACE.md

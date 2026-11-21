@@ -81,14 +81,14 @@ Audit Playwright tests go in `e2e/tests/local-<topic>.spec.ts` and follow this s
 After tests pass, archive the report into the audit directory:
 
 ```bash
-# 1. Run tests
-cd e2e && npx playwright test --config playwright.local.config.ts tests/local-<topic>.spec.ts
+# 1. Run tests (from repo root)
+(cd e2e && npx playwright test --config playwright.local.config.ts tests/local-<topic>.spec.ts)
 
 # 2. Copy HTML report to private audit archive (outside the public repo)
 AUDIT_DIR="${STOA_AUDIT_ARCHIVE_DIR:?set STOA_AUDIT_ARCHIVE_DIR}/YYYY-MM-DD-<topic>"
 mkdir -p "$AUDIT_DIR/report"
-cp -r reports/local/* "$AUDIT_DIR/report/"
-cp reports/local/results.json "$AUDIT_DIR/results.json"
+cp -r e2e/reports/local/* "$AUDIT_DIR/report/"
+cp e2e/reports/local/results.json "$AUDIT_DIR/results.json"
 
 # 3. Commit the Playwright test in the public repo (keep audit artifacts in the private archive)
 git add e2e/tests/local-<topic>.spec.ts

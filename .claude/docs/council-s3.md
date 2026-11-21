@@ -57,7 +57,7 @@ Each axis is a dedicated Anthropic call with its own prompt in `scripts/council-
 | `conformance` | Code respects repo conventions (style, naming, structure) | `scripts/council-prompts/conformance.md` |
 | `debt` | No shortcuts, TODOs, test gaps, premature abstractions | `scripts/council-prompts/debt.md` |
 | `attack_surface` | Security: input validation, authn/z, secrets, SSRF, PII, CORS, deps | `scripts/council-prompts/attack_surface.md` |
-| `contract_impact` | Cross-component contracts (API/CRD/events) — **skipped** if `docs/stoa-impact.db` is stale | `scripts/council-prompts/contract_impact.md` |
+| `contract_impact` | Cross-component contracts (API/CRD/events) — **skipped** if `docs/internal/stoa-impact.db` is stale | `scripts/council-prompts/contract_impact.md` |
 
 ### Scoring
 
@@ -70,7 +70,7 @@ Each axis is a dedicated Anthropic call with its own prompt in `scripts/council-
 
 ### contract_impact skip logic
 
-If `docs/stoa-impact.db` is missing or older than `DB_STALE_DAYS` (default **7 days**), the `contract_impact` axis is **skipped** and `expected_count=3`. The verdict is then averaged over the 3 remaining axes and the JSONL history entry sets `db_fresh: false`.
+If `docs/internal/stoa-impact.db` is missing or older than `DB_STALE_DAYS` (default **7 days**), the `contract_impact` axis is **skipped** and `expected_count=3`. The verdict is then averaged over the 3 remaining axes and the JSONL history entry sets `db_fresh: false`.
 
 All other axes are **always expected** — a missing or empty result file for `conformance`, `debt`, or `attack_surface` counts as an error (never a silent skip).
 
@@ -101,7 +101,7 @@ Each run appends one line to `council-history.jsonl`:
 ```json
 {
   "timestamp": "2026-04-11T18:30:00Z",
-  "ticket": "CAB-2047",
+  "ticket": "CAB-XXXX",
   "status": "APPROVED",
   "global_score": 8.75,
   "axes_evaluated": 4,
@@ -131,7 +131,7 @@ Each run appends one line to `council-history.jsonl`:
 | `duration_ms` | integer | Wall-clock time from start to verdict |
 | `diff_sha` | string | SHA-256 of the canonical diff — used for dedup |
 
-The file is append-only. Rotation is handled in CAB-2050.
+The file is append-only. Monthly rotation is handled by the session-init hook.
 
 ## Cost Guardrails
 
@@ -188,11 +188,11 @@ The `attack_surface` axis does not block on theoretical security issues in code 
 | `exit 2` + `gitleaks: secret detected` | Real secret or false positive in diff | Remove the secret or update `.gitleaks.toml` allowlist |
 | `exit 2` + `daily cap reached` | `cost_eur` sum today ≥ `COUNCIL_DAILY_CAP_EUR` | Wait for UTC midnight, or raise cap intentionally in CI `vars` |
 | `exit 0` but no API call in logs | SHA dedup hit on an existing `council-history.jsonl` entry | Expected. `COUNCIL_FORCE_DEDUP=1` to force a fresh review |
-| `axes_evaluated: 3` and `db_fresh: false` | `docs/stoa-impact.db` missing or older than 7 days | Run `docs/scripts/post-change-learn.sh` to refresh, or accept — it's a designed skip |
+| `axes_evaluated: 3` and `db_fresh: false` | `docs/internal/stoa-impact.db` missing or older than 7 days | Run `docs/scripts/post-change-learn.sh` to refresh, or accept — it's a designed skip |
 | `exit 2` + `>=2 axes failed` | API outage, prompt parse error, or rate-limit | Check `${tmpdir}/<axis>.raw` files — re-run after upstream is healthy |
 | Wrong verdict on a real diff | Prompt tuning needed | Edit `scripts/council-prompts/<axis>.md`, re-run against the same diff with `COUNCIL_FORCE_DEDUP=1` |
 | MOCK_API returns unexpected score | Stale fixtures | Update `scripts/council-prompts/fixtures/<axis>.json` |
-| History file fills disk | Not yet rotated | CAB-2050 implements rotation — for now, truncate after review |
+| History file fills disk | Not yet rotated | Session-init hook handles monthly rotation — or truncate manually after review |
 
 ## FAQ
 
@@ -212,7 +212,7 @@ Not without changing the script. The threshold is hard-coded in `aggregate_score
 Read the per-axis `blockers` and `warnings` in the run output. If they're spurious, tune the prompt (`scripts/council-prompts/<axis>.md`) and re-run with `COUNCIL_FORCE_DEDUP=1`. If you still disagree, override at the PR level with a human review — S3 is a gate, not an oracle.
 
 **Q: Can I run S3 locally before pushing?**
-Yes — that's the intended flow for CAB-2048 (pre-push hook extension). Today you can invoke `scripts/council-review.sh` manually on any branch.
+Yes — that's the intended flow for the pre-push hook extension. Today you can invoke `scripts/council-review.sh` manually on any branch.
 
 ## References
 
@@ -220,5 +220,5 @@ Yes — that's the intended flow for CAB-2048 (pre-push hook extension). Today y
 - Script: `scripts/council-review.sh` — v0.7.0 (Step 4)
 - Prompts: `scripts/council-prompts/{conformance,debt,attack_surface,contract_impact}.md`
 - Tests: `tests/bats/council-review.bats`
-- Impact DB: `docs/stoa-impact.db` (`docs/DEPENDENCIES.md`, `docs/SCENARIOS.md`)
-- Tickets: CAB-2046 (MEGA) → CAB-2047 (script) / CAB-2048 (pre-push) / CAB-2049 (CI) / CAB-2050 (rotation) / CAB-2051 (shadow)
+- Impact DB: `docs/internal/stoa-impact.db` (`docs/DEPENDENCIES.md`, `docs/SCENARIOS.md`)
+- Components: review script, pre-push hook, CI workflow, monthly rotation, shadow mode

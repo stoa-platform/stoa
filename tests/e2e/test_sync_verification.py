@@ -1,9 +1,9 @@
 """
-E2E Sync Verification Tests (CAB-650)
+E2E Sync Verification Tests
 Verify that Git = Gateway = Portal after Argo CD sync
 
 These tests ensure GitOps reconciliation is working correctly by comparing:
-- APIs defined in Git (webmethods/apis/*.yaml)
+- APIs defined in Git (platform/webmethods/apis/*.yaml)
 - APIs deployed on webMethods Gateway
 - APIs published on Developer Portal
 """
@@ -15,7 +15,8 @@ import pytest
 import yaml
 
 # Configuration
-WEBMETHODS_APIS_PATH = os.getenv("WEBMETHODS_APIS_PATH", "webmethods/apis")
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+WEBMETHODS_APIS_PATH = os.getenv("WEBMETHODS_APIS_PATH", str(REPO_ROOT / "platform" / "webmethods" / "apis"))
 SYSTEM_APIS = {"search", "health", "metrics", "Gateway_Admin_API", "Portal_API"}
 
 
@@ -233,7 +234,7 @@ class TestTenantApiSync:
     def tenant_git_apis(self):
         """Load tenant-specific APIs from Git."""
         tenant_apis = {}
-        tenants_path = Path("tenants")
+        tenants_path = REPO_ROOT / "platform" / "tenants"
 
         if not tenants_path.exists():
             pytest.skip("Tenants path not found")

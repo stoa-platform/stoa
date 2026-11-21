@@ -35,7 +35,7 @@ SAMPLE_SCENARIO = {
     "theme": "testing",
     "tenant": {
         "id": "test-tenant",
-        "ref": "tenants/test-tenant/tenant.yaml",
+        "ref": "platform/tenants/test-tenant/tenant.yaml",
     },
     "personas": [
         {
@@ -79,9 +79,9 @@ def scenario_dir(tmp_path: Path) -> Path:
     manifest.write_text(yaml.dump(SAMPLE_SCENARIO))
 
     # Create tenant dir with API
-    tenant_dir = tmp_path / "tenants" / "test-tenant" / "apis" / "test-api"
+    tenant_dir = tmp_path / "platform" / "tenants" / "test-tenant" / "apis" / "test-api"
     tenant_dir.mkdir(parents=True)
-    (tmp_path / "tenants" / "test-tenant" / "tenant.yaml").write_text(
+    (tmp_path / "platform" / "tenants" / "test-tenant" / "tenant.yaml").write_text(
         yaml.dump({"apiVersion": "stoa.io/v1", "kind": "Tenant", "metadata": {"name": "test-tenant"}})
     )
     (tenant_dir / "api.yaml").write_text(

@@ -32,7 +32,7 @@ Pour chaque etape du plan:
 
 ### Step 5: Mettre a jour le contexte
 - memory.md: marquer la feature comme DONE
-- Si decision architecturale importante: noter dans docs/decisions/DECISIONS.md
+- Si decision architecturale importante: noter dans docs/internal/decisions/DECISIONS.md
 
 ## Regles
 - 1 feature par session — pas de scope creep

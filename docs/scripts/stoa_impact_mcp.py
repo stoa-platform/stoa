@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """stoa-impact MCP server — read-only SQLite bridge for Claude Code teammates.
 
-Exposes docs/stoa-impact.db via Model Context Protocol (stdio transport).
+Exposes docs/internal/stoa-impact.db via Model Context Protocol (stdio transport).
 All queries are parameterized; no raw SQL surface. Database is opened in
 SQLite read-only URI mode. No external dependencies.
 
@@ -10,8 +10,6 @@ Register in .mcp.json:
       "command": "python3",
       "args": ["docs/scripts/stoa_impact_mcp.py"]
     }
-
-CAB-2066 Phase 3.
 """
 
 from __future__ import annotations
@@ -27,7 +25,7 @@ PROTOCOL_VERSION = "2024-11-05"
 SERVER_NAME = "stoa-impact"
 SERVER_VERSION = "0.1.0"
 
-DEFAULT_DB = Path(__file__).resolve().parent.parent / "stoa-impact.db"
+DEFAULT_DB = Path(__file__).resolve().parent.parent / "internal" / "stoa-impact.db"
 
 SEVERITY_ENUM = ["CRITICAL", "HIGH", "MEDIUM", "LOW"]
 RISK_STATUS_ENUM = ["open", "mitigated", "accepted", "resolved"]

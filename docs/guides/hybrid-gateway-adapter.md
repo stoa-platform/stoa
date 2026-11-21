@@ -120,7 +120,7 @@ For full GitOps reconciliation, create gateway-specific Ansible tasks or reuse t
 ### Git Structure
 
 ```
-webmethods/
+platform/webmethods/
 ├── aliases/
 │   ├── dev.yaml
 │   ├── staging.yaml

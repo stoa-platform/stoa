@@ -1,5 +1,5 @@
 {{/*
-  Bootstrap Job (CAB-1864) — provisions Keycloak realm, OIDC clients, roles,
+  Bootstrap Job — provisions Keycloak realm, OIDC clients, roles,
   scopes, and default tenant on first install.
   Runs as a Helm post-install hook. Existing realms require a separate reviewed migration.
 
@@ -263,7 +263,7 @@ data:
 
     # ---------------------------------------------------------------
     # stoactl CLI — public client, OAuth2 device authorization grant
-    # CAB-2103: required by `stoactl auth login` (hardcoded clientID)
+    # Required by `stoactl auth login` (hardcoded clientID)
     # ---------------------------------------------------------------
     create_client "stoactl" "{
       \"clientId\": \"stoactl\",
@@ -292,7 +292,7 @@ data:
     #   — it lacks OpenBao write credentials and running the job with them
     #   would broaden the blast radius. Retrieval + OpenBao write are a
     #   separate operator step: see runbook
-    #   docs/runbooks/cab-2108-stoactl-admin-kc-client.md.
+    #   docs/runbooks/stoactl-admin-kc-client.md.
     # - Client + role names kept hardcoded to match the convention used
     #   for stoa-mcp-gateway / control-plane-api above; follow-up ticket
     #   if we ever want these chart-configurable uniformly.
@@ -347,7 +347,7 @@ data:
 
     # Remind the operator that the client_secret still needs to be harvested
     # and pushed to OpenBao. The job intentionally does not do this itself.
-    log "NOTE: run docs/runbooks/cab-2108-stoactl-admin-kc-client.md step 4-5 to push STOACTL_ADMIN_CLIENT_SECRET to OpenBao"
+    log "NOTE: run docs/runbooks/stoactl-admin-kc-client.md step 4-5 to push STOACTL_ADMIN_CLIENT_SECRET to OpenBao"
 
     # ---------------------------------------------------------------
     {{- end }}

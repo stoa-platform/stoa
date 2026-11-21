@@ -18,7 +18,7 @@ permissions:
   contents: read
   pull-requests: write
   issues: write
-  # CAB-2608: GitHub OIDC token, exchanged for a short-lived Claude API token
+  # GitHub OIDC token, exchanged for a short-lived Claude API token
   # (workload identity federation). Fork PRs never run this job (see `if`).
   id-token: write
 
@@ -85,7 +85,7 @@ jobs:
           **STOA PR Guardian — skipped**
 
           Diff too large for guardian review (${{ steps.diff-guard.outputs.diff_lines }} lines > 1000 cap).
-          Human review required. Consider splitting this PR per CLAUDE.md rule.
+          Human review required. Consider splitting this PR per CONTRIBUTING.md guidelines.
           EOF
           )"
           echo "::notice::Guardian skipped on PR #${PR_NUM} — diff ${{ steps.diff-guard.outputs.diff_lines }} lines"
@@ -99,7 +99,7 @@ jobs:
         continue-on-error: true
         uses: anthropics/claude-code-action@f3b070c88125d33dbae5653df5f143101d4ea9dc # v1
         with:
-          # CAB-2608: without this input the action swaps an OIDC token for a
+          # Without this input the action swaps an OIDC token for a
           # Claude GitHub App token; the workflow token is enough for comments.
           github_token: ${{ github.token }}
           # Workload identity federation: the IDs are identifiers, not secrets,
@@ -139,7 +139,7 @@ jobs:
               - Comments max 4 lines, no preamble, no emoji, no TODO injection.
               - English in GitHub comments. French OK in Slack alert.
               - All summary comments MUST start with the literal marker `<!-- stoa-pr-guardian -->`.
-          # Sonnet 4.6 per CLAUDE.md CI policy. Bash/Read/Glob/Grep + gh/curl are enough.
+          # Sonnet 4.6 per CI policy. Bash/Read/Glob/Grep + gh/curl are enough.
           claude_args: "--model claude-sonnet-4-6 --max-turns 20 --allowedTools Read,Glob,Grep,Bash"
         env:
           GH_TOKEN: ${{ github.token }}

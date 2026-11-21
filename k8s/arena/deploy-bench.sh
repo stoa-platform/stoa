@@ -10,7 +10,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-BENCH_DIR="$REPO_ROOT/stoa-bench"
+BENCH_DIR="$REPO_ROOT/labs/stoa-bench"
 TOTAL=5
 
 echo "=== STOA Bench Deploy (L2 CUJs + L3 Stability) ==="

@@ -12,7 +12,7 @@ STATE_DB="${HOME}/.hegemon/state.db"
 # Resolve heg-state CLI
 HEG_STATE="${HOME}/.local/bin/heg-state"
 if [ ! -x "$HEG_STATE" ]; then
-    HEG_STATE="python3 ${PROJECT_DIR}/hegemon/tools/state/heg_state.py"
+    HEG_STATE="python3 ${PROJECT_DIR}/labs/hegemon/tools/state/heg_state.py"
 fi
 
 # Sync tickets from Linear + generate brief (rate-limited, best-effort)
@@ -68,7 +68,7 @@ fi
     done
 ) || true
 
-# --- Council S3: rotate council-history.jsonl monthly (CAB-2046 / CAB-2050) ---
+# --- Council S3: rotate council-history.jsonl monthly ---
 # Runs best-effort on session start. Keeps monthly snapshots, prunes >90 days.
 (
     cd "$PROJECT_DIR" 2>/dev/null || exit 0

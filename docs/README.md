@@ -6,6 +6,8 @@ Welcome to the STOA Platform documentation. STOA is a multi-tenant API managemen
 
 | Document | Description |
 |----------|-------------|
+| [Platform Overview](./platform.md) | Full STOA platform architecture, quickstart, and deployment guide |
+| [Agent Roles Preview](../examples/agent-roles/README.md) | Local key-free coding agent demo (`make demo`, preview) |
 | [Getting Started](./getting-started.md) | Quick start guide for new users |
 | [Installation](./installation.md) | Detailed installation instructions |
 | [Configuration](./configuration.md) | Configuration reference |

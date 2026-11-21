@@ -5,6 +5,7 @@
 	test-api test-ui test-portal test-gateway test-gateway-all-features check-cmake test-cli \
 	lint-api lint-ui lint-portal lint-gateway lint-cli \
 	check-docs \
+	demo \
 	seed-dev seed-staging seed-prod seed-check seed-local \
 	seed-demo test-demo demo-federation-setup demo-federation-test \
 	demo-federation-live demo-federation-cleanup demo-opensearch-seed \
@@ -23,8 +24,8 @@ setup: ## Install dependencies for all components
 	cd portal && npm install
 	@echo "==> Setting up stoa-gateway..."
 	cd stoa-gateway && cargo check
-	@echo "==> Setting up cli..."
-	cd cli && pip install -e ".[dev]"
+	@echo "==> Building stoactl (stoa-go)..."
+	go -C stoa-go build ./cmd/stoactl
 	@echo "✓ All components installed"
 
 # ── Run ──────────────────────────────────────────────────────────────────────
@@ -33,7 +34,7 @@ run-api: ## Start Control Plane API (port 8000) — secrets resolved from Vault
 	./scripts/dev/run-api-local.sh
 
 run-ui: ## Start Console UI dev server (port 5173)
-	cd control-plane-ui && npm start
+	cd control-plane-ui && npm run dev
 
 run-portal: ## Start Developer Portal dev server (port 5174)
 	cd portal && npm run dev
@@ -70,8 +71,8 @@ check-cmake: ## Check the prerequisite for gateway tests with all features
 test-gateway-all-features: check-cmake ## Run gateway tests including Kafka
 	cd stoa-gateway && cargo test --all-features
 
-test-cli: ## Run CLI tests
-	cd cli && pytest tests/ -q
+test-cli: ## Run stoactl (Go CLI) tests
+	go -C stoa-go test ./...
 
 # ── Lint ─────────────────────────────────────────────────────────────────────
 
@@ -92,14 +93,14 @@ lint-portal: ## Lint portal (eslint + prettier + tsc)
 lint-gateway: ## Lint gateway (clippy + fmt)
 	cd stoa-gateway && cargo fmt --check && cargo clippy --all-targets -- -D warnings
 
-lint-cli: ## Lint CLI (ruff)
-	cd cli && ruff check .
+lint-cli: ## Vet stoactl (Go CLI)
+	go -C stoa-go vet ./...
 
 # ── Docs Validation ──────────────────────────────────────────────────────────
 
 check-docs: ## Validate README Quick Start commands are consistent
 	@echo "==> Checking component README files..."
-	@for dir in control-plane-api control-plane-ui portal stoa-gateway cli; do \
+	@for dir in control-plane-api control-plane-ui portal stoa-gateway stoa-go cli; do \
 		if [ ! -f "$$dir/README.md" ]; then \
 			echo "FAIL: $$dir/README.md missing"; exit 1; \
 		fi; \
@@ -115,6 +116,11 @@ check-docs: ## Validate README Quick Start commands are consistent
 	@echo "==> Checking DEVELOPMENT.md..."
 	@test -f DEVELOPMENT.md || (echo "FAIL: DEVELOPMENT.md missing"; exit 1)
 	@echo "✓ All documentation files present"
+
+# ── Agent Roles Preview Demo ───────────────────────────────────────────────
+
+demo: ## Run the local agent-roles preview demo (Docker required)
+	$(MAKE) -C examples/agent-roles demo
 
 # ── Demo Data ──────────────────────────────────────────────────────────────
 

@@ -1,13 +1,13 @@
 #!/bin/bash
 # Post-Change Learning — compares actual changes with predicted impact
-# Usage: ./post-change-learn.sh --commit HEAD --ticket CAB-1900
+# Usage: ./post-change-learn.sh --commit HEAD --ticket TICKET-ID
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-DB="$SCRIPT_DIR/../stoa-impact.db"
-FILE_MAP="$SCRIPT_DIR/../file-map.json"
-CONTEXT_PACKS_DIR="$SCRIPT_DIR/../context-packs"
-LEARNING_DIR="$SCRIPT_DIR/../learning"
+DB="$SCRIPT_DIR/../internal/stoa-impact.db"
+FILE_MAP="$SCRIPT_DIR/../internal/file-map.json"
+CONTEXT_PACKS_DIR="$SCRIPT_DIR/../internal/context-packs"
+LEARNING_DIR="$SCRIPT_DIR/../internal/learning"
 
 if [ ! -f "$DB" ]; then
     echo "ERROR: Database not found at $DB"
@@ -27,7 +27,7 @@ done
 
 if [ -z "$COMMIT" ]; then
     echo "ERROR: --commit is required"
-    echo "Usage: $0 --commit HEAD --ticket CAB-1900"
+    echo "Usage: $0 --commit HEAD --ticket TICKET-ID"
     exit 1
 fi
 

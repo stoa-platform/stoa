@@ -19,7 +19,7 @@
 # =============================================================================
 set -euo pipefail
 
-BASELINE_FILE="${1:-.perf-baseline/gateway.json}"
+BASELINE_FILE="${1:-docs/internal/baselines/gateway.json}"
 CURRENT_FILE="${2:-/tmp/perf-gate-current.json}"
 GATEWAY_URL="${GATEWAY_URL:-http://localhost:8080}"
 K6_SCRIPT="${K6_SCRIPT:-scripts/traffic/arena/benchmark.js}"

@@ -158,7 +158,7 @@ python3 run_bench.py \
 python3 score.py --prompts prompts.jsonl --runs runs.jsonl --out report.json
 ```
 
-Artefacts (raw `runs.jsonl` + `report.json` + any prompts diff) land in `docs/audits/2026-XX-XX-phase05-harness/`. Per-variant verdict is computed **mechanically** by `score.py` — humans read, do not override.
+Artefacts (raw `runs.jsonl` + `report.json` + any prompts diff) land in `<private-audit-archive>/2026-XX-XX-phase05-harness/` (outside the public repository). Per-variant verdict is computed **mechanically** by `score.py` — humans read, do not override.
 
 ---
 

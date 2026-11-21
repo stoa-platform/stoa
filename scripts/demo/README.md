@@ -20,7 +20,7 @@ Scripts for the "ESB is Dead, AI Agents Are Here" live demo (24 fev 2026).
 | `opensearch-live-demo.sh` | 2-min presenter-friendly error correlation demo | ~90s |
 | `reset-demo.sh` | Idempotent harness — invokes cp-api demo reset (CAB-2149 contract) | ~10s |
 | `pre-demo-check.sh` | Binary preflight gate (health + seed + audience claim + tenant count) | ~5s |
-| `demo-dry-run.sh` | Cold full-path dry-run; emits timestamped artifacts under `docs/audits/demo-dryrun-<UTC>/` | ~20s |
+| `demo-dry-run.sh` | Cold full-path dry-run; emits timestamped artifacts under `${STOA_AUDIT_ARCHIVE_DIR:-tmp}/demo-dryrun-<UTC>/` | ~20s |
 
 ## Demo Harness Runbook (CAB-2148)
 
@@ -48,7 +48,7 @@ Exit-code contract (binary, no warning state):
 | `pre-demo-check.sh` | every check passed (any FAIL = exit 1) |
 | `demo-dry-run.sh` | reset (unless `--skip-reset`) AND preflight passed; artifacts written |
 
-Artifact archive (`demo-dry-run.sh` only): `docs/audits/demo-dryrun-<UTC>/` contains `summary.md`, `metadata.json`, and per-step logs. Commit the archive as evidence per the repo audit rule.
+Artifact archive (`demo-dry-run.sh` only): `${STOA_AUDIT_ARCHIVE_DIR:-tmp}/demo-dryrun-<UTC>/` contains `summary.md`, `metadata.json`, and per-step logs. Store the archive in the private audit archive outside the public repository.
 
 **Contract dependency**: `reset-demo.sh` and the seed-state probe in `pre-demo-check.sh` assume the cp-api endpoints delivered by CAB-2149 (`POST /api/v1/demo/reset`, `GET /api/v1/demo/status`). Until CAB-2149 merges, the scripts will fail fast with a non-zero exit and a diagnostic on stderr — that is the intended behavior.
 

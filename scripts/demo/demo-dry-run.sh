@@ -4,7 +4,7 @@
 # =============================================================================
 # Executes the full demo harness in order (reset -> check) with per-step
 # timing and captures all output + metadata into a timestamped evidence
-# archive under docs/audits/demo-dryrun-<UTC>/.
+# archive under ${STOA_AUDIT_ARCHIVE_DIR:-tmp}/demo-dryrun-<UTC>/.
 #
 # Exits 0 ONLY if every step succeeded.
 #
@@ -27,7 +27,7 @@ done
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
-ARTIFACT_DIR="${REPO_ROOT}/docs/audits/demo-dryrun-${STAMP}"
+ARTIFACT_DIR="${STOA_AUDIT_ARCHIVE_DIR:-${REPO_ROOT}/tmp}/demo-dryrun-${STAMP}"
 mkdir -p "$ARTIFACT_DIR"
 
 SUMMARY="${ARTIFACT_DIR}/summary.md"

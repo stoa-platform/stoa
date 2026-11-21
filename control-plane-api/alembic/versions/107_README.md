@@ -6,9 +6,9 @@ This migration is the concrete artefact for [CAB-2226](https://linear.app/hlfh-w
 
 ## Why this file exists
 
-The audit of 2026-05-11 (`docs/audits/2026-05-11-uac-subscription-mcp/AUDIT-RESULTS.md`) found that `audit_events` is declared "immutable" in the model docstring but is mutated by `erase_user_pii()` (`control-plane-api/src/services/audit_service.py:420-461`). This breaks DORA Art.11 (5-year integrity) silently while satisfying GDPR Art.17.
+The audit of 2026-05-11 (`2026-05-11-uac-subscription-mcp/AUDIT-RESULTS.md`, archived privately) found that `audit_events` is declared "immutable" in the model docstring but is mutated by `erase_user_pii()` (`control-plane-api/src/services/audit_service.py:420-461`). This breaks DORA Art.11 (5-year integrity) silently while satisfying GDPR Art.17.
 
-ADR-068 + ADR-069 (drafts in `docs/audits/2026-05-11-uac-subscription-mcp/adrs-drafts/`) reconcile the conflict by:
+ADR-068 + ADR-069 (drafts archived privately under `2026-05-11-uac-subscription-mcp/adrs-drafts/`) reconcile the conflict by:
 
 1. Forbidding UPDATE / DELETE on `audit_events` via a PostgreSQL trigger.
 2. Routing GDPR erasure requests through a separate `pseudonymized_audit_erasures` table.
@@ -106,8 +106,8 @@ DATABASE_URL=postgresql+asyncpg://postgres:test@localhost:5433/postgres \
 
 ## Companion documents
 
-- **Audit**: `docs/audits/2026-05-11-uac-subscription-mcp/AUDIT-RESULTS.md` (Axe C, controls 5/6/7/10/11)
+- **Audit**: `2026-05-11-uac-subscription-mcp/AUDIT-RESULTS.md` (Axe C, controls 5/6/7/10/11; archived privately)
 - **Plan**: `docs/plans/2026-05-11-uac-subscription-mcp-corrective.md` §5.4 (P0-4)
 - **Decision record**: `docs/decisions/2026-05-11-uac-subscription-mcp-corrective.md` C5 + §3.3 Q4 + Q5
-- **ADR-068 draft**: `docs/audits/2026-05-11-uac-subscription-mcp/adrs-drafts/adr-068-audit-log-actor-resource-doctrine.md`
-- **ADR-069 draft**: `docs/audits/2026-05-11-uac-subscription-mcp/adrs-drafts/adr-069-gdpr-dora-audit-reconciliation.md`
+- **ADR-068 draft**: `2026-05-11-uac-subscription-mcp/adrs-drafts/adr-068-audit-log-actor-resource-doctrine.md` (archived privately)
+- **ADR-069 draft**: `2026-05-11-uac-subscription-mcp/adrs-drafts/adr-069-gdpr-dora-audit-reconciliation.md` (archived privately)

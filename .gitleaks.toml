@@ -77,8 +77,6 @@ paths = [
   '''docs/guides/.*''',
   '''docs/MCP-CLAUDEAI-INTEGRATION\.md''',
   '''docs/PORTAL\.md''',
-  # Audit HTML reports (contain shell password patterns in Playwright traces)
-  '''docs/audits/.*''',
   # Demo POC scripts (one-off demo with dev creds)
   '''demo/.*''',
   # State files (contain IP references in text, not actual secrets)

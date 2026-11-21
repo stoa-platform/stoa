@@ -3,13 +3,13 @@ id: plan-2026-05-09-observability-data-visibility
 triggers: [a, c]                       # a: >5h cumulative ; c: irreversible (Gap 2 schema migration)
 validation_status: validated           # draft | challenged | validated | rejected
 challenge_ref: "docs/decisions/2026-05-09-observability-data-visibility.md"
-audit_ref: "docs/audits/2026-05-09-observability-data-visibility/findings.md"
-verdict_ref: "docs/audits/2026-05-09-observability-data-visibility/challenger-verdict.md"
+audit_ref: "<private-audit-archive>/2026-05-09-observability-data-visibility/findings.md"
+verdict_ref: "<private-audit-archive>/2026-05-09-observability-data-visibility/challenger-verdict.md"
 ---
 
 # Plan — Observability Data Visibility Closure
 
-> Source: `docs/audits/2026-05-09-observability-data-visibility/findings.md` (audit) + `challenger-verdict.md` (verdict initial) + `docs/decisions/2026-05-09-observability-data-visibility.md` (verdict plan + re-challenge).
+> Source: `<private-audit-archive>/2026-05-09-observability-data-visibility/findings.md` (audit) + `challenger-verdict.md` (verdict initial) + `docs/decisions/2026-05-09-observability-data-visibility.md` (verdict plan + re-challenge).
 > Statut : **validated** (amendements A1–A9 intégrés 2026-05-09 ; micro-corrections E1+E2 appliquées 2026-05-09).
 > Exécution prévue : phase par phase par Codex, review indépendante par Claude Code, cohérence vs ce plan vérifiée à chaque PR.
 
@@ -71,7 +71,7 @@ Sept phases. Chaque phase a un livrable atomique, des préconditions explicites,
 - **Route utilisée = endpoint idempotent / health-like / tenant `demo-probe`, sans effet métier durable** (A3).
 
 **Livrables** :
-1. `docs/audits/2026-05-09-observability-data-visibility/probe-trace-walk.md` — séquence diag exécutée + résultats par hop.
+1. `<private-audit-archive>/2026-05-09-observability-data-visibility/probe-trace-walk.md` — séquence diag exécutée + résultats par hop.
 2. Si le pipeline est partiellement déployé : inventaire des composants manquants (Alloy CR, Data Prepper config, OpenSearch index template).
 3. Verdict explicite : `pipeline_live` | `pipeline_partial` | `pipeline_absent` (A1 — format snake_case verrouillé).
 
@@ -551,8 +551,8 @@ Sans ce signal, Phase 6 reste correctement hors batch.
 
 ## 9. Cross-references
 
-- Audit : `docs/audits/2026-05-09-observability-data-visibility/findings.md`
-- Verdict challenger : `docs/audits/2026-05-09-observability-data-visibility/challenger-verdict.md`
+- Audit : `<private-audit-archive>/2026-05-09-observability-data-visibility/findings.md`
+- Verdict challenger : `<private-audit-archive>/2026-05-09-observability-data-visibility/challenger-verdict.md`
 - ADR-067 (UAC/MCP/Smoke doctrine) — relevant pour Phase 6 (guardrails sont conceptuellement UAC).
 - CAB-1411 — origine seeder catalog-only.
 - CAB-1475 — `audit_events` table (alembic 044).

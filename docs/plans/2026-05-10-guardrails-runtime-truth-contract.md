@@ -3,7 +3,7 @@ id: plan-2026-05-10-guardrails-runtime-truth-contract
 validation_status: validated
 plan_ref: docs/plans/2026-05-07-observability-data-integrity.md
 source_evidence:
-  - docs/audits/2026-05-07-observability/AUDIT.md
+  - <private-audit-archive>/2026-05-07-observability/AUDIT.md
 ---
 
 # PR-3A — Guardrails Runtime Truth Contract

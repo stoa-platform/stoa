@@ -156,9 +156,9 @@ When an LLM or coding agent touches sidecar-related code or manifests:
 
 ## 7. Evidence
 
-Current CAB-2173 evidence:
+Current CAB-2173 evidence (archived privately outside the public repository):
 
-- `docs/audits/2026-04-25-sidecar-deployment-reality/01-implementation-inventory.md`
-- `docs/audits/2026-04-25-sidecar-deployment-reality/02-verification.md`
+- `2026-04-25-sidecar-deployment-reality/01-implementation-inventory.md`
+- `2026-04-25-sidecar-deployment-reality/02-verification.md`
 
 This spec is the durable contract. The audit files are point-in-time evidence.

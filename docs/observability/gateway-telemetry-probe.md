@@ -3,7 +3,7 @@
 - Plan ref: `docs/plans/2026-05-09-observability-data-visibility.md`
 - Phase: 5B - gateway runtime telemetry probe
 - Decision ref: `docs/decisions/2026-05-09-observability-data-visibility.md`
-- Phase 0 trace walk: `docs/audits/2026-05-09-observability-data-visibility/probe-trace-walk.md`
+- Phase 0 trace walk: `2026-05-09-observability-data-visibility/probe-trace-walk.md` (archived privately)
 
 This probe is manual only. It must never run automatically in production; use
 `OPERATOR_OPT_IN=operator-approved` for any production execution.

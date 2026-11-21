@@ -118,5 +118,5 @@ UI changes to Console or Portal trigger 3 CI gates automatically. Follow these r
 
 ### Evidence Archive Rule
 
-After any Playwright run, archive results into `docs/audits/`. See `e2e-audit.md` for the single canonical process.
+After any Playwright run, archive results into the private audit archive (outside the public repository). See `e2e-audit.md` for the single canonical process.
 **Never** use `audit/<TICKET>/` or leave results in `e2e/test-results/` — both are ephemeral.

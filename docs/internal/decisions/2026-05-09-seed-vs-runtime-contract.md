@@ -64,5 +64,5 @@ explicites, pas une validation end-to-end.
 
 - Plan : `docs/plans/2026-05-09-observability-data-visibility.md`
 - Decision plan : `docs/decisions/2026-05-09-observability-data-visibility.md`
-- Audit findings : `<private-audit-archive>/2026-05-09-observability-data-visibility/findings.md`
-- Phase 0 : `<private-audit-archive>/2026-05-09-observability-data-visibility/probe-trace-walk.md`
+- Audit findings : `2026-05-09-observability-data-visibility/findings.md` (archived privately)
+- Phase 0 : `2026-05-09-observability-data-visibility/probe-trace-walk.md` (archived privately)

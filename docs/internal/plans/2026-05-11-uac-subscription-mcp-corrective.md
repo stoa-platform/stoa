@@ -2,7 +2,7 @@
 title: "Plan correctif — Souscription UAC API + MCP Tools"
 date: 2026-05-11
 updated_at: 2026-05-13
-source_audit: "<private-audit-archive>/2026-05-11-uac-subscription-mcp/AUDIT-RESULTS.md"
+source_audit: "2026-05-11-uac-subscription-mcp/AUDIT-RESULTS.md (archived privately)"
 validation_status: validated
 validated_at: "2026-05-13"
 validated_by: "operator (solo project mode)"
@@ -961,7 +961,7 @@ But :
 
 Statut cible : `accepted` avant Phase 2.
 
-Draft : `<private-audit-archive>/2026-05-11-uac-subscription-mcp/adrs-drafts/adr-071-api-subscription-lifecycle.md`.
+Draft : `2026-05-11-uac-subscription-mcp/adrs-drafts/adr-071-api-subscription-lifecycle.md` (archived privately).
 
 ---
 
@@ -1235,7 +1235,7 @@ Ordre recommandé :
 title: "Decision — UAC Subscription MCP Corrective Plan"
 date: 2026-05-XX
 source_plan: "docs/plans/2026-05-11-uac-subscription-mcp-corrective.md"
-source_audit: "<private-audit-archive>/2026-05-11-uac-subscription-mcp/AUDIT-RESULTS.md"
+source_audit: "2026-05-11-uac-subscription-mcp/AUDIT-RESULTS.md (archived privately)"
 decision: "GO | GO_WITH_CONDITIONS | NOGO | SPLIT_GATE"
 challenger: "TBD"
 validation_status: "draft | accepted | rejected"

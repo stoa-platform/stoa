@@ -6,7 +6,7 @@ operator: "founder, acting as product / security / privacy / legal / business de
 verdict_summary: "5/5 APPROVED with conditions"
 related_decision_record: "docs/decisions/2026-05-11-uac-subscription-mcp-corrective.md"
 related_plan: "docs/plans/2026-05-11-uac-subscription-mcp-corrective.md"
-related_audit: "<private-audit-archive>/2026-05-11-uac-subscription-mcp/AUDIT-RESULTS.md"
+related_audit: "2026-05-11-uac-subscription-mcp/AUDIT-RESULTS.md (archived privately)"
 ---
 
 # Operator approvals — ADR-067..071 (solo project mode)

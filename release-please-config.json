@@ -6,6 +6,8 @@
   "include-v-in-tag": true,
   "separate-pull-requests": true,
   "pull-request-overflow-handler": "GITHUB_API",
+  "draft": true,
+  "commit-search-depth": 1000,
   "changelog-sections": [
     {"type": "feat", "section": "Features", "hidden": false},
     {"type": "fix", "section": "Bug Fixes", "hidden": false},

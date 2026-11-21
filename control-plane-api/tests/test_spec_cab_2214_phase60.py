@@ -1,4 +1,4 @@
-"""CAB-2214 red tests for the CAB-2213 Phase 6.0 guardrails contract.
+"""Red tests for the Phase 6.0 guardrails contract.
 
 These tests intentionally fail until Phase 6.1+ implements the validated plan.
 They lock the API/docs side of the contract before any production reader or UI
@@ -152,10 +152,10 @@ def test_spec_ac15_prod_smoke_archive_is_safe_state_only() -> None:
 @pytest.mark.skip(reason="TODO Phase 6.4 - cp-api reader (audit archives stored privately outside repo)")
 def test_spec_ac16_council_gate_has_machine_readable_archive() -> None:
     archive_root = Path(os.environ["STOA_AUDIT_ARCHIVE_DIR"])
-    council_report = archive_root / "2026-05-11-cab-2213-council/findings.md"
+    council_reports = sorted(archive_root.glob("2026-05-11-*-council/findings.md"))
 
-    assert council_report.exists(), "AC16 red: Council report artifact is not archived yet"
-    body = council_report.read_text(encoding="utf-8")
+    assert council_reports, "AC16 red: Council report artifact is not archived yet"
+    body = council_reports[-1].read_text(encoding="utf-8")
     assert "8.0/10" in body
     assert "go" in body.lower()
 

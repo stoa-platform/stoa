@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""CAB-2343: manifest-only edits keep code gates and live E2E scoped."""
+"""Regression test: manifest-only edits keep code gates and live E2E scoped."""
 import os
 import re
 import subprocess

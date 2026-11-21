@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# CAB-2150 (parent CAB-2148): Cold full-path dry-run.
+# Demo harness: Cold full-path dry-run.
 # =============================================================================
 # Executes the full demo harness in order (reset -> check) with per-step
 # timing and captures all output + metadata into a timestamped evidence
@@ -88,8 +88,8 @@ TOTAL_ELAPSED=$((TOTAL_END - TOTAL_START))
 
 cat > "$META" <<EOF
 {
-  "ticket": "CAB-2150",
-  "parent": "CAB-2148",
+  "ticket": "demo-dry-run",
+  "parent": "demo-harness",
   "timestamp_utc": "${STAMP}",
   "status": "${STATUS}",
   "elapsed_seconds": ${TOTAL_ELAPSED},

@@ -1,5 +1,5 @@
 ---
-title: "Operator approvals — CAB-2225..2229 (solo project mode)"
+title: "Operator approvals — ADR-067..071 (solo project mode)"
 date: 2026-05-13
 mode: solo
 operator: "founder, acting as product / security / privacy / legal / business decision owner"
@@ -9,7 +9,7 @@ related_plan: "docs/plans/2026-05-11-uac-subscription-mcp-corrective.md"
 related_audit: "2026-05-11-uac-subscription-mcp/AUDIT-RESULTS.md (archived privately)"
 ---
 
-# Operator approvals — CAB-2225..2229 (solo project mode)
+# Operator approvals — ADR-067..071 (solo project mode)
 
 > **Solo project mode.** No separate DPO / Legal / Security / Business / Product / Gateway / CP-API human exists at this stage. The operator (founder) is the single decision-maker acting in all those roles. All approvals below are recorded as
 > *"APPROVED by operator acting as product, security, privacy, legal, and business decision owner for this solo project stage."*
@@ -20,7 +20,7 @@ This document is the canonical regulatory trace that the policies in ADR-067, AD
 
 ---
 
-## CAB-2225 — ADR-067 UAC describes / MCP projects / Smoke proves
+## ADR-067 — UAC describes / MCP projects / Smoke proves
 
 **Verdict:** APPROVED by operator acting as product, security, privacy, legal, and business decision owner for this solo project stage.
 
@@ -38,7 +38,7 @@ This document is the canonical regulatory trace that the policies in ADR-067, AD
 
 ---
 
-## CAB-2226 — ADR-068 (audit immutability) + ADR-069 (GDPR ↔ DORA reconciliation), joint
+## ADR-068 (audit immutability) + ADR-069 (GDPR ↔ DORA reconciliation), joint
 
 **Verdict ADR-068:** APPROVED by operator acting as product, security, privacy, legal, and business decision owner for this solo project stage.
 
@@ -61,7 +61,7 @@ This document is the canonical regulatory trace that the policies in ADR-067, AD
 
 ---
 
-## CAB-2227 — ADR-070 gateway fail-closed posture
+## ADR-070 — gateway fail-closed posture
 
 **Verdict:** APPROVED by operator acting as product, security, privacy, legal, and business decision owner for this solo project stage.
 
@@ -81,7 +81,7 @@ This document is the canonical regulatory trace that the policies in ADR-067, AD
 2. Policy load failure at boot → process exits non-zero. Readiness FAIL. No permissive fallback.
 3. Permission absent from cache → deny.
 4. Revocation event invalidates cache **immediately**, even if cache has not expired. Revocation priority beats every cached allow.
-5. `requires_human_approval=true` without a valid approval token → deny (ties into CAB-2225 enforcement).
+5. `requires_human_approval=true` without a valid approval token → deny (ties into ADR-067 enforcement).
 6. Readiness probe reflects actual enforcement state (policy bundle valid + CP reachable in window OR signed cache valid + audit spool below high-water).
 7. Durable spool required for audit events. **No silent drop** — if replay cannot happen, declare an `audit_gap_declared` incident, do not just bump a counter.
 8. Cache TTL is **never extensible locally** by the gateway. Re-issuance is CP-driven only.
@@ -90,7 +90,7 @@ This document is the canonical regulatory trace that the policies in ADR-067, AD
 
 ---
 
-## CAB-2228 — ADR-071 API subscription lifecycle
+## ADR-071 — API subscription lifecycle
 
 **Verdict:** APPROVED by operator acting as product, security, privacy, legal, and business decision owner for this solo project stage.
 
@@ -115,9 +115,9 @@ This document is the canonical regulatory trace that the policies in ADR-067, AD
 
 ---
 
-## CAB-2229 — Plan integration gate
+## Plan integration gate
 
-**Verdict:** PROCEED — once the four operator approvals above are recorded in repo (this document + the per-ticket Linear comments) AND the framing PR `chore/cab-2225-solo-mode-framing` lands on `main`.
+**Verdict:** PROCEED — once the four operator approvals above are recorded in repo (this document + the per-ticket tracking comments) AND the solo-mode framing PR lands on `main`.
 
 **Mechanical implication:** the plan `docs/plans/2026-05-11-uac-subscription-mcp-corrective.md` may flip:
 
@@ -129,7 +129,7 @@ validated_for_code_execution: true
 conditions_pending: false  # but bound by the conditions in this decision record
 ```
 
-The flip is **not** part of the framing PR per the operator's instruction (no side-effect bundling). A separate small PR closes CAB-2229 once the framing PR is on `main`.
+The flip is **not** part of the framing PR per the operator's instruction (no side-effect bundling). A separate small PR closes the integration gate once the framing PR is on `main`.
 
 ---
 

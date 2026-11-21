@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""CAB-2343: generated Compose follows the canonical image producer."""
+"""Regression test: generated Compose follows the canonical image producer."""
 import re
 import unittest
 from pathlib import Path

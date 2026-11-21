@@ -188,7 +188,7 @@ kubeconfig*
 tools/phase05-harness/report.json
 tools/phase05-harness/runs.jsonl
 
-# Council S3 (CAB-2047) — history + metrics, never commit
+# Council S3 — history + metrics, never commit
 council-history.jsonl
 council-history-*.jsonl
 

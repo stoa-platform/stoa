@@ -1,7 +1,6 @@
 # STOA Gateway Sidecar Contract
 
 > **Status**: v0.1 — 2026-04-25.
-> **Ticket**: CAB-2173.
 > **Purpose**: freeze the LLM-readable contract for real STOA sidecar deployment
 > semantics, distinct from standalone links and standalone authz demos.
 > **Topology model**: see `specs/gateway-topology-normalization.md` for the
@@ -13,7 +12,6 @@
 ```yaml
 contract:
   id: gateway-sidecar-contract
-  ticket: CAB-2173
   owner_component: stoa-gateway
   stable_terms:
     real_sidecar: "A third-party gateway container and a stoa-sidecar container in the same Kubernetes pod."
@@ -62,8 +60,8 @@ A STOA sidecar is real only when:
 
 - the third-party gateway container and `stoa-sidecar` container run in the same
   Kubernetes pod;
-- the third-party gateway calls `http://localhost:8081/authz` or
-  `http://127.0.0.1:8081/authz` before backend forwarding;
+- the third-party gateway calls `http://localhost:8081/authz` (loopback) before
+  backend forwarding;
 - the STOA container runs the same Rust binary with `STOA_GATEWAY_MODE=sidecar`;
 - the pod is labelled as `stoa.io/deployment-kind=sidecar`.
 
@@ -126,7 +124,7 @@ metadata only; they are not the product data model.
 | No fake sidecar render | `stoaSidecar.enabled=true` with `stoaSidecar.mainGateway.enabled=false` must fail Helm rendering. |
 | Same-pod proof | Rendered sidecar Deployment contains the target gateway container and `stoa-sidecar`. |
 | Authz URL | Target gateway env includes `EXT_AUTHZ_URL=http://localhost:8081/authz` unless overridden by a gateway-specific equivalent. |
-| STOA binding | STOA sidecar binds `STOA_HOST=127.0.0.1` and `STOA_PORT=8081` by default. |
+| STOA binding | STOA sidecar binds `STOA_HOST` to loopback (`localhost`) and `STOA_PORT=8081` by default. |
 | Service exposure | The Service exposes the main gateway port, not a public sidecar authz port. |
 
 ## 5. Agent Guardrails
@@ -156,7 +154,7 @@ When an LLM or coding agent touches sidecar-related code or manifests:
 
 ## 7. Evidence
 
-Current CAB-2173 evidence (archived privately outside the public repository):
+Current sidecar contract evidence (archived privately outside the public repository):
 
 - `2026-04-25-sidecar-deployment-reality/01-implementation-inventory.md`
 - `2026-04-25-sidecar-deployment-reality/02-verification.md`

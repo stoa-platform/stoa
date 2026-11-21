@@ -6,7 +6,7 @@
 
 Gate before Phase 1 (catalog CRDs): evaluate whether `per-op` or `enriched-single` beats `coarse` on LLM tool-selection accuracy, on a non-demo workload, with a pre-registered binary decision rule — so Phase 1 cannot be p-hacked ex post.
 
-Ticket: [CAB-2116](https://linear.app/hlfh-workspace/issue/CAB-2116) — parent: CAB-2113.
+Tracking: historical tracking issue.
 
 ---
 

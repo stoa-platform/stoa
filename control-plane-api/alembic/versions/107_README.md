@@ -2,7 +2,7 @@
 
 **Status: DRAFT. DO NOT APPLY TO PRODUCTION UNTIL SIGN-OFF.**
 
-This migration is the concrete artefact for [CAB-2226](https://linear.app/hlfh-workspace/issue/CAB-2226) — joint sign-off of ADR-068 (audit immutability + hash chain) and ADR-069 (GDPR ↔ DORA reconciliation via pseudonymization).
+This migration is the concrete artefact for the historical tracking issue — joint sign-off of ADR-068 (audit immutability + hash chain) and ADR-069 (GDPR ↔ DORA reconciliation via pseudonymization).
 
 ## Why this file exists
 
@@ -39,9 +39,9 @@ This migration **creates the schema**. It does **not** rewrite application code 
 - **Add SQLAlchemy models for the new tables.** Comes with the code PR.
 - **Drop `row_hash` on downgrade.** Preserved for safety; explicit drop under a separate procedure if needed.
 
-## Sign-off pre-requisites (CAB-2226)
+## Sign-off pre-requisites
 
-This migration is **non-mergeable** until all of the following are recorded on CAB-2226:
+This migration is **non-mergeable** until all of the following are recorded on the tracking ticket:
 
 - [ ] **Security** sign-off: SQL-level review of the immutability trigger and trigger exception path.
 - [ ] **Compliance** sign-off: pseudonymization model satisfies DORA Art.11 retention vs GDPR Art.17 erasure.

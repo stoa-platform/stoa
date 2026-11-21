@@ -17,7 +17,7 @@ verdict_ref: "<private-audit-archive>/2026-05-09-observability-data-visibility/c
 
 L'audit du 2026-05-09 a établi que l'absence apparente de données dans les surfaces observabilité (`/audit-log`, `/observability/live-calls`, `/observability/security`) **n'est pas un bug du seeder**. C'est un système-de-systèmes où :
 
-- le seeder est catalog-only par design (CAB-1411) ;
+- le seeder est catalog-only par design (décision historique) ;
 - une partie du pipeline runtime n'est pas confirmée déployée en prod (Alloy / Data Prepper / Tempo / OpenSearch traces) ;
 - les counters guardrails ne sont émis que depuis le path MCP, donc invisibles pour le trafic non-MCP ;
 - les empty states honnêtes du PR train récent (#2730–#2745) sont parfois lus comme "broken" alors qu'ils sont véridiques.
@@ -554,10 +554,10 @@ Sans ce signal, Phase 6 reste correctement hors batch.
 - Audit : `<private-audit-archive>/2026-05-09-observability-data-visibility/findings.md`
 - Verdict challenger : `<private-audit-archive>/2026-05-09-observability-data-visibility/challenger-verdict.md`
 - ADR-067 (UAC/MCP/Smoke doctrine) — relevant pour Phase 6 (guardrails sont conceptuellement UAC).
-- CAB-1411 — origine seeder catalog-only.
-- CAB-1475 — `audit_events` table (alembic 044).
-- CAB-1831 — gateway OTel always-compiled-in.
-- CAB-1997 — Data Prepper / `otel-v1-apm-span-*`.
+- Origine seeder catalog-only (décision historique).
+- `audit_events` table (alembic 044).
+- Gateway OTel always-compiled-in.
+- Data Prepper / `otel-v1-apm-span-*`.
 - PR train récent : #2723–#2745 (observability data integrity batch).
 - Audits prior : `2026-05-08-live-calls-runtime-verification`, `2026-05-09-audit-log-runtime-verification`, `2026-05-09-guardrails-runtime-verification`.
 

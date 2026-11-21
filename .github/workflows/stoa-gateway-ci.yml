@@ -46,25 +46,11 @@ jobs:
     with:
       component: stoa-gateway
       cargo-features: '--features kafka,pingora,k8s,phases'
-      # `ubuntu-latest` : le dépôt n'a AUCUN runner auto-hébergé enregistré
-      # (0 au 2026-07-30), donc ce job restait en file indéfiniment — le CI
-      # Rust de la gateway ne s'exécutait tout simplement plus.
-      # Vérifié avant bascule, car un build Rust peut légitimement dépendre
-      # de l'hôte : reusable-rust-ci installe LUI-MÊME ses dépendances
-      # système (libcurl, libsasl2, cmake, build-essential) et sccache y est
-      # configuré avec SCCACHE_GHA_ENABLED, c'est-à-dire le cache GitHub
-      # Actions — conçu pour les runners hébergés, pas un cache disque local.
-      # Le workflow a de plus un repli explicite si sccache est indisponible.
-      # Historique ci-dessus : situation au 2026-07-30, avant CAB-2355.
-      # CAB-2355 : runner auto-hébergé `stoa-rust` (label propre au seul runner
-      # auto-hébergé du dépôt) UNIQUEMENT pour la file de merge, les push sur
-      # main et les PR internes. Les PR de forks restent sur ubuntu-latest :
-      # jamais de code de fork sur une machine auto-hébergée.
-      runner: >-
-        ${{ (github.event_name == 'merge_group'
-             || (github.event_name == 'push' && github.ref == 'refs/heads/main')
-             || github.event.pull_request.head.repo.full_name == github.repository)
-            && 'stoa-rust' || 'ubuntu-latest' }}
+      # GitHub-hosted runners for every event, including the merge queue,
+      # pushes to main, and pull requests. reusable-rust-ci installs system
+      # dependencies on hosted runners and enables the hosted sccache path,
+      # with a fallback when sccache is unavailable.
+      runner: ubuntu-latest
     permissions:
       contents: read
 

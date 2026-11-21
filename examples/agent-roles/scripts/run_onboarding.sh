@@ -306,27 +306,15 @@ export STOA_POC_BOOTSTRAP_SECRET="prepare-only"
 
 if [[ "$prepare_only" == 1 ]]; then
   stage="construction des images onboarding"
-  cat > "$runtime_root/prepare-compose.json" <<JSON
-{
-  "services": {
-    "stoa-gateway": {
-      "image": "stoa-roles-onboarding-local/gateway:onboarding",
-      "build": {
-        "context": "$(cd "$dir/../../stoa-gateway" && pwd -P)",
-        "dockerfile": "Dockerfile",
-        "target": "runtime-debian"
-      }
-    },
-    "onboarding-mcp": {
-      "image": "stoa-roles-onboarding-local/fixture:onboarding",
-      "build": {
-        "context": "$dir",
-        "dockerfile": "Dockerfile.agent"
-      }
-    }
-  }
-}
-JSON
+  gw_context="$(cd "$dir/../../stoa-gateway" && pwd -P)"
+  python3 - "$runtime_root/prepare-compose.json" "$gw_context" "$dir" <<'PY'
+import json, pathlib, sys
+path, gw_context, repo_dir = sys.argv[1], sys.argv[2], sys.argv[3]
+doc = {"services": {"stoa-gateway": {"build": {"context": gw_context, "dockerfile": "Dockerfile", "target": "runtime-debian"}}, "onboarding-mcp": {"build": {"context": repo_dir, "dockerfile": "Dockerfile.agent"}}}}
+doc["services"]["stoa-gateway"]["image"] = "stoa-roles-onboarding-local/gateway:onboarding"
+doc["services"]["onboarding-mcp"]["image"] = "stoa-roles-onboarding-local/fixture:onboarding"
+pathlib.Path(path).write_text(json.dumps(doc, indent=2) + "\n")
+PY
   export COMPOSE_FILE="$runtime_root/prepare-compose.json"
   docker compose build stoa-gateway onboarding-mcp
   printf 'PASS · Images locales Gateway + fixtures onboarding prêtes. Lancez %s sans --prepare.\n' "$0"

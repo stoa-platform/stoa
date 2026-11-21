@@ -40,14 +40,14 @@ function readRepoFile(relative: string): string {
 describe('regression/CAB-2164', () => {
   describe('P2-11 — REWRITE-BUGS.md + BACKEND-GAPS-CAB-2159.md present', () => {
     it('REWRITE-BUGS.md documents zombies + UI-3 findings', () => {
-      const source = readRepoFile('control-plane-ui/REWRITE-BUGS.md');
+      const source = readRepoFile('docs/internal/control-plane-ui/REWRITE-BUGS.md');
       expect(source).toMatch(/§A — Zombies preserved/);
       expect(source).toMatch(/§B — UI-3 findings digest/);
       expect(source).toMatch(/CAB-2164/);
     });
 
     it('BACKEND-GAPS-CAB-2159.md carries BUG-6..9 (UI-3-discovered gaps)', () => {
-      const source = readRepoFile('control-plane-ui/BACKEND-GAPS-CAB-2159.md');
+      const source = readRepoFile('docs/internal/control-plane-ui/BACKEND-GAPS-CAB-2159.md');
       expect(source).toMatch(/BUG-6/);
       expect(source).toMatch(/BUG-7/);
       expect(source).toMatch(/BUG-8/);

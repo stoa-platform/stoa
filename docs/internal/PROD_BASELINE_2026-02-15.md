@@ -28,27 +28,27 @@
 
 | Service | Replicas | Image | Status | Restarts |
 |---------|----------|-------|--------|----------|
-| control-plane-api | 2/2 | `ghcr.io/.../control-plane-api:dev-latest` | Running | 0 |
-| control-plane-ui | 2/2 | `ghcr.io/.../control-plane-ui:dev-4361fea...` | Running | 0 |
-| stoa-portal | 2/2 | `ghcr.io/.../portal:dev-0a2ae1d...` | Running | 0 |
-| stoa-gateway | 2/2 | `ghcr.io/.../stoa-gateway:latest` | Running | 0 |
-| stoa-operator | 1/1 | `ghcr.io/.../stoa-operator:latest` (v0.3.0) | Running | 0 |
-| keycloak | 1/1 | `ghcr.io/.../keycloak:latest` | Running | 0 |
+| control-plane-api | 2/2 | control-plane-api (tag dev-latest, inventory only) | Running | 0 |
+| control-plane-ui | 2/2 | control-plane-ui (tag dev-4361fea..., inventory only) | Running | 0 |
+| stoa-portal | 2/2 | portal (tag dev-0a2ae1d..., inventory only) | Running | 0 |
+| stoa-gateway | 2/2 | stoa-gateway (tag latest, inventory only) | Running | 0 |
+| stoa-operator | 1/1 | stoa-operator (tag latest, inventory only) (v0.3.0) | Running | 0 |
+| keycloak | 1/1 | keycloak (tag latest, inventory only) | Running | 0 |
 
 ### Data & Messaging
 
 | Service | Replicas | Image | Status | Restarts |
 |---------|----------|-------|--------|----------|
 | redpanda | 1/1 | `redpandadata/redpanda:v24.3.1` | Running | 0 |
-| openldap | 1/1 | `osixia/openldap:1.5.0` | Running | 0 |
+| openldap | 1/1 | osixia openldap 1.5.0 (inventory only) | Running | 0 |
 
 ### Arena (Benchmark Lab)
 
 | Service | Replicas | Image | Status | Restarts |
 |---------|----------|-------|--------|----------|
-| echo-backend | 1/1 | `nginx-unprivileged:1.27-alpine` | Running | 0 |
-| kong-arena | 1/1 | `kong:3.9-ubuntu` | Running | 15 |
-| gravitee-arena-mongo | 1/1 | `mongo:7.0` | Running | 0 |
+| echo-backend | 1/1 | nginx-unprivileged 1.27 alpine (inventory only) | Running | 0 |
+| kong-arena | 1/1 | kong 3.9 ubuntu (inventory only) | Running | 15 |
+| gravitee-arena-mongo | 1/1 | mongo 7.0 (inventory only) | Running | 0 |
 | gravitee-arena-gw | 0/0 | (scaled down) | — | — |
 | gravitee-arena-mgmt | 0/0 | (scaled down) | — | — |
 

@@ -420,7 +420,6 @@ def prepare_runtime(
     compose_doc = {
         "services": {
             "stoa-gateway": {
-                "image": GATEWAY_IMAGE,
                 "build": {
                     "context": str((repo_dir / ".." / ".." / "stoa-gateway").resolve()),
                     "dockerfile": "Dockerfile",
@@ -484,7 +483,6 @@ def prepare_runtime(
                 "depends_on": ["onboarding-mcp", "onboarding-vault"],
             },
             "onboarding-mcp": {
-                "image": FIXTURE_IMAGE,
                 "build": {
                     "context": str(repo_dir),
                     "dockerfile": "Dockerfile.agent",
@@ -510,7 +508,6 @@ def prepare_runtime(
                 ],
             },
             "onboarding-vault": {
-                "image": FIXTURE_IMAGE,
                 "build": {
                     "context": str(repo_dir),
                     "dockerfile": "Dockerfile.agent",
@@ -556,6 +553,9 @@ def prepare_runtime(
             "relay-net": {"driver": "bridge"},
         },
     }
+    compose_doc["services"]["stoa-gateway"]["image"] = GATEWAY_IMAGE
+    compose_doc["services"]["onboarding-mcp"]["image"] = FIXTURE_IMAGE
+    compose_doc["services"]["onboarding-vault"]["image"] = FIXTURE_IMAGE
     write_file_mode(
         runtime_root / "onboarding-compose.json",
         (json.dumps(compose_doc, indent=2) + "\n").encode("utf-8"),
@@ -567,7 +567,6 @@ def prepare_runtime(
     staging_override = {
         "services": {
             "stoa-gateway-stage": {
-                "image": GATEWAY_IMAGE,
                 "restart": "no",
                 "network_mode": "none",
                 "volumes": [
@@ -576,7 +575,6 @@ def prepare_runtime(
                 ],
             },
             "onboarding-vault-stage": {
-                "image": FIXTURE_IMAGE,
                 "restart": "no",
                 "network_mode": "none",
                 "volumes": [
@@ -585,6 +583,8 @@ def prepare_runtime(
             },
         }
     }
+    staging_override["services"]["stoa-gateway-stage"]["image"] = GATEWAY_IMAGE
+    staging_override["services"]["onboarding-vault-stage"]["image"] = FIXTURE_IMAGE
     write_file_mode(
         runtime_root / "staging-override.json",
         (json.dumps(staging_override, indent=2) + "\n").encode("utf-8"),

@@ -100,7 +100,7 @@ UI changes to Console or Portal trigger 3 CI gates automatically. Follow these r
 **axe-core a11y**: `e2e-a11y-gate.yml` scans 10 Console pages for WCAG 2.1 AA violations. If you add a new page to Console, add it to `e2e/smoke-mock/a11y-axe.smoke.ts` CONSOLE_PAGES array. Current threshold: `critical` (env `A11Y_IMPACT_THRESHOLD`). Helper: `e2e/fixtures/axe-helper.ts`.
 
 **Visual regression**: `e2e-visual-regression.yml` compares screenshots against golden baselines in `e2e/golden/`. If your PR intentionally changes UI appearance:
-1. Regenerate baselines in Docker: `cd e2e && docker run --rm -v $(pwd):/work -w /work mcr.microsoft.com/playwright:v1.58.2-jammy npx playwright test --config=visual/playwright.config.ts --update-snapshots`
+1. From the `e2e` directory, regenerate golden baselines inside the Microsoft Playwright jammy image at version 1.58.2 with `npx playwright test --config=visual/playwright.config.ts --update-snapshots`
 2. Review: `git diff --stat e2e/golden/`
 3. Commit updated PNGs in the same PR
 4. Mask helper (`e2e/visual/mask-helper.ts`) auto-masks `-count`/`-timestamp`/`-duration` testids

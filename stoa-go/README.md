@@ -53,7 +53,7 @@ Build a static Linux binary and package it with [`stoa-go/Dockerfile`](Dockerfil
 ```bash
 GOOS=linux GOARCH="$(go env GOARCH)" CGO_ENABLED=0 go -C stoa-go build -o stoactl ./cmd/stoactl
 docker build -f stoa-go/Dockerfile -t stoactl:local stoa-go
-docker run --rm stoactl:local version
+Start the locally tagged stoactl image and pass the `version` command
 ```
 
 ## Quick Start

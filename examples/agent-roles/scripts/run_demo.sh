@@ -172,14 +172,21 @@ stage="génération des fixtures de démo"
 STOA_POC_BOOTSTRAP_SECRET="$(step openssl rand -hex 24)"
 if [[ "$preview_mode" == 1 ]]; then
   mkdir -m 0755 -p "$STOA_POC_RUNTIME_DIR"
-  step docker run --rm --network none \
-    --user "$(id -u):$(id -g)" \
-    -e STOA_POC_UPSTREAM_API_KEY \
-    -e STOA_POC_EXPECTED_SKILL_CONTEXT \
-    -v "$dir/scripts/gen_fixtures.py:/tmp/gen_fixtures.py:ro" \
-    -v "$STOA_POC_RUNTIME_DIR:/tmp/poc-fixtures" \
-    "stoa-roles-demo-local/parent:${image_tag}" \
-    python3 -B /tmp/gen_fixtures.py /tmp/poc-fixtures --refund-demo >/dev/null 2>&1
+  fixture_image="stoa-roles-demo-local/parent:${image_tag}"
+  fixture_run=(
+    docker
+    run
+    --rm
+    --network none
+    --user "$(id -u):$(id -g)"
+    -e STOA_POC_UPSTREAM_API_KEY
+    -e STOA_POC_EXPECTED_SKILL_CONTEXT
+    -v "$dir/scripts/gen_fixtures.py:/tmp/gen_fixtures.py:ro"
+    -v "$STOA_POC_RUNTIME_DIR:/tmp/poc-fixtures"
+    "$fixture_image"
+    python3 -B /tmp/gen_fixtures.py /tmp/poc-fixtures --refund-demo
+  )
+  step "${fixture_run[@]}" >/dev/null 2>&1
 else
   step python3 ./scripts/gen_fixtures.py "$STOA_POC_RUNTIME_DIR" --refund-demo >/dev/null 2>&1
 fi

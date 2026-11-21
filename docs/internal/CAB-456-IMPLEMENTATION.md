@@ -27,7 +27,7 @@ Expand Dependabot coverage to additional STOA repositories to maintain dependenc
    - prometheus-blackbox-exporter 9.1.0
 
 ### stoa-web Repository
-**Status**: ✅ Exists at `github.com/stoa-platform/stoa-web`
+**Status**: ✅ Exists at `https://github.com/stoa-platform/stoa-web`
 
 **Tech Stack**: Astro (npm)
 

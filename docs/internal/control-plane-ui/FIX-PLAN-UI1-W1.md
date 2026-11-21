@@ -15,9 +15,9 @@ Results from the scope-estimation greps (Phase 1 diligence — inform arbitrages
 |---|---|---|
 | `app.client_id\.` / `application.client_id\.` call sites | **1 unsafe** (`Applications.tsx:197`) + 1 safe render (`Applications.tsx:505`, React tolerates `null`) | P1-A scope contained — 1 guard only. |
 | `app.tenant_id\.` call sites on narrowed `Application` | **0** active consumer. Dormant hazard only. | Same-shape fix as client_id, no consumer guard needed today. |
-| `api.audience` consumers | 3 sites (`AudienceGovernance.tsx:185/204/207`, `APIDetail.tsx:338`) — **all already guard with `?? 'public'` or `\|\| 'public'`** | Cleanup of ENRICHED `audience?` is safe — code already defensive. |
+| `api.audience` consumers | 3 sites (`AudienceGovernance.tsx` lines 185, 204, 207; `APIDetail.tsx` line 338) — **all already guard with `?? 'public'` or `\|\| 'public'`** | Cleanup of ENRICHED `audience?` is safe — code already defensive. |
 | `api.created_at` on the `API` alias (not `BackendApi`) | **0** consumers (`BackendApiDetail.tsx:415` uses `BackendApi` local type) | Cleanup of ENRICHED `created_at?` is safe. |
-| `gateway.enabled` consumers | 5 sites (`GatewayDetail.tsx:116/165/202/208/228`) | Cleanup of ENRICHED `enabled: boolean` safe because backend has the field with same shape. |
+| `gateway.enabled` consumers | 5 sites (`GatewayDetail.tsx` lines 116, 165, 202, 208, 228) | Cleanup of ENRICHED `enabled: boolean` safe because backend has the field with same shape. |
 | `shared/package-lock.json` + `cd shared && npm ci --dry-run` | **Clean**, 4 packages added, 0 errors | P1-B is safe to implement. |
 | Canonical Schema for P2-D | `Schemas['TransactionDetailWithDemoResponse']` at `openapi-snapshot.json:27071` (required: id/trace_id/api_name/method/path/status_code/status/started_at/total_duration_ms/spans) | P2-D has a real canonical target — unification is possible without manual shape. |
 | `CAB-2164 scope verification` | CAB-2164 covers `any` in **`gateways.ts` + `gatewayDeployments.ts` services (17 sites)** — NOT `GatewayDeploymentsDashboard.tsx` (the 3 `as any` on `desired_state`) | P2-E is a separate concern. Option a (local fix) chosen — see B.5. |

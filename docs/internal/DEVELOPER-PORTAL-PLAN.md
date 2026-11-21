@@ -638,7 +638,7 @@ The Developer Portal was implemented as a separate React application (`portal/`)
 1. **Project Structure**: Located in `portal/` directory (not `developer-portal/`)
 2. **Vite Dev Server**: Port 5173 (not 3001 as originally planned)
 3. **Keycloak Client**: `stoa-portal` (not `developer-portal`)
-4. **API Access**: Via Gateway at `apis.gostoa.dev/gateway/Control-Plane-API/2.0`
+4. **API Access**: Via Gateway at `https://apis.gostoa.dev/gateway/Control-Plane-API/2.0`
 5. **OpenAPI Viewer**: Custom component (not swagger-ui-react)
 6. **State Management**: React Query (TanStack Query) for server state
 

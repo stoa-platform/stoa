@@ -308,7 +308,7 @@ En pratique, le `request` interceptor (interceptors.ts:5-14) override per-reques
 **Fichiers** : `src/services/http/*.ts` (7 fichiers), `src/__tests__/regression/auto-redirect-expired-session.test.tsx`, `src/contexts/AuthContext.test.tsx`
 
 - Aucun fichier `services/http/*.test.ts`.
-- Les 5 tests `src/test/services/api/ui2-s2{a,b,c,d}-clients.test.ts` mockent `httpClient` et testent uniquement que chaque domain client fait le bon `httpClient.get/post` — pas le comportement du core.
+- Les 5 tests `src/test/services/api/ui2-s2{a,b,c,d}-clients.test.ts` mockent `httpClient` et testent uniquement que chaque domain client fait le bon `httpClient.get` and `httpClient.post` — pas le comportement du core.
 - `auto-redirect-expired-session.test.tsx` (271 lignes, 73 mentions de `refresh`/`401`) **simule** la logique dans une fonction locale `simulate401Handler` (L35-69) parallèle au vrai code. Il **n'importe pas** `installRefreshInterceptor` et ne teste pas `refresh.ts` directement. Une régression dans `refresh.ts` (ex : le bug P0-1) ne serait **pas** détectée par ce test.
 
 Bilan : la zone la plus risquée du module (refresh + queue + interceptors) n'a **aucun** test de régression **sur le code réel**. Tout le flux dépend d'un test qui garantit la forme de sa propre réimplémentation.

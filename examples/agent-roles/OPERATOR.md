@@ -26,7 +26,7 @@ STOA_POC_STOACTL_SRC=/chemin/vers/stoa-v2/cli ./scripts/install_demo.sh --show -
 
 ### Story locale
 
-La story locale couvre uniquement les chapitres 1 à 3, sans inférence live ni facturation, et sans utiliser de clés ni de profils natifs dédiés. Elle s'appuie sur quatre exemples synthétiques aux chemins masqués, exécute réellement les commandes `import`, `list` et `probe`, vérifie 6 commandes au total et observe quatre échecs d'authentification HTTPS directs.
+The local story covers chapters 1 to 3 only, without live inference or billing, and without using dedicated native keys or profiles. It relies on four synthetic examples with masked paths, actually runs the `import`, `list` and `probe` commands, checks 6 commands in total, and observes four direct HTTPS authentication failures.
 
 Les données de démonstration sont stockées en texte chiffré AES-256-GCM (Go) sans laisser de fixture en clair sur disque. La gestion d'environnement distingue exactement le fichier `.env` de Gemini CLI de l'environnement natif d'Antigravity.
 

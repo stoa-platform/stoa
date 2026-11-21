@@ -128,7 +128,7 @@ as `connect` / `remote-agent`.
   It ran no live webMethods or Kong smoke test and built no container image.
 - Loopback-only binding is not implemented. The "STOA binding" invariant in
   the [sidecar contract](../../specs/gateway-sidecar-contract.md) (§4) expects
-  STOA on `localhost:8081` (loopback); the chart sets `STOA_HOST`, but the binary does not
+  STOA on localhost port 8081 (loopback); the chart sets `STOA_HOST`, but the binary does not
   use it for the listener.
 - Whether a given gateway honours the injected variables (`EXT_AUTHZ_URL` in the
   chart, `apigw_ext_authz_*` in the

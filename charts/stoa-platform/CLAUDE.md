@@ -21,7 +21,7 @@ Helm 3 chart for deploying the STOA Platform to Kubernetes. Manages gateway depl
 ## Values Structure
 ```yaml
 gateway:              # Python mcp-gateway (current production)
-  image: ...
+  # container image pinned by digest
   edgeMcp: ...        # Edge-MCP mode config
   sidecar: ...        # Future
   proxy: ...          # Future
@@ -29,7 +29,7 @@ gateway:              # Python mcp-gateway (current production)
 
 stoaGateway:          # Rust gateway (emerging, disabled by default)
   enabled: false
-  image: ...
+  # container image pinned by digest
   replicas: 1
   controlPlaneUrl: ...
   keycloakUrl: ...

@@ -105,7 +105,7 @@ Pas de `api/index.ts` — chaque ré-export passe par un **sous-chemin explicite
 
 - **76 fichiers** importent `apiService` depuis `../services/api` (44 pages, 13 hooks, 4 composants, 1 contexte, 1 mock, 13 tests).
 - **56 fichiers de tests** font `vi.mock('../services/api', () => ({ apiService: { getX: vi.fn() } }))`.
-- **11 services siblings** (`gatewayApi.ts`, `mcpGatewayApi.ts`, `federationApi.ts`, `backendApisApi.ts`, `skillsApi.ts`, `externalMcpServersApi.ts`, `errorSnapshotsApi.ts`, `discoveryApi.ts`, `diagnosticService.ts`, `mcpConnectorsApi.ts`, `proxyBackendService.ts`) consomment `apiService.get/post/put/delete` génériques.
+- **11 services siblings** (`gatewayApi.ts`, `mcpGatewayApi.ts`, `federationApi.ts`, `backendApisApi.ts`, `skillsApi.ts`, `externalMcpServersApi.ts`, `errorSnapshotsApi.ts`, `discoveryApi.ts`, `diagnosticService.ts`, `mcpConnectorsApi.ts`, `proxyBackendService.ts`) consomment `apiService.get`, `post`, `put`, and `delete` génériques.
 - **Zéro `import axios`** hors `services/api.ts` (vérifié repo-wide).
 
 ---

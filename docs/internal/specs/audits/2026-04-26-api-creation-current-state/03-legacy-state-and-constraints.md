@@ -81,7 +81,7 @@ Risque de collision avec `compute_api_id("demo","demo",<name>)` :
 ## 6. État du repo `stoa-catalog`
 
 - Le dossier `stoa/stoa-catalog/` est **inclus dans le monorepo** comme un sous-dossier non-Git (vérifié : `ls stoa-catalog/.git` ⇒ absent ; pas de submodule). Layout actuel : `stoa-catalog/{tenants,_templates,environments,schemas,scripts}/`. Les tenants présents ont chacun **un seul fichier `uac.yaml`** (ex. `tenants/oasis/uac.yaml`), pas un fichier par API.
-- Le repo distant utilisé par le `git_sync_worker` est défini par config : `settings.git.github.org="stoa-platform"`, `settings.git.github.catalog_repo="stoa-catalog"` (`config.py:58-59`), donc cible `github.com/stoa-platform/stoa-catalog`. Il n'a **jamais** été cloné localement par cp-api : `GitHubService` opère via PyGithub Contents API (REST), pas via `git clone`.
+- Le repo distant utilisé par le `git_sync_worker` est défini par config : `settings.git.github.org="stoa-platform"`, `settings.git.github.catalog_repo="stoa-catalog"` (`config.py:58-59`), donc cible `https://github.com/stoa-platform/stoa-catalog`. Il n'a **jamais** été cloné localement par cp-api : `GitHubService` opère via PyGithub Contents API (REST), pas via `git clone`.
 - Le layout Git utilisé par `GitHubService.create_api` (`github_service.py:909-910, 983-1041`) est :
   - `tenants/{tenant_id}/apis/{api_name}/api.yaml`
   - `tenants/{tenant_id}/apis/{api_name}/uac.json`

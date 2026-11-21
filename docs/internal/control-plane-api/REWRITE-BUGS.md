@@ -27,7 +27,7 @@ tree = git_service._project.repository_tree(path="tenants", ref="main")
 
 ---
 
-## BUG-03 — Semaphore bypass on `GitLabService.create_file/update_file/delete_file`
+## BUG-03 — Semaphore bypass on `GitLabService` `create_file`, `update_file`, and `delete_file`
 
 **File** : `src/services/git_service.py:621-663`
 **Nature** : `create_file`, `update_file`, `delete_file`, `batch_commit` call `self._gl.projects.get(project_id)` bypassing the `_fetch_with_protection` semaphore+retry wrapper (CAB-688 obligation #1).

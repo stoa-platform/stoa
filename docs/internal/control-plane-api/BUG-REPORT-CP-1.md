@@ -208,7 +208,7 @@ Le wrapper est appelé à **seulement 2 sites** : `list_apis_parallel` (ligne 51
 
 **File**: `src/services/github_service.py` (entier)
 
-**Nature** : zéro équivalent de `GITHUB_SEMAPHORE`. Les méthodes "parallèles" (`list_apis_parallel:333`, `list_mcp_servers:439`) font `asyncio.gather(*[...])` sans borne.
+**Nature** : zéro équivalent de `GITHUB_SEMAPHORE`. Les méthodes "parallèles" (`list_apis_parallel` line 333, `list_mcp_servers` line 439) font `asyncio.gather(*[...])` sans borne.
 
 **Correction du rapport initial** : PyGithub ≥ 2.1.0 a un throttle par défaut (0.25s reads / 1s writes), un timeout par défaut (15 s), un retry par défaut. Donc "no protection at all" est faux. Ce qui reste vrai :
 - **Aucun cap applicatif** : pour un tenant avec 500 APIs, `list_apis_parallel` spawn 500 tasks. PyGithub les sérialise de facto via son throttle — mais le buffer task + l'event loop pollué par C.1 rendent la chose pire que séquentiel pur.
@@ -443,9 +443,9 @@ Si GitLab lent/500 au boot CP-API, `connect()` échoue → service démarre en �
 **PyGithub side** : `repo.get_branches()` / `repo.get_pulls()` / `repo.get_commits()` retournent des `PaginatedList`. L'itération est **transparente** — le code qui fait `for b in repo.get_branches()` récupère bien toutes les pages, pas la première seulement. Donc PyGithub n'a PAS le bug de troncation à 30.
 
 **python-gitlab side** : `project.branches.list()` / `project.mergerequests.list()` sans paramètre retourne la **première page seulement** (par défaut 20 items) sauf si `get_all=True` ou `iterator=True` est passé. Le code actuel :
-- `list_branches:1042` — `self._project.branches.list()` → **tronqué à 20**
-- `list_merge_requests:1081` — `self._project.mergerequests.list(state=state)` → **tronqué à 20**
-- `list_commits:697` — `self._project.commits.list(path=path, per_page=limit)` → limite explicite mais pas de all=True
+- `list_branches` line 1042 — `self._project.branches.list()` → **tronqué à 20**
+- `list_merge_requests` line 1081 — `self._project.mergerequests.list(state=state)` → **tronqué à 20**
+- `list_commits` line 697 — `self._project.commits.list(path=path, per_page=limit)` → limite explicite mais pas de all=True
 
 **Impact GitLab** : catalog repo avec >20 branches ou >20 MRs open → liste tronquée silencieusement.
 

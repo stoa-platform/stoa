@@ -146,6 +146,6 @@ All benchmark code is open source (Apache 2.0):
 - k6 scripts: `scripts/traffic/arena/`
 - Scoring: `labs/stoa-bench/scoring/`
 - K8s manifests: `k8s/arena/`
-- Docker image: `ghcr.io/stoa-platform/arena-bench:0.2.0`
+- Docker image: GHCR `stoa-platform` arena-bench version 0.2.0
 
 To reproduce: deploy the arena on any K8s cluster and run the CronJobs.

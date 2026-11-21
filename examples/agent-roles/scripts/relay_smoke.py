@@ -184,7 +184,6 @@ def prepare_runtime(runtime_root: Path, requested_port: int | None) -> int:
     override = {
         "services": {
             "stoa-gateway": {
-                "image": "stoa-roles-relay-local/gateway:relay",
                 "networks": ["mcp-net", "upstream-net", "relay-net"],
                 "ports": [f"127.0.0.1:{port}:8080"],
                 "environment": {
@@ -196,7 +195,6 @@ def prepare_runtime(runtime_root: Path, requested_port: int | None) -> int:
                 ],
             },
             "upstream-mock": {
-                "image": "stoa-roles-relay-local/mock:relay",
             },
         },
         "networks": {
@@ -205,6 +203,8 @@ def prepare_runtime(runtime_root: Path, requested_port: int | None) -> int:
             }
         },
     }
+    override["services"]["stoa-gateway"]["image"] = "stoa-roles-relay-local/gateway:relay"
+    override["services"]["upstream-mock"]["image"] = "stoa-roles-relay-local/mock:relay"
     write_private_file(
         runtime_root / "relay-override.json",
         (json.dumps(override, indent=2) + "\n").encode("utf-8"),

@@ -168,7 +168,7 @@ Restent **10 P2 ouverts** : P2-1, P2-2, P2-4, P2-5, P2-6, P2-7, P2-8, P2-9, P2-1
 - **Fichier:ligne** : voir ci-dessus.
 - **Check anti-redondance** : OPEN. P0/P1 n'ont pas touché.
 - **Arbitrage** : 2 options :
-  - **(a) Logger pivotable** : nouvelle dep ou nouveau module `src/utils/logger.ts` avec `logger.warn/error`. Filter `import.meta.env.DEV` au runtime. Pattern scalable mais nécessite migration tout le codebase à terme.
+  - **(a) Logger pivotable** : nouvelle dep ou nouveau module `src/utils/logger.ts` avec `logger.warn` and `logger.error`. Filter `import.meta.env.DEV` au runtime. Pattern scalable mais nécessite migration tout le codebase à terme.
   - **(b) Garde minimale via `import.meta.env.DEV`** : `if (import.meta.env.DEV) console.warn(...)` inline aux 2 sites. Zéro dep, ROI immédiat pour un P2.
 - **Décision** : **(b)** + note de suivi dans un ticket Linear pour l'option (a) (scaler progressivement).
 - **Approche de fix** :

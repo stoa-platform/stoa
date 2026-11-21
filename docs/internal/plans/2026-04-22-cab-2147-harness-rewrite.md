@@ -156,7 +156,7 @@ No browser launched. No UI dance. No consent handling. ~10s total for 7 personas
 | Password grant disabled on `control-plane-ui` | Medium | Pre-condition check. If disabled, one-line stoa-infra PR flips flag. ≤15 min unblock. |
 | Mandatory Required Actions on prod personas (TERMS, UPDATE_PASSWORD) | Low | Personas are synthetic; no required actions configured. Verify via kcadm before starting. |
 | Silent-renew breaks without KC session cookie | Medium | Stage 1 keeps existing cookies. Stage 2 adds an `expires_at` buffer (refresh before expiry in test). Fallback: keep cookies pipeline from old auth.setup for Stage 2 first iteration, remove in Stage 3. |
-| `id_token` payload decode differs from current `profile` shape used by AuthContext | Low | `extractUserFromToken` reads `profile.sub/email/preferred_username/tenant_id` — all present in `id_token`. Test one persona manually before committing. |
+| `id_token` payload decode differs from current `profile` shape used by AuthContext | Low | `extractUserFromToken` reads `profile.sub`, `email`, `preferred_username`, and `tenant_id` — all present in `id_token`. Test one persona manually before committing. |
 | CI behavior differs from local | Medium | Stage 1 ships independently. If Stage 2 regresses, revert Stage 2, keep Stage 1. |
 | Breaks tests we didn't audit | Medium | `switchPersona()` API signature unchanged. No caller touches auth internals. 6 caller files pass type-check → runtime behavior preserved. |
 | Password grant gives a different `aud` than UI flow | Low | Both flows issue tokens for the same client → same audience mapping. Verify with first persona. |

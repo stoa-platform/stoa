@@ -12,7 +12,7 @@
 
 services:
   stoa-gateway:
-    image: stoa-roles-relay-dock-local/gateway:dock
+    # stoa-roles-relay-dock-local/gateway:dock
     environment:
       STOA_POC_PUBLIC_BASE_URL: "http://127.0.0.1:8080"
       STOA_POC_RELAY_ENROLLMENTS_FILE: "/etc/stoa/poc/relay-enrollments.json"
@@ -20,10 +20,10 @@ services:
       - "${STOA_POC_DOCK_ENROLLMENTS_FILE:-/dev/null}:/etc/stoa/poc/relay-enrollments.json:ro"
 
   upstream-mock:
-    image: stoa-roles-relay-dock-local/mock:dock
+    # stoa-roles-relay-dock-local/mock:dock
 
   relay-init:
-    image: stoa-roles-relay-dock-local/agent:dock
+    # stoa-roles-relay-dock-local/agent:dock
     build:
       context: .
       dockerfile: Dockerfile.agent
@@ -51,7 +51,7 @@ services:
         && chmod 0700 /run/stoa-relay/op /run/stoa-relay/parent /run/stoa-relay/child
 
   relay-broker:
-    image: stoa-roles-relay-dock-local/agent:dock
+    # stoa-roles-relay-dock-local/agent:dock
     build:
       context: .
       dockerfile: Dockerfile.agent
@@ -78,7 +78,7 @@ services:
         condition: service_completed_successfully
 
   relay-parent:
-    image: stoa-roles-relay-dock-local/agent:dock
+    # stoa-roles-relay-dock-local/agent:dock
     build:
       context: .
       dockerfile: Dockerfile.agent
@@ -101,7 +101,7 @@ services:
         condition: service_completed_successfully
 
   relay-child:
-    image: stoa-roles-relay-dock-local/agent:dock
+    # stoa-roles-relay-dock-local/agent:dock
     build:
       context: .
       dockerfile: Dockerfile.agent

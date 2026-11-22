@@ -5,24 +5,20 @@
 
 ### Features
 
-* **api:** lifecycle SSE propagation and Envoy policy translation (CAB-2256) ([592a731](https://github.com/stoa-platform/stoa/commit/592a731a6599611e6b08894e3d3bca83d242b6bb))
-* **gateway:** add Envoy ext_authz adapter ([8b6bc9c](https://github.com/stoa-platform/stoa/commit/8b6bc9caa957b6605bcd382a240c1e584b763e85))
+* **api:** lifecycle SSE propagation and Envoy policy translation ([592a731](https://github.com/stoa-platform/stoa/commit/592a731a6599611e6b08894e3d3bca83d242b6bb))
 * **migration:** generate Camel XML from synthetic constant-map flows ([#3096](https://github.com/stoa-platform/stoa/issues/3096)) ([1c99a76](https://github.com/stoa-platform/stoa/commit/1c99a76d0345356ce16d0b20aade2c61e1fc8c21))
 * **stoa-go:** add Envoy adapter to stoa-connect ([e63bbb9](https://github.com/stoa-platform/stoa/commit/e63bbb942d06896e034d112f9a8cc1b9a9e88877))
-* **stoa-go:** add xDS ADS server and Envoy adapter to stoa-connect ([f0ed785](https://github.com/stoa-platform/stoa/commit/f0ed785c7256aca6ef16d35ebc246be4b63eba54))
 * **stoa-go:** add xDS snapshot cache and ADS server ([412edcc](https://github.com/stoa-platform/stoa/commit/412edcc54959f45ab463d5c786e34d24501b74b9))
-* **stoa-go:** lier les routes xDS au tenant et à l’API (CAB-2278) ([3c40059](https://github.com/stoa-platform/stoa/commit/3c40059225344f19a52c087adfa7370bbbcf7f40))
+* **stoa-go:** bind xDS routes to the tenant and the API ([3c40059](https://github.com/stoa-platform/stoa/commit/3c40059225344f19a52c087adfa7370bbbcf7f40))
 * **stoactl:** ownership-safe gateway contract reconciliation ([#3101](https://github.com/stoa-platform/stoa/issues/3101)) ([375adcc](https://github.com/stoa-platform/stoa/commit/375adccc8f9cda3f476f3aecfc47ff341a0d47ee))
-
 
 ### Bug Fixes
 
 * **ci:** pin base images and recognize immutable SBOM digests ([#2974](https://github.com/stoa-platform/stoa/issues/2974)) ([4e0d2b1](https://github.com/stoa-platform/stoa/commit/4e0d2b142330a83ac26bca08295af19ca457b6d8))
-* **security:** bump vulnerable dependencies lot 3 (CAB-2353) ([#2995](https://github.com/stoa-platform/stoa/issues/2995)) ([de01fb2](https://github.com/stoa-platform/stoa/commit/de01fb28dffbf96b9bfba2fd1a3801534dc6204b))
-* **security:** bump vulnerable dependencies lot 5 (CAB-2353) ([#2998](https://github.com/stoa-platform/stoa/issues/2998)) ([9e6fe9b](https://github.com/stoa-platform/stoa/commit/9e6fe9b817f6ebc60457487f81f6c8e569a0b0d7))
+* **security:** upgrade kin-openapi to 0.149.0, go-jose/v4 to 4.1.6, and jsonschema/v6 to 6.0.3 ([#2995](https://github.com/stoa-platform/stoa/issues/2995)) ([de01fb2](https://github.com/stoa-platform/stoa/commit/de01fb28dffbf96b9bfba2fd1a3801534dc6204b))
+* **security:** upgrade go-logr/logr to 1.4.4 and OpenTelemetry to 1.45.0 ([#2998](https://github.com/stoa-platform/stoa/issues/2998)) ([9e6fe9b](https://github.com/stoa-platform/stoa/commit/9e6fe9b817f6ebc60457487f81f6c8e569a0b0d7))
 * **stoa-go:** check test cleanup, update Envoy options and update grpc ([ec2dad7](https://github.com/stoa-platform/stoa/commit/ec2dad7f2a9d80193c8c0fb0936dafb742dc54d1))
-* **stoa-go:** citer REWRITE-BUGS et vérifier ipList en mode DENY ([0c9d952](https://github.com/stoa-platform/stoa/commit/0c9d952bc4bb0cde55dbedfa1cfeaffb915ca507))
-* **stoa-go:** enforce policy contract in connect adapters ([d2dd92c](https://github.com/stoa-platform/stoa/commit/d2dd92cd12cea13bd314936cef61152697b43b98))
+* **stoa-go:** verify ipList in DENY mode ([0c9d952](https://github.com/stoa-platform/stoa/commit/0c9d952bc4bb0cde55dbedfa1cfeaffb915ca507))
 * **stoa-go:** enforce policy contract in connect adapters ([1f34a3f](https://github.com/stoa-platform/stoa/commit/1f34a3fad015809c9af30dd85b285e31b162c595))
 
 ## [0.3.10](https://github.com/stoa-platform/stoa/compare/stoa-go-v0.3.9...stoa-go-v0.3.10) (2026-05-06)

@@ -13,6 +13,7 @@ import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Sequence
+from pathlib import Path
 
 VERSIONED_SERVICES = ("control-plane-api", "control-plane-ui", "portal")
 FRONTEND_HTML_ROOT = "/usr/share/nginx/html"
@@ -20,14 +21,6 @@ FRONTEND_VERSION_PATH = f"{FRONTEND_HTML_ROOT}/version.txt"
 FRONTEND_INDEX_PATH = f"{FRONTEND_HTML_ROOT}/index.html"
 FRONTEND_MARK_PREFIX = "stoa-app-version:"
 API_HEALTH_PATH = "/health"
-# BusyBox find+grep is available in the nginx image and avoids GNU grep flags.
-FRONTEND_MARK_SCRIPT = (
-    "found=0; "
-    r"for path in $(find /usr/share/nginx/html \( -name '*.js' -o -name '*.html' \)); do "
-    'if grep -F -q -- "$1" "$path"; then echo "$path"; found=1; fi; '
-    "done; "
-    'test "$found" -eq 1'
-)
 
 Runner = Callable[..., subprocess.CompletedProcess[str]]
 
@@ -154,34 +147,93 @@ def assert_safe_version_token(expected: str) -> None:
         raise ValueError(f"Unsafe application version token: {expected!r}")
 
 
+def application_script_refs(index_html: str) -> list[str]:
+    """Return JS files loaded by index.html, ignoring unreferenced assets."""
+    refs: list[str] = []
+    for tag in re.finditer(r"<(script|link)\b([^>]*)>", index_html, flags=re.IGNORECASE | re.DOTALL):
+        name = tag.group(1).lower()
+        attrs = {
+            match.group(1).lower(): match.group(3)
+            for match in re.finditer(
+                r"""([^\s=]+)\s*=\s*(['"])(.*?)\2""",
+                tag.group(2),
+                flags=re.IGNORECASE | re.DOTALL,
+            )
+        }
+        if name == "script":
+            href = attrs.get("src")
+        else:
+            rel = attrs.get("rel", "").lower().split()
+            as_attr = attrs.get("as", "").lower()
+            href = attrs.get("href")
+            if not href or not (
+                "modulepreload" in rel or ("preload" in rel and as_attr == "script")
+            ):
+                continue
+        if not href:
+            continue
+        path = href.split("#", 1)[0].split("?", 1)[0]
+        if path.endswith(".js"):
+            refs.append(path)
+    return refs
+
+
+def resolve_frontend_path(href: str) -> str:
+    relative = href.split("#", 1)[0].split("?", 1)[0].lstrip("/")
+    if relative.startswith("./"):
+        relative = relative[2:]
+    parts = Path(relative).parts
+    if not relative or ".." in parts:
+        raise VersionMismatch(f"Refusing unsafe script path: {href!r}")
+    return f"{FRONTEND_HTML_ROOT}/{relative}"
+
+
+def has_delimited_app_mark(content: str, expected: str) -> bool:
+    """Require a complete mark, not a longer version with the same prefix."""
+    assert_safe_version_token(expected)
+    mark = frontend_app_mark(expected)
+    if f'"{mark}"' in content or f"'{mark}'" in content:
+        return True
+    return (
+        re.search(
+            rf"(?<![0-9A-Za-z._+-]){re.escape(mark)}(?![0-9A-Za-z._+-])",
+            content,
+        )
+        is not None
+    )
+
+
+def scan_application_scripts_for_mark(
+    index_html: str,
+    scripts: dict[str, str],
+    expected: str,
+) -> str:
+    mark = frontend_app_mark(expected)
+    refs = application_script_refs(index_html)
+    if not refs:
+        raise VersionMismatch("index.html does not load any application JavaScript")
+    for href in refs:
+        path = resolve_frontend_path(href)
+        if path not in scripts:
+            raise VersionMismatch(f"application script {path} was missing")
+        if has_delimited_app_mark(scripts[path], expected):
+            return mark
+    raise VersionMismatch(
+        f"application mark {mark!r} was not found in JavaScript loaded by the application"
+    )
+
+
 def read_frontend_app_mark(
     image_ref: str,
     expected: str,
     runner: Runner = default_runner,
 ) -> str:
-    assert_safe_version_token(expected)
-    mark = frontend_app_mark(expected)
-    result = runner(
-        [
-            "docker",
-            "run",
-            "--rm",
-            "--entrypoint",
-            "sh",
-            image_ref,
-            "-c",
-            FRONTEND_MARK_SCRIPT,
-            "--",
-            mark,
-        ]
-    )
-    if result.returncode != 0 or not (result.stdout or "").strip():
-        detail = (result.stderr or result.stdout or "").strip()
-        raise VersionMismatch(
-            f"application mark {mark!r} was not found in the frontend bundle"
-            + (f": {detail}" if detail else "")
-        )
-    return mark
+    index_html = read_image_text(image_ref, FRONTEND_INDEX_PATH, runner=runner)
+    scripts: dict[str, str] = {}
+    for href in application_script_refs(index_html):
+        path = resolve_frontend_path(href)
+        scripts[path] = read_image_text(image_ref, path, runner=runner)
+    return scan_application_scripts_for_mark(index_html, scripts, expected)
 
 
 def _run_and_cleanup(name: str, runner: Runner, body: Callable[[], str]) -> str:

@@ -15,7 +15,7 @@ export function Footer() {
             Documentation
           </a>
           <span>|</span>
-          <span>v{config.app.version}</span>
+          <span data-stoa-app-version-mark={config.app.versionMark}>v{config.app.version}</span>
         </div>
       </div>
     </footer>

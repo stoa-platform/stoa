@@ -85,3 +85,17 @@ class ImageContextRegressionTests(unittest.TestCase):
             "          image: ghcr.io/team/app@${{ steps.push.outputs.digest }}",
         ])
         self.assertTrue(guard.findings(".github/workflows/build.yml", source))
+
+    def test_regression_sbom_rejects_continued_loaded_image_publisher(self):
+        source = "\n".join([
+            "name: Build", "jobs:", "  publish:", "    runs-on: ubuntu-latest",
+            "    steps:", "      - id: push",
+            "        run: python3 -B scripts/ci/push_loaded_image.py",
+            "          && echo test",
+            "      - name: Generate SBOM",
+            "        uses: anchore/sbom-action@" + "b" * 40,
+            "        with:",
+            "          image: ghcr.io/team/app@${{ steps.push.outputs.digest }}",
+        ])
+        self.assertTrue(guard.findings(".github/workflows/build.yml", source))
+

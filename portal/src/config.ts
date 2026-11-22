@@ -30,7 +30,8 @@ const IS_DEV = ENVIRONMENT === 'dev' || ENVIRONMENT === 'development';
 
 const APP_VERSION = import.meta.env.VITE_APP_VERSION || '0.0.0-dev';
 /** Unique build mark checked by the image version verifier. */
-export const APP_VERSION_MARK = `stoa-app-version:${APP_VERSION}`;
+export const APP_VERSION_MARK =
+  import.meta.env.VITE_APP_VERSION_MARK || `stoa-app-version:${APP_VERSION}`;
 
 export const config = {
   // Base domain at root level for easy access

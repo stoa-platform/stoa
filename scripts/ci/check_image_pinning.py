@@ -45,6 +45,27 @@ def clean(value):
     return value.split(" #", 1)[0].strip().strip("\"'`").rstrip("\\").strip()
 
 
+
+def complete_yaml_scalar(lines, index, stop, key_indent, first_value):
+    """Return the full plain or block scalar, not only the first line."""
+    if index < 0:
+        return first_value
+    block = first_value in {"|", ">", "|-", ">-", "|+", ">+", ""}
+    pieces = [] if block or not first_value else [first_value]
+    for i in range(index + 1, stop):
+        raw = lines[i]
+        if not raw.strip() or raw.lstrip().startswith("#"):
+            continue
+        indent = len(raw) - len(raw.lstrip())
+        if indent <= key_indent:
+            break
+        pieces.append(raw.strip())
+    if not pieces:
+        return first_value
+    joined = "\n".join(pieces) if block else " ".join(pieces)
+    return clean(joined) if not block else joined.strip()
+
+
 def built_sbom_images(path, lines):
     """Trust only direct SBOM inputs from immutable same-job build outputs.
 
@@ -88,10 +109,10 @@ def built_sbom_images(path, lines):
                     attrs = fields(start, finish, 8, sequence=True)
                     with_index, with_value = attrs.get("with", (-1, ""))
                     inputs = fields(with_index + 1, min(end(with_index, 8), finish), 10) if with_index >= 0 and not with_value else {}
-                    steps.append((attrs, inputs))
-                ids = [attrs["id"][1] for attrs, _ in steps if "id" in attrs]
+                    steps.append((attrs, inputs, start, finish))
+                ids = [attrs["id"][1] for attrs, _, _, _ in steps if "id" in attrs]
                 producers = set()
-                for attrs, inputs in steps:
+                for attrs, inputs, _start, finish in steps:
                     action = attrs.get("uses", (-1, ""))[1]
                     image_index, value = inputs.get("image", (-1, ""))
                     digest = re.fullmatch(r"[^@]+@\$\{\{\s*steps\.([A-Za-z_][\w-]*)\.outputs\.digest\s*\}\}", value)
@@ -103,10 +124,12 @@ def built_sbom_images(path, lines):
                             and re.fullmatch(r"[A-Za-z_][\w-]*", identity) and ids.count(identity) == 1
                             and inputs.get("push", (-1, ""))[1] == "true"):
                         producers.add(identity)
-                    # The verified-image publisher pushes an already-loaded image
-                    # and exports its registry digest. Trust only this exact command.
+                    # Trust only the canonical single-line publisher command.
+                    # Continued or block scalars are a different command.
+                    run_index, run_first = attrs.get("run", (-1, ""))
+                    run_value = complete_yaml_scalar(lines, run_index, finish, 8, run_first)
                     if (action == ""
-                            and attrs.get("run", (-1, ""))[1] == "python3 -B scripts/ci/push_loaded_image.py"
+                            and run_value == "python3 -B scripts/ci/push_loaded_image.py"
                             and re.fullmatch(r"[A-Za-z_][\w-]*", identity)
                             and ids.count(identity) == 1):
                         producers.add(identity)

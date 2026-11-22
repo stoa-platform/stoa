@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import re
 import subprocess
@@ -12,7 +11,7 @@ import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-DIGEST_RE = re.compile(r"sha256:[0-9a-f]{64}")
+PUSH_DIGEST_RE = re.compile(r"digest:\s*(sha256:[0-9a-f]{64})")
 Runner = Callable[..., subprocess.CompletedProcess[str]]
 
 
@@ -23,14 +22,14 @@ def parse_image_tags(image_tags: str) -> list[str]:
     return tags
 
 
-def digest_from_repo_digests(repo_digests: Sequence[str]) -> str:
-    for item in repo_digests:
-        if not isinstance(item, str) or "@" not in item:
-            continue
-        digest = item.rsplit("@", 1)[1]
-        if DIGEST_RE.fullmatch(digest):
-            return digest
-    raise ValueError(f"No sha256 digest in RepoDigests: {list(repo_digests)!r}")
+def digest_from_push_output(output: str, tag: str) -> str:
+    matches = PUSH_DIGEST_RE.findall(output)
+    if not matches:
+        raise RuntimeError(f"docker push {tag} did not report a sha256 digest")
+    unique = set(matches)
+    if len(unique) != 1:
+        raise RuntimeError(f"docker push {tag} reported divergent digests: {matches}")
+    return matches[-1]
 
 
 def default_runner(argv: Sequence[str], **kwargs) -> subprocess.CompletedProcess[str]:
@@ -40,22 +39,18 @@ def default_runner(argv: Sequence[str], **kwargs) -> subprocess.CompletedProcess
 def push_loaded_image(image_tags: str, runner: Runner | None = None) -> str:
     runner = runner or default_runner
     tags = parse_image_tags(image_tags)
+    digests: list[str] = []
     for tag in tags:
         result = runner(["docker", "push", tag])
         if result.returncode != 0:
             detail = (result.stderr or result.stdout or "").strip()
             raise RuntimeError(f"docker push {tag} failed ({result.returncode}): {detail}")
-    inspect = runner(["docker", "inspect", "--format", "{{json .RepoDigests}}", tags[0]])
-    if inspect.returncode != 0:
-        detail = (inspect.stderr or inspect.stdout or "").strip()
-        raise RuntimeError(f"docker inspect failed ({inspect.returncode}): {detail}")
-    try:
-        repo_digests = json.loads(inspect.stdout)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(f"docker inspect returned invalid JSON: {inspect.stdout!r}") from exc
-    if not isinstance(repo_digests, list):
-        raise RuntimeError(f"Unexpected RepoDigests payload: {inspect.stdout!r}")
-    return digest_from_repo_digests(repo_digests)
+        output = f"{result.stdout or ''}\n{result.stderr or ''}"
+        digests.append(digest_from_push_output(output, tag))
+    unique = set(digests)
+    if len(unique) != 1:
+        raise RuntimeError(f"Pushed tags reported divergent digests: {digests}")
+    return digests[0]
 
 
 def main(argv: list[str] | None = None) -> int:

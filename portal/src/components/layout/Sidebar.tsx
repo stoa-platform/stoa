@@ -172,7 +172,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           </a>
           <div className="text-xs text-neutral-500 dark:text-neutral-400">
             <p>STOA Developer Portal</p>
-            <p>v{config.app.version}</p>
+            <p data-stoa-app-version-mark={config.app.versionMark}>v{config.app.version}</p>
           </div>
 
           {/* Debug: show user roles in development */}

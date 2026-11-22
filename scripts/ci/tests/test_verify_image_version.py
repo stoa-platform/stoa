@@ -203,6 +203,14 @@ def test_extract_meta_app_version():
         viv.extract_meta_app_version("<html><head></head></html>")
 
 
+INDEX_HTML = """<!doctype html><html><head>
+<meta name="stoa-app-version" content="1.13.0" />
+<script type="module" src="/assets/index-abc.js"></script>
+</head><body></body></html>
+"""
+JS_PATH = "/usr/share/nginx/html/assets/index-abc.js"
+
+
 def _frontend_file_ok(path, stdout):
     return (
         (
@@ -218,36 +226,74 @@ def _frontend_file_ok(path, stdout):
     )
 
 
-def _frontend_mark_response(expected="1.13.0", stdout="/usr/share/nginx/html/assets/index-abc.js\n", returncode=0):
-    return (
-        (
-            "docker",
-            "run",
-            "--rm",
-            "--entrypoint",
-            "sh",
-            "img:tag",
-            "-c",
-            viv.FRONTEND_MARK_SCRIPT,
-            "--",
-            f"stoa-app-version:{expected}",
-        ),
-        type("R", (), {"returncode": returncode, "stdout": stdout, "stderr": ""})(),
+def test_application_script_refs_ignore_unrelated_assets():
+    html = """<html><head>
+    <link rel="stylesheet" href="/assets/index.css">
+    <link rel="modulepreload" href="/assets/vendor.js">
+    <script type="module" src="./assets/index-abc.js"></script>
+    </head></html>"""
+    assert viv.application_script_refs(html) == [
+        "/assets/vendor.js",
+        "./assets/index-abc.js",
+    ]
+
+
+def test_delimited_app_mark_rejects_prerelease_prefix_and_unquoted_partial():
+    assert viv.has_delimited_app_mark('"stoa-app-version:1.13.0"', "1.13.0")
+    assert not viv.has_delimited_app_mark('"stoa-app-version:1.13.0-rc.1"', "1.13.0")
+    assert not viv.has_delimited_app_mark("stoa-app-version:1.13.0-rc.1", "1.13.0")
+    assert viv.has_delimited_app_mark("mark=stoa-app-version:1.13.0;", "1.13.0")
+
+
+def test_scan_rejects_mark_only_in_unreferenced_html():
+    index_html = INDEX_HTML
+    scripts = {JS_PATH: 'export const version="2.0.0";\n'}
+    with pytest.raises(viv.VersionMismatch, match="was not found in JavaScript loaded"):
+        viv.scan_application_scripts_for_mark(index_html, scripts, "1.13.0")
+    leftover = {
+        JS_PATH: 'export const version="2.0.0";\n',
+        "/usr/share/nginx/html/unused.html": '<meta name="stoa-app-version" content="1.13.0" />'
+        '<!-- stoa-app-version:1.13.0 -->',
+    }
+    with pytest.raises(viv.VersionMismatch, match="was not found in JavaScript loaded"):
+        viv.scan_application_scripts_for_mark(index_html, leftover, "1.13.0")
+
+
+def test_scan_accepts_quoted_mark_in_loaded_javascript():
+    scripts = {JS_PATH: 'const mark="stoa-app-version:1.13.0";\n'}
+    assert (
+        viv.scan_application_scripts_for_mark(INDEX_HTML, scripts, "1.13.0")
+        == "stoa-app-version:1.13.0"
     )
+
+
+def test_vite_configs_define_a_complete_mark_literal():
+    needle = "JSON.stringify(`stoa-app-version:${appVersion}`)"
+    for rel in ("portal/vite.config.ts", "control-plane-ui/vite.config.ts"):
+        text = (ROOT / rel).read_text()
+        assert needle in text, rel
+        assert "import.meta.env.VITE_APP_VERSION_MARK" in text, rel
 
 
 def test_verify_frontend_stale_app_mark_fails_when_version_txt_is_correct():
     runner = FakeRunner([
         _frontend_file_ok("/usr/share/nginx/html/version.txt", "1.13.0\n"),
-        _frontend_file_ok(
-            "/usr/share/nginx/html/index.html",
-            '<meta name="stoa-app-version" content="1.13.0" />\n',
-        ),
-        _frontend_mark_response(stdout="", returncode=1),
+        _frontend_file_ok("/usr/share/nginx/html/index.html", INDEX_HTML),
+        _frontend_file_ok(JS_PATH, 'const mark="stoa-app-version:2.0.0";\n'),
     ])
     with pytest.raises(viv.VersionMismatch, match="application mark 'stoa-app-version:1.13.0'"):
         viv.verify_image_version("control-plane-ui", "1.13.0", "img:tag", runner=runner)
     assert not any(call[:2] == ["docker", "run"] and "-d" in call for call in runner.calls)
+
+
+def test_verify_frontend_rejects_prerelease_prefix_in_loaded_javascript():
+    runner = FakeRunner([
+        _frontend_file_ok("/usr/share/nginx/html/version.txt", "1.13.0\n"),
+        _frontend_file_ok("/usr/share/nginx/html/index.html", INDEX_HTML),
+        _frontend_file_ok(JS_PATH, 'const mark="stoa-app-version:1.13.0-rc.1";\n'),
+    ])
+    with pytest.raises(viv.VersionMismatch, match="application mark 'stoa-app-version:1.13.0'"):
+        viv.verify_image_version("control-plane-ui", "1.13.0", "img:tag", runner=runner)
 
 
 def test_verify_frontend_stale_meta_fails_when_version_txt_is_correct():
@@ -260,7 +306,6 @@ def test_verify_frontend_stale_meta_fails_when_version_txt_is_correct():
     ])
     with pytest.raises(viv.VersionMismatch, match="expected '1.13.0'"):
         viv.verify_image_version("portal", "1.13.0", "img:tag", runner=runner)
-    assert not any("stoa-app-version:1.13.0" in part for call in runner.calls for part in call)
 
 
 def test_verify_frontend_success_checks_vite_artifacts_before_server():
@@ -269,11 +314,8 @@ def test_verify_frontend_success_checks_vite_artifacts_before_server():
     ])
     runner = FakeRunner([
         _frontend_file_ok("/usr/share/nginx/html/version.txt", "1.13.0\n"),
-        _frontend_file_ok(
-            "/usr/share/nginx/html/index.html",
-            '<meta name="stoa-app-version" content="1.13.0" />\n',
-        ),
-        _frontend_mark_response(),
+        _frontend_file_ok("/usr/share/nginx/html/index.html", INDEX_HTML),
+        _frontend_file_ok(JS_PATH, 'const mark="stoa-app-version:1.13.0";\n'),
         (
             (
                 "docker",

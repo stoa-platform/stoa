@@ -4,46 +4,68 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
-import pytest
-
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "scripts" / "ci"))
 import push_loaded_image as pli  # noqa: E402
 
 DIGEST = "sha256:" + "a" * 64
+OTHER = "sha256:" + "b" * 64
+PUSH_OK = f"The push refers to repository [ghcr.io/example/portal]\n1.4.0: digest: {DIGEST} size: 1234\n"
 
 
-def test_parse_image_tags_and_digest():
+def test_parse_image_tags_and_push_digest():
     tags = pli.parse_image_tags(
         "ghcr.io/stoa-platform/portal:1.4.0\n\nghcr.io/stoa-platform/portal:sha-abcd\n"
     )
     assert tags[0] == "ghcr.io/stoa-platform/portal:1.4.0"
-    assert pli.digest_from_repo_digests([f"ghcr.io/stoa-platform/portal@{DIGEST}"]) == DIGEST
-    with pytest.raises(ValueError):
-        pli.digest_from_repo_digests(["ghcr.io/stoa-platform/portal:1.4.0"])
-    with pytest.raises(ValueError):
+    assert pli.digest_from_push_output(PUSH_OK, "ghcr.io/example/portal:1.4.0") == DIGEST
+    try:
+        pli.digest_from_push_output("pushed\n", "ghcr.io/example/portal:1.4.0")
+    except RuntimeError as exc:
+        assert "did not report a sha256 digest" in str(exc)
+    else:
+        raise AssertionError("expected missing digest to fail")
+    try:
         pli.parse_image_tags("\n")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("expected empty tags to fail")
 
 
-def test_push_loaded_image_pushes_each_tag_then_reads_digest():
+def test_push_loaded_image_uses_push_digests_not_inspect():
     tags = "ghcr.io/example/portal:1.4.0\nghcr.io/example/portal:sha-abcd\n"
     calls = []
 
     def runner(argv, **kwargs):
         calls.append(list(argv))
         if argv[:2] == ["docker", "push"]:
-            return SimpleNamespace(returncode=0, stdout="pushed\n", stderr="")
-        if argv[:3] == ["docker", "inspect", "--format"]:
-            return SimpleNamespace(
-                returncode=0,
-                stdout=f'["ghcr.io/example/portal@{DIGEST}"]\n',
-                stderr="",
-            )
-        raise AssertionError(argv)
+            return SimpleNamespace(returncode=0, stdout=PUSH_OK, stderr="")
+        raise AssertionError(f"inspect must not be used: {argv}")
 
     assert pli.push_loaded_image(tags, runner=runner) == DIGEST
     assert calls[0] == ["docker", "push", "ghcr.io/example/portal:1.4.0"]
     assert calls[1] == ["docker", "push", "ghcr.io/example/portal:sha-abcd"]
+
+
+def test_push_loaded_image_rejects_divergent_tag_digests():
+    tags = "ghcr.io/example/portal:1.4.0\nghcr.io/example/portal:sha-abcd\n"
+
+    def runner(argv, **kwargs):
+        if argv[-1].endswith(":1.4.0"):
+            return SimpleNamespace(returncode=0, stdout=PUSH_OK, stderr="")
+        return SimpleNamespace(
+            returncode=0,
+            stdout=f"sha-abcd: digest: {OTHER} size: 99\n",
+            stderr="",
+        )
+
+    try:
+        pli.push_loaded_image(tags, runner=runner)
+    except RuntimeError as exc:
+        assert "divergent digests" in str(exc)
+    else:
+        raise AssertionError("expected divergent digests to fail")
 
 
 def test_cli_writes_digest(tmp_path, monkeypatch):
@@ -52,13 +74,7 @@ def test_cli_writes_digest(tmp_path, monkeypatch):
     monkeypatch.setenv("IMAGE_TAGS", "ghcr.io/example/portal:1.4.0")
 
     def runner(argv, **kwargs):
-        if argv[:2] == ["docker", "push"]:
-            return SimpleNamespace(returncode=0, stdout="", stderr="")
-        return SimpleNamespace(
-            returncode=0,
-            stdout=f'["ghcr.io/example/portal@{DIGEST}"]\n',
-            stderr="",
-        )
+        return SimpleNamespace(returncode=0, stdout=PUSH_OK, stderr="")
 
     monkeypatch.setattr(pli, "default_runner", runner)
     assert pli.main([]) == 0
@@ -72,6 +88,19 @@ def test_cli_rejects_failed_push(tmp_path, monkeypatch):
 
     def runner(argv, **kwargs):
         return SimpleNamespace(returncode=1, stdout="", stderr="denied")
+
+    monkeypatch.setattr(pli, "default_runner", runner)
+    assert pli.main([]) == 1
+    assert not output.exists()
+
+
+def test_cli_rejects_missing_push_digest(tmp_path, monkeypatch):
+    output = tmp_path / "output"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output))
+    monkeypatch.setenv("IMAGE_TAGS", "ghcr.io/example/portal:1.4.0")
+
+    def runner(argv, **kwargs):
+        return SimpleNamespace(returncode=0, stdout="pushed\n", stderr="")
 
     monkeypatch.setattr(pli, "default_runner", runner)
     assert pli.main([]) == 1

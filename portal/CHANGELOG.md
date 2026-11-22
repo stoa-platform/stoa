@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.5.0](https://github.com/stoa-platform/stoa/compare/portal-v1.4.0...portal-v1.5.0) (2026-11-22)
+
+
+### Features
+
+* **api:** lifecycle SSE propagation and Envoy policy translation (CAB-2256) ([592a731](https://github.com/stoa-platform/stoa/commit/592a731a6599611e6b08894e3d3bca83d242b6bb))
+* **auth:** update portal account access and realm import inputs ([8c35880](https://github.com/stoa-platform/stoa/commit/8c358805713d254fff347a916475ccd6d63d24b1))
+* **e2e:** axe-core a11y gate (CAB-1989 P4) ([#2367](https://github.com/stoa-platform/stoa/issues/2367)) ([75d79fe](https://github.com/stoa-platform/stoa/commit/75d79fea5b2e963468ffcd651ceb33d761e2ccd2))
+* isolation tenant lot 1, configuration des accès et bootstrap ([d8c806a](https://github.com/stoa-platform/stoa/commit/d8c806a989e5d02ab8d7197869f1527215bcbb41))
+* **local:** Tilt + k3d local environment + Alembic migration fixes ([#2359](https://github.com/stoa-platform/stoa/issues/2359)) ([c271013](https://github.com/stoa-platform/stoa/commit/c271013daa632893d4699faa5d7ce8cca25dcb46))
+* **migration:** generate Camel XML from synthetic constant-map flows ([#3096](https://github.com/stoa-platform/stoa/issues/3096)) ([1c99a76](https://github.com/stoa-platform/stoa/commit/1c99a76d0345356ce16d0b20aade2c61e1fc8c21))
+* **ui:** accessibilité de la console et du portail ([ebb668e](https://github.com/stoa-platform/stoa/commit/ebb668e5a22918a0ecdf7ef4a6a49178dd1d3c1d))
+* **ui:** accessibilité de la console et du portail ([d356976](https://github.com/stoa-platform/stoa/commit/d356976a79aa6e59fe1b691e1ffbe9db6afa66ec))
+
+
+### Bug Fixes
+
+* **api:** scrub stack traces + axios/follow-redirects bumps (CAB-2138) ([#2441](https://github.com/stoa-platform/stoa/issues/2441)) ([656e19b](https://github.com/stoa-platform/stoa/commit/656e19b9d36000d0f7cacf9ddaa8878604645f58))
+* **auth:** label the optional company field ([694bfb5](https://github.com/stoa-platform/stoa/commit/694bfb50e6d39a54adde9e2d4eec0f61810fb24b))
+* **mcp:** restore temperature=0 + add tool-name bijection in phase05 bench (CAB-2116) ([#2428](https://github.com/stoa-platform/stoa/issues/2428)) ([e9adb32](https://github.com/stoa-platform/stoa/commit/e9adb320d8e38414f3eecc7da7d56d9a3778655b))
+* **portal:** default to current environment ([07f3f71](https://github.com/stoa-platform/stoa/commit/07f3f71f34b9f71443878f123217fae33dd46ef5))
+* **portal:** expose provider plans for subscriptions ([#2652](https://github.com/stoa-platform/stoa/issues/2652)) ([a7293ab](https://github.com/stoa-platform/stoa/commit/a7293ab3c05d8a758ddc0ea73d64187368513f7f))
+* **portal:** interpoler les libellés sans replaceAll ([db22217](https://github.com/stoa-platform/stoa/commit/db22217a3e3a1465d3471ee10195662b396ff44c))
+* **portal:** PKCE polyfill for non-secure HTTP local dev ([#2347](https://github.com/stoa-platform/stoa/issues/2347)) ([ed60bda](https://github.com/stoa-platform/stoa/commit/ed60bdacb11be1f900c83b92ccad4d8dd3cdd944))
+* **portal:** surface catalog load failures instead of an empty list (CAB-1917) ([#3143](https://github.com/stoa-platform/stoa/issues/3143)) ([303010d](https://github.com/stoa-platform/stoa/commit/303010db98770fa47d99d15a3e67d3985aca8a5e))
+* **security:** bump vulnerable dependencies lot 3 (CAB-2353) ([#2995](https://github.com/stoa-platform/stoa/issues/2995)) ([de01fb2](https://github.com/stoa-platform/stoa/commit/de01fb28dffbf96b9bfba2fd1a3801534dc6204b))
+* **security:** bump vulnerable dependencies lot 5 (CAB-2353) ([#2998](https://github.com/stoa-platform/stoa/issues/2998)) ([9e6fe9b](https://github.com/stoa-platform/stoa/commit/9e6fe9b817f6ebc60457487f81f6c8e569a0b0d7))
+* **subscriptions:** align Portal Console Gateway UAC flow ([d2c0a64](https://github.com/stoa-platform/stoa/commit/d2c0a6485f6bd9d3188aca66660e0a926a1b75c2))
+* **ui:** erreurs de dialogue, contraste et libellés accessibles ([9bc9dca](https://github.com/stoa-platform/stoa/commit/9bc9dcae4f048bc11e698db3a6d08f4121734014))
+
 ## [1.4.0](https://github.com/stoa-platform/stoa/compare/portal-v1.3.4...portal-v1.4.0) (2026-11-22)
 
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.27](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.26...stoa-gateway-v0.9.27) (2026-11-22)
+
+
+### Bug Fixes
+
+* **deps:** bump url to 2.5.9 ([#3213](https://github.com/stoa-platform/stoa/issues/3213)) ([1f0b3cd](https://github.com/stoa-platform/stoa/commit/1f0b3cd8fd306239c55b3f00b66728a998b086aa))
+
 ## [0.9.26](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.25...stoa-gateway-v0.9.26) (2026-11-22)
 
 

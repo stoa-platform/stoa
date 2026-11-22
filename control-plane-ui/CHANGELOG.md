@@ -1,5 +1,66 @@
 # Changelog
 
+## [1.14.0](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.13.0...control-plane-ui-v1.14.0) (2026-11-22)
+
+
+### Features
+
+* **api:** add catalog release versioning ([8e724b9](https://github.com/stoa-platform/stoa/commit/8e724b9f77732f1f1870816a2b03a834eb73dc4d))
+* **api:** observability audit fixtures gated by profile (phase 2) ([#2748](https://github.com/stoa-platform/stoa/issues/2748)) ([3d7e7ef](https://github.com/stoa-platform/stoa/commit/3d7e7ef66411d0b7bd5ccd27597cbb78a37168b8))
+* **local:** Tilt + k3d local environment + Alembic migration fixes ([#2359](https://github.com/stoa-platform/stoa/issues/2359)) ([c271013](https://github.com/stoa-platform/stoa/commit/c271013daa632893d4699faa5d7ce8cca25dcb46))
+* **migration:** generate Camel XML from synthetic constant-map flows ([#3096](https://github.com/stoa-platform/stoa/issues/3096)) ([1c99a76](https://github.com/stoa-platform/stoa/commit/1c99a76d0345356ce16d0b20aade2c61e1fc8c21))
+* **ui:** accessibilité de la console et du portail ([ebb668e](https://github.com/stoa-platform/stoa/commit/ebb668e5a22918a0ecdf7ef4a6a49178dd1d3c1d))
+* **ui:** accessibilité de la console et du portail ([d356976](https://github.com/stoa-platform/stoa/commit/d356976a79aa6e59fe1b691e1ffbe9db6afa66ec))
+* **ui:** add gateway overview tabs ([b1186c3](https://github.com/stoa-platform/stoa/commit/b1186c31df615c6c5e03fd565ee636cee9ca3202))
+* **ui:** audit log stats + actions + actor + backoff + export + i18n ([#2738](https://github.com/stoa-platform/stoa/issues/2738)) ([7ca74d7](https://github.com/stoa-platform/stoa/commit/7ca74d7a04e609b4c6313e3d8bd1c597e9391f25))
+* **ui:** CAB-2219 phase 6.5 cp-ui 5-state rendering + AR-1 anti-regression ([#2766](https://github.com/stoa-platform/stoa/issues/2766)) ([843b18c](https://github.com/stoa-platform/stoa/commit/843b18c97e5b27444931921e5cde23318a15d4c7))
+* **ui:** CAB-2223 split Live Calls status semantics ([#2772](https://github.com/stoa-platform/stoa/issues/2772)) ([0e646dd](https://github.com/stoa-platform/stoa/commit/0e646dd7df37b83b06f0ce3b7de8052e06d85b4e))
+* **ui:** CAB-2224 wire Live Calls traffic heatmap ([#2775](https://github.com/stoa-platform/stoa/issues/2775)) ([fbebd67](https://github.com/stoa-platform/stoa/commit/fbebd67a90af78f8b5e776e96f2df3b44e15dce6))
+* **ui:** guardrails runtime truth UI per PR-3A contract ([#2743](https://github.com/stoa-platform/stoa/issues/2743)) ([411ea88](https://github.com/stoa-platform/stoa/commit/411ea88826c3222161efd11a2bb5c3e01d55cc62))
+* **ui:** live-calls success-first UX ([#2770](https://github.com/stoa-platform/stoa/issues/2770)) ([1ac8b28](https://github.com/stoa-platform/stoa/commit/1ac8b28a94a4e0716ed6d305d50454abadde662c))
+* **ui:** migrate critical entities to OpenAPI-generated types (Wave 1) ([#2471](https://github.com/stoa-platform/stoa/issues/2471)) ([d14b27d](https://github.com/stoa-platform/stoa/commit/d14b27d53a129f2575a57d90981e3bf804fdbe56))
+
+
+### Bug Fixes
+
+* align API deployment workflow contract ([9bc9db4](https://github.com/stoa-platform/stoa/commit/9bc9db49ee577757adc45010f90c0dcb5eba0aff))
+* **api:** isolate Swagger and ReDoc CSP from the API (CAB-2587) ([#3148](https://github.com/stoa-platform/stoa/issues/3148)) ([93ed7df](https://github.com/stoa-platform/stoa/commit/93ed7df1bcb6144ee058eb3c0965aa51437da653))
+* **api:** scrub stack traces + axios/follow-redirects bumps (CAB-2138) ([#2441](https://github.com/stoa-platform/stoa/issues/2441)) ([656e19b](https://github.com/stoa-platform/stoa/commit/656e19b9d36000d0f7cacf9ddaa8878604645f58))
+* **console:** explain invitation-only signup access ([#3059](https://github.com/stoa-platform/stoa/issues/3059)) ([f9c05ef](https://github.com/stoa-platform/stoa/commit/f9c05ef22fa0f04c9f961176a00af1ce25f52629))
+* **console:** surface lifecycle runtime status ([bed5aaf](https://github.com/stoa-platform/stoa/commit/bed5aaffc7db312ce542d2b8a9fbce826cb0af59))
+* **demo:** bridge route sync for smoke ([#2553](https://github.com/stoa-platform/stoa/issues/2553)) ([3f0af42](https://github.com/stoa-platform/stoa/commit/3f0af424af3b4f95bb7b33f1135c7dd2707e90ec))
+* **deployments:** expose Git desired state freshness ([#2583](https://github.com/stoa-platform/stoa/issues/2583)) ([5771b91](https://github.com/stoa-platform/stoa/commit/5771b910c5a5fc47c20fbff10bed659839f3541d))
+* **gateway:** decouple edge MCP tools from API discovery ([#2687](https://github.com/stoa-platform/stoa/issues/2687)) ([1ab63a0](https://github.com/stoa-platform/stoa/commit/1ab63a07be2b852c38e0d3a9d5210e12a29fb51c))
+* **gateway:** decouple native runtime tools from API discovery ([#2690](https://github.com/stoa-platform/stoa/issues/2690)) ([9bb78af](https://github.com/stoa-platform/stoa/commit/9bb78af6b563fd364d0a25c3b3611081c2d01b9a))
+* **gateway:** keep scoped discovery counts authoritative ([#2684](https://github.com/stoa-platform/stoa/issues/2684)) ([9047b9b](https://github.com/stoa-platform/stoa/commit/9047b9b7ab86b9ccb36530fea05feca57c16c6aa))
+* **gateways:** surface external URLs for link and connect ([#2642](https://github.com/stoa-platform/stoa/issues/2642)) ([dacf695](https://github.com/stoa-platform/stoa/commit/dacf6950016f48783c48db2d90dab485bf82c74b))
+* **mcp:** restore temperature=0 + add tool-name bijection in phase05 bench (CAB-2116) ([#2428](https://github.com/stoa-platform/stoa/issues/2428)) ([e9adb32](https://github.com/stoa-platform/stoa/commit/e9adb320d8e38414f3eecc7da7d56d9a3778655b))
+* reconcile prod promotion migrations ([17d8a3b](https://github.com/stoa-platform/stoa/commit/17d8a3b5474e5298e704586bf101a9378e1e2a32))
+* **security:** bump vulnerable dependencies lot 3 (CAB-2353) ([#2995](https://github.com/stoa-platform/stoa/issues/2995)) ([de01fb2](https://github.com/stoa-platform/stoa/commit/de01fb28dffbf96b9bfba2fd1a3801534dc6204b))
+* **security:** bump vulnerable dependencies lot 5 (CAB-2353) ([#2998](https://github.com/stoa-platform/stoa/issues/2998)) ([9e6fe9b](https://github.com/stoa-platform/stoa/commit/9e6fe9b817f6ebc60457487f81f6c8e569a0b0d7))
+* **subscriptions:** align Portal Console Gateway UAC flow ([d2c0a64](https://github.com/stoa-platform/stoa/commit/d2c0a6485f6bd9d3188aca66660e0a926a1b75c2))
+* **ui-1:** close UI-1 Wave 1 bug hunt batch (8 items) ([#2525](https://github.com/stoa-platform/stoa/issues/2525)) ([3235dde](https://github.com/stoa-platform/stoa/commit/3235dde431fa56b8ea4dc9b7492c81e9316b90c9))
+* **ui-2:** close 10 P0 critical bugs (refresh token cascade + SSE + fetch bypass + path encoding) ([#2514](https://github.com/stoa-platform/stoa/issues/2514)) ([a3f1a4e](https://github.com/stoa-platform/stoa/commit/a3f1a4eeadf200ab72dbc621ecce8c31fa8b8323))
+* **ui-2:** P1 batch — 14 P1 fixes across dashboards, auth, http, skills ([#2519](https://github.com/stoa-platform/stoa/issues/2519)) ([4d1984d](https://github.com/stoa-platform/stoa/commit/4d1984d1ed0829646207fe137aad8e2c2bbd3150))
+* **ui-2:** P2 cleanup batch — close UI-2 module (8 code fixes + 3 WONT-FIX + 2 deferred) ([#2521](https://github.com/stoa-platform/stoa/issues/2521)) ([44ec6cd](https://github.com/stoa-platform/stoa/commit/44ec6cd135956fc26f5a6ee7c7e367a8bb10de47))
+* **ui:** align Application alias with regenerated schema (CAB-2159) ([#2476](https://github.com/stoa-platform/stoa/issues/2476)) ([e5f3064](https://github.com/stoa-platform/stoa/commit/e5f3064f8d004c900ee29873176a75b3829f0326))
+* **ui:** align live calls metrics on http_route ([#2727](https://github.com/stoa-platform/stoa/issues/2727)) ([6ebaf90](https://github.com/stoa-platform/stoa/commit/6ebaf9097d2eca2e411bdf886fb2058b6ad05fd8))
+* **ui:** chown /usr/share/nginx/html for sed -i index.html ([#2375](https://github.com/stoa-platform/stoa/issues/2375)) ([22621da](https://github.com/stoa-platform/stoa/commit/22621dad915f517dd66b87c2f8cbce373f31e8fc))
+* **ui:** clarify gateway URL surfaces (CAB-2240) ([e2a2e89](https://github.com/stoa-platform/stoa/commit/e2a2e89e04e1c775b27eb26a9da7f8f7244f6ac2))
+* **ui:** close CAB-2164 UI-3 cleanup — zombies doc + any hardening ([#2527](https://github.com/stoa-platform/stoa/issues/2527)) ([5af1c92](https://github.com/stoa-platform/stoa/commit/5af1c9212cae6deb0d382ca819298f38a8a1fbb6))
+* **ui:** consolidate Live Calls trace details ([#2715](https://github.com/stoa-platform/stoa/issues/2715)) ([0b58a9d](https://github.com/stoa-platform/stoa/commit/0b58a9dc285f1115eb1050fa80fe495eda14cc39))
+* **ui:** consolidate observability product navigation ([#2713](https://github.com/stoa-platform/stoa/issues/2713)) ([31e045b](https://github.com/stoa-platform/stoa/commit/31e045be8e4a584a8f2f06b64077736b294cccf4))
+* **ui:** erreurs de dialogue, contraste et libellés accessibles ([9bc9dca](https://github.com/stoa-platform/stoa/commit/9bc9dcae4f048bc11e698db3a6d08f4121734014))
+* **ui:** Gateway Dashboard Inconsistencies — unified status, remove mocks, aggregated multi-gateway overview (CAB-1887) ([#2365](https://github.com/stoa-platform/stoa/issues/2365)) ([5d4b40d](https://github.com/stoa-platform/stoa/commit/5d4b40d65bc1f15d8783bb350d6c8efeb4773058))
+* **ui:** honest wording for guardrails empty state (phase 3) ([#2749](https://github.com/stoa-platform/stoa/issues/2749)) ([876cb47](https://github.com/stoa-platform/stoa/commit/876cb47e7444683a99ef4383daa1ba18c6b18160))
+* **ui:** keep Field label association with explicit control ids ([172c5f0](https://github.com/stoa-platform/stoa/commit/172c5f05f35a8c2b32c4ae17401ed0da5bcad76e))
+* **ui:** keep Field label association with explicit control ids ([6d248bb](https://github.com/stoa-platform/stoa/commit/6d248bbb4a055be5c116946165217779c0af5c72))
+* **ui:** make API deployment workflow visible ([#2575](https://github.com/stoa-platform/stoa/issues/2575)) ([63ae62c](https://github.com/stoa-platform/stoa/commit/63ae62c1f4fe615cc2cd4ef79bb139c41a3a8742))
+* **ui:** reduce gateway metrics warning noise ([#2701](https://github.com/stoa-platform/stoa/issues/2701)) ([986d46e](https://github.com/stoa-platform/stoa/commit/986d46ecef445e987039c570ec60efda73cf1129))
+* **ui:** remove Grafana URL token embedding ([#2711](https://github.com/stoa-platform/stoa/issues/2711)) ([9683f27](https://github.com/stoa-platform/stoa/commit/9683f2789a4a6891ffa256ebe58822c236e14ebc))
+* **ui:** show sidecar deployment mode in gateway detail ([018916c](https://github.com/stoa-platform/stoa/commit/018916c2f0ce7c04d4903ac5f9a96c86d03c437d))
+* use Git OpenAPI specs as API truth ([a01bb0c](https://github.com/stoa-platform/stoa/commit/a01bb0c2035b4a72ed668230081da8343f438050))
+
 ## [1.13.0](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.12.0...control-plane-ui-v1.13.0) (2026-11-22)
 
 

@@ -103,6 +103,13 @@ def built_sbom_images(path, lines):
                             and re.fullmatch(r"[A-Za-z_][\w-]*", identity) and ids.count(identity) == 1
                             and inputs.get("push", (-1, ""))[1] == "true"):
                         producers.add(identity)
+                    # The verified-image publisher pushes an already-loaded image
+                    # and exports its registry digest. Trust only this exact command.
+                    if (action == ""
+                            and attrs.get("run", (-1, ""))[1] == "python3 -B scripts/ci/push_loaded_image.py"
+                            and re.fullmatch(r"[A-Za-z_][\w-]*", identity)
+                            and ids.count(identity) == 1):
+                        producers.add(identity)
     return trusted
 
 

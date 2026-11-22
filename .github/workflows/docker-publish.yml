@@ -155,10 +155,12 @@ jobs:
       - name: Resolve application version
         id: app-version
         env:
-          # Release tags are <component>-vX.Y.Z; dispatch/call fall back to the
-          # version file of the checked-out commit.
+          # Only a published-release tag may override the checked-out version
+          # file. workflow_dispatch and workflow_call leave TAG empty so a
+          # tag-shaped ref name cannot be mistaken for a release.
           SERVICE: ${{ matrix.service }}
-          TAG: ${{ github.event.release.tag_name || github.ref_name }}
+          TAG: ${{ github.event.release.tag_name }}
+          EVENT_NAME: ${{ github.event_name }}
         run: python3 -B scripts/ci/release_app_version.py
 
       - name: Build ${{ matrix.service }}
@@ -186,19 +188,13 @@ jobs:
           IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
         run: python3 -B scripts/ci/verify_image_version.py
 
+      # Publish the already-loaded, already-verified image. A second
+      # build-push-action run could produce a different digest.
       - name: Push ${{ matrix.service }}
         id: push
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
-        with:
-          context: ${{ (matrix.service == 'portal' || matrix.service == 'control-plane-ui') && '.' || format('./{0}', matrix.service) }}
-          file: ./${{ matrix.service }}/Dockerfile
-          platforms: linux/amd64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ matrix.service }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
-          build-args: ${{ steps.app-version.outputs.build_args }}
+        env:
+          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
+        run: python3 -B scripts/ci/push_loaded_image.py
 
       - name: Validate published image digest
         id: image

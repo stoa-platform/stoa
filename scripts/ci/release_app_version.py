@@ -47,18 +47,25 @@ def version_from_source(repo_root: Path, service: str) -> str:
     return version
 
 
-def resolve_app_version(service: str, tag: str, repo_root: Path) -> tuple[str, bool]:
+def resolve_app_version(
+    service: str,
+    tag: str,
+    repo_root: Path,
+    event_name: str = "",
+) -> tuple[str, bool]:
     """Return (version, should_verify).
 
-    Versioned services always verify. The release tag wins when it matches
-    the service; otherwise the checked-out version file is used (manual
-    dispatch or workflow_call).
+    Versioned services always verify. A component release tag is used only
+    for the GitHub `release` event. workflow_dispatch and workflow_call
+    always read the checked-out version file, even if the ref name looks
+    like a component tag.
     """
     if service not in VERSIONED_SERVICES:
         return "", False
-    tagged = version_from_tag(tag, service)
-    if tagged is not None:
-        return tagged, True
+    if event_name == "release":
+        tagged = version_from_tag(tag, service)
+        if tagged is not None:
+            return tagged, True
     return version_from_source(repo_root, service), True
 
 
@@ -84,6 +91,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--service", default=os.environ.get("SERVICE", ""))
     parser.add_argument("--tag", default=os.environ.get("TAG", ""))
+    parser.add_argument("--event-name", default=os.environ.get("EVENT_NAME", ""))
     parser.add_argument("--repo-root", default=os.environ.get("GITHUB_WORKSPACE", ""))
     args = parser.parse_args(argv)
 
@@ -92,7 +100,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     repo_root = Path(args.repo_root or ".").resolve()
     try:
-        version, verify = resolve_app_version(args.service, args.tag, repo_root)
+        version, verify = resolve_app_version(
+            args.service, args.tag, repo_root, event_name=args.event_name
+        )
     except (OSError, ValueError, tomllib.TOMLDecodeError, json.JSONDecodeError, KeyError) as exc:
         print(f"::error::Failed to resolve application version: {exc}", file=sys.stderr)
         return 1

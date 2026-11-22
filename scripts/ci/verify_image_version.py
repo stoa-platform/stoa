@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -14,8 +15,19 @@ import urllib.request
 from collections.abc import Callable, Sequence
 
 VERSIONED_SERVICES = ("control-plane-api", "control-plane-ui", "portal")
-FRONTEND_VERSION_PATH = "/usr/share/nginx/html/version.txt"
+FRONTEND_HTML_ROOT = "/usr/share/nginx/html"
+FRONTEND_VERSION_PATH = f"{FRONTEND_HTML_ROOT}/version.txt"
+FRONTEND_INDEX_PATH = f"{FRONTEND_HTML_ROOT}/index.html"
+FRONTEND_MARK_PREFIX = "stoa-app-version:"
 API_HEALTH_PATH = "/health"
+# BusyBox find+grep is available in the nginx image and avoids GNU grep flags.
+FRONTEND_MARK_SCRIPT = (
+    "found=0; "
+    r"for path in $(find /usr/share/nginx/html \( -name '*.js' -o -name '*.html' \)); do "
+    'if grep -F -q -- "$1" "$path"; then echo "$path"; found=1; fi; '
+    "done; "
+    'test "$found" -eq 1'
+)
 
 Runner = Callable[..., subprocess.CompletedProcess[str]]
 
@@ -97,7 +109,7 @@ def wait_for_url(url: str, timeout_seconds: float, sleeper=time.sleep, fetcher=_
     raise RuntimeError(f"Timed out waiting for {url}: {last_error}")
 
 
-def read_frontend_version_file(image_ref: str, runner: Runner = default_runner) -> str:
+def read_image_text(image_ref: str, path: str, runner: Runner = default_runner) -> str:
     result = _require_ok(
         runner(
             [
@@ -107,15 +119,69 @@ def read_frontend_version_file(image_ref: str, runner: Runner = default_runner) 
                 "--entrypoint",
                 "cat",
                 image_ref,
-                FRONTEND_VERSION_PATH,
+                path,
             ]
         ),
-        f"read {FRONTEND_VERSION_PATH}",
+        f"read {path}",
     )
-    version = (result.stdout or "").strip()
+    return result.stdout or ""
+
+
+def read_frontend_version_file(image_ref: str, runner: Runner = default_runner) -> str:
+    version = read_image_text(image_ref, FRONTEND_VERSION_PATH, runner=runner).strip()
     if not version:
         raise VersionMismatch(f"{FRONTEND_VERSION_PATH} was empty")
     return version
+
+
+def extract_meta_app_version(html: str) -> str:
+    match = re.search(
+        r'<meta\s+name="stoa-app-version"\s+content="([^"]*)"\s*/?>',
+        html,
+        flags=re.IGNORECASE,
+    )
+    if match is None or not match.group(1).strip():
+        raise VersionMismatch("index.html is missing the stoa-app-version meta tag")
+    return match.group(1).strip()
+
+
+def frontend_app_mark(expected: str) -> str:
+    return f"{FRONTEND_MARK_PREFIX}{expected}"
+
+
+def assert_safe_version_token(expected: str) -> None:
+    if not re.fullmatch(r"[0-9A-Za-z._+-]+", expected):
+        raise ValueError(f"Unsafe application version token: {expected!r}")
+
+
+def read_frontend_app_mark(
+    image_ref: str,
+    expected: str,
+    runner: Runner = default_runner,
+) -> str:
+    assert_safe_version_token(expected)
+    mark = frontend_app_mark(expected)
+    result = runner(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "--entrypoint",
+            "sh",
+            image_ref,
+            "-c",
+            FRONTEND_MARK_SCRIPT,
+            "--",
+            mark,
+        ]
+    )
+    if result.returncode != 0 or not (result.stdout or "").strip():
+        detail = (result.stderr or result.stdout or "").strip()
+        raise VersionMismatch(
+            f"application mark {mark!r} was not found in the frontend bundle"
+            + (f": {detail}" if detail else "")
+        )
+    return mark
 
 
 def _run_and_cleanup(name: str, runner: Runner, body: Callable[[], str]) -> str:
@@ -229,7 +295,19 @@ def verify_image_version(
     if not expected:
         raise ValueError("Expected application version is empty")
     if service in ("control-plane-ui", "portal"):
-        compare_version(read_frontend_version_file(image_ref, runner=runner), expected, FRONTEND_VERSION_PATH)
+        compare_version(
+            read_frontend_version_file(image_ref, runner=runner),
+            expected,
+            FRONTEND_VERSION_PATH,
+        )
+        compare_version(
+            extract_meta_app_version(
+                read_image_text(image_ref, FRONTEND_INDEX_PATH, runner=runner)
+            ),
+            expected,
+            "index.html stoa-app-version meta",
+        )
+        read_frontend_app_mark(image_ref, expected, runner=runner)
         compare_version(
             served_frontend_version(image_ref, runner=runner, wait=wait),
             expected,

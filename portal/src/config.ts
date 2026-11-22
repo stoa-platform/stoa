@@ -28,6 +28,10 @@ const BASE_DOMAIN = env('VITE_BASE_DOMAIN', 'gostoa.dev');
 const ENVIRONMENT = env('VITE_ENVIRONMENT', 'production');
 const IS_DEV = ENVIRONMENT === 'dev' || ENVIRONMENT === 'development';
 
+const APP_VERSION = import.meta.env.VITE_APP_VERSION || '0.0.0-dev';
+/** Unique build mark checked by the image version verifier. */
+export const APP_VERSION_MARK = `stoa-app-version:${APP_VERSION}`;
+
 export const config = {
   // Base domain at root level for easy access
   baseDomain: BASE_DOMAIN,
@@ -35,7 +39,8 @@ export const config = {
   // Application metadata
   app: {
     title: import.meta.env.VITE_APP_TITLE || 'STOA Developer Portal',
-    version: import.meta.env.VITE_APP_VERSION || '0.0.0-dev',
+    version: APP_VERSION,
+    versionMark: APP_VERSION_MARK,
     environment: ENVIRONMENT,
     isDev: IS_DEV,
     baseDomain: BASE_DOMAIN,

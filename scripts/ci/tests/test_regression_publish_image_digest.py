@@ -59,9 +59,8 @@ def test_regression_publish_validates_digest_before_consumption(name, job):
         assert verify['run'] == 'python3 -B scripts/ci/verify_image_version.py'
         assert 'continue-on-error' not in verify
         push = next(step for step in steps if step.get('id') == 'push')
-        assert push['uses'].startswith('docker/build-push-action@')
-        assert push['with']['push'] is True
-        assert push['with']['build-args'] == '${{ steps.app-version.outputs.build_args }}'
+        assert push['run'] == 'python3 -B scripts/ci/push_loaded_image.py'
+        assert 'uses' not in push
         assert 'continue-on-error' not in push
         step = next(step for step in steps if step.get('id') == 'image')
         assert step['run'] == 'python3 -B scripts/ci/publish_image_ref.py'

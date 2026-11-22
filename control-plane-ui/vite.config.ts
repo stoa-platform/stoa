@@ -1,16 +1,41 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import fs from 'fs';
 import path from 'path';
 
-if (!process.env.VITE_APP_VERSION && !process.env.VITEST) {
-  process.env.VITE_APP_VERSION = JSON.parse(
-    fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf8')
-  ).version
+function resolveAppVersion(mode: string): string {
+  if (process.env.VITEST) {
+    return process.env.VITE_APP_VERSION || '0.0.0-dev';
+  }
+  const env = loadEnv(mode, __dirname, 'VITE_');
+  const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf8')) as {
+    version?: string;
+  };
+  return process.env.VITE_APP_VERSION || env.VITE_APP_VERSION || pkg.version || '0.0.0-dev';
 }
 
-export default defineConfig({
-  plugins: [react()],
+function writeAppVersionPlugin(version: string): Plugin {
+  return {
+    name: 'stoa-write-app-version',
+    transformIndexHtml(html) {
+      const meta = `<meta name="stoa-app-version" content="${version}" />`;
+      if (!html.includes('</head>')) {
+        throw new Error('index.html is missing </head>; cannot record the application version');
+      }
+      return html.replace('</head>', `    ${meta}\n  </head>`);
+    },
+    closeBundle() {
+      const dist = path.resolve(__dirname, 'dist');
+      fs.mkdirSync(dist, { recursive: true });
+      fs.writeFileSync(path.join(dist, 'version.txt'), `${version}\n`);
+    },
+  };
+}
+
+export default defineConfig(({ mode }) => {
+  const appVersion = resolveAppVersion(mode);
+  return {
+  plugins: [react(), writeAppVersionPlugin(appVersion)],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
@@ -63,4 +88,8 @@ export default defineConfig({
   optimizeDeps: {
     include: ['react', 'react-dom', 'react-router-dom', '@tanstack/react-query'],
   },
+  define: {
+    'import.meta.env.VITE_APP_VERSION': JSON.stringify(appVersion),
+  },
+  };
 });

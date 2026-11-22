@@ -38,13 +38,17 @@ describe('private testing gateway runtime config', () => {
 
 describe('application version', () => {
   it('falls back to 0.0.0-dev when VITE_APP_VERSION is unset', async () => {
-    const { config } = await import('./config');
+    const { config, APP_VERSION_MARK } = await import('./config');
     expect(config.app.version).toBe('0.0.0-dev');
+    expect(config.app.versionMark).toBe('stoa-app-version:0.0.0-dev');
+    expect(APP_VERSION_MARK).toBe('stoa-app-version:0.0.0-dev');
   });
 
   it('uses VITE_APP_VERSION when set', async () => {
     vi.stubEnv('VITE_APP_VERSION', '1.4.0');
-    const { config } = await import('./config');
+    const { config, APP_VERSION_MARK } = await import('./config');
     expect(config.app.version).toBe('1.4.0');
+    expect(config.app.versionMark).toBe('stoa-app-version:1.4.0');
+    expect(APP_VERSION_MARK).toBe('stoa-app-version:1.4.0');
   });
 });

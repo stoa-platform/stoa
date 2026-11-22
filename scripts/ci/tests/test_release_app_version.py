@@ -47,13 +47,13 @@ def test_version_from_source_reads_checked_out_files():
 
 
 def test_resolve_prefers_matching_tag_over_version_file():
-    version, verify = rav.resolve_app_version("portal", "portal-v9.9.9", ROOT)
+    version, verify = rav.resolve_app_version("portal", "portal-v9.9.9", ROOT, event_name="release")
     assert version == "9.9.9"
     assert verify is True
 
 
 def test_resolve_falls_back_to_version_file_when_tag_is_not_component_scoped():
-    version, verify = rav.resolve_app_version("portal", "main", ROOT)
+    version, verify = rav.resolve_app_version("portal", "main", ROOT, event_name="workflow_dispatch")
     assert version == rav.version_from_source(ROOT, "portal")
     assert verify is True
 
@@ -82,6 +82,8 @@ def test_cli_writes_github_output(tmp_path):
             "portal",
             "--tag",
             "portal-v1.4.0",
+            "--event-name",
+            "release",
             "--repo-root",
             str(ROOT),
         ],
@@ -120,3 +122,44 @@ def test_cli_errors_when_fallback_file_is_missing(tmp_path):
     assert result.returncode == 1
     assert "::error::Failed to resolve application version:" in result.stderr
     assert not output.exists()
+
+def test_resolve_ignores_tag_shaped_dispatch_ref():
+    version, verify = rav.resolve_app_version(
+        "portal", "portal-v9.9.9", ROOT, event_name="workflow_dispatch"
+    )
+    assert version == rav.version_from_source(ROOT, "portal")
+    assert version != "9.9.9"
+    assert verify is True
+
+
+def test_resolve_ignores_tag_when_event_name_is_missing():
+    version, verify = rav.resolve_app_version("portal", "portal-v9.9.9", ROOT)
+    assert version == rav.version_from_source(ROOT, "portal")
+    assert verify is True
+
+def test_cli_dispatch_ignores_tag_shaped_ref(tmp_path):
+    output = tmp_path / "output"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-B",
+            str(SCRIPT),
+            "--service",
+            "portal",
+            "--tag",
+            "portal-v9.9.9",
+            "--event-name",
+            "workflow_dispatch",
+            "--repo-root",
+            str(ROOT),
+        ],
+        env={**os.environ, "GITHUB_OUTPUT": str(output)},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    expected = rav.version_from_source(ROOT, "portal")
+    text = output.read_text()
+    assert f"version={expected}\n" in text
+    assert "version=9.9.9\n" not in text

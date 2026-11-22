@@ -61,3 +61,27 @@ class ImageContextRegressionTests(unittest.TestCase):
         self.assertEqual(guard.findings("docs/guide.md", source), [
             (7, "image-unpinned"), (9, "image-unpinned"),
         ])
+
+    def test_regression_sbom_accepts_loaded_image_publisher_digest(self):
+        source = "\n".join([
+            "name: Build", "jobs:", "  publish:", "    runs-on: ubuntu-latest",
+            "    steps:", "      - id: push",
+            "        run: python3 -B scripts/ci/push_loaded_image.py",
+            "      - name: Generate SBOM",
+            "        uses: anchore/sbom-action@" + "b" * 40,
+            "        with:",
+            "          image: ghcr.io/team/app@${{ steps.push.outputs.digest }}",
+        ])
+        self.assertFalse(guard.findings(".github/workflows/build.yml", source))
+
+    def test_regression_sbom_rejects_other_run_publishers(self):
+        source = "\n".join([
+            "name: Build", "jobs:", "  publish:", "    runs-on: ubuntu-latest",
+            "    steps:", "      - id: push",
+            "        run: python3 -B scripts/ci/push_loaded_image.py --extra",
+            "      - name: Generate SBOM",
+            "        uses: anchore/sbom-action@" + "b" * 40,
+            "        with:",
+            "          image: ghcr.io/team/app@${{ steps.push.outputs.digest }}",
+        ])
+        self.assertTrue(guard.findings(".github/workflows/build.yml", source))

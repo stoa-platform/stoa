@@ -39,6 +39,10 @@ jobs:
       # Aggregate: true if any component released
       any_release_created: ${{ steps.aggregate.outputs.any_release }}
       released_services: ${{ steps.aggregate.outputs.services }}
+      # Published (non-draft) release outputs
+      any_release_published: ${{ steps.release_state.outputs.any_release_published }}
+      published_services: ${{ steps.release_state.outputs.published_services }}
+      stoa_go_release_published: ${{ steps.release_state.outputs.stoa_go_release_published }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -83,35 +87,147 @@ jobs:
             echo "stoa-go released: ${{ steps.release.outputs['stoa-go--tag_name'] }}"
           fi
 
-          echo "any_release=$ANY" >> $GITHUB_OUTPUT
-          echo "services=$SERVICES" >> $GITHUB_OUTPUT
+          {
+            echo "any_release=$ANY"
+            echo "services=$SERVICES"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Inspect release publication state
+        id: release_state
+        env:
+          GH_TOKEN: ${{ github.token }}
+          API_CREATED: ${{ steps.release.outputs['control-plane-api--release_created'] }}
+          API_TAG: ${{ steps.release.outputs['control-plane-api--tag_name'] }}
+          API_ID: ${{ steps.release.outputs['control-plane-api--id'] }}
+          API_DRAFT: ${{ steps.release.outputs['control-plane-api--draft'] }}
+          UI_CREATED: ${{ steps.release.outputs['control-plane-ui--release_created'] }}
+          UI_TAG: ${{ steps.release.outputs['control-plane-ui--tag_name'] }}
+          UI_ID: ${{ steps.release.outputs['control-plane-ui--id'] }}
+          UI_DRAFT: ${{ steps.release.outputs['control-plane-ui--draft'] }}
+          PORTAL_CREATED: ${{ steps.release.outputs['portal--release_created'] }}
+          PORTAL_TAG: ${{ steps.release.outputs['portal--tag_name'] }}
+          PORTAL_ID: ${{ steps.release.outputs['portal--id'] }}
+          PORTAL_DRAFT: ${{ steps.release.outputs['portal--draft'] }}
+          GATEWAY_CREATED: ${{ steps.release.outputs['stoa-gateway--release_created'] }}
+          GATEWAY_TAG: ${{ steps.release.outputs['stoa-gateway--tag_name'] }}
+          GATEWAY_ID: ${{ steps.release.outputs['stoa-gateway--id'] }}
+          GATEWAY_DRAFT: ${{ steps.release.outputs['stoa-gateway--draft'] }}
+          STOA_GO_CREATED: ${{ steps.release.outputs['stoa-go--release_created'] }}
+          STOA_GO_TAG: ${{ steps.release.outputs['stoa-go--tag_name'] }}
+          STOA_GO_ID: ${{ steps.release.outputs['stoa-go--id'] }}
+          STOA_GO_DRAFT: ${{ steps.release.outputs['stoa-go--draft'] }}
+        run: |
+          set -euo pipefail
+
+          ANY_PUBLISHED="false"
+          PUBLISHED_SERVICES=""
+          STOA_GO_PUBLISHED="false"
+
+          inspect_release_draft() {
+            local service="$1"
+            local tag="$2"
+            local release_id="$3"
+            local draft_output="$4"
+            local is_draft=""
+
+            # 1. Explicit action output <component>--draft ('true' or 'false').
+            if [ "$draft_output" = "true" ] || [ "$draft_output" = "false" ]; then
+              printf '%s\n' "$draft_output"
+              return 0
+            fi
+
+            # 2. Fallback: look up the exact created release by ID (supports drafts).
+            if [ -n "$release_id" ]; then
+              if [[ ! "$release_id" =~ ^[0-9]+$ ]]; then
+                echo "::error::Invalid release id '${release_id}' for ${service} (${tag:-unknown})" >&2
+                return 1
+              fi
+              if is_draft="$(gh api "repos/${GITHUB_REPOSITORY}/releases/${release_id}" --jq .draft)"; then
+                if [ "$is_draft" = "true" ] || [ "$is_draft" = "false" ]; then
+                  printf '%s\n' "$is_draft"
+                  return 0
+                fi
+              fi
+              echo "::error::Unable to determine draft status for ${service} (${tag:-unknown}, release id '${release_id}')" >&2
+              return 1
+            fi
+
+            # 3. Fail closed: never assume published and never query /releases/tags/<tag>.
+            echo "::error::Unable to determine draft status for ${service} (${tag:-unknown}): missing draft output and release id" >&2
+            return 1
+          }
+
+          check_component() {
+            local service="$1"
+            local key="$2"
+            local created="$3"
+            local tag="$4"
+            local release_id="$5"
+            local draft_output="$6"
+            local is_draft=""
+
+            if [ "$created" != "true" ]; then
+              return 0
+            fi
+
+            is_draft="$(inspect_release_draft "$service" "$tag" "$release_id" "$draft_output")" || exit 1
+            if [ "$is_draft" = "false" ]; then
+              echo "${service} (${tag}): published"
+              echo "${key}_status=published" >> "$GITHUB_OUTPUT"
+              PUBLISHED_SERVICES="${PUBLISHED_SERVICES:+$PUBLISHED_SERVICES,}${service}"
+              ANY_PUBLISHED="true"
+              if [ "$service" = "stoa-go" ]; then
+                STOA_GO_PUBLISHED="true"
+              fi
+            elif [ "$is_draft" = "true" ]; then
+              echo "${service} (${tag}): draft (skipping publish triggers)"
+              echo "${key}_status=draft" >> "$GITHUB_OUTPUT"
+            else
+              echo "::error::Unexpected draft status '${is_draft}' for ${service} (${tag})" >&2
+              exit 1
+            fi
+          }
+
+          check_component "control-plane-api" "api"     "$API_CREATED"     "$API_TAG"     "$API_ID"     "$API_DRAFT"
+          check_component "control-plane-ui"  "ui"      "$UI_CREATED"      "$UI_TAG"      "$UI_ID"      "$UI_DRAFT"
+          check_component "portal"            "portal"  "$PORTAL_CREATED"  "$PORTAL_TAG"  "$PORTAL_ID"  "$PORTAL_DRAFT"
+          check_component "stoa-gateway"      "gateway" "$GATEWAY_CREATED" "$GATEWAY_TAG" "$GATEWAY_ID" "$GATEWAY_DRAFT"
+          check_component "stoa-go"           "stoa_go" "$STOA_GO_CREATED" "$STOA_GO_TAG" "$STOA_GO_ID" "$STOA_GO_DRAFT"
+
+          {
+            echo "any_release_published=${ANY_PUBLISHED}"
+            echo "published_services=${PUBLISHED_SERVICES}"
+            echo "stoa_go_release_published=${STOA_GO_PUBLISHED}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Output release summary
         if: ${{ steps.aggregate.outputs.any_release == 'true' }}
         run: |
-          echo "### Releases Created" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Component | Version | Tag |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----------|---------|-----|" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ steps.release.outputs['control-plane-api--release_created'] }}" = "true" ]; then
-            echo "| control-plane-api | ${{ steps.release.outputs['control-plane-api--version'] }} | ${{ steps.release.outputs['control-plane-api--tag_name'] }} |" >> $GITHUB_STEP_SUMMARY
-          fi
-          if [ "${{ steps.release.outputs['control-plane-ui--release_created'] }}" = "true" ]; then
-            echo "| control-plane-ui | ${{ steps.release.outputs['control-plane-ui--version'] }} | ${{ steps.release.outputs['control-plane-ui--tag_name'] }} |" >> $GITHUB_STEP_SUMMARY
-          fi
-          if [ "${{ steps.release.outputs['portal--release_created'] }}" = "true" ]; then
-            echo "| portal | ${{ steps.release.outputs['portal--version'] }} | ${{ steps.release.outputs['portal--tag_name'] }} |" >> $GITHUB_STEP_SUMMARY
-          fi
-          if [ "${{ steps.release.outputs['stoa-gateway--release_created'] }}" = "true" ]; then
-            echo "| stoa-gateway | ${{ steps.release.outputs['stoa-gateway--version'] }} | ${{ steps.release.outputs['stoa-gateway--tag_name'] }} |" >> $GITHUB_STEP_SUMMARY
-          fi
-          if [ "${{ steps.release.outputs['stoa-go--release_created'] }}" = "true" ]; then
-            echo "| stoa-go | ${{ steps.release.outputs['stoa-go--version'] }} | ${{ steps.release.outputs['stoa-go--tag_name'] }} |" >> $GITHUB_STEP_SUMMARY
-          fi
+          {
+            echo "### Releases Created"
+            echo ""
+            echo "| Component | Version | Tag | Status |"
+            echo "|-----------|---------|-----|--------|"
+            if [ "${{ steps.release.outputs['control-plane-api--release_created'] }}" = "true" ]; then
+              echo "| control-plane-api | ${{ steps.release.outputs['control-plane-api--version'] }} | ${{ steps.release.outputs['control-plane-api--tag_name'] }} | ${{ steps.release_state.outputs.api_status }} |"
+            fi
+            if [ "${{ steps.release.outputs['control-plane-ui--release_created'] }}" = "true" ]; then
+              echo "| control-plane-ui | ${{ steps.release.outputs['control-plane-ui--version'] }} | ${{ steps.release.outputs['control-plane-ui--tag_name'] }} | ${{ steps.release_state.outputs.ui_status }} |"
+            fi
+            if [ "${{ steps.release.outputs['portal--release_created'] }}" = "true" ]; then
+              echo "| portal | ${{ steps.release.outputs['portal--version'] }} | ${{ steps.release.outputs['portal--tag_name'] }} | ${{ steps.release_state.outputs.portal_status }} |"
+            fi
+            if [ "${{ steps.release.outputs['stoa-gateway--release_created'] }}" = "true" ]; then
+              echo "| stoa-gateway | ${{ steps.release.outputs['stoa-gateway--version'] }} | ${{ steps.release.outputs['stoa-gateway--tag_name'] }} | ${{ steps.release_state.outputs.gateway_status }} |"
+            fi
+            if [ "${{ steps.release.outputs['stoa-go--release_created'] }}" = "true" ]; then
+              echo "| stoa-go | ${{ steps.release.outputs['stoa-go--version'] }} | ${{ steps.release.outputs['stoa-go--tag_name'] }} | ${{ steps.release_state.outputs.stoa_go_status }} |"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
   trigger-goreleaser:
     needs: release-please
-    if: ${{ needs.release-please.outputs.stoa_go_release_created == 'true' }}
+    if: ${{ needs.release-please.outputs.stoa_go_release_published == 'true' }}
     uses: ./.github/workflows/stoa-go-release.yml
     secrets: inherit
     with:
@@ -120,7 +236,7 @@ jobs:
 
   trigger-docs-changelog-sync:
     needs: release-please
-    if: ${{ needs.release-please.outputs.any_release_created == 'true' }}
+    if: ${{ needs.release-please.outputs.any_release_published == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Dispatch release-published event to stoa-docs
@@ -134,4 +250,4 @@ jobs:
           gh api repos/stoa-platform/stoa-docs/dispatches \
             -X POST \
             -f event_type=release-published \
-            -F 'client_payload[services]=${{ needs.release-please.outputs.released_services }}'
+            -F 'client_payload[services]=${{ needs.release-please.outputs.published_services }}'

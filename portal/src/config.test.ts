@@ -7,6 +7,7 @@ beforeEach(() => {
   vi.stubEnv('VITE_TEST_GATEWAY_URL', '');
   vi.stubEnv('VITE_PORTAL_MODE', '');
   vi.stubEnv('VITE_API_URL', 'http://127.0.0.1:18000');
+  vi.stubEnv('VITE_APP_VERSION', '');
   delete runtimeWindow.__STOA_RUNTIME__;
 });
 
@@ -32,5 +33,18 @@ describe('private testing gateway runtime config', () => {
     expect(config.testing.gatewayBaseUrl).toBe('/api');
     expect(config.portalMode).toBe('non-production');
     expect(config.api.baseUrl).toBe('http://127.0.0.1:18000');
+  });
+});
+
+describe('application version', () => {
+  it('falls back to 0.0.0-dev when VITE_APP_VERSION is unset', async () => {
+    const { config } = await import('./config');
+    expect(config.app.version).toBe('0.0.0-dev');
+  });
+
+  it('uses VITE_APP_VERSION when set', async () => {
+    vi.stubEnv('VITE_APP_VERSION', '1.4.0');
+    const { config } = await import('./config');
+    expect(config.app.version).toBe('1.4.0');
   });
 });

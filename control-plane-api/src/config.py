@@ -7,10 +7,12 @@ For Kubernetes deployments, set these in ConfigMaps/Secrets.
 import json
 import logging
 import os
+import tomllib
+from pathlib import Path
 from typing import Final, Literal
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 # Base domain — derived URLs (KEYCLOAK_URL, GATEWAY_URL, …, VAULT_ADDR,
@@ -169,9 +171,29 @@ class GitProviderConfig(BaseModel):
         return self.gitlab.catalog_project_id
 
 
+def _default_app_version() -> str:
+    """Read the package version from pyproject.toml when available.
+
+    The runtime image does not copy pyproject.toml, so Docker builds set
+    the VERSION environment variable from the APP_VERSION build-arg.
+    """
+    pyproject = Path(__file__).resolve().parent.parent / "pyproject.toml"
+    try:
+        data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+        version = data.get("project", {}).get("version")
+    except (OSError, tomllib.TOMLDecodeError, TypeError, AttributeError):
+        return "0.0.0-dev"
+    if isinstance(version, str) and version.strip():
+        return version.strip()
+    return "0.0.0-dev"
+
+
 class Settings(BaseSettings):
     # Application
-    VERSION: str = "2.0.0"
+    VERSION: str = Field(
+        default_factory=_default_app_version,
+        validation_alias=AliasChoices("VERSION", "APP_VERSION"),
+    )
     DEBUG: bool = False
     ENVIRONMENT: str = "production"  # dev, staging, production
     STOA_EDITION: str = "community"  # community, standard, enterprise (Open Core model)

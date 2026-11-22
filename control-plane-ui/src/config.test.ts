@@ -26,6 +26,7 @@ beforeEach(() => {
   vi.stubEnv('VITE_ENABLE_DEBUG', '');
   vi.stubEnv('VITE_GIT_PROVIDER', '');
   vi.stubEnv('VITE_GIT_REPO_URL', '');
+  vi.stubEnv('VITE_APP_VERSION', '');
 });
 
 describe('config', () => {
@@ -131,5 +132,18 @@ describe('config', () => {
     expect(quickLinks[0].name).toBe('API Documentation');
     expect(quickLinks[1].name).toBe('Gateway Console');
     expect(quickLinks[2].name).toBe('AWX Automation');
+  });
+});
+
+describe('application version', () => {
+  it('falls back to 0.0.0-dev when VITE_APP_VERSION is unset', async () => {
+    const { config } = await importConfig();
+    expect(config.app.version).toBe('0.0.0-dev');
+  });
+
+  it('uses VITE_APP_VERSION when set', async () => {
+    vi.stubEnv('VITE_APP_VERSION', '1.13.0');
+    const { config } = await importConfig();
+    expect(config.app.version).toBe('1.13.0');
   });
 });

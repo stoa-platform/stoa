@@ -1,6 +1,13 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import fs from 'fs';
 import path from 'path';
+
+if (!process.env.VITE_APP_VERSION && !process.env.VITEST) {
+  process.env.VITE_APP_VERSION = JSON.parse(
+    fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf8')
+  ).version
+}
 
 export default defineConfig({
   plugins: [react()],

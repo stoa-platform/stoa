@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.13.0](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.12.0...control-plane-ui-v1.13.0) (2026-11-22)
+
+
+### Features
+
+* **migration:** generate Camel XML from synthetic constant-map flows ([#3096](https://github.com/stoa-platform/stoa/issues/3096)) ([1c99a76](https://github.com/stoa-platform/stoa/commit/1c99a76d0345356ce16d0b20aade2c61e1fc8c21))
+* **ui:** improve console and portal accessibility ([d356976](https://github.com/stoa-platform/stoa/commit/d356976a79aa6e59fe1b691e1ffbe9db6afa66ec))
+
+### Bug Fixes
+
+* **api:** isolate Swagger and ReDoc CSP from the API ([#3148](https://github.com/stoa-platform/stoa/issues/3148)) ([93ed7df](https://github.com/stoa-platform/stoa/commit/93ed7df1bcb6144ee058eb3c0965aa51437da653))
+* **console:** explain invitation-only signup access ([#3059](https://github.com/stoa-platform/stoa/issues/3059)) ([f9c05ef](https://github.com/stoa-platform/stoa/commit/f9c05ef22fa0f04c9f961176a00af1ce25f52629))
+* **security:** upgrade follow-redirects to 1.16.2, undici to 7.30.1, and brace-expansion to 1.1.21 and 5.0.12 ([#2995](https://github.com/stoa-platform/stoa/issues/2995)) ([de01fb2](https://github.com/stoa-platform/stoa/commit/de01fb28dffbf96b9bfba2fd1a3801534dc6204b))
+* **security:** upgrade @babel/core to 7.29.6 and postcss-selector-parser to 6.1.5 ([#2998](https://github.com/stoa-platform/stoa/issues/2998)) ([9e6fe9b](https://github.com/stoa-platform/stoa/commit/9e6fe9b817f6ebc60457487f81f6c8e569a0b0d7))
+* **ui:** fix dialog errors, contrast, and accessible labels ([9bc9dca](https://github.com/stoa-platform/stoa/commit/9bc9dcae4f048bc11e698db3a6d08f4121734014))
+* **ui:** keep Field label association with explicit control ids ([6d248bb](https://github.com/stoa-platform/stoa/commit/6d248bbb4a055be5c116946165217779c0af5c72))
+
 ## [1.12.0](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.11.0...control-plane-ui-v1.12.0) (2026-05-13)
 
 

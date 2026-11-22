@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.4.0](https://github.com/stoa-platform/stoa/compare/portal-v1.3.4...portal-v1.4.0) (2026-11-22)
+
+
+### Features
+
+* **api:** lifecycle SSE propagation and Envoy policy translation ([592a731](https://github.com/stoa-platform/stoa/commit/592a731a6599611e6b08894e3d3bca83d242b6bb))
+* **auth:** update portal account access and realm import inputs ([8c35880](https://github.com/stoa-platform/stoa/commit/8c358805713d254fff347a916475ccd6d63d24b1))
+* **migration:** generate Camel XML from synthetic constant-map flows ([#3096](https://github.com/stoa-platform/stoa/issues/3096)) ([1c99a76](https://github.com/stoa-platform/stoa/commit/1c99a76d0345356ce16d0b20aade2c61e1fc8c21))
+* **ui:** improve console and portal accessibility ([d356976](https://github.com/stoa-platform/stoa/commit/d356976a79aa6e59fe1b691e1ffbe9db6afa66ec))
+
+### Bug Fixes
+
+* **auth:** label the optional company field ([694bfb5](https://github.com/stoa-platform/stoa/commit/694bfb50e6d39a54adde9e2d4eec0f61810fb24b))
+* **portal:** interpolate labels without replaceAll ([db22217](https://github.com/stoa-platform/stoa/commit/db22217a3e3a1465d3471ee10195662b396ff44c))
+* **portal:** surface catalog load failures instead of an empty list ([#3143](https://github.com/stoa-platform/stoa/issues/3143)) ([303010d](https://github.com/stoa-platform/stoa/commit/303010db98770fa47d99d15a3e67d3985aca8a5e))
+* **security:** upgrade follow-redirects to 1.16.2, undici to 7.30.1, fast-uri to 3.1.9, and brace-expansion to 1.1.21 and 5.0.12 ([#2995](https://github.com/stoa-platform/stoa/issues/2995)) ([de01fb2](https://github.com/stoa-platform/stoa/commit/de01fb28dffbf96b9bfba2fd1a3801534dc6204b))
+* **security:** upgrade @babel/core to 7.29.6 and postcss-selector-parser to 6.1.5 ([#2998](https://github.com/stoa-platform/stoa/issues/2998)) ([9e6fe9b](https://github.com/stoa-platform/stoa/commit/9e6fe9b817f6ebc60457487f81f6c8e569a0b0d7))
+* **ui:** fix dialog errors, contrast, and accessible labels ([9bc9dca](https://github.com/stoa-platform/stoa/commit/9bc9dcae4f048bc11e698db3a6d08f4121734014))
+
 ## [1.3.4](https://github.com/stoa-platform/stoa/compare/portal-v1.3.3...portal-v1.3.4) (2026-05-01)
 
 

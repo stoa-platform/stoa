@@ -7,6 +7,7 @@
   "separate-pull-requests": true,
   "pull-request-overflow-handler": "GITHUB_API",
   "draft": true,
+  "force-tag-creation": true,
   "commit-search-depth": 1000,
   "changelog-sections": [
     {"type": "feat", "section": "Features", "hidden": false},

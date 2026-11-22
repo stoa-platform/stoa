@@ -11,7 +11,6 @@ import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-PUSH_DIGEST_RE = re.compile(r"digest:\s*(sha256:[0-9a-f]{64})")
 Runner = Callable[..., subprocess.CompletedProcess[str]]
 
 
@@ -22,8 +21,30 @@ def parse_image_tags(image_tags: str) -> list[str]:
     return tags
 
 
+def tag_name_from_ref(tag: str) -> str:
+    """Return the tag name after the last colon of a tagged image reference."""
+    ref = tag.strip()
+    if "@" in ref:
+        raise ValueError(f"Expected a tagged image reference, not a digest: {tag!r}")
+    last_segment = ref.rsplit("/", 1)[-1]
+    if ":" not in last_segment:
+        raise ValueError(f"Image reference is missing a tag name: {tag!r}")
+    name = last_segment.rsplit(":", 1)[1]
+    if not name:
+        raise ValueError(f"Image reference has an empty tag name: {tag!r}")
+    return name
+
+
 def digest_from_push_output(output: str, tag: str) -> str:
-    matches = PUSH_DIGEST_RE.findall(output)
+    tag_name = tag_name_from_ref(tag)
+    pattern = re.compile(
+        rf"^{re.escape(tag_name)}: digest: (sha256:[0-9a-f]{{64}}) size: [0-9]+$"
+    )
+    matches: list[str] = []
+    for line in output.splitlines():
+        match = pattern.fullmatch(line.strip())
+        if match is not None:
+            matches.append(match.group(1))
     if not matches:
         raise RuntimeError(f"docker push {tag} did not report a sha256 digest")
     unique = set(matches)

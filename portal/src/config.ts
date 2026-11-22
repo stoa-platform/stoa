@@ -28,10 +28,24 @@ const BASE_DOMAIN = env('VITE_BASE_DOMAIN', 'gostoa.dev');
 const ENVIRONMENT = env('VITE_ENVIRONMENT', 'production');
 const IS_DEV = ENVIRONMENT === 'dev' || ENVIRONMENT === 'development';
 
-const APP_VERSION = import.meta.env.VITE_APP_VERSION || '0.0.0-dev';
+const APP_VERSION_MARK_PREFIX = 'stoa-app-version:';
+const FALLBACK_APP_VERSION = import.meta.env.VITE_APP_VERSION || '0.0.0-dev';
+
 /** Unique build mark checked by the image version verifier. */
 export const APP_VERSION_MARK =
-  import.meta.env.VITE_APP_VERSION_MARK || `stoa-app-version:${APP_VERSION}`;
+  import.meta.env.VITE_APP_VERSION_MARK || `${APP_VERSION_MARK_PREFIX}${FALLBACK_APP_VERSION}`;
+
+export function appVersionFromMark(mark: string | undefined, fallback = '0.0.0-dev'): string {
+  if (mark && mark.startsWith(APP_VERSION_MARK_PREFIX)) {
+    const version = mark.slice(APP_VERSION_MARK_PREFIX.length);
+    if (version) {
+      return version;
+    }
+  }
+  return fallback;
+}
+
+const APP_VERSION = appVersionFromMark(APP_VERSION_MARK, FALLBACK_APP_VERSION);
 
 export const config = {
   // Base domain at root level for easy access

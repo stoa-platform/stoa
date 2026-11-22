@@ -58,6 +58,19 @@ import {
 import { clsx } from 'clsx';
 import { useApiConnectivity } from '../hooks/useApiConnectivity';
 
+const VERSION_MARK_PREFIX = 'stoa-app-version:';
+
+function displayedAppVersion(): string {
+  const mark = config.app.versionMark;
+  if (mark && mark.startsWith(VERSION_MARK_PREFIX)) {
+    const version = mark.slice(VERSION_MARK_PREFIX.length);
+    if (version) {
+      return version;
+    }
+  }
+  return config.app.version;
+}
+
 interface LayoutProps {
   children: ReactNode;
 }
@@ -768,7 +781,7 @@ export function Layout({ children }: LayoutProps) {
             className="mt-3 text-xs text-neutral-500 dark:text-neutral-400"
             data-stoa-app-version-mark={config.app.versionMark}
           >
-            v{config.app.version}
+            v{displayedAppVersion()}
           </p>
         </div>
       </div>

@@ -8,6 +8,7 @@ beforeEach(() => {
   vi.stubEnv('VITE_PORTAL_MODE', '');
   vi.stubEnv('VITE_API_URL', 'http://127.0.0.1:18000');
   vi.stubEnv('VITE_APP_VERSION', '');
+  vi.stubEnv('VITE_APP_VERSION_MARK', '');
   delete runtimeWindow.__STOA_RUNTIME__;
 });
 
@@ -50,5 +51,14 @@ describe('application version', () => {
     expect(config.app.version).toBe('1.4.0');
     expect(config.app.versionMark).toBe('stoa-app-version:1.4.0');
     expect(APP_VERSION_MARK).toBe('stoa-app-version:1.4.0');
+  });
+
+  it('derives config.app.version from VITE_APP_VERSION_MARK when set', async () => {
+    vi.stubEnv('VITE_APP_VERSION', '9.9.9');
+    vi.stubEnv('VITE_APP_VERSION_MARK', 'stoa-app-version:1.4.0');
+    const { config, APP_VERSION_MARK } = await import('./config');
+    expect(APP_VERSION_MARK).toBe('stoa-app-version:1.4.0');
+    expect(config.app.versionMark).toBe('stoa-app-version:1.4.0');
+    expect(config.app.version).toBe('1.4.0');
   });
 });

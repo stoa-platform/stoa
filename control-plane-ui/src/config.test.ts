@@ -27,6 +27,7 @@ beforeEach(() => {
   vi.stubEnv('VITE_GIT_PROVIDER', '');
   vi.stubEnv('VITE_GIT_REPO_URL', '');
   vi.stubEnv('VITE_APP_VERSION', '');
+  vi.stubEnv('VITE_APP_VERSION_MARK', '');
 });
 
 describe('config', () => {
@@ -149,5 +150,14 @@ describe('application version', () => {
     expect(config.app.version).toBe('1.13.0');
     expect(config.app.versionMark).toBe('stoa-app-version:1.13.0');
     expect(APP_VERSION_MARK).toBe('stoa-app-version:1.13.0');
+  });
+
+  it('derives config.app.version from VITE_APP_VERSION_MARK when set', async () => {
+    vi.stubEnv('VITE_APP_VERSION', '9.9.9');
+    vi.stubEnv('VITE_APP_VERSION_MARK', 'stoa-app-version:1.13.0');
+    const { config, APP_VERSION_MARK } = await importConfig();
+    expect(APP_VERSION_MARK).toBe('stoa-app-version:1.13.0');
+    expect(config.app.versionMark).toBe('stoa-app-version:1.13.0');
+    expect(config.app.version).toBe('1.13.0');
   });
 });

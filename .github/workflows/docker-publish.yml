@@ -142,9 +142,9 @@ jobs:
           images: ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}
           flavor: latest=false
           tags: |
-            type=match,pattern=${{ matrix.service }}-v(.*),group=1
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=match,pattern=${{ matrix.service }}-v(.*),group=1,enable=${{ github.event_name == 'release' }}
+            type=semver,pattern={{version}},enable=${{ github.event_name == 'release' }}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ github.event_name == 'release' }}
             type=sha,prefix=sha-
 
       - name: Stage project license and notice

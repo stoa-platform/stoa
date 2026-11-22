@@ -1,5 +1,18 @@
 import { config } from '../../config';
 
+const VERSION_MARK_PREFIX = 'stoa-app-version:';
+
+function displayedAppVersion(): string {
+  const mark = config.app.versionMark;
+  if (mark && mark.startsWith(VERSION_MARK_PREFIX)) {
+    const version = mark.slice(VERSION_MARK_PREFIX.length);
+    if (version) {
+      return version;
+    }
+  }
+  return config.app.version;
+}
+
 export function Footer() {
   return (
     <footer className="bg-white dark:bg-neutral-900 border-t border-neutral-200 dark:border-neutral-800 py-4 px-6 transition-colors">
@@ -15,7 +28,7 @@ export function Footer() {
             Documentation
           </a>
           <span>|</span>
-          <span data-stoa-app-version-mark={config.app.versionMark}>v{config.app.version}</span>
+          <span data-stoa-app-version-mark={config.app.versionMark}>v{displayedAppVersion()}</span>
         </div>
       </div>
     </footer>

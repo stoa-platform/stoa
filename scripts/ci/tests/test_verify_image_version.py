@@ -124,6 +124,14 @@ def test_verify_api_health_success():
                 "-e",
                 "GITHUB_CATALOG_REPO=stoa-catalog",
                 "img:tag",
+                "uvicorn",
+                "src.main:app",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "8000",
+                "--lifespan",
+                "off",
             ),
             _ok("cid\n"),
         ),
@@ -175,6 +183,14 @@ def test_verify_api_health_mismatch():
                 "-e",
                 "GITHUB_CATALOG_REPO=stoa-catalog",
                 "img:tag",
+                "uvicorn",
+                "src.main:app",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "8000",
+                "--lifespan",
+                "off",
             ),
             _ok("cid\n"),
         ),
@@ -230,12 +246,90 @@ def test_application_script_refs_ignore_unrelated_assets():
     html = """<html><head>
     <link rel="stylesheet" href="/assets/index.css">
     <link rel="modulepreload" href="/assets/vendor.js">
+    <link rel="preload" as="script" href="/assets/preload.js">
+    <script type="application/json" src="/assets/data.js"></script>
+    <!-- <script type="module" src="/assets/commented.js"></script> -->
+    <script src="/assets/classic.js"></script>
     <script type="module" src="./assets/index-abc.js"></script>
     </head></html>"""
     assert viv.application_script_refs(html) == [
-        "/assets/vendor.js",
+        "/assets/classic.js",
         "./assets/index-abc.js",
     ]
+
+
+def test_scan_rejects_mark_only_in_preload_or_modulepreload_asset():
+    html_with_stale_entry = """<!doctype html><html><head>
+    <link rel="modulepreload" href="/assets/vendor.js">
+    <link rel="preload" as="script" href="/assets/preload.js">
+    <script type="module" src="/assets/index-abc.js"></script>
+    </head><body></body></html>"""
+    scripts = {
+        "/usr/share/nginx/html/assets/vendor.js": 'const mark="stoa-app-version:1.13.0";\n',
+        "/usr/share/nginx/html/assets/preload.js": 'const mark="stoa-app-version:1.13.0";\n',
+        JS_PATH: 'const mark="stoa-app-version:2.0.0";\n',
+    }
+    with pytest.raises(viv.VersionMismatch, match="was not found in JavaScript loaded"):
+        viv.scan_application_scripts_for_mark(html_with_stale_entry, scripts, "1.13.0")
+
+    html_preload_only = """<!doctype html><html><head>
+    <link rel="modulepreload" href="/assets/vendor.js">
+    <link rel="preload" as="script" href="/assets/preload.js">
+    </head><body></body></html>"""
+    with pytest.raises(viv.VersionMismatch, match="does not load any application JavaScript"):
+        viv.scan_application_scripts_for_mark(html_preload_only, scripts, "1.13.0")
+
+
+def test_scan_rejects_script_src_inside_html_comment():
+    commented_only = """<!doctype html><html><head>
+    <!-- <script type="module" src="/assets/index-abc.js"></script> -->
+    </head><body></body></html>"""
+    scripts = {JS_PATH: 'const mark="stoa-app-version:1.13.0";\n'}
+    with pytest.raises(viv.VersionMismatch, match="does not load any application JavaScript"):
+        viv.scan_application_scripts_for_mark(commented_only, scripts, "1.13.0")
+
+    commented_plus_stale = """<!doctype html><html><head>
+    <!-- <script type="module" src="/assets/fresh.js"></script> -->
+    <script type="module" src="/assets/index-abc.js"></script>
+    </head><body></body></html>"""
+    scripts_both = {
+        "/usr/share/nginx/html/assets/fresh.js": 'const mark="stoa-app-version:1.13.0";\n',
+        JS_PATH: 'const mark="stoa-app-version:2.0.0";\n',
+    }
+    with pytest.raises(viv.VersionMismatch, match="was not found in JavaScript loaded"):
+        viv.scan_application_scripts_for_mark(commented_plus_stale, scripts_both, "1.13.0")
+
+    commented_meta = '<html><head><!-- <meta name="stoa-app-version" content="1.13.0" /> --></head></html>'
+    with pytest.raises(viv.VersionMismatch, match="missing the stoa-app-version meta tag"):
+        viv.extract_meta_app_version(commented_meta)
+
+
+def test_scan_rejects_mark_only_in_js_comments_and_preserves_strings():
+    line_comment = {JS_PATH: '// "stoa-app-version:1.13.0"\nconst version="2.0.0";\n'}
+    with pytest.raises(viv.VersionMismatch, match="was not found in JavaScript loaded"):
+        viv.scan_application_scripts_for_mark(INDEX_HTML, line_comment, "1.13.0")
+
+    block_comment = {JS_PATH: '/* "stoa-app-version:1.13.0" */ const version="2.0.0";\n'}
+    with pytest.raises(viv.VersionMismatch, match="was not found in JavaScript loaded"):
+        viv.scan_application_scripts_for_mark(INDEX_HTML, block_comment, "1.13.0")
+
+    template_expr_comment = {
+        JS_PATH: 'const s = `https://example.com/${/* "stoa-app-version:1.13.0" */ 1}`;\n'
+    }
+    with pytest.raises(viv.VersionMismatch, match="was not found in JavaScript loaded"):
+        viv.scan_application_scripts_for_mark(INDEX_HTML, template_expr_comment, "1.13.0")
+
+    # String literals and regexes containing // or /* must not hide a real mark on the same line.
+    minified_with_url = {
+        JS_PATH: (
+            'const url="https://api.gostoa.dev/*x*/",re=/https?:\\/\\//;'
+            'const mark="stoa-app-version:1.13.0";'
+        )
+    }
+    assert (
+        viv.scan_application_scripts_for_mark(INDEX_HTML, minified_with_url, "1.13.0")
+        == "stoa-app-version:1.13.0"
+    )
 
 
 def test_delimited_app_mark_rejects_prerelease_prefix_and_unquoted_partial():
@@ -243,6 +337,26 @@ def test_delimited_app_mark_rejects_prerelease_prefix_and_unquoted_partial():
     assert not viv.has_delimited_app_mark('"stoa-app-version:1.13.0-rc.1"', "1.13.0")
     assert not viv.has_delimited_app_mark("stoa-app-version:1.13.0-rc.1", "1.13.0")
     assert viv.has_delimited_app_mark("mark=stoa-app-version:1.13.0;", "1.13.0")
+    with pytest.raises(viv.VersionMismatch, match="was not found in JavaScript loaded"):
+        viv.scan_application_scripts_for_mark(
+            INDEX_HTML,
+            {JS_PATH: 'const mark="stoa-app-version:1.13.0-rc.1";\n'},
+            "1.13.0",
+        )
+
+
+def test_frontends_derive_displayed_version_from_verified_mark():
+    for rel in ("portal/src/config.ts", "control-plane-ui/src/config.ts"):
+        text = (ROOT / rel).read_text()
+        assert "appVersionFromMark(APP_VERSION_MARK" in text, rel
+    for rel in (
+        "portal/src/components/layout/Footer.tsx",
+        "portal/src/components/layout/Sidebar.tsx",
+        "control-plane-ui/src/components/Layout.tsx",
+    ):
+        text = (ROOT / rel).read_text()
+        assert "data-stoa-app-version-mark={config.app.versionMark}" in text, rel
+        assert "config.app.versionMark" in text and "stoa-app-version:" in text, rel
 
 
 def test_scan_rejects_mark_only_in_unreferenced_html():

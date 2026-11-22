@@ -13,6 +13,7 @@ import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Sequence
+from html.parser import HTMLParser
 from pathlib import Path
 
 VERSIONED_SERVICES = ("control-plane-api", "control-plane-ui", "portal")
@@ -21,6 +22,35 @@ FRONTEND_VERSION_PATH = f"{FRONTEND_HTML_ROOT}/version.txt"
 FRONTEND_INDEX_PATH = f"{FRONTEND_HTML_ROOT}/index.html"
 FRONTEND_MARK_PREFIX = "stoa-app-version:"
 API_HEALTH_PATH = "/health"
+
+_EXECUTABLE_SCRIPT_TYPES = frozenset(
+    {
+        "",
+        "module",
+        "text/javascript",
+        "application/javascript",
+        "text/ecmascript",
+        "application/ecmascript",
+    }
+)
+_REGEX_PREFIX_KEYWORDS = frozenset(
+    {
+        "await",
+        "case",
+        "delete",
+        "do",
+        "else",
+        "in",
+        "instanceof",
+        "new",
+        "of",
+        "return",
+        "throw",
+        "typeof",
+        "void",
+        "yield",
+    }
+)
 
 Runner = Callable[..., subprocess.CompletedProcess[str]]
 
@@ -127,10 +157,16 @@ def read_frontend_version_file(image_ref: str, runner: Runner = default_runner) 
     return version
 
 
+def strip_html_comments(html: str) -> str:
+    """Remove HTML comments, including an unclosed trailing comment."""
+    return re.sub(r"<!--(?:.*?-->|.*$)", "", html, flags=re.DOTALL)
+
+
 def extract_meta_app_version(html: str) -> str:
+    cleaned = strip_html_comments(html)
     match = re.search(
         r'<meta\s+name="stoa-app-version"\s+content="([^"]*)"\s*/?>',
-        html,
+        cleaned,
         flags=re.IGNORECASE,
     )
     if match is None or not match.group(1).strip():
@@ -147,35 +183,32 @@ def assert_safe_version_token(expected: str) -> None:
         raise ValueError(f"Unsafe application version token: {expected!r}")
 
 
+class _ExecutableScriptParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.refs: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag.lower() != "script":
+            return
+        attr_map = {name.lower(): (value or "") for name, value in attrs}
+        script_type = attr_map.get("type", "").split(";", 1)[0].strip().lower()
+        if script_type not in _EXECUTABLE_SCRIPT_TYPES:
+            return
+        src = attr_map.get("src", "").strip()
+        if not src:
+            return
+        path = src.split("#", 1)[0].split("?", 1)[0]
+        if path.endswith((".js", ".mjs")):
+            self.refs.append(path)
+
+
 def application_script_refs(index_html: str) -> list[str]:
-    """Return JS files loaded by index.html, ignoring unreferenced assets."""
-    refs: list[str] = []
-    for tag in re.finditer(r"<(script|link)\b([^>]*)>", index_html, flags=re.IGNORECASE | re.DOTALL):
-        name = tag.group(1).lower()
-        attrs = {
-            match.group(1).lower(): match.group(3)
-            for match in re.finditer(
-                r"""([^\s=]+)\s*=\s*(['"])(.*?)\2""",
-                tag.group(2),
-                flags=re.IGNORECASE | re.DOTALL,
-            )
-        }
-        if name == "script":
-            href = attrs.get("src")
-        else:
-            rel = attrs.get("rel", "").lower().split()
-            as_attr = attrs.get("as", "").lower()
-            href = attrs.get("href")
-            if not href or not (
-                "modulepreload" in rel or ("preload" in rel and as_attr == "script")
-            ):
-                continue
-        if not href:
-            continue
-        path = href.split("#", 1)[0].split("?", 1)[0]
-        if path.endswith(".js"):
-            refs.append(path)
-    return refs
+    """Return executable <script src=...> JavaScript files from index.html."""
+    parser = _ExecutableScriptParser()
+    parser.feed(strip_html_comments(index_html))
+    parser.close()
+    return parser.refs
 
 
 def resolve_frontend_path(href: str) -> str:
@@ -188,16 +221,200 @@ def resolve_frontend_path(href: str) -> str:
     return f"{FRONTEND_HTML_ROOT}/{relative}"
 
 
+def strip_js_comments(source: str) -> str:
+    """Strip JS // and /* */ comments while preserving string, template, and regex literals."""
+    out: list[str] = []
+    n = len(source)
+    i = 0
+    allows_regex = True
+    brace_stack: list[bool] = []
+    paren_stack: list[bool] = []
+    prev_word = ""
+
+    def scan_template(pos: int) -> tuple[int, bool]:
+        while pos < n:
+            ch = source[pos]
+            if ch == "\\" and pos + 1 < n:
+                out.append(source[pos : pos + 2])
+                pos += 2
+                continue
+            if ch == "`":
+                out.append(ch)
+                return pos + 1, False
+            if ch == "$" and pos + 1 < n and source[pos + 1] == "{":
+                out.append("${")
+                brace_stack.append(True)
+                return pos + 2, True
+            out.append(ch)
+            pos += 1
+        return pos, False
+
+    while i < n:
+        ch = source[i]
+        nxt = source[i + 1] if i + 1 < n else ""
+
+        if ch in " \t\r\n":
+            out.append(ch)
+            i += 1
+            continue
+
+        if ch == "/" and nxt == "/":
+            i += 2
+            while i < n and source[i] not in "\r\n":
+                i += 1
+            continue
+
+        if ch == "/" and nxt == "*":
+            i += 2
+            end = source.find("*/", i)
+            i = n if end == -1 else end + 2
+            out.append(" ")
+            continue
+
+        if ch in ("'", '"'):
+            quote = ch
+            out.append(ch)
+            i += 1
+            while i < n:
+                c = source[i]
+                if c == "\\" and i + 1 < n:
+                    out.append(source[i : i + 2])
+                    i += 2
+                    continue
+                out.append(c)
+                i += 1
+                if c == quote:
+                    break
+            allows_regex = False
+            prev_word = ""
+            continue
+
+        if ch == "`":
+            out.append(ch)
+            i, entered_expr = scan_template(i + 1)
+            allows_regex = entered_expr
+            prev_word = ""
+            continue
+
+        if ch == "{":
+            out.append(ch)
+            brace_stack.append(False)
+            allows_regex = True
+            prev_word = ""
+            i += 1
+            continue
+
+        if ch == "}":
+            out.append(ch)
+            i += 1
+            if brace_stack and brace_stack.pop():
+                i, entered_expr = scan_template(i)
+                allows_regex = entered_expr
+            else:
+                allows_regex = True
+            prev_word = ""
+            continue
+
+        if ch == "/":
+            if allows_regex:
+                out.append(ch)
+                i += 1
+                in_class = False
+                while i < n:
+                    c = source[i]
+                    if c == "\\" and i + 1 < n:
+                        out.append(source[i : i + 2])
+                        i += 2
+                        continue
+                    if c == "[":
+                        in_class = True
+                    elif c == "]":
+                        in_class = False
+                    elif c == "/" and not in_class:
+                        out.append(c)
+                        i += 1
+                        break
+                    elif c in "\r\n":
+                        break
+                    out.append(c)
+                    i += 1
+                allows_regex = False
+            else:
+                out.append(ch)
+                i += 1
+                allows_regex = True
+            prev_word = ""
+            continue
+
+        if ch.isalpha() or ch in "_$":
+            start = i
+            i += 1
+            while i < n and (source[i].isalnum() or source[i] in "_$"):
+                i += 1
+            word = source[start:i]
+            out.append(word)
+            allows_regex = word in _REGEX_PREFIX_KEYWORDS
+            prev_word = word
+            continue
+
+        if ch.isdigit():
+            start = i
+            i += 1
+            while i < n and (source[i].isalnum() or source[i] in "._"):
+                i += 1
+            out.append(source[start:i])
+            allows_regex = False
+            prev_word = ""
+            continue
+
+        if ch == "(":
+            out.append(ch)
+            paren_stack.append(prev_word in ("if", "while", "for", "with"))
+            allows_regex = True
+            prev_word = ""
+            i += 1
+            continue
+
+        if ch == ")":
+            out.append(ch)
+            allows_regex = paren_stack.pop() if paren_stack else False
+            prev_word = ""
+            i += 1
+            continue
+
+        if ch in "].":
+            out.append(ch)
+            allows_regex = False
+            prev_word = ""
+            i += 1
+            continue
+
+        if ch in "+-" and nxt == ch:
+            out.append(source[i : i + 2])
+            allows_regex = False
+            prev_word = ""
+            i += 2
+            continue
+
+        out.append(ch)
+        allows_regex = True
+        prev_word = ""
+        i += 1
+
+    return "".join(out)
+
+
 def has_delimited_app_mark(content: str, expected: str) -> bool:
-    """Require a complete mark, not a longer version with the same prefix."""
+    """Require a complete mark in executable JS, not a comment or longer version prefix."""
     assert_safe_version_token(expected)
+    cleaned = strip_js_comments(content)
     mark = frontend_app_mark(expected)
-    if f'"{mark}"' in content or f"'{mark}'" in content:
+    if f'"{mark}"' in cleaned or f"'{mark}'" in cleaned:
         return True
     return (
         re.search(
             rf"(?<![0-9A-Za-z._+-]){re.escape(mark)}(?![0-9A-Za-z._+-])",
-            content,
+            cleaned,
         )
         is not None
     )
@@ -318,6 +535,14 @@ def served_api_health_version(
                 "-e",
                 "GITHUB_CATALOG_REPO=stoa-catalog",
                 image_ref,
+                "uvicorn",
+                "src.main:app",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "8000",
+                "--lifespan",
+                "off",
             ]
         ),
         "start API image",

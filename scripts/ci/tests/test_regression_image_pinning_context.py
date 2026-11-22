@@ -99,3 +99,58 @@ class ImageContextRegressionTests(unittest.TestCase):
         ])
         self.assertTrue(guard.findings(".github/workflows/build.yml", source))
 
+    def test_regression_sbom_accepts_canonical_publisher_with_trailing_comment(self):
+        source = "\n".join([
+            "name: Build", "jobs:", "  publish:", "    runs-on: ubuntu-latest",
+            "    steps:", "      - id: push",
+            "        run: python3 -B scripts/ci/push_loaded_image.py # publish verified image",
+            "      - name: Generate SBOM",
+            "        uses: anchore/sbom-action@" + "b" * 40,
+            "        with:",
+            "          image: ghcr.io/team/app@${{ steps.push.outputs.digest }}",
+        ])
+        self.assertFalse(guard.findings(".github/workflows/build.yml", source))
+
+    def test_regression_sbom_rejects_quoted_and_block_loaded_image_publisher(self):
+        cases = {
+            "double-quoted same command": [
+                '        run: "python3 -B scripts/ci/push_loaded_image.py"',
+            ],
+            "single-quoted same command": [
+                "        run: 'python3 -B scripts/ci/push_loaded_image.py'",
+            ],
+            "double-quoted second command": [
+                '        run: "python3 -B scripts/ci/push_loaded_image.py && echo evil"',
+            ],
+            "double-quoted inner hash": [
+                '        run: "python3 -B scripts/ci/push_loaded_image.py # && echo evil"',
+            ],
+            "single-quoted inner hash": [
+                "        run: 'python3 -B scripts/ci/push_loaded_image.py # && echo evil'",
+            ],
+            "literal block scalar": [
+                "        run: |",
+                "          python3 -B scripts/ci/push_loaded_image.py",
+            ],
+            "strip literal block scalar": [
+                "        run: |-",
+                "          python3 -B scripts/ci/push_loaded_image.py",
+            ],
+            "folded block scalar": [
+                "        run: >",
+                "          python3 -B scripts/ci/push_loaded_image.py",
+            ],
+        }
+        for name, run_lines in cases.items():
+            source = "\n".join([
+                "name: Build", "jobs:", "  publish:", "    runs-on: ubuntu-latest",
+                "    steps:", "      - id: push",
+                *run_lines,
+                "      - name: Generate SBOM",
+                "        uses: anchore/sbom-action@" + "b" * 40,
+                "        with:",
+                "          image: ghcr.io/team/app@${{ steps.push.outputs.digest }}",
+            ])
+            with self.subTest(name=name):
+                self.assertTrue(guard.findings(".github/workflows/build.yml", source))
+

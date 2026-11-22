@@ -81,6 +81,25 @@ def test_regression_publish_validates_digest_before_consumption(name, job):
             assert '${{ steps.image.outputs.ref }}' in consumer['run']
 
 
+def test_regression_docker_publish_gates_release_aliases_to_release_event():
+    document = workflow('docker-publish')
+    steps = document['jobs']['build']['steps']
+    meta_tags = next(step for step in steps if step.get('id') == 'meta')['with']['tags']
+    rules = [
+        dict(part.strip().split('=', 1) for part in line.strip().split(',') if '=' in part)
+        for line in meta_tags.splitlines()
+        if line.strip()
+    ]
+    release_gated = [rule for rule in rules if rule.get('type') in {'match', 'semver'}]
+    assert len(release_gated) == 3
+    assert sum(1 for rule in release_gated if rule.get('type') == 'match') == 1
+    assert sum(1 for rule in release_gated if rule.get('type') == 'semver') == 2
+    for rule in release_gated:
+        assert rule.get('enable') == "${{ github.event_name == 'release' }}"
+    sha_rules = [rule for rule in rules if rule.get('type') == 'sha']
+    assert sha_rules == [{'type': 'sha', 'prefix': 'sha-'}]
+
+
 @pytest.mark.parametrize('name', [
     'control-plane-api-ci', 'control-plane-ui-ci', 'stoa-portal-ci', 'stoa-gateway-ci',
 ])

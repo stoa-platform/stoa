@@ -190,7 +190,9 @@ describe('Layout', () => {
   it('renders user info in sidebar', () => {
     renderLayout();
     expect(screen.getByText('Parzival')).toBeInTheDocument();
-    expect(screen.getByText('v0.0.0-dev')).toBeInTheDocument();
+    const version = screen.getByText('v0.0.0-dev');
+    expect(version).toBeInTheDocument();
+    expect(version).toHaveAttribute('data-stoa-app-version-mark', 'stoa-app-version:0.0.0-dev');
   });
 
   it('does not expose logs as a primary observability navigation item', () => {

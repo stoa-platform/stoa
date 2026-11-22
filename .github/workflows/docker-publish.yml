@@ -6,21 +6,18 @@
 # Used by the Quick Start docker-compose setup
 #
 # Trigger modes:
-#   1. Release Please (workflow_call): builds only released components
-#   2. Tag push (v* or component-v*): builds matching component(s)
+#   1. Published GitHub Release: builds matching component(s) from the
+#      release tag (component-v* or legacy v*). Draft releases do not start
+#      this workflow.
+#   2. Reusable workflow (workflow_call): builds only the requested components.
 #   3. Manual dispatch: builds selected services or all
 # =============================================================================
 
 name: Publish Docker Images
 
 on:
-  push:
-    tags:
-      - 'v*'                    # Legacy: monorepo-wide tag (builds all)
-      - 'control-plane-api-v*'  # Per-component tags from Release Please
-      - 'control-plane-ui-v*'
-      - 'portal-v*'
-      - 'stoa-gateway-v*'
+  release:
+    types: [published]
   workflow_call:
     inputs:
       services:
@@ -57,29 +54,45 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
+      has_services: ${{ steps.set-matrix.outputs.has_services }}
     steps:
       - name: Set build matrix
         id: set-matrix
+        env:
+          # Pass event data through env so tag names are not interpolated into the script.
+          SERVICES_INPUT: ${{ inputs.services }}
+          TAG: ${{ github.event.release.tag_name || github.ref_name }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           ALL_SERVICES='["control-plane-api","control-plane-ui","keycloak","portal","stoa-gateway"]'
 
-          # Priority 1: workflow_call services input (from Release Please)
-          SERVICES_INPUT="${{ inputs.services }}"
-
-          # Priority 2: tag-based detection
-          TAG="${{ github.ref_name }}"
-
-          if [ -n "$SERVICES_INPUT" ] && [ "$SERVICES_INPUT" != "all" ]; then
+          if [ -n "${SERVICES_INPUT}" ] && [ "${SERVICES_INPUT}" != "all" ]; then
             # Build only the specified services
-            MATRIX=$(echo "$SERVICES_INPUT" | tr ',' '\n' | jq -R . | jq -s -c '{service: .}')
-            echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
-          elif echo "$TAG" | grep -qE '^(control-plane-api|control-plane-ui|portal|stoa-gateway)-v'; then
+            MATRIX=$(printf '%s\n' "${SERVICES_INPUT}" | tr ',' '\n' | jq -R . | jq -s -c '{service: .}')
+          elif printf '%s\n' "${TAG}" | grep -qE '^(control-plane-api|control-plane-ui|portal|stoa-gateway)-v[0-9][^/]*$'; then
             # Component-scoped tag: extract service name
-            SERVICE=$(echo "$TAG" | sed 's/-v[0-9].*//')
-            echo "matrix={\"service\":[\"$SERVICE\"]}" >> $GITHUB_OUTPUT
+            SERVICE=$(printf '%s\n' "${TAG}" | sed 's/-v[0-9].*//')
+            MATRIX="{\"service\":[\"${SERVICE}\"]}"
+          elif [ "${EVENT_NAME}" = "release" ]; then
+            # Keep the previous tag-push scope: only legacy v* tags (no slash)
+            # build all services. Other published tags (for example stoa-go-v*)
+            # must not publish container images.
+            if printf '%s\n' "${TAG}" | grep -qE '^v[^/]+$'; then
+              MATRIX="{\"service\":${ALL_SERVICES}}"
+            else
+              echo "Skipping container image publish for unsupported release tag: ${TAG}"
+              MATRIX='{"service":[]}'
+            fi
           else
-            # All services (legacy v* tag, manual dispatch "all", or empty)
-            echo "matrix={\"service\":$ALL_SERVICES}" >> $GITHUB_OUTPUT
+            # All services (manual dispatch "all", or empty)
+            MATRIX="{\"service\":${ALL_SERVICES}}"
+          fi
+
+          echo "matrix=${MATRIX}" >> "$GITHUB_OUTPUT"
+          if [ "$(printf '%s\n' "${MATRIX}" | jq '.service | length')" -gt 0 ]; then
+            echo "has_services=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_services=false" >> "$GITHUB_OUTPUT"
           fi
 
   # ==========================================================================
@@ -89,6 +102,7 @@ jobs:
     name: Build ${{ matrix.service }}
     runs-on: ubuntu-latest
     needs: setup
+    if: ${{ needs.setup.outputs.has_services == 'true' }}
     permissions:
       contents: read
       packages: write
@@ -121,6 +135,9 @@ jobs:
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        env:
+          # Use the release tag so image tags match the previous tag-push behavior.
+          GITHUB_REF: ${{ github.event.release.tag_name && format('refs/tags/{0}', github.event.release.tag_name) || github.ref }}
         with:
           images: ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}
           flavor: latest=false

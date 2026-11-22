@@ -40,14 +40,18 @@ struct SubAccountToolRef {
 /// Populated lazily from CP API on first request per sub-account.
 pub struct FederationCache {
     cache: Cache<(String, String, String), HashSet<String>>,
-    control_plane: Arc<ToolProxyClient>,
+    control_plane: Option<Arc<ToolProxyClient>>,
     hits: AtomicU64,
     misses: AtomicU64,
 }
 
 impl FederationCache {
     /// Create a new federation cache.
-    pub fn new(ttl_secs: u64, max_entries: u64, control_plane: Arc<ToolProxyClient>) -> Self {
+    pub fn new(
+        ttl_secs: u64,
+        max_entries: u64,
+        control_plane: impl Into<Option<Arc<ToolProxyClient>>>,
+    ) -> Self {
         let cache = Cache::builder()
             .max_capacity(max_entries)
             .time_to_live(std::time::Duration::from_secs(ttl_secs))
@@ -55,7 +59,7 @@ impl FederationCache {
 
         Self {
             cache,
-            control_plane,
+            control_plane: control_plane.into(),
             hits: AtomicU64::new(0),
             misses: AtomicU64::new(0),
         }
@@ -158,14 +162,16 @@ impl FederationCache {
         tenant_id: &str,
         master_account_id: &str,
     ) -> Result<HashSet<String>, String> {
-        let base_url = self.control_plane.base_url();
+        let Some(control_plane) = self.control_plane.as_ref() else {
+            return Err("Control Plane URL not configured".to_string());
+        };
+        let base_url = control_plane.base_url();
         let url = format!(
             "{}/v1/tenants/{}/federation/accounts/{}/sub-accounts/{}",
             base_url, tenant_id, master_account_id, sub_account_id
         );
 
-        let response = self
-            .control_plane
+        let response = control_plane
             .http_client()
             .get(&url)
             .send()
@@ -351,6 +357,15 @@ mod tests {
         // An invalid URL fails in the HTTP client before opening a socket.
         let cp = Arc::new(ToolProxyClient::new("invalid-url", None));
         let cache = FederationCache::new(300, 1000, cp);
+        assert_eq!(
+            cache.get_allowed_tools("sub", "tenant-a", "master").await,
+            Some(HashSet::new())
+        );
+    }
+
+    #[tokio::test]
+    async fn missing_control_plane_denies_without_outbound_call() {
+        let cache = FederationCache::new(300, 1000, None);
         assert_eq!(
             cache.get_allowed_tools("sub", "tenant-a", "master").await,
             Some(HashSet::new())

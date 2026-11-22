@@ -63,7 +63,7 @@ pub struct AppState {
     /// OAuth2 subscription validator — validates JWT azp claim against active subscriptions
     pub subscription_validator: Arc<SubscriptionValidator>,
     pub uac_enforcer: Arc<UacEnforcer>,
-    pub control_plane: Arc<ToolProxyClient>,
+    pub control_plane: Option<Arc<ToolProxyClient>>,
     pub route_registry: Arc<RouteRegistry>,
     pub policy_registry: Arc<PolicyRegistry>,
     /// JWT validator for user token authentication (None if Keycloak not configured)
@@ -172,51 +172,6 @@ impl AppState {
         let policy_engine = Arc::new(resolve_policy_engine(&config));
         let uac_enforcer = Arc::new(UacEnforcer::new(policy_engine));
 
-        let cp_url = config
-            .control_plane_url
-            .as_deref()
-            .unwrap_or("http://localhost:8000");
-
-        // Build OIDC config if Keycloak credentials are provided.
-        // Use internal URL for token endpoint (service-to-service), fall back to external URL.
-        // A signing key (private_key_jwt) takes precedence over a client secret.
-        let credential = match (
-            &config.keycloak_client_key_path,
-            &config.keycloak_client_secret,
-        ) {
-            (Some(key_path), _) => Some(ClientCredential::PrivateKeyJwt {
-                key_path: key_path.into(),
-                key_id: config.keycloak_client_key_id.clone(),
-            }),
-            (None, Some(client_secret)) => {
-                tracing::warn!(
-                    "Service client uses a client secret; set STOA_KEYCLOAK_CLIENT_KEY_PATH \
-                     for private_key_jwt (required to read tenant tool permissions)"
-                );
-                Some(ClientCredential::Secret(client_secret.clone()))
-            }
-            (None, None) => None,
-        };
-        let oidc = match (&config.keycloak_url, &config.keycloak_client_id, credential) {
-            (Some(url), Some(client_id), Some(credential)) => {
-                let realm = config.keycloak_realm.as_deref().unwrap_or("stoa");
-                let token_base = config
-                    .keycloak_internal_url
-                    .as_deref()
-                    .unwrap_or(url.as_str());
-                let token_url = format!(
-                    "{}/realms/{}/protocol/openid-connect/token",
-                    token_base.trim_end_matches('/'),
-                    realm
-                );
-                let mut oidc = OidcConfig::new(token_url, client_id.clone(), credential);
-                oidc.max_token_ttl =
-                    std::time::Duration::from_secs(config.service_token_max_ttl_secs);
-                Some(oidc)
-            }
-            _ => None,
-        };
-
         // Initialize per-upstream circuit breaker registry (CAB-362, wired in CAB-1542 Phase 2)
         let cb_config = CircuitBreakerConfig {
             failure_threshold: config.cb_failure_threshold,
@@ -227,12 +182,54 @@ impl AppState {
         let circuit_breakers = Arc::new(CircuitBreakerRegistry::new(cb_config));
         tracing::info!("Per-upstream circuit breaker registry initialized");
 
-        let mut tool_proxy = ToolProxyClient::new(cp_url, oidc);
-        // Pass API key for internal tool discovery (CAB-1817: sidecars use X-Gateway-Key)
-        if let Some(ref key) = config.control_plane_api_key {
-            tool_proxy = tool_proxy.with_api_key(key.clone());
-        }
-        let control_plane = Arc::new(tool_proxy.with_circuit_breakers(circuit_breakers.clone()));
+        let control_plane = config.control_plane_url.as_deref().map(|cp_url| {
+            // Build OIDC config if Keycloak credentials are provided.
+            // Use internal URL for token endpoint (service-to-service), fall back to external URL.
+            // A signing key (private_key_jwt) takes precedence over a client secret.
+            let credential = match (
+                &config.keycloak_client_key_path,
+                &config.keycloak_client_secret,
+            ) {
+                (Some(key_path), _) => Some(ClientCredential::PrivateKeyJwt {
+                    key_path: key_path.into(),
+                    key_id: config.keycloak_client_key_id.clone(),
+                }),
+                (None, Some(client_secret)) => {
+                    tracing::warn!(
+                        "Service client uses a client secret; set STOA_KEYCLOAK_CLIENT_KEY_PATH \
+                         for private_key_jwt (required to read tenant tool permissions)"
+                    );
+                    Some(ClientCredential::Secret(client_secret.clone()))
+                }
+                (None, None) => None,
+            };
+            let oidc = match (&config.keycloak_url, &config.keycloak_client_id, credential) {
+                (Some(url), Some(client_id), Some(credential)) => {
+                    let realm = config.keycloak_realm.as_deref().unwrap_or("stoa");
+                    let token_base = config
+                        .keycloak_internal_url
+                        .as_deref()
+                        .unwrap_or(url.as_str());
+                    let token_url = format!(
+                        "{}/realms/{}/protocol/openid-connect/token",
+                        token_base.trim_end_matches('/'),
+                        realm
+                    );
+                    let mut oidc = OidcConfig::new(token_url, client_id.clone(), credential);
+                    oidc.max_token_ttl =
+                        std::time::Duration::from_secs(config.service_token_max_ttl_secs);
+                    Some(oidc)
+                }
+                _ => None,
+            };
+
+            let mut tool_proxy = ToolProxyClient::new(cp_url, oidc);
+            // Pass API key for internal tool discovery (CAB-1817: sidecars use X-Gateway-Key)
+            if let Some(ref key) = config.control_plane_api_key {
+                tool_proxy = tool_proxy.with_api_key(key.clone());
+            }
+            Arc::new(tool_proxy.with_circuit_breakers(circuit_breakers.clone()))
+        });
         let route_registry = Arc::new(RouteRegistry::new());
         let policy_registry = Arc::new(PolicyRegistry::new());
 
@@ -262,7 +259,11 @@ impl AppState {
             tracing::info!("JWT validator initialized for user token authentication");
             Some(Arc::new(validator))
         } else {
-            tracing::warn!("Keycloak not configured — JWT user auth disabled");
+            if config.environment == Environment::Dev && config.control_plane_url.is_none() {
+                tracing::debug!("Keycloak not configured — JWT user auth disabled");
+            } else {
+                tracing::warn!("Keycloak not configured — JWT user auth disabled");
+            }
             None
         };
 
@@ -450,22 +451,31 @@ impl AppState {
 
         // Initialize budget cache (CAB-1456)
         let budget_cache = if config.budget_enforcement_enabled {
-            let billing_url = config
+            match config
                 .billing_api_url
                 .clone()
                 .or_else(|| config.control_plane_url.clone())
-                .unwrap_or_else(|| "http://localhost:8000".to_string());
-            let cache = Arc::new(BudgetCache::new(BudgetCacheConfig {
-                billing_api_url: billing_url.clone(),
-                cache_ttl_secs: config.budget_cache_ttl_secs,
-                gateway_key: config.control_plane_api_key.clone(),
-            }));
-            tracing::info!(
-                billing_api_url = %billing_url,
-                cache_ttl_secs = config.budget_cache_ttl_secs,
-                "Budget enforcement enabled"
-            );
-            Some(cache)
+            {
+                Some(billing_url) => {
+                    let cache = Arc::new(BudgetCache::new(BudgetCacheConfig {
+                        billing_api_url: billing_url.clone(),
+                        cache_ttl_secs: config.budget_cache_ttl_secs,
+                        gateway_key: config.control_plane_api_key.clone(),
+                    }));
+                    tracing::info!(
+                        billing_api_url = %billing_url,
+                        cache_ttl_secs = config.budget_cache_ttl_secs,
+                        "Budget enforcement enabled"
+                    );
+                    Some(cache)
+                }
+                None => {
+                    tracing::warn!(
+                        "Budget enforcement skipped: neither STOA_BILLING_API_URL nor STOA_CONTROL_PLANE_URL is set"
+                    );
+                    None
+                }
+            }
         } else {
             tracing::info!("Budget enforcement disabled (STOA_BUDGET_ENFORCEMENT_ENABLED=false)");
             None
@@ -582,15 +592,23 @@ impl AppState {
 
         // Tenant tool permissions require a valid signed policy and a pinned trust set.
         let policy_trust = config.policy_trust_jwks_file.as_deref();
-        let tool_permissions = config.control_plane_url.as_ref().map(|cp_url| {
-            tracing::info!("Tenant tool permission cache enabled (60s TTL)");
-            Arc::new(
-                ToolPermissionService::new(http_client.clone(), cp_url, Duration::from_secs(60))
-                    .with_auth(control_plane.clone())
+        let tool_permissions = config
+            .control_plane_url
+            .as_ref()
+            .zip(control_plane.as_ref())
+            .map(|(cp_url, cp)| {
+                tracing::info!("Tenant tool permission cache enabled (60s TTL)");
+                Arc::new(
+                    ToolPermissionService::new(
+                        http_client.clone(),
+                        cp_url,
+                        Duration::from_secs(60),
+                    )
+                    .with_auth(cp.clone())
                     .with_policy_identity(&config.policy_expected_issuer, &config.policy_audience)
                     .with_trust_store(policy_trust.map(PolicyTrustStore::open)),
-            )
-        });
+                )
+            });
 
         // Initialize A2A agent registry (CAB-1754)
         let a2a_registry = if config.a2a_enabled {
@@ -673,11 +691,28 @@ impl AppState {
             || self.uac_enforcer.policy_engine().is_enabled()
     }
 
+    /// True when running in dev mode without a Control Plane or startup policy tenants.
+    ///
+    /// Scoped dev-only exception allowing local standalone runs without a Control Plane;
+    /// staging/prod and any configuration with a Control Plane URL or startup policy
+    /// tenants keep ADR-070 fail-closed readiness gating.
+    pub fn is_standalone_dev(&self) -> bool {
+        self.config.environment == Environment::Dev
+            && self.config.control_plane_url.is_none()
+            && self.config.policy_boot_tenants.is_empty()
+    }
+
     /// Start background tasks
     pub fn start_background_tasks(&self) {
         match &self.tool_permissions {
             Some(permissions) if !self.config.policy_boot_tenants.is_empty() => {
                 permissions.spawn_policy_refresher(self.config.policy_boot_tenants.clone());
+            }
+            None if self.is_standalone_dev() => {
+                tracing::info!(
+                    mode = "local_dev",
+                    "Control Plane not configured; running in local dev mode without Control Plane tool policies. Set STOA_CONTROL_PLANE_URL and STOA_POLICY_BOOT_TENANTS for Control Plane tool policies, and STOA_KEYCLOAK_URL for JWT user authentication."
+                );
             }
             _ => tracing::error!(
                 reason = "startup_policy_inputs_missing",
@@ -722,7 +757,7 @@ impl AppState {
         }
 
         // Start route reload watch loop (CAB-1828)
-        if self.config.route_reload_enabled {
+        if self.config.route_reload_enabled && self.config.control_plane_url.is_some() {
             let reload_state = self.clone();
             let interval_secs = self.config.route_reload_interval_secs;
             tokio::spawn(async move {
@@ -1093,5 +1128,113 @@ mod tests {
         // so elapsed should be small (well under 1 second)
         assert!(elapsed.as_secs() < 1);
         assert!(state.start_time >= before);
+    }
+
+    #[tokio::test]
+    async fn dev_without_control_plane_skips_cp_client_and_startup_policy_error() {
+        use crate::control_plane::tool_proxy::tests::LogBuffer;
+
+        let state = AppState::new(Config {
+            environment: Environment::Dev,
+            control_plane_url: None,
+            policy_boot_tenants: Vec::new(),
+            budget_enforcement_enabled: true,
+            billing_api_url: None,
+            quota_enforcement_enabled: false,
+            ..Config::default()
+        });
+        assert!(state.control_plane.is_none());
+        assert!(state.tool_permissions.is_none());
+        assert!(state.budget_cache.is_none());
+        assert!(state.is_standalone_dev());
+
+        let logs = LogBuffer::default();
+        let subscriber = tracing_subscriber::fmt()
+            .with_writer(logs.clone())
+            .with_ansi(false)
+            .finish();
+        let _guard = tracing::subscriber::set_default(subscriber);
+        state.start_background_tasks();
+        let captured = String::from_utf8(logs.0.lock().clone()).unwrap();
+
+        assert!(
+            !captured.contains("startup_policy_inputs_missing"),
+            "unexpected startup policy error in dev without CP: {captured}"
+        );
+        assert!(captured.contains("STOA_CONTROL_PLANE_URL"), "{captured}");
+        assert!(captured.contains("STOA_POLICY_BOOT_TENANTS"), "{captured}");
+        assert!(captured.contains("STOA_KEYCLOAK_URL"), "{captured}");
+    }
+
+    #[tokio::test]
+    async fn dev_with_control_plane_and_no_policy_boot_tenants_logs_startup_policy_error() {
+        use crate::control_plane::tool_proxy::tests::LogBuffer;
+
+        let state = AppState::new(Config {
+            environment: Environment::Dev,
+            control_plane_url: Some("http://127.0.0.1:1".to_string()),
+            policy_boot_tenants: Vec::new(),
+            quota_enforcement_enabled: false,
+            ..Config::default()
+        });
+        assert!(state.control_plane.is_some());
+        assert!(state.tool_permissions.is_some());
+        assert!(!state.is_standalone_dev());
+
+        let logs = LogBuffer::default();
+        let subscriber = tracing_subscriber::fmt()
+            .with_writer(logs.clone())
+            .with_ansi(false)
+            .finish();
+        let _guard = tracing::subscriber::set_default(subscriber);
+        state.start_background_tasks();
+        let captured = String::from_utf8(logs.0.lock().clone()).unwrap();
+
+        assert!(
+            captured.contains("startup_policy_inputs_missing"),
+            "expected startup_policy_inputs_missing error: {captured}"
+        );
+    }
+
+    #[tokio::test]
+    async fn regulated_profiles_without_control_plane_log_startup_policy_error() {
+        use crate::control_plane::tool_proxy::tests::LogBuffer;
+
+        let mut policy_file = tempfile::NamedTempFile::new().expect("temp policy file");
+        write!(
+            policy_file,
+            "{}",
+            PolicyEngineConfig::default().default_policy
+        )
+        .expect("write policy");
+        let policy_path = policy_file.path().display().to_string();
+
+        for environment in [Environment::Staging, Environment::Prod] {
+            let state = AppState::new(Config {
+                environment,
+                policy_enabled: true,
+                policy_path: Some(policy_path.clone()),
+                control_plane_url: None,
+                policy_boot_tenants: Vec::new(),
+                quota_enforcement_enabled: false,
+                ..Config::default()
+            });
+            assert!(state.control_plane.is_none(), "{environment:?}");
+            assert!(!state.is_standalone_dev(), "{environment:?}");
+
+            let logs = LogBuffer::default();
+            let subscriber = tracing_subscriber::fmt()
+                .with_writer(logs.clone())
+                .with_ansi(false)
+                .finish();
+            let _guard = tracing::subscriber::set_default(subscriber);
+            state.start_background_tasks();
+            let captured = String::from_utf8(logs.0.lock().clone()).unwrap();
+
+            assert!(
+                captured.contains("startup_policy_inputs_missing"),
+                "expected startup_policy_inputs_missing in {environment:?}: {captured}"
+            );
+        }
     }
 }

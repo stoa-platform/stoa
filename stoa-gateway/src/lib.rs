@@ -860,8 +860,11 @@ async fn ready(
     }
 
     // Readiness is gated on a real startup policy load (ADR-070 §1, §4). Missing
-    // inputs (no permission service, no startup tenants) never bypass the gate.
+    // inputs (no permission service, no startup tenants) fail closed whenever a
+    // Control Plane URL or startup tenants are configured, and in staging/prod.
+    // Standalone dev runs without a Control Plane are the sole scoped exception.
     let policy_failure = match &state.tool_permissions {
+        None if state.is_standalone_dev() => None,
         None => Some("permission_service_missing"),
         Some(_) if state.config.policy_boot_tenants.is_empty() => Some("boot_tenants_missing"),
         Some(perm_svc) => perm_svc.policy_readiness_failure(),
@@ -1005,8 +1008,8 @@ mod tests {
             ("GET", "/health", StatusCode::OK),
             ("HEAD", "/health", StatusCode::OK),
             ("GET", "/health/live", StatusCode::OK),
-            ("GET", "/ready", StatusCode::SERVICE_UNAVAILABLE),
-            ("GET", "/health/ready", StatusCode::SERVICE_UNAVAILABLE),
+            ("GET", "/ready", StatusCode::OK),
+            ("GET", "/health/ready", StatusCode::OK),
             ("GET", "/metrics", StatusCode::OK),
             ("GET", "/admin/health", StatusCode::SERVICE_UNAVAILABLE),
             ("GET", "/authz", StatusCode::METHOD_NOT_ALLOWED),
@@ -1242,6 +1245,75 @@ mod tests {
             let state = AppState::new(serde_json::from_value(value.clone()).unwrap());
             let status = ready(axum::extract::State(state)).await.status();
             assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{value}");
+        }
+    }
+
+    #[tokio::test]
+    async fn ready_succeeds_in_dev_without_control_plane() {
+        let state = AppState::new(config::Config {
+            environment: config::Environment::Dev,
+            control_plane_url: None,
+            policy_boot_tenants: Vec::new(),
+            quota_enforcement_enabled: false,
+            ..config::Config::default()
+        });
+        assert!(state.control_plane.is_none());
+        assert!(state.tool_permissions.is_none());
+
+        let app = build_router(state);
+        for uri in ["/ready", "/health/ready"] {
+            let response = app
+                .clone()
+                .oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap())
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK, "{uri}");
+            let body = axum::body::to_bytes(response.into_body(), 1024)
+                .await
+                .unwrap();
+            assert_eq!(&body[..], b"READY", "{uri}");
+        }
+    }
+
+    #[tokio::test]
+    async fn ready_fails_closed_in_regulated_profiles_without_control_plane() {
+        use std::io::Write;
+        let mut policy_file = tempfile::NamedTempFile::new().expect("temp policy file");
+        write!(
+            policy_file,
+            "{}",
+            policy::PolicyEngineConfig::default().default_policy
+        )
+        .expect("write policy");
+        let policy_path = policy_file.path().display().to_string();
+
+        for environment in [config::Environment::Staging, config::Environment::Prod] {
+            let state = AppState::new(config::Config {
+                environment,
+                policy_enabled: true,
+                policy_path: Some(policy_path.clone()),
+                control_plane_url: None,
+                policy_boot_tenants: Vec::new(),
+                quota_enforcement_enabled: false,
+                ..config::Config::default()
+            });
+            assert!(state.policy_ready(), "{environment:?}");
+            assert!(state.control_plane.is_none(), "{environment:?}");
+
+            let response = ready(axum::extract::State(state)).await;
+            assert_eq!(
+                response.status(),
+                StatusCode::SERVICE_UNAVAILABLE,
+                "{environment:?}"
+            );
+            let body = axum::body::to_bytes(response.into_body(), 1024)
+                .await
+                .unwrap();
+            assert_eq!(
+                &body[..],
+                b"NOT READY: tool policy unavailable",
+                "{environment:?}"
+            );
         }
     }
 }

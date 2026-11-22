@@ -393,20 +393,21 @@ pub async fn mcp_rest_tools_list(
     // CAB-1317: stale-while-revalidate — return cached immediately, refresh in background
     // CAB-1558: thundering herd prevention — only one refresh per tenant at a time
     let ttl = Duration::from_secs(state.config.tool_refresh_ttl_secs);
-    if state.tool_registry.is_stale(&auth.tenant_id, ttl)
-        && state.tool_registry.try_start_refresh(&auth.tenant_id)
-    {
-        let registry = state.tool_registry.clone();
-        let tenant_id = auth.tenant_id.clone();
-        let cp = state.control_plane.clone();
-        let cb = state.cp_circuit_breaker.clone();
-        tokio::spawn(async move {
-            debug!(tenant_id = %tenant_id, "Background tool refresh (stale-while-revalidate)");
-            if let Err(e) = refresh_tenant_tools(&registry, &cp, cb, &tenant_id).await {
-                warn!(tenant_id = %tenant_id, error = %e, "Background tool refresh failed");
-            }
-            registry.finish_refresh(&tenant_id);
-        });
+    if let Some(cp) = state.control_plane.clone() {
+        if state.tool_registry.is_stale(&auth.tenant_id, ttl)
+            && state.tool_registry.try_start_refresh(&auth.tenant_id)
+        {
+            let registry = state.tool_registry.clone();
+            let tenant_id = auth.tenant_id.clone();
+            let cb = state.cp_circuit_breaker.clone();
+            tokio::spawn(async move {
+                debug!(tenant_id = %tenant_id, "Background tool refresh (stale-while-revalidate)");
+                if let Err(e) = refresh_tenant_tools(&registry, &cp, cb, &tenant_id).await {
+                    warn!(tenant_id = %tenant_id, error = %e, "Background tool refresh failed");
+                }
+                registry.finish_refresh(&tenant_id);
+            });
+        }
     }
 
     let tools = state.tool_registry.list(Some(&auth.tenant_id));
@@ -467,20 +468,21 @@ pub async fn mcp_tools_list(
     // CAB-1317: stale-while-revalidate — return cached immediately, refresh in background
     // CAB-1558: thundering herd prevention — only one refresh per tenant at a time
     let ttl = Duration::from_secs(state.config.tool_refresh_ttl_secs);
-    if state.tool_registry.is_stale(&auth.tenant_id, ttl)
-        && state.tool_registry.try_start_refresh(&auth.tenant_id)
-    {
-        let registry = state.tool_registry.clone();
-        let tenant_id = auth.tenant_id.clone();
-        let cp = state.control_plane.clone();
-        let cb = state.cp_circuit_breaker.clone();
-        tokio::spawn(async move {
-            debug!(tenant_id = %tenant_id, "Background tool refresh (stale-while-revalidate)");
-            if let Err(e) = refresh_tenant_tools(&registry, &cp, cb, &tenant_id).await {
-                warn!(tenant_id = %tenant_id, error = %e, "Background tool refresh failed");
-            }
-            registry.finish_refresh(&tenant_id);
-        });
+    if let Some(cp) = state.control_plane.clone() {
+        if state.tool_registry.is_stale(&auth.tenant_id, ttl)
+            && state.tool_registry.try_start_refresh(&auth.tenant_id)
+        {
+            let registry = state.tool_registry.clone();
+            let tenant_id = auth.tenant_id.clone();
+            let cb = state.cp_circuit_breaker.clone();
+            tokio::spawn(async move {
+                debug!(tenant_id = %tenant_id, "Background tool refresh (stale-while-revalidate)");
+                if let Err(e) = refresh_tenant_tools(&registry, &cp, cb, &tenant_id).await {
+                    warn!(tenant_id = %tenant_id, error = %e, "Background tool refresh failed");
+                }
+                registry.finish_refresh(&tenant_id);
+            });
+        }
     }
 
     let tools = state.tool_registry.list(Some(&auth.tenant_id));
@@ -656,9 +658,10 @@ async fn mcp_tools_call_inner(
             // This prevents retry storms under load (3 VUs × 15 iterations = 45
             // blocking HTTP calls to CP that previously caused p95 > 1s).
             let ttl = Duration::from_secs(state.config.tool_refresh_ttl_secs);
-            if !state.tool_registry.has_been_loaded(&auth.tenant_id)
-                && state.tool_registry.is_stale(&auth.tenant_id, ttl)
-            {
+            if let Some(cp) = state.control_plane.as_ref().filter(|_| {
+                !state.tool_registry.has_been_loaded(&auth.tenant_id)
+                    && state.tool_registry.is_stale(&auth.tenant_id, ttl)
+            }) {
                 debug!(
                     tool = %request.name,
                     tenant_id = %auth.tenant_id,
@@ -666,7 +669,7 @@ async fn mcp_tools_call_inner(
                 );
                 let _ = refresh_tenant_tools(
                     &state.tool_registry,
-                    &state.control_plane,
+                    cp,
                     state.cp_circuit_breaker.clone(),
                     &auth.tenant_id,
                 )

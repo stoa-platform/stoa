@@ -66,6 +66,10 @@ def resolve_app_version(
         tagged = version_from_tag(tag, service)
         if tagged is not None:
             return tagged, True
+        if tag and tag.startswith(f"{service}-v"):
+            raise ValueError(
+                f"Invalid component release tag {tag!r} for service {service!r}"
+            )
     return version_from_source(repo_root, service), True
 
 

@@ -85,7 +85,7 @@ ENV VITE_BASE_DOMAIN=$VITE_BASE_DOMAIN \
 # Cache-bust: ARG change invalidates this layer, ensuring fresh Vite build per commit
 ARG CACHEBUST=unknown
 # Prefer the release-tag build-arg; fall back to package.json for local builds.
-RUN VERSION="${VITE_APP_VERSION:-${APP_VERSION:-$(node -p "require('./package.json').version")}}" \
+RUN VERSION="${VITE_APP_VERSION:-${APP_VERSION:-$(node -p "const v = require('./package.json').version; typeof v === 'string' ? v.trim() : ''")}}" \
     && export VITE_APP_VERSION="$VERSION" \
     && npm run build
 

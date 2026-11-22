@@ -92,7 +92,7 @@ ENV VITE_BASE_DOMAIN=$VITE_BASE_DOMAIN \
 # while npm ci layers above remain cached. Prevents stale JS chunks from GHA Docker cache.
 ARG CACHEBUST=unknown
 # Prefer the release-tag build-arg; fall back to package.json for local builds.
-RUN VERSION="${VITE_APP_VERSION:-${APP_VERSION:-$(node -p "require('./package.json').version")}}" \
+RUN VERSION="${VITE_APP_VERSION:-${APP_VERSION:-$(node -p "const v = require('./package.json').version; typeof v === 'string' ? v.trim() : ''")}}" \
     && export VITE_APP_VERSION="$VERSION" \
     && npm run build
 

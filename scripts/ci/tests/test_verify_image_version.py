@@ -1,6 +1,10 @@
 """Pure-function tests for the pre-push image version check."""
 
 import json
+import os
+import re
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -334,15 +338,185 @@ def test_scan_rejects_mark_only_in_js_comments_and_preserves_strings():
 
 def test_delimited_app_mark_rejects_prerelease_prefix_and_unquoted_partial():
     assert viv.has_delimited_app_mark('"stoa-app-version:1.13.0"', "1.13.0")
+    assert viv.has_delimited_app_mark("'stoa-app-version:1.13.0'", "1.13.0")
+    assert viv.has_delimited_app_mark("`stoa-app-version:1.13.0`", "1.13.0")
     assert not viv.has_delimited_app_mark('"stoa-app-version:1.13.0-rc.1"', "1.13.0")
     assert not viv.has_delimited_app_mark("stoa-app-version:1.13.0-rc.1", "1.13.0")
-    assert viv.has_delimited_app_mark("mark=stoa-app-version:1.13.0;", "1.13.0")
+    assert not viv.has_delimited_app_mark("mark=stoa-app-version:1.13.0;", "1.13.0")
+    assert not viv.has_delimited_app_mark('"As of stoa-app-version:1.13.0 details"', "1.13.0")
+    assert not viv.has_delimited_app_mark('\'foo "stoa-app-version:1.13.0" bar\'', "1.13.0")
+    assert not viv.has_delimited_app_mark("`${x}stoa-app-version:1.13.0`", "1.13.0")
+    assert not viv.has_delimited_app_mark("`stoa-app-version:1.13.0${x}`", "1.13.0")
+    assert not viv.has_delimited_app_mark('return /"stoa-app-version:1.13.0"/;', "1.13.0")
     with pytest.raises(viv.VersionMismatch, match="was not found in JavaScript loaded"):
         viv.scan_application_scripts_for_mark(
             INDEX_HTML,
             {JS_PATH: 'const mark="stoa-app-version:1.13.0-rc.1";\n'},
             "1.13.0",
         )
+
+
+def test_scan_and_verifier_reject_comment_after_brace_division():
+    index_1_4 = """<!doctype html><html><head>
+    <meta name="stoa-app-version" content="1.4.0" />
+    <script type="module" src="/assets/index-abc.js"></script>
+    </head><body></body></html>"""
+    fixture = (
+        'const n = {} / 2 /* "stoa-app-version:1.4.0" */;\n'
+        'const version = "stoa-app-version:1.0.0";\n'
+    )
+    with pytest.raises(viv.VersionMismatch, match="was not found in JavaScript loaded"):
+        viv.scan_application_scripts_for_mark(index_1_4, {JS_PATH: fixture}, "1.4.0")
+
+    runner = FakeRunner([
+        _frontend_file_ok("/usr/share/nginx/html/version.txt", "1.4.0\n"),
+        _frontend_file_ok("/usr/share/nginx/html/index.html", index_1_4),
+        _frontend_file_ok(JS_PATH, fixture),
+    ])
+    with pytest.raises(viv.VersionMismatch, match="application mark 'stoa-app-version:1.4.0'"):
+        viv.verify_image_version("portal", "1.4.0", "img:tag", runner=runner)
+
+    # Division after ], numbers, strings, and identifiers also keeps comments stripped.
+    for expr in ("arr[0]", "42", '"1"', "count"):
+        js = f'const n = {expr} / 2 /* "stoa-app-version:1.4.0" */;\n'
+        with pytest.raises(viv.VersionMismatch, match="was not found in JavaScript loaded"):
+            viv.scan_application_scripts_for_mark(index_1_4, {JS_PATH: js}, "1.4.0")
+
+    # Regexes after keywords such as return or case still scan without hiding a real mark.
+    regex_after_keyword = (
+        'function f(x){switch(x){case /https?:\\/\\//:return /\\/*/;}}'
+        'const mark="stoa-app-version:1.4.0";\n'
+    )
+    assert (
+        viv.scan_application_scripts_for_mark(index_1_4, {JS_PATH: regex_after_keyword}, "1.4.0")
+        == "stoa-app-version:1.4.0"
+    )
+
+
+def test_scan_and_verifier_reject_mark_substring_inside_larger_string():
+    index_1_4 = """<!doctype html><html><head>
+    <meta name="stoa-app-version" content="1.4.0" />
+    <script type="module" src="/assets/index-abc.js"></script>
+    </head><body></body></html>"""
+    fixture = (
+        'const message = "As of stoa-app-version:1.4.0 details";\n'
+        'const version = "stoa-app-version:1.0.0";\n'
+    )
+    with pytest.raises(viv.VersionMismatch, match="was not found in JavaScript loaded"):
+        viv.scan_application_scripts_for_mark(index_1_4, {JS_PATH: fixture}, "1.4.0")
+
+    runner = FakeRunner([
+        _frontend_file_ok("/usr/share/nginx/html/version.txt", "1.4.0\n"),
+        _frontend_file_ok("/usr/share/nginx/html/index.html", index_1_4),
+        _frontend_file_ok(JS_PATH, fixture),
+    ])
+    with pytest.raises(viv.VersionMismatch, match="application mark 'stoa-app-version:1.4.0'"):
+        viv.verify_image_version("portal", "1.4.0", "img:tag", runner=runner)
+
+
+def test_scan_rejects_mark_only_in_inert_template_script():
+    html_with_template = """<!doctype html><html><head>
+    <meta name="stoa-app-version" content="1.13.0" />
+    <template><script type="module" src="/assets/unused.js"></script></template>
+    <template><template><script src="/assets/nested.js"></script></template></template>
+    <script type="module" src="/assets/index-abc.js"></script>
+    </head><body></body></html>"""
+    assert viv.application_script_refs(html_with_template) == ["/assets/index-abc.js"]
+    scripts = {
+        "/usr/share/nginx/html/assets/unused.js": 'const mark="stoa-app-version:1.13.0";\n',
+        "/usr/share/nginx/html/assets/nested.js": 'const mark="stoa-app-version:1.13.0";\n',
+        JS_PATH: 'const mark="stoa-app-version:2.0.0";\n',
+    }
+    with pytest.raises(viv.VersionMismatch, match="was not found in JavaScript loaded"):
+        viv.scan_application_scripts_for_mark(html_with_template, scripts, "1.13.0")
+
+    template_only = """<!doctype html><html><head>
+    <template><script type="module" src="/assets/unused.js"></script></template>
+    </head><body></body></html>"""
+    with pytest.raises(viv.VersionMismatch, match="does not load any application JavaScript"):
+        viv.scan_application_scripts_for_mark(template_only, scripts, "1.13.0")
+
+
+def test_scan_ignores_runtime_config_stub_and_requires_application_entry():
+    scripts = {
+        "/usr/share/nginx/html/runtime-config.js": 'window.__MARK__="stoa-app-version:1.13.0";\n',
+        JS_PATH: 'const mark="stoa-app-version:2.0.0";\n',
+    }
+    for runtime_src in (
+        "/runtime-config.js",
+        "/runtime-config.js?v=__RUNTIME_CFG_V__",
+        "/runtime-config.js#cache",
+        "runtime-config.js",
+        "./runtime-config.js",
+    ):
+        html_with_stale_entry = f"""<!doctype html><html><head>
+        <meta name="stoa-app-version" content="1.13.0" />
+        <script src="{runtime_src}"></script>
+        <script type="module" src="/assets/index-abc.js"></script>
+        </head><body></body></html>"""
+        assert viv.application_script_refs(html_with_stale_entry) == ["/assets/index-abc.js"]
+        with pytest.raises(viv.VersionMismatch, match="was not found in JavaScript loaded"):
+            viv.scan_application_scripts_for_mark(html_with_stale_entry, scripts, "1.13.0")
+
+        html_runtime_only = f"""<!doctype html><html><head>
+        <script src="{runtime_src}"></script>
+        </head><body></body></html>"""
+        with pytest.raises(viv.VersionMismatch, match="does not load any application JavaScript"):
+            viv.scan_application_scripts_for_mark(html_runtime_only, scripts, "1.13.0")
+
+    html_fresh_with_runtime = """<!doctype html><html><head>
+    <meta name="stoa-app-version" content="1.13.0" />
+    <script src="/runtime-config.js?v=__RUNTIME_CFG_V__"></script>
+    <script type="module" src="/assets/index-abc.js"></script>
+    </head><body></body></html>"""
+    fresh_scripts = {
+        "/usr/share/nginx/html/runtime-config.js": "window.__STOA_RUNTIME__ = {};\n",
+        JS_PATH: 'const mark="stoa-app-version:1.13.0";\n',
+    }
+    assert (
+        viv.scan_application_scripts_for_mark(html_fresh_with_runtime, fresh_scripts, "1.13.0")
+        == "stoa-app-version:1.13.0"
+    )
+
+
+def test_frontend_dockerfiles_handle_missing_or_null_package_version(tmp_path):
+    pattern = re.compile(r"^RUN (VERSION=.*?) \\$", re.MULTILINE)
+    assignments: list[str] = []
+    for rel in ("portal/Dockerfile", "control-plane-ui/Dockerfile"):
+        text = (ROOT / rel).read_text(encoding="utf-8")
+        match = pattern.search(text)
+        assert match is not None, f"missing VERSION assignment in {rel}"
+        assignment = match.group(1)
+        assert "require('./package.json').version\")" not in assignment, rel
+        assignments.append(assignment)
+    assert assignments[0] == assignments[1]
+
+    if shutil.which("node") is None:
+        pytest.skip("node is not installed")
+
+    shell_cmd = f'{assignments[0]} && printf "%s" "$VERSION"'
+    cases = [
+        ({"version": "1.4.0"}, {}, "1.4.0"),
+        ({}, {}, ""),
+        ({"version": None}, {}, ""),
+        ({"version": 123}, {}, ""),
+        ({"version": "   "}, {}, ""),
+        ({}, {"APP_VERSION": "2.0.0"}, "2.0.0"),
+        ({}, {"APP_VERSION": "2.0.0", "VITE_APP_VERSION": "3.0.0"}, "3.0.0"),
+    ]
+    base_env = {"PATH": os.environ.get("PATH", "")}
+    for pkg, extra_env, expected in cases:
+        (tmp_path / "package.json").write_text(json.dumps(pkg), encoding="utf-8")
+        result = subprocess.run(
+            ["/bin/sh", "-c", shell_cmd],
+            cwd=tmp_path,
+            env={**base_env, **extra_env},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        assert result.stdout == expected
 
 
 def test_frontends_derive_displayed_version_from_verified_mark():

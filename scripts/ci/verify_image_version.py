@@ -183,13 +183,23 @@ def assert_safe_version_token(expected: str) -> None:
         raise ValueError(f"Unsafe application version token: {expected!r}")
 
 
+def _is_runtime_config_ref(path: str) -> bool:
+    normalized = path.strip().lower()
+    return normalized == "runtime-config.js" or normalized.endswith("/runtime-config.js")
+
+
 class _ExecutableScriptParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.refs: list[str] = []
+        self._template_depth = 0
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag.lower() != "script":
+        tag_name = tag.lower()
+        if tag_name == "template":
+            self._template_depth += 1
+            return
+        if self._template_depth > 0 or tag_name != "script":
             return
         attr_map = {name.lower(): (value or "") for name, value in attrs}
         script_type = attr_map.get("type", "").split(";", 1)[0].strip().lower()
@@ -198,9 +208,15 @@ class _ExecutableScriptParser(HTMLParser):
         src = attr_map.get("src", "").strip()
         if not src:
             return
-        path = src.split("#", 1)[0].split("?", 1)[0]
+        path = src.split("#", 1)[0].split("?", 1)[0].strip()
+        if _is_runtime_config_ref(path):
+            return
         if path.endswith((".js", ".mjs")):
             self.refs.append(path)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag.lower() == "template" and self._template_depth > 0:
+            self._template_depth -= 1
 
 
 def application_script_refs(index_html: str) -> list[str]:
@@ -221,8 +237,8 @@ def resolve_frontend_path(href: str) -> str:
     return f"{FRONTEND_HTML_ROOT}/{relative}"
 
 
-def strip_js_comments(source: str) -> str:
-    """Strip JS // and /* */ comments while preserving string, template, and regex literals."""
+def _scan_js(source: str, *, target_literal: str | None = None) -> tuple[str, bool]:
+    """Strip JS // and /* */ comments while scanning string, template, and regex literals."""
     out: list[str] = []
     n = len(source)
     i = 0
@@ -230,8 +246,11 @@ def strip_js_comments(source: str) -> str:
     brace_stack: list[bool] = []
     paren_stack: list[bool] = []
     prev_word = ""
+    found = False
 
-    def scan_template(pos: int) -> tuple[int, bool]:
+    def scan_template(pos: int, *, standalone: bool) -> tuple[int, bool]:
+        nonlocal found
+        start = pos
         while pos < n:
             ch = source[pos]
             if ch == "\\" and pos + 1 < n:
@@ -239,6 +258,8 @@ def strip_js_comments(source: str) -> str:
                 pos += 2
                 continue
             if ch == "`":
+                if standalone and target_literal is not None and source[start:pos] == target_literal:
+                    found = True
                 out.append(ch)
                 return pos + 1, False
             if ch == "$" and pos + 1 < n and source[pos + 1] == "{":
@@ -275,6 +296,7 @@ def strip_js_comments(source: str) -> str:
             quote = ch
             out.append(ch)
             i += 1
+            start = i
             while i < n:
                 c = source[i]
                 if c == "\\" and i + 1 < n:
@@ -282,16 +304,19 @@ def strip_js_comments(source: str) -> str:
                     i += 2
                     continue
                 out.append(c)
-                i += 1
                 if c == quote:
+                    if target_literal is not None and source[start:i] == target_literal:
+                        found = True
+                    i += 1
                     break
+                i += 1
             allows_regex = False
             prev_word = ""
             continue
 
         if ch == "`":
             out.append(ch)
-            i, entered_expr = scan_template(i + 1)
+            i, entered_expr = scan_template(i + 1, standalone=True)
             allows_regex = entered_expr
             prev_word = ""
             continue
@@ -308,10 +333,10 @@ def strip_js_comments(source: str) -> str:
             out.append(ch)
             i += 1
             if brace_stack and brace_stack.pop():
-                i, entered_expr = scan_template(i)
+                i, entered_expr = scan_template(i, standalone=False)
                 allows_regex = entered_expr
             else:
-                allows_regex = True
+                allows_regex = False
             prev_word = ""
             continue
 
@@ -401,23 +426,20 @@ def strip_js_comments(source: str) -> str:
         prev_word = ""
         i += 1
 
-    return "".join(out)
+    return "".join(out), found
+
+
+def strip_js_comments(source: str) -> str:
+    """Strip JS // and /* */ comments while preserving string, template, and regex literals."""
+    cleaned, _ = _scan_js(source)
+    return cleaned
 
 
 def has_delimited_app_mark(content: str, expected: str) -> bool:
-    """Require a complete mark in executable JS, not a comment or longer version prefix."""
+    """Require an exact string or uninterpolated template literal equal to the app mark."""
     assert_safe_version_token(expected)
-    cleaned = strip_js_comments(content)
-    mark = frontend_app_mark(expected)
-    if f'"{mark}"' in cleaned or f"'{mark}'" in cleaned:
-        return True
-    return (
-        re.search(
-            rf"(?<![0-9A-Za-z._+-]){re.escape(mark)}(?![0-9A-Za-z._+-])",
-            cleaned,
-        )
-        is not None
-    )
+    _, found = _scan_js(content, target_literal=frontend_app_mark(expected))
+    return found
 
 
 def scan_application_scripts_for_mark(

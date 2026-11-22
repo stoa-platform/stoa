@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / "scripts" / "ci" / "release_app_version.py"
 
@@ -49,6 +51,57 @@ def test_version_from_source_reads_checked_out_files():
 def test_resolve_prefers_matching_tag_over_version_file():
     version, verify = rav.resolve_app_version("portal", "portal-v9.9.9", ROOT, event_name="release")
     assert version == "9.9.9"
+    assert verify is True
+
+    prerelease, verify_pre = rav.resolve_app_version(
+        "portal", "portal-v9.9.9-rc.1", ROOT, event_name="release"
+    )
+    assert prerelease == "9.9.9-rc.1"
+    assert verify_pre is True
+
+
+@pytest.mark.parametrize("bad_tag", ["portal-v9.8.7+build.1", "portal-v9.8", "portal-v"])
+def test_resolve_rejects_malformed_component_release_tags(bad_tag, tmp_path):
+    with pytest.raises(ValueError, match="Invalid component release tag"):
+        rav.resolve_app_version("portal", bad_tag, ROOT, event_name="release")
+
+    output = tmp_path / "output"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-B",
+            str(SCRIPT),
+            "--service",
+            "portal",
+            "--tag",
+            bad_tag,
+            "--event-name",
+            "release",
+            "--repo-root",
+            str(ROOT),
+        ],
+        env={**os.environ, "GITHUB_OUTPUT": str(output)},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert "::error::Failed to resolve application version:" in result.stderr
+    assert not output.exists()
+
+
+@pytest.mark.parametrize("tag", ["v1.4.0", "control-plane-ui-v1.13.0"])
+def test_resolve_release_allows_legacy_and_other_component_tags(tag):
+    version, verify = rav.resolve_app_version("portal", tag, ROOT, event_name="release")
+    assert version == rav.version_from_source(ROOT, "portal")
+    assert verify is True
+
+
+@pytest.mark.parametrize("event_name", ["workflow_dispatch", "workflow_call"])
+@pytest.mark.parametrize("tag", ["portal-v9.9.9", "portal-v9.8", "portal-v9.8.7+build.1"])
+def test_resolve_non_release_events_ignore_component_tags(event_name, tag):
+    version, verify = rav.resolve_app_version("portal", tag, ROOT, event_name=event_name)
+    assert version == rav.version_from_source(ROOT, "portal")
     assert verify is True
 
 

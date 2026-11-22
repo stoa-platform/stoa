@@ -153,4 +153,3 @@ class ImageContextRegressionTests(unittest.TestCase):
             ])
             with self.subTest(name=name):
                 self.assertTrue(guard.findings(".github/workflows/build.yml", source))
-

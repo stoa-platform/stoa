@@ -97,7 +97,7 @@ def wait_for_url(url: str, timeout_seconds: float, sleeper=time.sleep, fetcher=_
     raise RuntimeError(f"Timed out waiting for {url}: {last_error}")
 
 
-def read_frontend_version_file(image: str, runner: Runner = default_runner) -> str:
+def read_frontend_version_file(image_ref: str, runner: Runner = default_runner) -> str:
     result = _require_ok(
         runner(
             [
@@ -106,7 +106,7 @@ def read_frontend_version_file(image: str, runner: Runner = default_runner) -> s
                 "--rm",
                 "--entrypoint",
                 "cat",
-                image,
+                image_ref,
                 FRONTEND_VERSION_PATH,
             ]
         ),
@@ -126,7 +126,7 @@ def _run_and_cleanup(name: str, runner: Runner, body: Callable[[], str]) -> str:
 
 
 def served_frontend_version(
-    image: str,
+    image_ref: str,
     runner: Runner = default_runner,
     wait=wait_for_url,
 ) -> str:
@@ -142,7 +142,7 @@ def served_frontend_version(
                 name,
                 "-p",
                 "127.0.0.1::8080",
-                image,
+                image_ref,
             ]
         ),
         "start frontend image",
@@ -161,7 +161,7 @@ def served_frontend_version(
 
 
 def served_api_health_version(
-    image: str,
+    image_ref: str,
     runner: Runner = default_runner,
     wait=wait_for_url,
 ) -> str:
@@ -199,7 +199,7 @@ def served_api_health_version(
                 "GITHUB_ORG=stoa-platform",
                 "-e",
                 "GITHUB_CATALOG_REPO=stoa-catalog",
-                image,
+                image_ref,
             ]
         ),
         "start API image",
@@ -220,7 +220,7 @@ def served_api_health_version(
 def verify_image_version(
     service: str,
     expected: str,
-    image: str,
+    image_ref: str,
     runner: Runner = default_runner,
     wait=wait_for_url,
 ) -> None:
@@ -229,15 +229,15 @@ def verify_image_version(
     if not expected:
         raise ValueError("Expected application version is empty")
     if service in ("control-plane-ui", "portal"):
-        compare_version(read_frontend_version_file(image, runner=runner), expected, FRONTEND_VERSION_PATH)
+        compare_version(read_frontend_version_file(image_ref, runner=runner), expected, FRONTEND_VERSION_PATH)
         compare_version(
-            served_frontend_version(image, runner=runner, wait=wait),
+            served_frontend_version(image_ref, runner=runner, wait=wait),
             expected,
             "frontend /version.txt",
         )
         return
     compare_version(
-        served_api_health_version(image, runner=runner, wait=wait),
+        served_api_health_version(image_ref, runner=runner, wait=wait),
         expected,
         "API /health",
     )
@@ -253,8 +253,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.service not in VERSIONED_SERVICES:
         return 0
     try:
-        image = first_image_tag(args.image_tags)
-        verify_image_version(args.service, args.version, image)
+        image_ref = first_image_tag(args.image_tags)
+        verify_image_version(args.service, args.version, image_ref)
     except (VersionMismatch, ValueError, RuntimeError, json.JSONDecodeError, OSError) as exc:
         print(f"::error::{exc}", file=sys.stderr)
         return 1

@@ -188,9 +188,17 @@ jobs:
 
       - name: Push ${{ matrix.service }}
         id: push
-        env:
-          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
-        run: python3 -B scripts/ci/push_loaded_image.py
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ (matrix.service == 'portal' || matrix.service == 'control-plane-ui') && '.' || format('./{0}', matrix.service) }}
+          file: ./${{ matrix.service }}/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+          build-args: ${{ steps.app-version.outputs.build_args }}
 
       - name: Validate published image digest
         id: image

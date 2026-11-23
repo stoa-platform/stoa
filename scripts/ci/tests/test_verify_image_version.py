@@ -266,12 +266,19 @@ def test_frontend_dockerfiles_handle_missing_or_null_package_version(tmp_path):
     shell_cmd = f'{assignments[0]} && printf "%s" "$VERSION"'
     cases = [
         ({"version": "1.4.0"}, {}, "1.4.0"),
-        ({}, {}, ""),
-        ({"version": None}, {}, ""),
-        ({"version": 123}, {}, ""),
-        ({"version": "   "}, {}, ""),
+        ({"version": " 1.4.0 "}, {}, "1.4.0"),
+        ({}, {}, "0.0.0-dev"),
+        ({"version": None}, {}, "0.0.0-dev"),
+        ({"version": 123}, {}, "0.0.0-dev"),
+        ({"version": ""}, {}, "0.0.0-dev"),
+        ({"version": "   "}, {}, "0.0.0-dev"),
         ({}, {"APP_VERSION": "2.0.0"}, "2.0.0"),
         ({}, {"APP_VERSION": "2.0.0", "VITE_APP_VERSION": "3.0.0"}, "3.0.0"),
+        ({}, {"APP_VERSION": "2.0.0", "VITE_APP_VERSION": "   "}, "2.0.0"),
+        ({"version": "1.4.0"}, {"APP_VERSION": "   ", "VITE_APP_VERSION": "  "}, "1.4.0"),
+        ({"version": "   "}, {"APP_VERSION": "   ", "VITE_APP_VERSION": "  "}, "0.0.0-dev"),
+        ({}, {"APP_VERSION": "  2.0.0  "}, "2.0.0"),
+        ({}, {"VITE_APP_VERSION": "  3.0.0  "}, "3.0.0"),
     ]
     base_env = {"PATH": os.environ.get("PATH", "")}
     for pkg, extra_env, expected in cases:
@@ -286,6 +293,12 @@ def test_frontend_dockerfiles_handle_missing_or_null_package_version(tmp_path):
         )
         assert result.returncode == 0, result.stderr
         assert result.stdout == expected
+
+
+def test_api_dockerfile_normalizes_empty_app_version():
+    text = (ROOT / "control-plane-api" / "Dockerfile").read_text(encoding="utf-8")
+    assert "ARG APP_VERSION=0.0.0-dev" in text
+    assert "ENV VERSION=${APP_VERSION:-0.0.0-dev}" in text
 
 
 def test_verify_frontend_stale_meta_fails_when_version_txt_is_correct():

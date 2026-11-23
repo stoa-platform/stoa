@@ -35,7 +35,7 @@ export const config = {
   // Application metadata
   app: {
     title: import.meta.env.VITE_APP_TITLE || 'STOA Developer Portal',
-    version: import.meta.env.VITE_APP_VERSION || '0.0.0-dev',
+    version: (import.meta.env.VITE_APP_VERSION || '').trim() || '0.0.0-dev',
     environment: ENVIRONMENT,
     isDev: IS_DEV,
     baseDomain: BASE_DOMAIN,

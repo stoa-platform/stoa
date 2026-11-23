@@ -171,15 +171,17 @@ class GitProviderConfig(BaseModel):
         return self.gitlab.catalog_project_id
 
 
+_PYPROJECT_PATH = Path(__file__).resolve().parent.parent / "pyproject.toml"
+
+
 def _default_app_version() -> str:
     """Read the package version from pyproject.toml when available.
 
     The runtime image does not copy pyproject.toml, so Docker builds set
     the VERSION environment variable from the APP_VERSION build-arg.
     """
-    pyproject = Path(__file__).resolve().parent.parent / "pyproject.toml"
     try:
-        data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+        data = tomllib.loads(_PYPROJECT_PATH.read_text(encoding="utf-8"))
         version = data.get("project", {}).get("version")
     except (OSError, tomllib.TOMLDecodeError, TypeError, AttributeError):
         return "0.0.0-dev"
@@ -194,6 +196,28 @@ class Settings(BaseSettings):
         default_factory=_default_app_version,
         validation_alias=AliasChoices("VERSION", "APP_VERSION"),
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_app_version(cls, data: object) -> object:
+        """Treat empty or whitespace-only VERSION / APP_VERSION as absent."""
+        if not isinstance(data, dict):
+            return data
+        normalized = dict(data)
+        for key in ("VERSION", "APP_VERSION"):
+            if key in normalized:
+                value = normalized[key]
+                if value is None or (isinstance(value, str) and not value.strip()):
+                    normalized.pop(key)
+                elif isinstance(value, str):
+                    normalized[key] = value.strip()
+        if "VERSION" not in normalized and "APP_VERSION" not in normalized:
+            # EnvSettingsSource stops at the first AliasChoices match, so a
+            # blank VERSION env var can hide a non-empty APP_VERSION env var.
+            env_app_version = os.getenv("APP_VERSION", "").strip()
+            if env_app_version:
+                normalized["VERSION"] = env_app_version
+        return normalized
     DEBUG: bool = False
     ENVIRONMENT: str = "production"  # dev, staging, production
     STOA_EDITION: str = "community"  # community, standard, enterprise (Open Core model)

@@ -47,7 +47,7 @@ RUN chown -R stoa:stoa /app
 # Application version served by /health. docker-publish passes the release tag
 # (or the pyproject version on manual dispatch). Local builds default to 0.0.0-dev.
 ARG APP_VERSION=0.0.0-dev
-ENV VERSION=${APP_VERSION}
+ENV VERSION=${APP_VERSION:-0.0.0-dev}
 
 # Python optimization
 ENV PYTHONDONTWRITEBYTECODE=1 \

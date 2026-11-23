@@ -12,6 +12,7 @@ import tomllib
 from pathlib import Path
 
 VERSIONED_SERVICES = ("control-plane-api", "control-plane-ui", "portal")
+DEFAULT_DEV_VERSION = "0.0.0-dev"
 _SEMVER = re.compile(r"^\d+\.\d+\.\d+(?:[0-9A-Za-z.-]*)?$")
 
 
@@ -28,20 +29,47 @@ def version_from_tag(tag: str, service: str) -> str | None:
     return version
 
 
+def version_from_platform_tag(tag: str) -> str | None:
+    """Return X.Y.Z when tag is a platform release tag 'vX.Y.Z', otherwise None."""
+    if not tag or not tag.startswith("v"):
+        return None
+    version = tag[1:]
+    if not version or not _SEMVER.fullmatch(version):
+        return None
+    return version
+
+
 def version_from_source(repo_root: Path, service: str) -> str:
-    """Read the Release Please-managed version file for a component."""
+    """Read the Release Please-managed version file for a component.
+
+    Missing, null, or blank version fields fall back to DEFAULT_DEV_VERSION.
+    Present non-semver versions still fail closed.
+    """
     if service == "control-plane-api":
         path = repo_root / "control-plane-api" / "pyproject.toml"
         data = tomllib.loads(path.read_text(encoding="utf-8"))
-        version = data.get("project", {}).get("version")
+        project = data.get("project")
+        if project is None:
+            version = None
+        elif isinstance(project, dict):
+            version = project.get("version")
+        else:
+            raise ValueError(f"Invalid [project] section in {path}")
     elif service in ("control-plane-ui", "portal"):
         path = repo_root / service / "package.json"
-        version = json.loads(path.read_text(encoding="utf-8")).get("version")
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError(f"Invalid manifest object in {path}")
+        version = data.get("version")
     else:
         raise ValueError(f"No version file mapping for service {service!r}")
-    if not isinstance(version, str) or not version.strip():
-        raise ValueError(f"Missing version in {path}")
+    if version is None:
+        return DEFAULT_DEV_VERSION
+    if not isinstance(version, str):
+        raise ValueError(f"Invalid version {version!r} in {path}")
     version = version.strip()
+    if not version:
+        return DEFAULT_DEV_VERSION
     if not _SEMVER.fullmatch(version):
         raise ValueError(f"Invalid version {version!r} in {path}")
     return version
@@ -55,10 +83,12 @@ def resolve_app_version(
 ) -> tuple[str, bool]:
     """Return (version, should_verify).
 
-    Versioned services always verify. A component release tag is used only
-    for the GitHub `release` event. workflow_dispatch and workflow_call
-    always read the checked-out version file, even if the ref name looks
-    like a component tag.
+    Versioned services always verify. On the GitHub `release` event, a
+    matching component tag (`<service>-vX.Y.Z`) or platform release tag
+    (`vX.Y.Z`) supplies the injected version, and malformed component or
+    platform tags fail closed. workflow_dispatch and workflow_call always
+    read the checked-out version file (falling back to 0.0.0-dev when
+    missing or blank), even if the ref name looks like a release tag.
     """
     if service not in VERSIONED_SERVICES:
         return "", False
@@ -70,10 +100,18 @@ def resolve_app_version(
             raise ValueError(
                 f"Invalid component release tag {tag!r} for service {service!r}"
             )
+        platform = version_from_platform_tag(tag)
+        if platform is not None:
+            return platform, True
+        if tag and tag.startswith("v"):
+            raise ValueError(
+                f"Invalid platform release tag {tag!r} for service {service!r}"
+            )
     return version_from_source(repo_root, service), True
 
 
 def build_args_for(service: str, version: str) -> str:
+    version = version.strip()
     if service not in VERSIONED_SERVICES or not version:
         return ""
     lines = [f"APP_VERSION={version}"]

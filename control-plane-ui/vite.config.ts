@@ -3,15 +3,40 @@ import react from '@vitejs/plugin-react';
 import fs from 'fs';
 import path from 'path';
 
-function resolveAppVersion(mode: string): string {
-  if (process.env.VITEST) {
-    return process.env.VITE_APP_VERSION || '0.0.0-dev';
+function nonEmptyVersion(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+export interface ResolveAppVersionOptions {
+  env?: Record<string, string | undefined>;
+  pkgDir?: string;
+}
+
+export function resolveAppVersion(
+  mode: string,
+  options: ResolveAppVersionOptions = {},
+): string {
+  const processEnv = options.env ?? process.env;
+  if (processEnv.VITEST) {
+    return (
+      nonEmptyVersion(processEnv.VITE_APP_VERSION) ||
+      nonEmptyVersion(processEnv.APP_VERSION) ||
+      '0.0.0-dev'
+    );
   }
-  const env = loadEnv(mode, __dirname, 'VITE_');
-  const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf8')) as {
-    version?: string;
+  const pkgDir = options.pkgDir ?? __dirname;
+  const env = loadEnv(mode, pkgDir, 'VITE_');
+  const fromEnv =
+    nonEmptyVersion(processEnv.VITE_APP_VERSION) ||
+    nonEmptyVersion(env.VITE_APP_VERSION) ||
+    nonEmptyVersion(processEnv.APP_VERSION);
+  if (fromEnv) {
+    return fromEnv;
+  }
+  const pkg = JSON.parse(fs.readFileSync(path.resolve(pkgDir, 'package.json'), 'utf8')) as {
+    version?: unknown;
   };
-  return process.env.VITE_APP_VERSION || env.VITE_APP_VERSION || pkg.version || '0.0.0-dev';
+  return nonEmptyVersion(pkg.version) || '0.0.0-dev';
 }
 
 function writeAppVersionPlugin(version: string): Plugin {

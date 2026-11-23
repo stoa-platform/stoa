@@ -2,8 +2,10 @@
 
 import json
 import os
+import re
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -24,14 +26,23 @@ def test_version_from_component_tags():
     assert rav.version_from_tag("control-plane-ui-v1.13.0", "control-plane-ui") == "1.13.0"
     assert rav.version_from_tag("control-plane-api-v1.15.0", "control-plane-api") == "1.15.0"
     assert rav.version_from_tag("stoa-gateway-v0.9.27", "stoa-gateway") == "0.9.27"
+    assert rav.version_from_tag("stoa-gateway-v0.9.27-rc.1", "stoa-gateway") == "0.9.27-rc.1"
+    assert rav.version_from_tag("stoa-gateway-v0.9.27+build.1", "stoa-gateway") == "0.9.27+build.1"
+    assert (
+        rav.version_from_tag("stoa-gateway-v0.9.27-rc.1+build.1", "stoa-gateway")
+        == "0.9.27-rc.1+build.1"
+    )
 
 
 def test_version_from_tag_rejects_mismatched_or_invalid_tags():
     assert rav.version_from_tag("control-plane-ui-v1.13.0", "portal") is None
     assert rav.version_from_tag("portal-v1.4.0", "control-plane-api") is None
+    assert rav.version_from_tag("portal-v1.4.0", "stoa-gateway") is None
     assert rav.version_from_tag("v1.4.0", "portal") is None
+    assert rav.version_from_tag("v0.9.27", "stoa-gateway") is None
     assert rav.version_from_tag("portal-v", "portal") is None
     assert rav.version_from_tag("portal-v2.4", "portal") is None
+    assert rav.version_from_tag("stoa-gateway-v0.9", "stoa-gateway") is None
     assert rav.version_from_tag("main", "portal") is None
     assert rav.version_from_tag("portal-vnot-a-version", "portal") is None
     for bad in (
@@ -45,6 +56,8 @@ def test_version_from_tag_rejects_mismatched_or_invalid_tags():
         "portal-v2.4.0\n",
     ):
         assert rav.version_from_tag(bad, "portal") is None, bad
+        gw_bad = bad.replace("portal-v", "stoa-gateway-v", 1)
+        assert rav.version_from_tag(gw_bad, "stoa-gateway") is None, gw_bad
 
 
 def test_version_from_platform_tags():
@@ -83,13 +96,15 @@ def test_version_from_source_reads_checked_out_files():
     assert rav.version_from_source(ROOT, "control-plane-ui") == json.loads(
         (ROOT / "control-plane-ui" / "package.json").read_text()
     )["version"]
-    # Import tomllib here to keep the test aligned with the production parser.
-    import tomllib
-
     expected = tomllib.loads(
         (ROOT / "control-plane-api" / "pyproject.toml").read_text()
     )["project"]["version"]
     assert rav.version_from_source(ROOT, "control-plane-api") == expected
+    expected_gw = tomllib.loads(
+        (ROOT / "stoa-gateway" / "Cargo.toml").read_text()
+    )["package"]["version"]
+    assert rav.version_from_source(ROOT, "stoa-gateway") == expected_gw
+    assert rav.version_from_source(ROOT, "keycloak") == "0.0.0-dev"
 
 
 @pytest.mark.parametrize("service", ["portal", "control-plane-ui"])
@@ -131,6 +146,40 @@ def test_version_from_source_api_missing_or_blank_falls_back_to_dev(
 
 
 @pytest.mark.parametrize(
+    "cargo_text",
+    [
+        "",
+        '[package]\nname = "stoa-gateway"\n',
+        '[package]\nname = "stoa-gateway"\nversion = ""\n',
+        '[package]\nname = "stoa-gateway"\nversion = "   \\t "\n',
+    ],
+)
+def test_version_from_source_gateway_missing_or_blank_falls_back_to_dev(
+    tmp_path, cargo_text
+):
+    cargo = tmp_path / "stoa-gateway" / "Cargo.toml"
+    cargo.parent.mkdir(parents=True)
+    cargo.write_text(cargo_text, encoding="utf-8")
+    assert rav.version_from_source(tmp_path, "stoa-gateway") == "0.0.0-dev"
+    assert rav.resolve_app_version(
+        "stoa-gateway", "main", tmp_path, event_name="workflow_dispatch"
+    ) == ("0.0.0-dev", True)
+
+
+def test_version_from_source_gateway_rejects_invalid_package_or_workspace_version(tmp_path):
+    cargo = tmp_path / "stoa-gateway" / "Cargo.toml"
+    cargo.parent.mkdir(parents=True)
+
+    cargo.write_text('package = "not-a-table"\n', encoding="utf-8")
+    with pytest.raises(ValueError, match="Invalid \\[package\\] section"):
+        rav.version_from_source(tmp_path, "stoa-gateway")
+
+    cargo.write_text("[package]\nversion = { workspace = true }\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="Invalid version"):
+        rav.version_from_source(tmp_path, "stoa-gateway")
+
+
+@pytest.mark.parametrize(
     "valid_version",
     ["2.4.0", "2.4.0-rc.1", "2.4.0+build.1", "2.4.0-rc.1+build.1"],
 )
@@ -146,6 +195,13 @@ def test_version_from_source_accepts_valid_semver(tmp_path, valid_version):
         f"[project]\nversion = {json.dumps(valid_version)}\n", encoding="utf-8"
     )
     assert rav.version_from_source(tmp_path, "control-plane-api") == valid_version
+
+    gw_cargo = tmp_path / "stoa-gateway" / "Cargo.toml"
+    gw_cargo.parent.mkdir(parents=True)
+    gw_cargo.write_text(
+        f"[package]\nversion = {json.dumps(valid_version)}\n", encoding="utf-8"
+    )
+    assert rav.version_from_source(tmp_path, "stoa-gateway") == valid_version
 
 
 @pytest.mark.parametrize(
@@ -178,6 +234,12 @@ def test_version_from_source_rejects_present_invalid_version(tmp_path, bad_versi
     with pytest.raises(ValueError, match="Invalid version"):
         rav.version_from_source(tmp_path, "control-plane-api")
 
+    gw_cargo = tmp_path / "stoa-gateway" / "Cargo.toml"
+    gw_cargo.parent.mkdir(parents=True)
+    gw_cargo.write_text(f"[package]\nversion = {raw}\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="Invalid version"):
+        rav.version_from_source(tmp_path, "stoa-gateway")
+
 
 def test_resolve_prefers_matching_tag_over_version_file():
     version, verify = rav.resolve_app_version("portal", "portal-v9.9.9", ROOT, event_name="release")
@@ -202,8 +264,17 @@ def test_resolve_prefers_matching_tag_over_version_file():
     assert pre_build == "9.8.7-rc.1+build.1"
     assert verify_pre_build is True
 
+    gw_version, gw_verify = rav.resolve_app_version(
+        "stoa-gateway", "stoa-gateway-v0.9.99", ROOT, event_name="release"
+    )
+    assert gw_version == "0.9.99"
+    assert gw_verify is True
 
-@pytest.mark.parametrize("service", ["portal", "control-plane-ui", "control-plane-api"])
+
+@pytest.mark.parametrize(
+    "service",
+    ["portal", "control-plane-ui", "control-plane-api", "stoa-gateway", "keycloak"],
+)
 @pytest.mark.parametrize(
     "tag,expected",
     [
@@ -244,14 +315,22 @@ def test_resolve_release_injects_platform_tag_for_versioned_services(
     text = output.read_text()
     assert f"version={expected}\n" in text
     assert "verify=true\n" in text
-    assert f"APP_VERSION={expected}" in text
-    if service in ("portal", "control-plane-ui"):
-        assert f"VITE_APP_VERSION={expected}" in text
-    else:
+    if service == "stoa-gateway":
+        assert "build_args=\n" in text
+        assert "APP_VERSION=" not in text
         assert "VITE_APP_VERSION=" not in text
+    else:
+        assert f"APP_VERSION={expected}" in text
+        if service in ("portal", "control-plane-ui"):
+            assert f"VITE_APP_VERSION={expected}" in text
+        else:
+            assert "VITE_APP_VERSION=" not in text
 
 
-@pytest.mark.parametrize("service", ["portal", "control-plane-ui", "control-plane-api"])
+@pytest.mark.parametrize(
+    "service",
+    ["portal", "control-plane-ui", "control-plane-api", "stoa-gateway", "keycloak"],
+)
 @pytest.mark.parametrize(
     "suffix",
     ["2.4.0garbage", "2.4.0-", "2.4.0+", "9.8", "", "02.4.0", "2.4.0-01"],
@@ -286,7 +365,10 @@ def test_resolve_rejects_malformed_component_release_tags(service, suffix, tmp_p
     assert not output.exists()
 
 
-@pytest.mark.parametrize("service", ["portal", "control-plane-ui", "control-plane-api"])
+@pytest.mark.parametrize(
+    "service",
+    ["portal", "control-plane-ui", "control-plane-api", "stoa-gateway", "keycloak"],
+)
 @pytest.mark.parametrize(
     "bad_tag",
     [
@@ -345,17 +427,30 @@ def test_resolve_release_other_component_tag_uses_source_or_dev_fallback(tmp_pat
     assert fallback == "0.0.0-dev"
     assert verify_fallback is True
 
+    gw_version, gw_verify = rav.resolve_app_version(
+        "stoa-gateway", "portal-v1.4.0", ROOT, event_name="release"
+    )
+    assert gw_version == rav.version_from_source(ROOT, "stoa-gateway")
+    assert gw_verify is True
 
+    kc_version, kc_verify = rav.resolve_app_version(
+        "keycloak", "portal-v1.4.0", ROOT, event_name="release"
+    )
+    assert kc_version == "0.0.0-dev"
+    assert kc_verify is True
+
+
+@pytest.mark.parametrize("service", ["portal", "stoa-gateway", "keycloak"])
 @pytest.mark.parametrize("event_name", ["workflow_dispatch", "workflow_call"])
 @pytest.mark.parametrize(
-    "tag",
+    "tag_template",
     [
-        "portal-v9.9.9",
-        "portal-v9.8",
-        "portal-v9.8.7+build.1",
-        "portal-v2.4.0garbage",
-        "portal-v2.4.0-",
-        "portal-v2.4.0+",
+        "{service}-v9.9.9",
+        "{service}-v9.8",
+        "{service}-v9.8.7+build.1",
+        "{service}-v2.4.0garbage",
+        "{service}-v2.4.0-",
+        "{service}-v2.4.0+",
         "v2.4.0",
         "v2.4",
         "v",
@@ -365,9 +460,12 @@ def test_resolve_release_other_component_tag_uses_source_or_dev_fallback(tmp_pat
         "v2.4.0+",
     ],
 )
-def test_resolve_non_release_events_ignore_component_and_platform_tags(event_name, tag):
-    version, verify = rav.resolve_app_version("portal", tag, ROOT, event_name=event_name)
-    assert version == rav.version_from_source(ROOT, "portal")
+def test_resolve_non_release_events_ignore_component_and_platform_tags(
+    service, event_name, tag_template
+):
+    tag = tag_template.format(service=service)
+    version, verify = rav.resolve_app_version(service, tag, ROOT, event_name=event_name)
+    assert version == rav.version_from_source(ROOT, service)
     assert verify is True
 
 
@@ -376,31 +474,43 @@ def test_resolve_falls_back_to_version_file_when_tag_is_not_component_scoped():
     assert version == rav.version_from_source(ROOT, "portal")
     assert verify is True
 
+    gw_version, gw_verify = rav.resolve_app_version(
+        "stoa-gateway", "main", ROOT, event_name="workflow_dispatch"
+    )
+    assert gw_version == rav.version_from_source(ROOT, "stoa-gateway")
+    assert gw_verify is True
+
+    kc_version, kc_verify = rav.resolve_app_version(
+        "keycloak", "main", ROOT, event_name="workflow_dispatch"
+    )
+    assert kc_version == "0.0.0-dev"
+    assert kc_verify is True
+
 
 def test_resolve_skips_unversioned_services():
-    assert rav.resolve_app_version("keycloak", "keycloak-v1.0.0", ROOT) == ("", False)
-    assert rav.resolve_app_version("keycloak", "v2.4.0", ROOT, event_name="release") == ("", False)
-    assert rav.resolve_app_version("keycloak", "v2.4.0garbage", ROOT, event_name="release") == (
+    assert rav.resolve_app_version("stoa-go", "stoa-go-v1.0.0", ROOT) == ("", False)
+    assert rav.resolve_app_version("stoa-go", "v2.4.0", ROOT, event_name="release") == ("", False)
+    assert rav.resolve_app_version("stoa-go", "v2.4.0garbage", ROOT, event_name="release") == (
         "",
         False,
     )
-    assert rav.resolve_app_version("stoa-gateway", "stoa-gateway-v0.9.27", ROOT) == ("", False)
-    assert rav.resolve_app_version("stoa-gateway", "v2.4.0", ROOT, event_name="release") == (
-        "",
-        False,
-    )
-    assert rav.resolve_app_version("stoa-gateway", "v2.4.0garbage", ROOT, event_name="release") == (
+    assert rav.resolve_app_version("unknown-service", "v2.4.0", ROOT, event_name="release") == (
         "",
         False,
     )
 
 
-def test_build_args_only_for_versioned_services():
+def test_build_args_only_for_build_arg_consuming_services():
     assert rav.build_args_for("portal", "1.4.0") == (
         "APP_VERSION=1.4.0\nVITE_APP_VERSION=1.4.0\n"
     )
+    assert rav.build_args_for("control-plane-ui", "1.13.0") == (
+        "APP_VERSION=1.13.0\nVITE_APP_VERSION=1.13.0\n"
+    )
     assert rav.build_args_for("control-plane-api", "1.15.0") == "APP_VERSION=1.15.0\n"
-    assert rav.build_args_for("keycloak", "1.0.0") == ""
+    assert rav.build_args_for("keycloak", "2.4.0") == "APP_VERSION=2.4.0\n"
+    assert rav.build_args_for("stoa-gateway", "0.9.27") == ""
+    assert rav.build_args_for("unknown-service", "1.0.0") == ""
 
 
 def test_cli_writes_github_output(tmp_path):
@@ -432,7 +542,8 @@ def test_cli_writes_github_output(tmp_path):
     assert "VITE_APP_VERSION=1.4.0" in text
 
 
-def test_cli_errors_when_fallback_file_is_missing(tmp_path):
+@pytest.mark.parametrize("service", ["portal", "stoa-gateway"])
+def test_cli_errors_when_fallback_file_is_missing(service, tmp_path):
     output = tmp_path / "output"
     result = subprocess.run(
         [
@@ -440,7 +551,7 @@ def test_cli_errors_when_fallback_file_is_missing(tmp_path):
             "-B",
             str(SCRIPT),
             "--service",
-            "portal",
+            service,
             "--tag",
             "main",
             "--repo-root",
@@ -463,13 +574,43 @@ def test_resolve_ignores_tag_shaped_dispatch_ref():
     assert version != "9.9.9"
     assert verify is True
 
+    gw_version, gw_verify = rav.resolve_app_version(
+        "stoa-gateway", "stoa-gateway-v9.9.9", ROOT, event_name="workflow_dispatch"
+    )
+    assert gw_version == rav.version_from_source(ROOT, "stoa-gateway")
+    assert gw_version != "9.9.9"
+    assert gw_verify is True
+
+    kc_version, kc_verify = rav.resolve_app_version(
+        "keycloak", "v9.9.9", ROOT, event_name="workflow_dispatch"
+    )
+    assert kc_version == "0.0.0-dev"
+    assert kc_verify is True
+
 
 def test_resolve_ignores_tag_when_event_name_is_missing():
     version, verify = rav.resolve_app_version("portal", "portal-v9.9.9", ROOT)
     assert version == rav.version_from_source(ROOT, "portal")
     assert verify is True
 
-def test_cli_dispatch_ignores_tag_shaped_ref(tmp_path):
+    gw_version, gw_verify = rav.resolve_app_version("stoa-gateway", "stoa-gateway-v9.9.9", ROOT)
+    assert gw_version == rav.version_from_source(ROOT, "stoa-gateway")
+    assert gw_verify is True
+
+    kc_version, kc_verify = rav.resolve_app_version("keycloak", "v9.9.9", ROOT)
+    assert kc_version == "0.0.0-dev"
+    assert kc_verify is True
+
+
+@pytest.mark.parametrize(
+    "service,tag",
+    [
+        ("portal", "portal-v9.9.9"),
+        ("stoa-gateway", "stoa-gateway-v9.9.9"),
+        ("keycloak", "v9.9.9"),
+    ],
+)
+def test_cli_dispatch_ignores_tag_shaped_ref(service, tag, tmp_path):
     output = tmp_path / "output"
     result = subprocess.run(
         [
@@ -477,9 +618,9 @@ def test_cli_dispatch_ignores_tag_shaped_ref(tmp_path):
             "-B",
             str(SCRIPT),
             "--service",
-            "portal",
+            service,
             "--tag",
-            "portal-v9.9.9",
+            tag,
             "--event-name",
             "workflow_dispatch",
             "--repo-root",
@@ -491,7 +632,20 @@ def test_cli_dispatch_ignores_tag_shaped_ref(tmp_path):
         check=False,
     )
     assert result.returncode == 0, result.stderr
-    expected = rav.version_from_source(ROOT, "portal")
+    expected = rav.version_from_source(ROOT, service)
     text = output.read_text()
     assert f"version={expected}\n" in text
+    assert "verify=true\n" in text
     assert "version=9.9.9\n" not in text
+    if service == "keycloak":
+        assert "APP_VERSION=0.0.0-dev" in text
+    elif service == "stoa-gateway":
+        assert "build_args=\n" in text
+
+
+def test_docker_publish_all_services_match_versioned_services():
+    workflow = (ROOT / ".github" / "workflows" / "docker-publish.yml").read_text(encoding="utf-8")
+    match = re.search(r"ALL_SERVICES='(\[[^\n']+\])'", workflow)
+    assert match is not None
+    all_services = json.loads(match.group(1))
+    assert set(all_services) == set(rav.VERSIONED_SERVICES)

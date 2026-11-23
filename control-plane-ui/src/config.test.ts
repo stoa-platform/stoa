@@ -1,4 +1,22 @@
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+const { mockLoadEnv } = vi.hoisted(() => ({
+  mockLoadEnv: vi.fn<(...args: unknown[]) => Record<string, string>>(() => ({})),
+}));
+
+vi.mock('vite', () => ({
+  defineConfig: (cfg: unknown) => cfg,
+  loadEnv: (...args: unknown[]) => mockLoadEnv(...args),
+}));
+
+vi.mock('@vitejs/plugin-react', () => ({
+  default: () => ({ name: 'mock-react' }),
+}));
+
+import { resolveAppVersion } from '../vite.config';
 
 // Helper to re-import config with fresh env vars
 async function importConfig() {
@@ -9,6 +27,8 @@ async function importConfig() {
 
 beforeEach(() => {
   vi.resetModules();
+  mockLoadEnv.mockReset();
+  mockLoadEnv.mockReturnValue({});
   // Clear all VITE_ env vars
   vi.stubEnv('VITE_BASE_DOMAIN', '');
   vi.stubEnv('VITE_ENVIRONMENT', '');
@@ -26,6 +46,7 @@ beforeEach(() => {
   vi.stubEnv('VITE_ENABLE_DEBUG', '');
   vi.stubEnv('VITE_GIT_PROVIDER', '');
   vi.stubEnv('VITE_GIT_REPO_URL', '');
+  vi.stubEnv('VITE_APP_VERSION', '');
 });
 
 describe('config', () => {
@@ -131,5 +152,100 @@ describe('config', () => {
     expect(quickLinks[0].name).toBe('API Documentation');
     expect(quickLinks[1].name).toBe('Gateway Console');
     expect(quickLinks[2].name).toBe('AWX Automation');
+  });
+});
+
+describe('application version', () => {
+  it('falls back to 0.0.0-dev when VITE_APP_VERSION is unset', async () => {
+    const { config } = await importConfig();
+    expect(config.app.version).toBe('0.0.0-dev');
+  });
+
+  it('falls back to 0.0.0-dev when VITE_APP_VERSION is whitespace', async () => {
+    vi.stubEnv('VITE_APP_VERSION', '   ');
+    const { config } = await importConfig();
+    expect(config.app.version).toBe('0.0.0-dev');
+  });
+
+  it('uses VITE_APP_VERSION when set', async () => {
+    vi.stubEnv('VITE_APP_VERSION', '1.13.0');
+    const { config } = await importConfig();
+    expect(config.app.version).toBe('1.13.0');
+  });
+
+  it('trims surrounding whitespace from VITE_APP_VERSION', async () => {
+    vi.stubEnv('VITE_APP_VERSION', '  1.13.0  ');
+    const { config } = await importConfig();
+    expect(config.app.version).toBe('1.13.0');
+  });
+});
+
+describe('vite resolveAppVersion', () => {
+  function withPackageJson(pkg: Record<string, unknown>, fn: (dir: string) => void) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'console-version-'));
+    try {
+      fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify(pkg));
+      fn(dir);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it('skips blank env values in the Vitest branch and falls back to 0.0.0-dev', () => {
+    expect(resolveAppVersion('test', { env: { VITEST: 'true', VITE_APP_VERSION: '   ' } })).toBe(
+      '0.0.0-dev'
+    );
+    expect(
+      resolveAppVersion('test', {
+        env: { VITEST: 'true', VITE_APP_VERSION: '   ', APP_VERSION: ' 2.1.0 ' },
+      })
+    ).toBe('2.1.0');
+    expect(
+      resolveAppVersion('test', {
+        env: { VITEST: 'true', VITE_APP_VERSION: '', APP_VERSION: '   ' },
+      })
+    ).toBe('0.0.0-dev');
+  });
+
+  it('skips blank VITE_APP_VERSION and APP_VERSION before reading package.json', () => {
+    withPackageJson({ version: ' 1.13.0 ' }, (pkgDir) => {
+      mockLoadEnv.mockReturnValueOnce({ VITE_APP_VERSION: '   ' });
+      expect(
+        resolveAppVersion('production', {
+          env: { VITE_APP_VERSION: '   ', APP_VERSION: '  ' },
+          pkgDir,
+        })
+      ).toBe('1.13.0');
+      expect(mockLoadEnv).toHaveBeenLastCalledWith('production', pkgDir, 'VITE_');
+
+      mockLoadEnv.mockReturnValueOnce({});
+      expect(
+        resolveAppVersion('production', {
+          env: { VITE_APP_VERSION: '   ', APP_VERSION: ' 2.4.0 ' },
+          pkgDir,
+        })
+      ).toBe('2.4.0');
+
+      mockLoadEnv.mockReturnValueOnce({ VITE_APP_VERSION: ' 3.1.0 ' });
+      expect(
+        resolveAppVersion('production', {
+          env: { VITE_APP_VERSION: '   ' },
+          pkgDir,
+        })
+      ).toBe('3.1.0');
+    });
+  });
+
+  it('falls back to 0.0.0-dev when package.json version is missing, null, or whitespace', () => {
+    for (const pkg of [{}, { version: null }, { version: '' }, { version: '   \t ' }]) {
+      withPackageJson(pkg, (pkgDir) => {
+        expect(
+          resolveAppVersion('production', {
+            env: { VITE_APP_VERSION: '', APP_VERSION: '   ' },
+            pkgDir,
+          })
+        ).toBe('0.0.0-dev');
+      });
+    }
   });
 });

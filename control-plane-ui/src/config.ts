@@ -55,7 +55,7 @@ export const config = {
   // Application metadata
   app: {
     title: import.meta.env.VITE_APP_TITLE || 'STOA Control Plane',
-    version: import.meta.env.VITE_APP_VERSION || '2.0.0',
+    version: (import.meta.env.VITE_APP_VERSION || '').trim() || '0.0.0-dev',
     environment: ENVIRONMENT,
     isDev: IS_DEV,
     baseDomain: BASE_DOMAIN,

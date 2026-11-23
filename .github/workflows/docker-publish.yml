@@ -142,9 +142,9 @@ jobs:
           images: ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}
           flavor: latest=false
           tags: |
-            type=match,pattern=${{ matrix.service }}-v(.*),group=1
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=match,pattern=${{ matrix.service }}-v(.*),group=1,enable=${{ github.event_name == 'release' }}
+            type=semver,pattern={{version}},enable=${{ github.event_name == 'release' }}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ github.event_name == 'release' }}
             type=sha,prefix=sha-
 
       - name: Stage project license and notice
@@ -152,7 +152,18 @@ jobs:
           COMPONENT: ${{ matrix.service }}
         run: python3 -B scripts/ci/release_legal.py --dest "$COMPONENT"
 
-      - name: Build and push ${{ matrix.service }}
+      - name: Resolve application version
+        id: app-version
+        env:
+          # Only a published-release tag may override the checked-out version
+          # file. workflow_dispatch and workflow_call leave TAG empty so a
+          # tag-shaped ref name cannot be mistaken for a release.
+          SERVICE: ${{ matrix.service }}
+          TAG: ${{ github.event.release.tag_name }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: python3 -B scripts/ci/release_app_version.py
+
+      - name: Build ${{ matrix.service }}
         id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -160,17 +171,36 @@ jobs:
           context: ${{ (matrix.service == 'portal' || matrix.service == 'control-plane-ui') && '.' || format('./{0}', matrix.service) }}
           file: ./${{ matrix.service }}/Dockerfile
           platforms: linux/amd64
-          push: true
+          push: false
+          load: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+          build-args: ${{ steps.app-version.outputs.build_args }}
+
+      - name: Verify image version
+        id: verify-version
+        if: ${{ steps.app-version.outputs.verify == 'true' }}
+        env:
+          SERVICE: ${{ matrix.service }}
+          APP_VERSION: ${{ steps.app-version.outputs.version }}
+          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
+        run: python3 -B scripts/ci/verify_image_version.py
+
+      # Publish the already-loaded, already-verified image. A second
+      # build-push-action run could produce a different digest.
+      - name: Push ${{ matrix.service }}
+        id: push
+        env:
+          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
+        run: python3 -B scripts/ci/push_loaded_image.py
 
       - name: Validate published image digest
         id: image
         env:
           IMAGE_NAME: ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}
-          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          IMAGE_DIGEST: ${{ steps.push.outputs.digest }}
         run: python3 -B scripts/ci/publish_image_ref.py
 
       - name: Sign image with Cosign (keyless)
@@ -182,13 +212,13 @@ jobs:
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-name: ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}
-          subject-digest: ${{ steps.build.outputs.digest }}
+          subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
 
       - name: Generate SBOM
         uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
-          image: ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}@${{ steps.build.outputs.digest }}
+          image: ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}@${{ steps.push.outputs.digest }}
           format: spdx-json
           output-file: sbom-${{ matrix.service }}.spdx.json
           upload-artifact: false

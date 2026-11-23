@@ -17,6 +17,9 @@ from pathlib import PurePosixPath
 
 DIGEST = re.compile(r"^.+@sha256:[0-9a-f]{64}$")
 KEY = re.compile(r"^(\s*)(?:-\s*)?([\w-]+):\s*(.*?)\s*$")
+PUBLISHER_RUN_RE = re.compile(
+    r"^(?:      - |        )run:[ \t]+python3 -B scripts/ci/push_loaded_image\.py(?:[ \t]+#.*)?[ \t]*$"
+)
 GUARD = "scripts/ci/check_image_pinning.py"
 
 
@@ -43,6 +46,23 @@ def allowed(path):
 
 def clean(value):
     return value.split(" #", 1)[0].strip().strip("\"'`").rstrip("\\").strip()
+
+
+def is_canonical_publisher_run(lines, index, stop):
+    """Trust only the exact unquoted single-line publisher run step."""
+    if index < 0 or not PUBLISHER_RUN_RE.fullmatch(lines[index]):
+        return False
+    for i in range(index + 1, stop):
+        raw = lines[i]
+        if not raw.strip() or raw.lstrip().startswith("#"):
+            continue
+        indent = len(raw) - len(raw.lstrip())
+        if indent > 8:
+            return False
+        if indent == 8 and not KEY.match(raw):
+            return False
+        break
+    return True
 
 
 def built_sbom_images(path, lines):
@@ -84,14 +104,14 @@ def built_sbom_images(path, lines):
                 stop = min(end(step_list, 4), job_end)
                 starts = [i for i in range(step_list + 1, stop) if re.match(r"      - [\w-]+:", lines[i])]
                 steps = []
-                for start, finish in zip(starts, starts[1:] + [stop]):
+                for start, finish in zip(starts, starts[1:] + [stop], strict=False):
                     attrs = fields(start, finish, 8, sequence=True)
                     with_index, with_value = attrs.get("with", (-1, ""))
                     inputs = fields(with_index + 1, min(end(with_index, 8), finish), 10) if with_index >= 0 and not with_value else {}
-                    steps.append((attrs, inputs))
-                ids = [attrs["id"][1] for attrs, _ in steps if "id" in attrs]
+                    steps.append((attrs, inputs, start, finish))
+                ids = [attrs["id"][1] for attrs, _, _, _ in steps if "id" in attrs]
                 producers = set()
-                for attrs, inputs in steps:
+                for attrs, inputs, _start, finish in steps:
                     action = attrs.get("uses", (-1, ""))[1]
                     image_index, value = inputs.get("image", (-1, ""))
                     digest = re.fullmatch(r"[^@]+@\$\{\{\s*steps\.([A-Za-z_][\w-]*)\.outputs\.digest\s*\}\}", value)
@@ -102,6 +122,14 @@ def built_sbom_images(path, lines):
                     if ("run" not in attrs and re.fullmatch(r"docker/build-push-action@[0-9a-f]{40}", action)
                             and re.fullmatch(r"[A-Za-z_][\w-]*", identity) and ids.count(identity) == 1
                             and inputs.get("push", (-1, ""))[1] == "true"):
+                        producers.add(identity)
+                    # Trust only the canonical unquoted single-line publisher command.
+                    # Quoted, block, and continued scalars are rejected.
+                    run_index, _run_first = attrs.get("run", (-1, ""))
+                    if (action == ""
+                            and is_canonical_publisher_run(lines, run_index, finish)
+                            and re.fullmatch(r"[A-Za-z_][\w-]*", identity)
+                            and ids.count(identity) == 1):
                         producers.add(identity)
     return trusted
 

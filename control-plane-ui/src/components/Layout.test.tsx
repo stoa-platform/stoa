@@ -81,6 +81,9 @@ vi.mock('../config', () => ({
   config: {
     api: { baseUrl: 'https://api.test' },
     features: { enableI18n: true },
+    app: {
+      version: '0.0.0-dev',
+    },
   },
 }));
 
@@ -186,6 +189,7 @@ describe('Layout', () => {
   it('renders user info in sidebar', () => {
     renderLayout();
     expect(screen.getByText('Parzival')).toBeInTheDocument();
+    expect(screen.getByText('v0.0.0-dev')).toBeInTheDocument();
   });
 
   it('does not expose logs as a primary observability navigation item', () => {

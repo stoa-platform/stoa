@@ -22,18 +22,19 @@ def workflow(name):
 def test_regression_publish_validates_digest_before_consumption(name, job):
     document = workflow(name)
     steps = document['jobs'][job]['steps']
-    build = next(i for i, step in enumerate(steps) if step.get('id') == 'build')
-    validate = next(i for i, step in enumerate(steps) if step.get('id') == 'image')
-    assert validate == build + 1
-    step = steps[validate]
-    assert step['run'] == 'python3 -B scripts/ci/publish_image_ref.py'
-    assert step['env']['IMAGE_DIGEST'] == '${{ steps.build.outputs.digest }}'
-    assert 'continue-on-error' not in step
-    assert 'if' not in step
+    ids = [step.get('id') for step in steps]
     metadata = next(step for step in steps if step.get('id') == 'meta')['with']
     assert metadata['flavor'] == 'latest=false'
     assert 'latest' not in metadata['tags']
     if name == 'reusable-docker-ghcr':
+        build = ids.index('build')
+        validate = ids.index('image')
+        assert validate == build + 1
+        step = steps[validate]
+        assert step['run'] == 'python3 -B scripts/ci/publish_image_ref.py'
+        assert step['env']['IMAGE_DIGEST'] == '${{ steps.build.outputs.digest }}'
+        assert 'continue-on-error' not in step
+        assert 'if' not in step
         assert document[True]['workflow_call']['outputs']['image-ref']['value'] == (
             '${{ jobs.docker.outputs.image_ref }}'
         )
@@ -42,16 +43,61 @@ def test_regression_publish_validates_digest_before_consumption(name, job):
             '${{ env.IMAGE_NAME }}:${{ inputs.environment }}-${{ github.sha }}'
         )
     else:
+        # Load the image, check the served version, then push the same image
+        # and validate the published digest before Cosign/SBOM consume it.
+        for required in ('app-version', 'build', 'verify-version', 'push', 'image'):
+            assert required in ids, required
+        assert ids.index('app-version') < ids.index('build')
+        assert ids.index('build') < ids.index('verify-version')
+        assert ids.index('verify-version') < ids.index('push')
+        assert ids.index('push') < ids.index('image')
+        build_step = next(step for step in steps if step.get('id') == 'build')
+        assert build_step['with']['push'] is False
+        assert build_step['with']['load'] is True
+        assert build_step['with']['build-args'] == '${{ steps.app-version.outputs.build_args }}'
+        verify = next(step for step in steps if step.get('id') == 'verify-version')
+        assert verify['run'] == 'python3 -B scripts/ci/verify_image_version.py'
+        assert 'continue-on-error' not in verify
+        push = next(step for step in steps if step.get('id') == 'push')
+        assert push['run'] == 'python3 -B scripts/ci/push_loaded_image.py'
+        assert 'uses' not in push
+        assert 'continue-on-error' not in push
+        step = next(step for step in steps if step.get('id') == 'image')
+        assert step['run'] == 'python3 -B scripts/ci/publish_image_ref.py'
+        assert step['env']['IMAGE_DIGEST'] == '${{ steps.push.outputs.digest }}'
+        assert 'continue-on-error' not in step
+        assert 'if' not in step
         sign = next(step for step in steps if step['name'] == 'Sign image with Cosign (keyless)')
         assert sign['env'] == {'IMAGE_REF': '${{ steps.image.outputs.ref }}'}
         assert sign['run'].strip() == 'cosign sign --yes "$IMAGE_REF"'
         sbom = next(step for step in steps if step['name'] == 'Generate SBOM')
         assert sbom['with']['image'] == (
-            '${{ env.IMAGE_PREFIX }}/${{ matrix.service }}@${{ steps.build.outputs.digest }}'
+            '${{ env.IMAGE_PREFIX }}/${{ matrix.service }}@${{ steps.push.outputs.digest }}'
         )
+        provenance = next(step for step in steps if step['name'] == 'Generate SLSA provenance (attestation)')
+        assert provenance['with']['subject-digest'] == '${{ steps.push.outputs.digest }}'
         for name in ('Attach SBOM to image', 'Sign SBOM attestation', 'Output image info'):
             consumer = next(step for step in steps if step['name'] == name)
             assert '${{ steps.image.outputs.ref }}' in consumer['run']
+
+
+def test_regression_docker_publish_gates_release_aliases_to_release_event():
+    document = workflow('docker-publish')
+    steps = document['jobs']['build']['steps']
+    meta_tags = next(step for step in steps if step.get('id') == 'meta')['with']['tags']
+    rules = [
+        dict(part.strip().split('=', 1) for part in line.strip().split(',') if '=' in part)
+        for line in meta_tags.splitlines()
+        if line.strip()
+    ]
+    release_gated = [rule for rule in rules if rule.get('type') in {'match', 'semver'}]
+    assert len(release_gated) == 3
+    assert sum(1 for rule in release_gated if rule.get('type') == 'match') == 1
+    assert sum(1 for rule in release_gated if rule.get('type') == 'semver') == 2
+    for rule in release_gated:
+        assert rule.get('enable') == "${{ github.event_name == 'release' }}"
+    sha_rules = [rule for rule in rules if rule.get('type') == 'sha']
+    assert sha_rules == [{'type': 'sha', 'prefix': 'sha-'}]
 
 
 @pytest.mark.parametrize('name', [

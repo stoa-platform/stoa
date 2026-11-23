@@ -764,6 +764,9 @@ export function Layout({ children }: LayoutProps) {
               </button>
             )}
           </div>
+          <p className="mt-3 text-xs text-neutral-500 dark:text-neutral-400">
+            v{config.app.version}
+          </p>
         </div>
       </div>
 

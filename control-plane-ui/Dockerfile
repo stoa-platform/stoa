@@ -31,7 +31,8 @@ WORKDIR /app/control-plane-ui
 ARG VITE_BASE_DOMAIN=gostoa.dev
 ARG VITE_ENVIRONMENT=production
 ARG VITE_APP_TITLE="STOA Control Plane"
-ARG VITE_APP_VERSION=2.0.0
+ARG APP_VERSION=
+ARG VITE_APP_VERSION=
 
 # API Configuration (direct connection to Control-Plane-API)
 ARG VITE_API_URL=https://api.gostoa.dev
@@ -90,7 +91,10 @@ ENV VITE_BASE_DOMAIN=$VITE_BASE_DOMAIN \
 # Cache-bust: ARG change invalidates this layer, ensuring fresh Vite build per commit
 # while npm ci layers above remain cached. Prevents stale JS chunks from GHA Docker cache.
 ARG CACHEBUST=unknown
-RUN npm run build
+# Prefer the release-tag build-arg; fall back to package.json or 0.0.0-dev for local builds.
+RUN VERSION="$(node -p "const pick = (v) => (typeof v === 'string' ? v.trim() : ''); pick(process.env.VITE_APP_VERSION) || pick(process.env.APP_VERSION) || pick(require('./package.json').version) || '0.0.0-dev'")" \
+    && export VITE_APP_VERSION="$VERSION" \
+    && npm run build
 
 # Production stage - Use nginx-unprivileged for security (non-root)
 FROM nginxinc/nginx-unprivileged:alpine@sha256:b5047b9b76845eac124358373c6852377c52e4b05834a47647e955dd91cb8f1e AS runtime

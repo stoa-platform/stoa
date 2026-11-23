@@ -31,7 +31,8 @@ WORKDIR /app/portal
 ARG VITE_BASE_DOMAIN=gostoa.dev
 ARG VITE_ENVIRONMENT=production
 ARG VITE_APP_TITLE="STOA Developer Portal"
-ARG VITE_APP_VERSION=1.0.0
+ARG APP_VERSION=
+ARG VITE_APP_VERSION=
 
 # MCP Gateway Configuration
 ARG VITE_MCP_URL=https://mcp.gostoa.dev
@@ -83,7 +84,10 @@ ENV VITE_BASE_DOMAIN=$VITE_BASE_DOMAIN \
 
 # Cache-bust: ARG change invalidates this layer, ensuring fresh Vite build per commit
 ARG CACHEBUST=unknown
-RUN npm run build
+# Prefer the release-tag build-arg; fall back to package.json or 0.0.0-dev for local builds.
+RUN VERSION="$(node -p "const pick = (v) => (typeof v === 'string' ? v.trim() : ''); pick(process.env.VITE_APP_VERSION) || pick(process.env.APP_VERSION) || pick(require('./package.json').version) || '0.0.0-dev'")" \
+    && export VITE_APP_VERSION="$VERSION" \
+    && npm run build
 
 # Production stage - Use nginx-unprivileged for Kubernetes compatibility
 FROM nginxinc/nginx-unprivileged:alpine@sha256:b5047b9b76845eac124358373c6852377c52e4b05834a47647e955dd91cb8f1e AS runtime

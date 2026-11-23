@@ -7,11 +7,18 @@ For Kubernetes deployments, set these in ConfigMaps/Secrets.
 import json
 import logging
 import os
-from typing import Final, Literal
+import tomllib
+from pathlib import Path
+from typing import Any, Final, Literal
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
-from pydantic_settings import BaseSettings
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
+from pydantic_settings import (
+    BaseSettings,
+    EnvSettingsSource,
+    PydanticBaseSettingsSource,
+    SecretsSettingsSource,
+)
 
 # Base domain — derived URLs (KEYCLOAK_URL, GATEWAY_URL, …, VAULT_ADDR,
 # CORS_ORIGINS) are filled in from this value by the
@@ -169,9 +176,117 @@ class GitProviderConfig(BaseModel):
         return self.gitlab.catalog_project_id
 
 
+_PYPROJECT_PATH = Path(__file__).resolve().parent.parent / "pyproject.toml"
+_VERSION_SOURCE_KEYS: Final[tuple[str, str]] = ("VERSION", "APP_VERSION")
+
+
+def _is_blank_version(value: object) -> bool:
+    return value is None or (isinstance(value, str) and not value.strip())
+
+
+class _IgnoreBlankVersionSource(PydanticBaseSettingsSource):
+    """Treat empty or whitespace-only VERSION / APP_VERSION as absent before source merge."""
+
+    def __init__(self, settings_cls: type[BaseSettings], inner: PydanticBaseSettingsSource) -> None:
+        super().__init__(settings_cls)
+        self._inner = inner
+        self.__name__ = inner.__name__ if hasattr(inner, "__name__") else type(inner).__name__
+
+    def _set_current_state(self, state: dict[str, Any]) -> None:
+        super()._set_current_state(state)
+        self._inner._set_current_state(state)
+
+    def _set_settings_sources_data(self, states: dict[str, dict[str, Any]]) -> None:
+        super()._set_settings_sources_data(states)
+        self._inner._set_settings_sources_data(states)
+
+    def get_field_value(self, field: Any, field_name: str) -> tuple[Any, str, bool]:
+        return self._inner.get_field_value(field, field_name)
+
+    def _read_non_blank_secret_version(self, source: SecretsSettingsSource) -> str | None:
+        secrets_paths = getattr(source, "secrets_paths", None)
+        if not secrets_paths:
+            return None
+        for env_name in _VERSION_SOURCE_KEYS:
+            for secrets_path in reversed(secrets_paths):
+                path = source.find_case_path(secrets_path, env_name, source.case_sensitive)
+                if path and path.is_file():
+                    value = path.read_text(encoding="utf-8").strip()
+                    if value:
+                        return value
+        return None
+
+    def __call__(self) -> dict[str, Any]:
+        inner = self._inner
+        if isinstance(inner, EnvSettingsSource) and hasattr(inner, "env_vars"):
+            inner.env_vars = {
+                key: value
+                for key, value in inner.env_vars.items()
+                if not (key.upper() in _VERSION_SOURCE_KEYS and _is_blank_version(value))
+            }
+
+        data = dict(inner())
+        resolved: Any = None
+        found = False
+        for key in _VERSION_SOURCE_KEYS:
+            if key not in data:
+                continue
+            candidate = data.pop(key)
+            if _is_blank_version(candidate):
+                continue
+            if not found:
+                resolved = candidate.strip() if isinstance(candidate, str) else candidate
+                found = True
+
+        if not found and isinstance(inner, SecretsSettingsSource):
+            secret_version = self._read_non_blank_secret_version(inner)
+            if secret_version is not None:
+                resolved = secret_version
+                found = True
+
+        if found:
+            data["VERSION"] = resolved
+        return data
+
+
+def _default_app_version() -> str:
+    """Read the package version from pyproject.toml when available.
+
+    The runtime image does not copy pyproject.toml, so Docker builds set
+    the VERSION environment variable from the APP_VERSION build-arg.
+    """
+    try:
+        data = tomllib.loads(_PYPROJECT_PATH.read_text(encoding="utf-8"))
+        version = data.get("project", {}).get("version")
+    except (OSError, tomllib.TOMLDecodeError, TypeError, AttributeError):
+        return "0.0.0-dev"
+    if isinstance(version, str) and version.strip():
+        return version.strip()
+    return "0.0.0-dev"
+
+
 class Settings(BaseSettings):
     # Application
-    VERSION: str = "2.0.0"
+    VERSION: str = Field(
+        default_factory=_default_app_version,
+        validation_alias=AliasChoices("VERSION", "APP_VERSION"),
+    )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        return (
+            _IgnoreBlankVersionSource(settings_cls, init_settings),
+            _IgnoreBlankVersionSource(settings_cls, env_settings),
+            _IgnoreBlankVersionSource(settings_cls, dotenv_settings),
+            _IgnoreBlankVersionSource(settings_cls, file_secret_settings),
+        )
     DEBUG: bool = False
     ENVIRONMENT: str = "production"  # dev, staging, production
     STOA_EDITION: str = "community"  # community, standard, enterprise (Open Core model)

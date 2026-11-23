@@ -442,7 +442,8 @@ ALLOWED_SECRET_INHERIT = frozenset(
 )
 PYYAML_PIN = "6.0.3"
 _SECRETS_KEY = re.compile(r"^\s*secrets\s*:")
-_SECRET_EXPR = re.compile(r"secrets\.[A-Za-z_][A-Za-z0-9_]*")
+# The word boundary keeps a file name such as precommit_secrets.py from reading as secrets.<NAME>.
+_SECRET_EXPR = re.compile(r"\bsecrets\.[A-Za-z_][A-Za-z0-9_]*")
 _EVENT_EQ = re.compile(r"github\.event_name\s*==\s*['\"]([A-Za-z0-9_]+)['\"]")
 _ALLOWED_EVENTS = frozenset({"push", "workflow_dispatch"})
 _FORBIDDEN_TRIGGER = re.compile(r"(?m)^[ \t]*(pull_request_target|workflow_run)[ \t]*:")
@@ -605,6 +606,19 @@ def test_r_inh_2_new_inherit_fails(tmp_path: Path) -> None:
 
 def test_r_inh_3_called_workflows_gate_secret_expressions() -> None:
     assert secret_expr_violations(ROOT) == []
+
+
+def test_r_inh_3_secret_expression_pattern_ignores_file_names() -> None:
+    cases = (
+        ("${{ secrets.TOKEN }}", True),
+        ("${{secrets.TOKEN}}", True),
+        ("!secrets.TOKEN && true", True),
+        ("python3 -I -B trusted/scripts/ci/precommit_secrets.py --range", False),
+        ("scripts/ci/precommit_secrets.py", False),
+    )
+    for index, (text, expected) in enumerate(cases):
+        if (_SECRET_EXPR.search(text) is not None) is not expected:
+            pytest.fail(f"case #{index}: unexpected secret expression match", pytrace=False)
 
 
 @pytest.mark.parametrize(

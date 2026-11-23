@@ -126,7 +126,18 @@ jobs:
 
       - name: Install pytest
         # gate.txt preserves pytest==8.4.2 and PyYAML==6.0.3 with transitive hashes.
-        run: python -m pip install --require-hashes -r .github/workflows/requirements/gate.txt
+        # pip output goes to a temporary file that is never printed.
+        shell: bash
+        run: |
+          set -euo pipefail
+          pip_log="$(mktemp "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/pip-install.XXXXXX")"
+          trap 'rm -f "$pip_log"' EXIT
+          status=0
+          python -m pip install --require-hashes -r .github/workflows/requirements/gate.txt >"$pip_log" 2>&1 || status=$?
+          if [[ "$status" -ne 0 ]]; then
+            echo "dependency install failed" >&2
+            exit "$status"
+          fi
 
       - name: Run ci-gate contract tests
         run: |

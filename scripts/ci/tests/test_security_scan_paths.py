@@ -9,6 +9,7 @@ import runpy
 import shutil
 import subprocess
 from pathlib import Path
+from typing import NamedTuple
 
 import pytest
 import yaml
@@ -150,16 +151,26 @@ def test_cli_diff_add_delete_rename_and_invalid_sha(tmp_path: Path) -> None:
     ("true", "success", "skipped", False),
 ))
 def test_scan_summary(target: str, flag: str, detector: str, scan: str, success: bool) -> None:
-    job = yaml.safe_load((ROOT / ".github/workflows/security-scan.yml").read_text())["jobs"]["scan-summary"]
-    assert job["if"] == "always()"
     scans = ("dependency-scan", "container-scan", "sast-rust", "sast-python", "sast-javascript")
     needs = {name: {"result": "success" if flag == "true" else "skipped"} for name in scans}
+    needs["secret-guard"] = {"result": "success"}
     needs["scan-changes"] = {"result": detector, "outputs": {
         name: flag for name in scans if name != "dependency-scan"}}
     needs[target]["result"] = scan
-    proc = subprocess.run(["bash", "-c", job["steps"][0]["run"]], capture_output=True,
-                          env=dict(os.environ, RESULTS=json.dumps(needs)))
-    assert (proc.returncode == 0) is success
+    _require(_scan_summary_passes(needs) is success, "unexpected Scan results status")
+
+
+@pytest.mark.parametrize(("guard", "success"), (
+    ("success", True), ("failure", False), ("cancelled", False), ("skipped", False), (None, False),
+))
+def test_scan_summary_requires_secret_guard_success(guard: str | None, success: bool) -> None:
+    scans = ("dependency-scan", "container-scan", "sast-rust", "sast-python", "sast-javascript")
+    needs = {name: {"result": "skipped"} for name in scans}
+    needs["scan-changes"] = {"result": "success", "outputs": {
+        name: "false" for name in scans if name != "dependency-scan"}}
+    if guard is not None:
+        needs["secret-guard"] = {"result": guard}
+    _require(_scan_summary_passes(needs) is success, "Scan results must follow secret-guard")
 
 
 def test_workflow_enforces_selected_sast_and_keeps_unconditional_scans() -> None:
@@ -368,3 +379,624 @@ def test_regression_scan_never_reuses_a_cached_os_package_stage(component: str) 
     assert re.search(r"^FROM \S+ AS runtime$", dockerfile, flags=re.M)
     # OS packages are installed in the last stage: it must be the one rebuilt.
     assert "\nFROM " not in dockerfile.split(" AS runtime\n", 1)[1]
+
+
+# --------------------------------------------------------------------------------------
+# Secret guard job. Failure messages below are fixed strings: workflow values, fixture
+# values and captured output are never rendered.
+# --------------------------------------------------------------------------------------
+
+SECURITY_WORKFLOW = ".github/workflows/security-scan.yml"
+GATE_WORKFLOW = ".github/workflows/ci-gate.yml"
+GUARD_SCRIPT = "scripts/ci/precommit_secrets.py"
+RANGE_MARKER = "RANGE_MODE_SUPPORTED = True"
+NO_COMMIT = "0" * 40
+TIMEOUT = 60
+SELECT, CANDIDATE, RUN, CONFIRM = GUARD_STEPS = (
+    "Select commit range",
+    "Checkout candidate revision",
+    "Run secret guard on commit range",
+    "Confirm there is no commit range to scan",
+)
+SCAN_STEPS = [SELECT, CANDIDATE, RUN]
+SCANNED, SKIPPED = "steps.range.outputs.scan == 'true'", "steps.range.outputs.scan != 'true'"
+GUARD_ERROR = "::error::Secret guard: "
+NO_IDS = GUARD_ERROR + "the event does not provide two full commit ids\n"
+UNSUPPORTED = GUARD_ERROR + "unsupported event\n"
+NO_BASE = GUARD_ERROR + "the protected base revision does not resolve to a commit\n"
+NO_TEMP = GUARD_ERROR + "unable to create a temporary directory\n"
+NO_SCANNER = GUARD_ERROR + "unable to read the scanner from the protected base revision\n"
+NO_RANGE_MODE = GUARD_ERROR + "the scanner of the protected base revision has no range mode\n"
+NO_MODE = GUARD_ERROR + "unknown scan mode\n"
+NO_DECISION = GUARD_ERROR + "the commit range selection gave no decision\n"
+CONFIRMED = "Secret guard: no checkout and no scan for this event\n"
+DELETED = "::notice::Secret guard: branch deletion, no commit to scan\n" + CONFIRMED
+CREATED = "::notice::Secret guard: branch creation, no prior revision to compare with\n" + CONFIRMED
+NO_RANGE = "Secret guard: this event has no commit range, nothing to scan\n" + CONFIRMED
+FOUND = ". Remove sensitive data from the range.\n"
+CLOSED = ". Range scan failed closed.\n"
+# The scanner is the base revision blob, written outside the checkout; every command that
+# could print git output or file content has its output redirected.
+EXTRACTION = (
+    'git rev-parse --verify --quiet "${BASE_SHA}^{commit}" >/dev/null 2>&1 \\',
+    '|| fail "the protected base revision does not resolve to a commit"',
+    'scanner_dir="$(mktemp -d "${RUNNER_TEMP:-/tmp}/secret-guard.XXXXXX" 2>/dev/null)" \\',
+    '|| fail "unable to create a temporary directory"',
+    "trap 'rm -rf -- \"$scanner_dir\"' EXIT",
+    'scanner="$scanner_dir/precommit_secrets.py"',
+    f'git show "${{BASE_SHA}}:{GUARD_SCRIPT}" >"$scanner" 2>/dev/null \\',
+    '|| fail "unable to read the scanner from the protected base revision"',
+    f"grep -qxF -- '{RANGE_MARKER}' \"$scanner\" 2>/dev/null \\",
+    '|| fail "the scanner of the protected base revision has no range mode"',
+)
+# Fixture texts that only git output or file content could bring into a step output.
+SUBJECT, CONTENT = "fixture commit subject", "fixture file content"
+LEAKS = (SUBJECT, CONTENT, GUARD_SCRIPT, "fatal:")
+
+
+def _require(condition: object, message: str) -> None:
+    if not condition:
+        pytest.fail(message, pytrace=False)
+
+
+def _run(command: list[str], cwd: Path, env: dict[str, str],
+         stdin: str = "") -> subprocess.CompletedProcess[str]:
+    """Run a command with captured output; a timeout is a fixed failure."""
+    try:
+        return subprocess.run(command, cwd=cwd, env=env, input=stdin, capture_output=True,
+                              text=True, timeout=TIMEOUT)
+    except subprocess.TimeoutExpired:
+        pass
+    pytest.fail("fixture command timed out", pytrace=False)
+
+
+def _fixture_env(home: Path) -> dict[str, str]:
+    """Environment without the caller's Git, Python or workflow settings."""
+    env = {key: value for key, value in os.environ.items()
+           if not key.startswith(("GIT_", "GITHUB_", "PYTHON"))}
+    env.update(HOME=str(home), GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
+    for role in ("AUTHOR", "COMMITTER"):
+        env.update({f"GIT_{role}_NAME": "CI", f"GIT_{role}_EMAIL": "ci@example.invalid"})
+    return env
+
+
+def _workflow_jobs(relative: str) -> dict:
+    try:
+        loaded = yaml.safe_load((ROOT / relative).read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        loaded = None
+    jobs = loaded.get("jobs") if isinstance(loaded, dict) else None
+    _require(isinstance(jobs, dict), "workflow jobs cannot be loaded")
+    return jobs
+
+
+def _steps(relative: str, job: str) -> list[dict]:
+    body = _workflow_jobs(relative).get(job)
+    steps = body.get("steps") if isinstance(body, dict) else None
+    _require(isinstance(steps, list) and all(isinstance(step, dict) for step in steps),
+             "workflow job steps cannot be loaded")
+    return steps
+
+
+def _script_lines(step: dict) -> list[str]:
+    """Stripped lines of a step script, without blank lines and comments."""
+    _require(isinstance(step.get("run"), str), "step has no script")
+    _require("${{" not in step["run"], "a step script must not inline workflow expressions")
+    lines = [line.strip() for line in step["run"].splitlines()]
+    return [line for line in lines if line and not line.startswith("#")]
+
+
+def _scan_summary_passes(needs: dict) -> bool:
+    """Run the Scan results step on a `needs` context."""
+    job = _workflow_jobs(SECURITY_WORKFLOW).get("scan-summary") or {}
+    _require(job.get("name") == "Scan results" and job.get("if") == "always()",
+             "Scan results must keep its name and always run")
+    steps = _steps(SECURITY_WORKFLOW, "scan-summary")
+    _require(len(steps) == 1 and isinstance(steps[0].get("run"), str),
+             "Scan results must be one script step")
+    env = {**os.environ, "RESULTS": json.dumps(needs)}
+    return _run(["bash", "-c", steps[0]["run"]], ROOT, env).returncode == 0
+
+
+def _operand(token: str, context: dict[str, str]) -> str:
+    if len(token) > 1 and token[0] == token[-1] == "'":
+        return token[1:-1]
+    _require(token.startswith(("github.", "steps.")), "unsupported workflow expression")
+    return context.get(token, "")
+
+
+def _evaluate(expression: str, context: dict[str, str]) -> str:
+    """Evaluate the workflow expression subset the guard job uses: a value, == and !=."""
+    found = re.fullmatch(r"\s*([\w.'-]+)\s*(?:(==|!=)\s*([\w.'-]+)\s*)?", expression)
+    _require(found, "unsupported workflow expression")
+    left, operator, right = found.groups()
+    value = _operand(left, context)
+    if operator:
+        equal = value == _operand(right, context)
+        value = "true" if equal is (operator == "==") else ""
+    return value
+
+
+def _render(value: object, context: dict[str, str]) -> str:
+    """Substitute the expressions of a workflow value, an absent field being empty."""
+    return re.sub(r"\$\{\{(.*?)\}\}", lambda found: _evaluate(found.group(1), context),
+                  str(value), flags=re.S)
+
+
+def _run_script(step: dict, workspace: Path, env: dict[str, str],
+                context: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    """Run a step script as the runner starts `shell: bash`, with its rendered environment."""
+    variables = {name: _render(value, context) for name, value in step.get("env", {}).items()}
+    command = ["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", step["run"]]
+    return _run(command, workspace / step.get("working-directory", "."), {**env, **variables})
+
+
+def _checkout(step: dict, origin: Path, workspace: Path, env: dict[str, str],
+              revision: str) -> bool:
+    """Stand in for the checkout action: full history of every branch, at the tested revision."""
+    path = str(workspace / step.get("with", {}).get("path", "."))
+    commands = (
+        ["init", "-q", path],
+        ["-C", path, "fetch", "-q", str(origin), "+refs/heads/*:refs/remotes/origin/*"],
+        ["-C", path, "checkout", "-q", "--detach", revision],
+    )
+    return all(_run(["git", *command], workspace, env).returncode == 0 for command in commands)
+
+
+class GuardRun(NamedTuple):
+    passed: bool
+    output: str
+    steps: list[str]
+
+
+def _run_guard_job(origin: Path, root: Path, env: dict[str, str],
+                   event: dict[str, str]) -> GuardRun:
+    """Run the secret-guard steps in order for one event, as the runner would.
+
+    `root` receives the job workspace and, next to it, the runner temporary directory.
+    """
+    workspace, temp, outputs = root / "workspace", root / "temp", root / "step-outputs"
+    for directory in (root, workspace, temp):
+        directory.mkdir()
+    context = dict(event)
+    # A hostile PYTHONPATH: isolated mode must keep candidate modules out of the scanner.
+    env = {**env, "GITHUB_OUTPUT": str(outputs), "RUNNER_TEMP": str(temp),
+           "PYTHONPATH": str(workspace / "candidate")}
+    ran, output = [], ""
+    for step in _steps(SECURITY_WORKFLOW, "secret-guard"):
+        if "if" in step and not _evaluate(step["if"], context):
+            continue
+        ran.append(step.get("name"))
+        if "uses" in step:
+            passed = _checkout(step, origin, workspace, env, context.get("github.sha", ""))
+        else:
+            result = _run_script(step, workspace, env, context)
+            passed, output = result.returncode == 0, output + result.stdout + result.stderr
+            if outputs.exists():
+                for line in outputs.read_text(encoding="utf-8").splitlines():
+                    name, _, value = line.partition("=")
+                    context[f"steps.{step.get('id')}.outputs.{name}"] = value
+                outputs.unlink()
+        if not passed:
+            return GuardRun(False, output, ran)
+    return GuardRun(True, output, ran)
+
+
+class GuardOrigin(NamedTuple):
+    path: Path
+    env: dict[str, str]
+    commits: dict[str, str]
+    sentinels: tuple[Path, ...]
+    record: Path
+
+
+@pytest.fixture(scope="module")
+def guard_origin(tmp_path_factory: pytest.TempPathFactory) -> GuardOrigin:
+    """Repository the guard job checks out from; candidate revisions carry a hostile scanner."""
+    root = tmp_path_factory.mktemp("secret-guard")
+    origin, env = root / "origin", _fixture_env(root)
+    names = ("candidate-scanner-ran", "candidate-module-ran", "unmarked-scanner-ran")
+    sentinels = tuple(root / name for name in names)
+    # Each of these records its own execution: none of them may ever run.
+    hostile, module, unmarked = (
+        f"# {CONTENT}\nimport pathlib\npathlib.Path({str(path)!r}).write_text('ran')\n"
+        for path in sentinels)
+    # A marked base scanner that records how it was started instead of scanning.
+    record = root / "base-scanner-run"
+    probe = (f"import json, os, pathlib, sys\n{RANGE_MARKER}\n"
+             "run = [os.path.abspath(__file__), os.getcwd(), sys.argv[1:], sys.flags.isolated,\n"
+             "       sys.dont_write_bytecode]\n"
+             f"pathlib.Path({str(record)!r}).write_text(json.dumps(run))\n")
+    real = (ROOT / GUARD_SCRIPT).read_text(encoding="utf-8")
+    token = "ghp_" + "A" * 36
+    commits: dict[str, str] = {}
+
+    def git(*args: str, stdin: str = "") -> str:
+        result = _run(["git", *args], origin, env, stdin)
+        _require(result.returncode == 0, "git fixture command failed")
+        return result.stdout.strip()
+
+    def commit(name: str, parent: str | None, files: dict[str, str | None],
+               message: str = "chore: " + SUBJECT, branch: bool = True) -> None:
+        """Record a commit on top of `parent`, kept on a branch of its own unless told not to."""
+        if parent is not None:
+            git("checkout", "-q", "--detach", commits[parent])
+        for file, content in files.items():
+            if content is None:
+                (origin / file).unlink()
+            else:
+                (origin / file).parent.mkdir(parents=True, exist_ok=True)
+                (origin / file).write_text(content, encoding="utf-8")
+        git("add", "-A")
+        git("commit", "-q", "--allow-empty", "-F", "-", stdin=message)
+        commits[name] = git("rev-parse", "HEAD")
+        if branch:
+            git("branch", "-f", name, "HEAD")
+
+    origin.mkdir()
+    git("init", "-q", "-b", "main")
+    commit("base", None, {GUARD_SCRIPT: real, "app.txt": "seed\n", "legacy.txt": token + "\n"})
+    # The base branch moves on after the branch point and drops a flagged file.
+    commit("advanced", "base", {"legacy.txt": None})
+    candidate = {GUARD_SCRIPT: hostile, "fnmatch.py": module, "app.txt": "clean update\n"}
+    commit("clean", "base", candidate)
+    commit("flagged", "clean", {"app.txt": token + "\n"})
+    commit("noted", "clean", {}, f"chore: {SUBJECT}\n\n-----BEGIN " + "RSA PRIVATE KEY-----")
+    # A branch moved back from `removed` to `restored` brings a sensitive path back.
+    commit("restored", "base", {GUARD_SCRIPT: hostile, "deploy/.env": f"PORT=3000\n{token}\n"})
+    commit("removed", "restored", {GUARD_SCRIPT: real, "deploy/.env": None})
+    # No branch keeps this commit: a full fetch of the origin does not bring it.
+    commit("dropped", "base", {"notes.txt": "temporary\n"}, branch=False)
+    commit("bare", "base", {GUARD_SCRIPT: None})
+    commit("bare-head", "bare", {GUARD_SCRIPT: hostile})
+    commit("probe", "base", {GUARD_SCRIPT: probe})
+    commit("probe-head", "probe", {GUARD_SCRIPT: hostile, "fnmatch.py": module})
+    # Base revisions whose scanner does not carry the marker as a whole line.
+    suffixes = ("", f"# {RANGE_MARKER}\n", f"{RANGE_MARKER}  # note\n", f"if True:\n    {RANGE_MARKER}\n")
+    for index, suffix in enumerate(suffixes):
+        commit(f"unmarked-{index}", "base", {GUARD_SCRIPT: unmarked + suffix})
+        commit(f"unmarked-{index}-head", f"unmarked-{index}", {GUARD_SCRIPT: hostile})
+    return GuardOrigin(origin, env, commits, sentinels, record)
+
+
+def _pull_request(base: str, head: str) -> dict[str, str]:
+    return {"github.event_name": "pull_request", "github.sha": head,
+            "github.event.pull_request.base.sha": base, "github.event.pull_request.head.sha": head}
+
+
+def _merge_group(base: str, head: str) -> dict[str, str]:
+    return {"github.event_name": "merge_group", "github.sha": head,
+            "github.event.merge_group.base_sha": base, "github.event.merge_group.head_sha": head}
+
+
+def _push(before: str, after: str, sha: str | None = None, created: str = "false",
+          deleted: str = "false") -> dict[str, str]:
+    return {"github.event_name": "push", "github.sha": sha or after, "github.event.before": before,
+            "github.event.after": after, "github.event.created": created,
+            "github.event.deleted": deleted}
+
+
+def _require_fixed_output(shown: str, expected: str, label: str) -> None:
+    _require(shown == expected, f"{label}: unexpected output")
+    _require(not any(text in shown for text in LEAKS),
+             f"{label}: git output or file content was shown")
+
+
+def _require_no_candidate_code_ran(origin: GuardOrigin) -> None:
+    for sentinel in origin.sentinels:
+        _require(not sentinel.exists(), "candidate or unmarked scanner code was executed")
+
+
+def _assert_guard_runs(origin: GuardOrigin, tmp_path: Path, cases: list[tuple]) -> None:
+    """Run the job for each (event, passed, output, steps) case; labels are case indexes."""
+    for index, (event, passed, output, steps) in enumerate(cases):
+        root = tmp_path / f"run-{index}"
+        run = _run_guard_job(origin.path, root, origin.env, event)
+        _require(run.steps == steps, f"case #{index}: unexpected steps ran")
+        _require(run.passed is passed, f"case #{index}: unexpected job status")
+        _require_fixed_output(run.output, output, f"case #{index}")
+        checkouts = [entry.name for entry in (root / "workspace").iterdir()]
+        _require(checkouts == ["candidate"] * (CANDIDATE in steps),
+                 f"case #{index}: unexpected checkouts")
+        _require(not any((root / "temp").iterdir()),
+                 f"case #{index}: the extracted scanner must be removed")
+    _require_no_candidate_code_ran(origin)
+
+
+def test_secret_guard_job_structure() -> None:
+    jobs = _workflow_jobs(SECURITY_WORKFLOW)
+    job = jobs.get("secret-guard")
+    _require(isinstance(job, dict), "secret-guard job is missing")
+    _require(job.get("name") == "Secret Guard (Hook Rules)", "secret-guard job name changed")
+    _require(job.get("permissions") == {"contents": "read"}, "secret-guard may only read contents")
+    timeout = job.get("timeout-minutes")
+    _require(isinstance(timeout, int) and 5 <= timeout <= 10, "secret-guard timeout out of bounds")
+    _require(not {"if", "needs", "secrets", "continue-on-error"} & set(job),
+             "secret-guard must be unconditional and blocking")
+    steps = _steps(SECURITY_WORKFLOW, "secret-guard")
+    _require([step.get("name") for step in steps] == list(GUARD_STEPS), "unexpected guard steps")
+    select, candidate, run, confirm = steps
+    _require(not any("continue-on-error" in step for step in steps), "guard steps must be blocking")
+    _require([step for step in steps if "uses" in step] == [candidate],
+             "the guard must have exactly one checkout, of the candidate revision")
+    _require([step.get("if") for step in steps] == [None, SCANNED, SCANNED, SKIPPED],
+             "checkout and scan need a selected range; everything else is the explicit no-op")
+
+    # The checkout reuses the one action pin of the workflow, keeps no credentials and
+    # names no ref: no other revision is ever checked out.
+    pins = {step.get("uses") for name in jobs for step in _steps(SECURITY_WORKFLOW, name)
+            if str(step.get("uses")).startswith("actions/checkout@")}
+    _require(len(pins) == 1 and re.fullmatch(r"actions/checkout@[0-9a-f]{40}", min(pins)),
+             "the workflow must use one pinned checkout action")
+    _require(candidate.get("with") == {"path": "candidate", "fetch-depth": 0,
+                                       "persist-credentials": False},
+             "the candidate checkout must fetch the full history of the tested ref")
+
+    _require(select.get("id") == "range" and select.get("shell") == "bash",
+             "the range selection must be a bash step with the id range")
+    _require(select.get("env") == {
+        "EVENT_NAME": "${{ github.event_name }}",
+        "PR_BASE_SHA": "${{ github.event.pull_request.base.sha }}",
+        "PR_HEAD_SHA": "${{ github.event.pull_request.head.sha }}",
+        "MG_BASE_SHA": "${{ github.event.merge_group.base_sha }}",
+        "MG_HEAD_SHA": "${{ github.event.merge_group.head_sha }}",
+        "PUSH_BEFORE_SHA": "${{ github.event.before }}",
+        "PUSH_AFTER_SHA": "${{ github.event.after }}",
+        "PUSH_CREATED": "${{ github.event.created }}",
+        "PUSH_DELETED": "${{ github.event.deleted }}",
+    }, "event values must reach the range selection through its environment")
+    selection = _script_lines(select)
+    for index, call in enumerate((
+        'scan "$PR_BASE_SHA" "$PR_HEAD_SHA" merge-base',
+        'scan "$MG_BASE_SHA" "$MG_HEAD_SHA" merge-base',
+        'scan "$PUSH_BEFORE_SHA" "$PUSH_AFTER_SHA" direct',
+    )):
+        _require(selection.count(call) == 1, f"range selection #{index} is missing")
+    _require(sum(line.startswith("scan ") for line in selection) == 3,
+             "only pull_request, merge_group and push may select a range")
+
+    _require(run.get("shell") == "bash" and run.get("working-directory") == "candidate",
+             "the scan must run with bash inside the candidate checkout")
+    _require(run.get("env") == {
+        "BASE_SHA": "${{ steps.range.outputs.base }}",
+        "HEAD_SHA": "${{ steps.range.outputs.head }}",
+        "SCAN_MODE": "${{ steps.range.outputs.mode }}",
+    }, "the scan must take its range and mode from the selection alone")
+    scan = _script_lines(run)
+    command = 'python3 -I -B "$scanner" --range "$BASE_SHA" "$HEAD_SHA"'
+    _require([line for line in scan if "python" in line]
+             == [command, command + " --direct --allow-empty"],
+             "the scanner must run isolated, with --direct --allow-empty for a push only")
+    start = scan.index(EXTRACTION[0]) if EXTRACTION[0] in scan else len(scan)
+    end = start + len(EXTRACTION)
+    _require(tuple(scan[start:end]) == EXTRACTION and command in scan[end:],
+             "the scanner must be read from the base revision, with its range mode marker "
+             "checked as a fixed whole line, before it runs")
+    _require([line for line in scan if re.search(r"\bgit |scanner\w*=", line)]
+             == [EXTRACTION[index] for index in (0, 2, 5, 6)],
+             "the base revision blob in the temporary directory must be the only scanner, "
+             "and no other git command may run")
+    _require(RANGE_MARKER in (ROOT / GUARD_SCRIPT).read_text(encoding="utf-8").splitlines(),
+             "the scanner must declare the range mode marker on a line of its own")
+
+    _require(confirm.get("shell") == "bash"
+             and confirm.get("env") == {"SCAN": "${{ steps.range.outputs.scan }}"},
+             "the no-op step must check the selection decision")
+    # No bootstrap path: no script names the candidate checkout or downgrades to a warning.
+    for index, step in enumerate((select, run, confirm)):
+        lines = _script_lines(step)
+        _require(not any("candidate" in line or "::warning::" in line for line in lines),
+                 f"script #{index} must not fall back to the candidate checkout")
+
+
+def test_scan_results_and_ci_gate_propagate_secret_guard() -> None:
+    summary = _workflow_jobs(SECURITY_WORKFLOW).get("scan-summary") or {}
+    _require(summary.get("name") == "Scan results", "the Scan results context must keep its name")
+    _require("secret-guard" in (summary.get("needs") or []), "Scan results must need secret-guard")
+    gate = _workflow_jobs(GATE_WORKFLOW)
+    security, aggregate = gate.get("security") or {}, gate.get("ci-gate") or {}
+    _require(security.get("uses") == "./" + SECURITY_WORKFLOW, "ci-gate must call the security scan")
+    _require(aggregate.get("name") == "ci-gate" and "security" in (aggregate.get("needs") or []),
+             "the ci-gate context must keep its name and need the security scan")
+
+
+def test_secret_guard_job_runs_the_base_scanner_from_outside_the_candidate(
+    guard_origin: GuardOrigin, tmp_path: Path,
+) -> None:
+    base, head = (guard_origin.commits[name] for name in ("probe", "probe-head"))
+    events = ((_pull_request, []), (_merge_group, []), (_push, ["--direct", "--allow-empty"]))
+    for index, (event, options) in enumerate(events):
+        root = tmp_path / f"run-{index}"
+        run = _run_guard_job(guard_origin.path, root, guard_origin.env, event(base, head))
+        _require(run.passed and run.steps == SCAN_STEPS and run.output == "",
+                 f"case #{index}: the base scanner must run without output")
+        try:
+            started = json.loads(guard_origin.record.read_text(encoding="utf-8"))
+            guard_origin.record.unlink()
+        except (OSError, ValueError):
+            started = None
+        _require(isinstance(started, list) and len(started) == 5,
+                 f"case #{index}: the base scanner did not run")
+        script, directory, arguments, isolated, no_bytecode = started
+        temp, candidate = (root / "temp").resolve(), (root / "workspace/candidate").resolve()
+        # The temporary directory is next to the workspace, so outside the candidate checkout.
+        _require(Path(script).resolve().parent.parent == temp,
+                 f"case #{index}: the scanner must be extracted under the temporary directory")
+        _require(Path(directory).resolve() == candidate,
+                 f"case #{index}: the scanner must run inside the candidate checkout")
+        _require(arguments == ["--range", base, head, *options],
+                 f"case #{index}: unexpected scanner arguments")
+        _require(isolated == 1 and no_bytecode is True,
+                 f"case #{index}: the scanner must run isolated, without bytecode")
+        _require(not any(temp.iterdir()), f"case #{index}: the extracted scanner must be removed")
+    _require_no_candidate_code_ran(guard_origin)
+
+
+def test_secret_guard_job_scans_the_range_of_each_event(
+    guard_origin: GuardOrigin, tmp_path: Path,
+) -> None:
+    commits = guard_origin.commits
+    base, clean, flagged, noted = (commits[name] for name in ("base", "clean", "flagged", "noted"))
+    in_file = "Secret guard: access token detected in diff file #1 at line 1" + FOUND
+    in_message = f"Secret guard: private key detected in commit #1 ({noted[:12]}) message at line 3"
+    in_message += FOUND
+    empty = "Secret guard: empty commit range" + CLOSED
+    unresolved = "Secret guard: unable to resolve git revision" + CLOSED
+    restored = ("Secret guard: sensitive filename added or renamed at diff path #1" + FOUND
+                + "Secret guard: access token detected in diff file #1 at line 2" + FOUND)
+    diverged = "Secret guard: access token detected in diff file #3 at line 1" + FOUND
+    cases = [
+        (_pull_request(base, clean), True, "", SCAN_STEPS),
+        (_pull_request(base, flagged), False, in_file, SCAN_STEPS),
+        (_pull_request(base, noted), False, in_message, SCAN_STEPS),
+        (_pull_request(base, base), False, empty, SCAN_STEPS),
+        (_merge_group(base, clean), True, "", SCAN_STEPS),
+        (_merge_group(base, flagged), False, in_file, SCAN_STEPS),
+        (_merge_group(base, noted), False, in_message, SCAN_STEPS),
+        (_merge_group(base, base), False, empty, SCAN_STEPS),
+        (_push(base, clean), True, "", SCAN_STEPS),
+        (_push(base, flagged), False, in_file, SCAN_STEPS),
+        (_push(base, noted), False, in_message, SCAN_STEPS),
+        # What differs only because the base moved on is not attributed to the range;
+        # a push is compared with the previous tip itself, which also covers a rewind.
+        (_pull_request(commits["advanced"], clean), True, "", SCAN_STEPS),
+        (_merge_group(commits["advanced"], clean), True, "", SCAN_STEPS),
+        (_push(commits["advanced"], clean), False, diverged, SCAN_STEPS),
+        (_push(commits["removed"], commits["restored"]), False, restored, SCAN_STEPS),
+        # A push that adds no commit passes.
+        (_push(base, base), True, "", SCAN_STEPS),
+        # The pushed commit does not resolve in the candidate checkout.
+        (_push(base, "2" * 40, sha=clean), False, unresolved, SCAN_STEPS),
+    ]
+    _assert_guard_runs(guard_origin, tmp_path, cases)
+
+
+def test_secret_guard_job_checks_nothing_out_without_a_commit_range(
+    guard_origin: GuardOrigin, tmp_path: Path,
+) -> None:
+    commits = guard_origin.commits
+    base, clean, flagged = (commits[name] for name in ("base", "clean", "flagged"))
+    events = [
+        ({"github.event_name": "schedule", "github.sha": flagged}, NO_RANGE),
+        ({"github.event_name": "workflow_dispatch", "github.sha": flagged}, NO_RANGE),
+        # Branch creation: by flag, by an all-zero previous revision, or both.
+        (_push(NO_COMMIT, flagged, created="true"), CREATED),
+        (_push(base, flagged, created="true"), CREATED),
+        (_push(NO_COMMIT, flagged), CREATED),
+        (_push("0" * 64, flagged), CREATED),
+        # Branch deletion: by flag, by an all-zero pushed revision, or both; it comes first.
+        (_push(flagged, NO_COMMIT, sha=clean, deleted="true"), DELETED),
+        (_push(base, flagged, deleted="true"), DELETED),
+        (_push(flagged, NO_COMMIT, sha=clean), DELETED),
+        (_push(NO_COMMIT, NO_COMMIT, sha=clean, created="true", deleted="true"), DELETED),
+    ]
+    cases = [(event, True, output, [SELECT, CONFIRM]) for event, output in events]
+    _assert_guard_runs(guard_origin, tmp_path, cases)
+
+
+def test_secret_guard_job_fails_closed(guard_origin: GuardOrigin, tmp_path: Path) -> None:
+    commits = guard_origin.commits
+    base, clean = commits["base"], commits["clean"]
+    unmarked = [(commits[f"unmarked-{index}"], commits[f"unmarked-{index}-head"])
+                for index in range(4)]
+    events = (_pull_request, _merge_group, _push)
+    cases = [
+        # Missing or partial commit ids stop the job before any checkout.
+        (_pull_request("", clean), False, NO_IDS, [SELECT]),
+        (_pull_request(base, ""), False, NO_IDS, [SELECT]),
+        (_pull_request("main", clean), False, NO_IDS, [SELECT]),
+        (_pull_request(base[:12], clean), False, NO_IDS, [SELECT]),
+        (_pull_request(NO_COMMIT, clean), False, NO_IDS, [SELECT]),
+        (_merge_group("", clean), False, NO_IDS, [SELECT]),
+        (_merge_group(base, ""), False, NO_IDS, [SELECT]),
+        (_push("", clean), False, NO_IDS, [SELECT]),
+        (_push(base, ""), False, NO_IDS, [SELECT]),
+        (_push("main", clean), False, NO_IDS, [SELECT]),
+        # Any other event is an error, whatever fields it carries.
+        ({**_pull_request(base, clean), "github.event_name": "pull_request_target"},
+         False, UNSUPPORTED, [SELECT]),
+        ({"github.event_name": "workflow_run"}, False, UNSUPPORTED, [SELECT]),
+        ({}, False, UNSUPPORTED, [SELECT]),
+        # A base revision the fetched history does not hold (a previous tip no branch
+        # keeps, or an unknown commit), one without the scanner, or one whose scanner has
+        # no range mode marker, is an error on every event: the candidate scanner is never
+        # used instead, and neither git output nor file content is shown.
+        (_push(commits["dropped"], base), False, NO_BASE, SCAN_STEPS),
+        *((event("1" * 40, clean), False, NO_BASE, SCAN_STEPS) for event in events),
+        *((event(commits["bare"], commits["bare-head"]), False, NO_SCANNER, SCAN_STEPS)
+          for event in events),
+        *((_pull_request(old, new), False, NO_RANGE_MODE, SCAN_STEPS) for old, new in unmarked),
+        (_merge_group(*unmarked[0]), False, NO_RANGE_MODE, SCAN_STEPS),
+        (_push(*unmarked[0]), False, NO_RANGE_MODE, SCAN_STEPS),
+    ]
+    _assert_guard_runs(guard_origin, tmp_path, cases)
+
+
+def test_secret_guard_scripts_reject_an_unexpected_state(
+    guard_origin: GuardOrigin, tmp_path: Path,
+) -> None:
+    commits = guard_origin.commits
+    base, clean = commits["base"], commits["clean"]
+    root = tmp_path / "job"
+    workspace, temp = root / "workspace", root / "temp"
+    passed = _run_guard_job(guard_origin.path, root, guard_origin.env,
+                            _pull_request(base, clean)).passed
+    _require(passed, "the fixture job must pass before its state is altered")
+    tree = _run(["git", "rev-parse", "--verify", "--quiet", base + "^{tree}"],
+                workspace / "candidate", guard_origin.env).stdout.strip()
+    _require(re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", tree), "git fixture command failed")
+    steps = _steps(SECURITY_WORKFLOW, "secret-guard")
+    outputs = {"base": base, "head": clean, "mode": "merge-base"}
+    cases = [
+        (2, {}, temp, 0, ""),
+        # A base that is no commit of the candidate history: absent, unknown, or a tree.
+        (2, {"base": ""}, temp, 1, NO_BASE),
+        (2, {"base": "1" * 40}, temp, 1, NO_BASE),
+        (2, {"base": tree}, temp, 1, NO_BASE),
+        # A candidate revision as base: its scanner has no marker and does not run.
+        (2, {"base": clean}, temp, 1, NO_RANGE_MODE),
+        (2, {"mode": ""}, temp, 1, NO_MODE),
+        (2, {"mode": "bootstrap"}, temp, 1, NO_MODE),
+        (2, {}, tmp_path / "absent", 1, NO_TEMP),
+        (3, {"scan": "false"}, temp, 0, CONFIRMED),
+        (3, {"scan": ""}, temp, 1, NO_DECISION),
+        (3, {"scan": "maybe"}, temp, 1, NO_DECISION),
+    ]
+    for index, (step, changes, runner_temp, status, output) in enumerate(cases):
+        context = {f"steps.range.outputs.{name}": value
+                   for name, value in {**outputs, **changes}.items()}
+        env = {**guard_origin.env, "RUNNER_TEMP": str(runner_temp)}
+        result = _run_script(steps[step], workspace, env, context)
+        _require(result.returncode == status, f"case #{index}: unexpected exit status")
+        _require_fixed_output(result.stdout + result.stderr, output, f"case #{index}")
+        _require(not any(temp.iterdir()), f"case #{index}: the extracted scanner must be removed")
+    _require_no_candidate_code_ran(guard_origin)
+
+
+def test_gate_dependency_install_never_shows_pip_output(tmp_path: Path) -> None:
+    install = [step for step in _steps(GATE_WORKFLOW, "gate-contract")
+               if step.get("name") == "Install pytest"]
+    _require(len(install) == 1 and install[0].get("shell") == "bash",
+             "gate-contract must have one bash step that installs pytest")
+    # Stand-in for the interpreter: records its arguments and writes to both streams.
+    stub, arguments = tmp_path / "bin/python", tmp_path / "arguments"
+    stub.parent.mkdir()
+    stub.write_text('#!/bin/sh\nprintf "%s\\n" "$@" > "$STUB_ARGUMENTS"\n'
+                    'echo "pip output $STUB_STATUS"\necho "pip error $STUB_STATUS" >&2\n'
+                    'exit "$STUB_STATUS"\n', encoding="utf-8")
+    stub.chmod(0o755)
+    expected = "-m pip install --require-hashes -r .github/workflows/requirements/gate.txt"
+    for index, status in enumerate((0, 1, 7)):
+        temporary = tmp_path / f"temporary-{index}"
+        temporary.mkdir()
+        env = _fixture_env(tmp_path)
+        env.update(PATH=f"{stub.parent}{os.pathsep}{env['PATH']}", RUNNER_TEMP=str(temporary),
+                   STUB_ARGUMENTS=str(arguments), STUB_STATUS=str(status))
+        result = _run_script(install[0], tmp_path, env, {})
+        _require(result.returncode == status, f"case #{index}: the pip exit status must be kept")
+        shown = "" if status == 0 else "dependency install failed\n"
+        _require(result.stdout == "" and result.stderr == shown,
+                 f"case #{index}: only the fixed failure message may be shown")
+        _require(arguments.read_text(encoding="utf-8").split() == expected.split(),
+                 f"case #{index}: unexpected install command")
+        _require(not any(temporary.iterdir()), f"case #{index}: the pip output must be removed")

@@ -53,11 +53,11 @@ pub async fn handle_ws_upgrade(
     };
 
     // Keep the push connection bounded by the verified token's lifetime.
-    let (claims, _) = match crate::auth::tenant::request_identity(&state, &synthetic_headers).await
-    {
-        Ok(identity) => identity,
-        Err(error) => return error.into_response(),
-    };
+    let (claims, _) =
+        match crate::auth::tenant::request_mcp_identity(&state, &synthetic_headers).await {
+            Ok(identity) => identity,
+            Err(error) => return error.into_response(),
+        };
     let authorization_deadline = crate::auth::tenant::authorization_deadline(claims.exp);
 
     // Check if browser is using subprotocol auth — we need to echo back the subprotocol
@@ -88,7 +88,7 @@ pub(crate) async fn websocket_identity(
     let token = extract_ws_token(headers)
         .ok_or_else(|| crate::auth::middleware::AuthError::unauthorized("Missing Bearer token"))?;
     let synthetic_headers = build_headers_from_token(headers, &token);
-    let (claims, _) = crate::auth::tenant::request_identity(state, &synthetic_headers).await?;
+    let (claims, _) = crate::auth::tenant::request_mcp_identity(state, &synthetic_headers).await?;
     let tenant_id = crate::auth::tenant::require_tenant(&claims)?.to_string();
     Ok((synthetic_headers, tenant_id))
 }

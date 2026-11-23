@@ -389,6 +389,7 @@ impl Default for Config {
             shadow_min_samples: default_shadow_min_samples(),
             shadow_gitlab_project: None,
             environment: default_environment(),
+            environment_explicit: false,
             auto_register: default_auto_register(),
             advertise_url: None,
             heartbeat_interval_secs: default_heartbeat_interval(),

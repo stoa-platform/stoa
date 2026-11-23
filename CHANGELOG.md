@@ -32,6 +32,7 @@ changes are covered by the version sections below and by the per-component
 - Accessibility improvements across the Console and the Developer Portal, including form labels bound to their controls (#2870, #2895).
 
 ### Fixed
+- The gateway can start locally in development without a control plane or identity provider. When `STOA_ENVIRONMENT=dev` is set and no Keycloak or control-plane URL is configured, MCP tool listing is available under a restricted local identity. Staging and production stay fail-closed. `STOA_ENVIRONMENT` accepts only the literals `dev`, `staging`, and `prod`.
 
 - Webhooks are emitted when a subscription is suspended or reactivated (#2784).
 - Gateway deprovisioning retries transient failures and records a distinct `DEPROVISIONING_FAILED` state, so revoked subscriptions no longer keep live gateway routes indefinitely (#2782).

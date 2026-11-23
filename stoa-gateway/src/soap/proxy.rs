@@ -241,6 +241,43 @@ mod tests {
             }
         }
 
+        async fn explicit_local_dev() -> Self {
+            let server = MockServer::start().await;
+            Mock::given(method("POST"))
+                .and(path("/backend"))
+                .respond_with(ResponseTemplate::new(200).set_body_string("<reply>ok</reply>"))
+                .mount(&server)
+                .await;
+            let spool = tempfile::tempdir().unwrap();
+            let state = AppState::new(Config {
+                environment: crate::config::Environment::Dev,
+                environment_explicit: true,
+                soap_proxy_enabled: true,
+                audit_spool_dir: spool.path().into(),
+                ..Config::default()
+            });
+            assert!(state.config.allows_explicit_local_dev_access());
+            assert!(state.jwt_validator.is_none());
+            state.route_registry.upsert(
+                serde_json::from_value(json!({
+                    "id": "route-local",
+                    "name": "SOAP local test",
+                    "tenant_id": "local",
+                    "path_prefix": "/soap",
+                    "backend_url": format!("{}/backend", server.uri()),
+                    "methods": ["POST"],
+                    "spec_hash": "",
+                    "activated": true
+                }))
+                .unwrap(),
+            );
+            Self {
+                server,
+                state,
+                _spool: spool,
+            }
+        }
+
         fn token(&self, overrides: Value) -> String {
             mcp_test_mint(&format!("{}/realms/stoa", self.server.uri()), overrides)
         }
@@ -393,6 +430,19 @@ mod tests {
         let token = fixture.token(json!({}));
         let response = fixture.post("tenant-a", Some(&token), &[]).await;
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert!(fixture.backend_requests().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn regression_soap_stays_unauthorized_in_explicit_local_dev() {
+        let fixture = Fixture::explicit_local_dev().await;
+
+        let anonymous = fixture.post("local", None, &[]).await;
+        assert_eq!(anonymous.status(), StatusCode::UNAUTHORIZED);
+
+        let bearer = fixture.post("local", Some("fake-token"), &[]).await;
+        assert_eq!(bearer.status(), StatusCode::UNAUTHORIZED);
+
         assert!(fixture.backend_requests().await.is_empty());
     }
 }

@@ -26,11 +26,11 @@ async fn test_health_no_auth_required() {
 
 #[tokio::test]
 async fn test_ready_no_cp_configured() {
-    // Without a control_plane_url no tool policy can load: readiness fails closed
+    // In dev mode without a control_plane_url, standalone readiness succeeds
     let app = TestApp::new();
     let (status, body) = app.get("/ready").await;
-    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
-    assert_eq!(body, "NOT READY: tool policy unavailable");
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, "READY");
 }
 
 #[tokio::test]

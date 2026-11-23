@@ -381,6 +381,11 @@ pub struct Config {
     #[serde(default = "default_environment")]
     pub environment: Environment,
 
+    /// True only when `environment` was explicitly configured (via `STOA_ENVIRONMENT`
+    /// or a loaded config file). Skipped by serde so casual env/YAML keys cannot set it.
+    #[serde(skip)]
+    pub environment_explicit: bool,
+
     /// Enable auto-registration with Control Plane on startup
     /// Env: STOA_AUTO_REGISTER
     #[serde(default = "default_auto_register")]
@@ -1072,6 +1077,7 @@ impl fmt::Debug for Config {
             .field("shadow_min_samples", &self.shadow_min_samples)
             .field("shadow_gitlab_project", &self.shadow_gitlab_project)
             .field("environment", &self.environment)
+            .field("environment_explicit", &self.environment_explicit)
             .field("auto_register", &self.auto_register)
             .field("advertise_url", &self.advertise_url)
             .field("heartbeat_interval_secs", &self.heartbeat_interval_secs)

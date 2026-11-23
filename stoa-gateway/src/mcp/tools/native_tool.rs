@@ -102,6 +102,11 @@ impl NativeTool {
 
     /// Execute HTTP GET request to CP API
     async fn get(&self, path: &str, ctx: &ToolContext) -> Result<Value, ToolError> {
+        if self.cp_base_url.is_empty() {
+            return Err(ToolError::ExecutionFailed(
+                "Control Plane URL is not configured".to_string(),
+            ));
+        }
         let url = format!("{}{}", self.cp_base_url, path);
         debug!(url = %url, tool = %self.tool_name, "Native tool GET");
 
@@ -133,6 +138,11 @@ impl NativeTool {
 
     /// Execute HTTP POST request to CP API
     async fn post(&self, path: &str, body: &Value, ctx: &ToolContext) -> Result<Value, ToolError> {
+        if self.cp_base_url.is_empty() {
+            return Err(ToolError::ExecutionFailed(
+                "Control Plane URL is not configured".to_string(),
+            ));
+        }
         let url = format!("{}{}", self.cp_base_url, path);
         debug!(url = %url, tool = %self.tool_name, "Native tool POST");
 
@@ -169,6 +179,11 @@ impl NativeTool {
 
     /// Execute HTTP DELETE request to CP API
     async fn delete(&self, path: &str, ctx: &ToolContext) -> Result<Value, ToolError> {
+        if self.cp_base_url.is_empty() {
+            return Err(ToolError::ExecutionFailed(
+                "Control Plane URL is not configured".to_string(),
+            ));
+        }
         let url = format!("{}{}", self.cp_base_url, path);
         debug!(url = %url, tool = %self.tool_name, "Native tool DELETE");
 

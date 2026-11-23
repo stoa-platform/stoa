@@ -76,12 +76,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize mode-specific components
     init_mode_components(&config).await;
 
+    let control_plane_url = config
+        .control_plane_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|url| !url.is_empty())
+        .map(str::to_string);
+
     // Auto-register with Control Plane (ADR-028, CAB-1915)
     // Registration runs in background with retry so the gateway becomes visible
     // even if the CP API is not ready at startup (common in K8s).
     // The registrar is kept alive so api_bridge can read the assigned gateway_id (CAB-1940).
     let registrar: Option<std::sync::Arc<GatewayRegistrar>> = if config.auto_register {
-        match (&config.control_plane_url, &config.control_plane_api_key) {
+        match (&control_plane_url, &config.control_plane_api_key) {
             (Some(cp_url), Some(api_key)) => {
                 info!(
                     "Starting background registration with Control Plane: {}",
@@ -129,7 +136,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Pre-warm connection pool: establish TCP+TLS connections to Control Plane
     // before the first real request, so ramp_up traffic doesn't pay cold-start cost.
-    if let Some(cp_url) = &config.control_plane_url {
+    if let Some(cp_url) = &control_plane_url {
         prewarm_connections(cp_url).await;
     }
 
@@ -340,11 +347,32 @@ fn init_tracing(config: &Config) {
 async fn register_tools(state: &AppState, registrar: Option<std::sync::Arc<GatewayRegistrar>>) {
     use stoa_gateway::mcp::tools::{api_bridge, stoa_tools};
 
+    let Some(control_plane) = state.control_plane.as_ref() else {
+        if state.config.allows_explicit_local_dev_access() && state.config.native_tools_enabled {
+            let http_client = stoa_gateway::mcp::tools::native_tool::create_http_client();
+            stoa_gateway::mcp::tools::native_tool::register_native_tools(
+                &state.tool_registry,
+                http_client,
+                "",
+                state.tool_registry.clone(),
+                Some(state.session_manager.clone()),
+                Some(state.circuit_breakers.clone()),
+                Some(state.prompt_cache.clone()),
+            );
+            info!("Control Plane not configured — registered native tool catalog for explicit local dev");
+        } else {
+            info!(
+                "Control Plane not configured — skipping Control Plane tool and catalog discovery"
+            );
+        }
+        return;
+    };
+
     if state.config.native_tools_enabled {
         info!("Native tools enabled (direct CP API calls)");
         match stoa_tools::discover_and_register(
             state.tool_registry.clone(),
-            &state.control_plane,
+            control_plane,
             state.cp_circuit_breaker.clone(),
             Some(state.session_manager.clone()),
             Some(state.circuit_breakers.clone()),
@@ -361,20 +389,20 @@ async fn register_tools(state: &AppState, registrar: Option<std::sync::Arc<Gatew
         }
     } else {
         info!("Native tools DISABLED (STOA_NATIVE_TOOLS_ENABLED=false) — using proxy mode");
-        stoa_tools::register_static_tools(&state.tool_registry, state.control_plane.clone());
+        stoa_tools::register_static_tools(&state.tool_registry, control_plane.clone());
     }
 
     // Background refresh: sync tools from CP every 60s
     stoa_tools::start_tool_refresh_task(
         state.tool_registry.clone(),
-        state.control_plane.clone(),
+        control_plane.clone(),
         state.cp_circuit_breaker.clone(),
     );
 
     // Discover published APIs from CP catalog and register as MCP tools
     // Sidecar is an ext_authz enforcer, Shadow is passive capture — neither needs discovery (CAB-1949)
     if state.config.gateway_mode.supports_discovery() {
-        let cp_url = state.control_plane.base_url().to_string();
+        let cp_url = control_plane.base_url().to_string();
         let http_client = stoa_gateway::mcp::tools::native_tool::create_http_client();
 
         let expansion_mode = state.config.tool_expansion_mode;

@@ -14,7 +14,6 @@ use figment::{
     providers::{Env, Format, Serialized, Yaml},
     Figment,
 };
-use std::path::Path;
 use thiserror::Error;
 use tracing::info;
 
@@ -88,16 +87,34 @@ pub enum ConfigError {
     ClientKeyUnreadable(String),
 }
 
+fn non_empty_trimmed(value: &Option<String>) -> Option<&str> {
+    value.as_deref().map(str::trim).filter(|s| !s.is_empty())
+}
+
 impl Config {
     /// Return the Keycloak backend URL for service-to-service calls.
     ///
     /// Prefers `keycloak_internal_url` (K8s service DNS) over `keycloak_url` (external)
     /// to bypass hairpin NAT issues on OVH MKS and similar cloud providers.
-    /// Returns `None` if neither is configured.
+    /// Returns `None` if neither is configured (empty/whitespace counts as unset).
     pub fn keycloak_backend_url(&self) -> Option<&str> {
-        self.keycloak_internal_url
-            .as_deref()
-            .or(self.keycloak_url.as_deref())
+        non_empty_trimmed(&self.keycloak_internal_url)
+            .or_else(|| non_empty_trimmed(&self.keycloak_url))
+    }
+
+    /// True only when running in explicit local dev mode without Keycloak
+    /// and without a Control Plane.
+    ///
+    /// Empty or whitespace-only URL values are treated as unset. Implicit
+    /// `Dev` defaults (`Config::default()` or unset `STOA_ENVIRONMENT`),
+    /// staging, production, and any run with a Keycloak or Control Plane URL
+    /// return `false`.
+    pub fn allows_explicit_local_dev_access(&self) -> bool {
+        self.environment == super::Environment::Dev
+            && self.environment_explicit
+            && non_empty_trimmed(&self.keycloak_url).is_none()
+            && non_empty_trimmed(&self.keycloak_internal_url).is_none()
+            && non_empty_trimmed(&self.control_plane_url).is_none()
     }
 
     /// Load configuration from file and environment.
@@ -112,14 +129,28 @@ impl Config {
         let mut figment = Figment::new()
             // Start with defaults
             .merge(Serialized::defaults(Config::default()));
+        // Track explicit overrides (file -> STOA_* env) without defaults so
+        // `environment_explicit` reflects the winning provider value only.
+        let mut explicit_figment = Figment::new();
 
-        // Try config.yaml if exists
+        // Try config.yaml if exists. Read the file once and reuse the captured
+        // contents for both extraction and environment provenance.
         let config_paths = ["config.yaml", "config.yml", "/etc/stoa/config.yaml"];
         for path in config_paths {
-            if Path::new(path).exists() {
-                info!(path = path, "Loading config from file");
-                figment = figment.merge(Yaml::file(path));
-                break;
+            match std::fs::read_to_string(path) {
+                Ok(contents) => {
+                    info!(path = path, "Loading config from file");
+                    explicit_figment = explicit_figment.merge(Yaml::string(&contents));
+                    figment = figment.merge(Yaml::string(&contents));
+                    break;
+                }
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(err) => {
+                    return Err(figment::Error::from(format!(
+                        "failed to read config file {path}: {err}"
+                    ))
+                    .into());
+                }
             }
         }
 
@@ -127,7 +158,11 @@ impl Config {
         // `.split("__")` lets nested struct fields be driven via env: e.g.
         // `STOA_MTLS__ENABLED=true` → `mtls.enabled`. Single-underscore forms
         // bind to root-level flat fields only (unchanged behaviour).
-        figment = figment.merge(Env::prefixed("STOA_").split("__"));
+        // Materialize the prefixed env provider once and reuse that snapshot
+        // for both environment provenance and extraction.
+        let env_figment = Figment::from(Env::prefixed("STOA_").split("__"));
+        explicit_figment = explicit_figment.merge(env_figment.clone());
+        figment = figment.merge(env_figment);
 
         // Legacy env vars (backward compat with envy)
         figment = figment.merge(Env::raw().only(&[
@@ -147,12 +182,17 @@ impl Config {
             "GIT_PROVIDER",
         ]));
 
-        let config: Config = figment.extract()?;
+        let mut config: Config = figment.extract()?;
+        config.environment_explicit = explicit_figment
+            .find_value("environment")
+            .ok()
+            .and_then(|value| value.as_str().and_then(super::Environment::parse_literal))
+            .is_some();
 
         info!(
             port = config.port,
             host = %config.host,
-            control_plane = config.control_plane_url.as_deref().unwrap_or("not set"),
+            control_plane = non_empty_trimmed(&config.control_plane_url).unwrap_or("not set"),
             "Configuration loaded"
         );
 
@@ -247,18 +287,21 @@ impl Config {
             );
         }
 
-        if self.keycloak_client_key_path.is_none() && self.control_plane_url.is_some() {
+        let has_control_plane = non_empty_trimmed(&self.control_plane_url).is_some();
+        let has_keycloak = self.keycloak_backend_url().is_some();
+
+        if self.keycloak_client_key_path.is_none() && has_control_plane {
             tracing::warn!(
                 "STOA_KEYCLOAK_CLIENT_KEY_PATH not set - tenant tool permissions cannot be read, \
                  tool calls will be denied"
             );
         }
 
-        if self.control_plane_url.is_none() {
+        if !has_control_plane {
             tracing::warn!("CONTROL_PLANE_URL not set - some features will be disabled");
         }
 
-        if self.jwt_secret.is_none() && self.keycloak_url.is_none() {
+        if self.jwt_secret.is_none() && !has_keycloak {
             tracing::warn!("No JWT_SECRET or KEYCLOAK_URL - auth will be limited");
         }
 
@@ -646,5 +689,248 @@ mod tests {
             );
             Ok(())
         });
+    }
+
+    #[test]
+    fn explicit_local_dev_access_requires_explicit_dev_and_no_idp_or_cp() {
+        let default_cfg = Config::default();
+        assert!(!default_cfg.environment_explicit);
+        assert!(!default_cfg.allows_explicit_local_dev_access());
+
+        let mut cfg = Config {
+            environment: super::super::Environment::Dev,
+            environment_explicit: true,
+            ..Config::default()
+        };
+        assert!(cfg.allows_explicit_local_dev_access());
+
+        // Blank / whitespace URLs count as unset.
+        cfg.keycloak_url = Some("   ".to_string());
+        cfg.keycloak_internal_url = Some("".to_string());
+        cfg.control_plane_url = Some("\t ".to_string());
+        assert!(cfg.allows_explicit_local_dev_access());
+
+        // Setting any Keycloak or Control Plane URL re-locks access.
+        cfg.keycloak_url = Some("https://auth.example.com".to_string());
+        assert!(!cfg.allows_explicit_local_dev_access());
+        cfg.keycloak_url = None;
+
+        cfg.keycloak_internal_url = Some("http://keycloak.internal:8080".to_string());
+        assert!(!cfg.allows_explicit_local_dev_access());
+        cfg.keycloak_internal_url = None;
+
+        cfg.control_plane_url = Some("http://127.0.0.1:8000".to_string());
+        assert!(!cfg.allows_explicit_local_dev_access());
+        cfg.control_plane_url = None;
+
+        // Staging and Prod never allow explicit local dev access.
+        for env in [
+            super::super::Environment::Staging,
+            super::super::Environment::Prod,
+        ] {
+            cfg.environment = env;
+            assert!(!cfg.allows_explicit_local_dev_access(), "{env:?}");
+        }
+    }
+
+    #[test]
+    #[allow(clippy::result_large_err)]
+    fn environment_load_tracks_explicit_env_and_file_and_rejects_unknown() {
+        use figment::Jail;
+
+        // Absent STOA_ENVIRONMENT stays implicit Dev (locked).
+        Jail::expect_with(|jail| {
+            jail.clear_env();
+            let cfg = Config::load().expect("default load");
+            assert_eq!(cfg.environment, super::super::Environment::Dev);
+            assert!(!cfg.environment_explicit);
+            assert!(!cfg.allows_explicit_local_dev_access());
+
+            // A casual env var for the skipped field cannot flip it.
+            jail.set_env("STOA_ENVIRONMENT_EXPLICIT", "true");
+            let cfg = Config::load().expect("load with ignored explicit flag");
+            assert!(!cfg.environment_explicit);
+            assert!(!cfg.allows_explicit_local_dev_access());
+            Ok(())
+        });
+
+        // Explicit STOA_ENVIRONMENT=dev unlocks local dev when no IdP/CP URL is set.
+        Jail::expect_with(|jail| {
+            jail.clear_env();
+            jail.set_env("STOA_ENVIRONMENT", "dev");
+            let cfg = Config::load().expect("explicit dev load");
+            assert_eq!(cfg.environment, super::super::Environment::Dev);
+            assert!(cfg.environment_explicit);
+            assert!(cfg.allows_explicit_local_dev_access());
+
+            // Whitespace URLs remain unset.
+            jail.set_env("STOA_KEYCLOAK_URL", "   ");
+            jail.set_env("STOA_CONTROL_PLANE_URL", "");
+            let cfg = Config::load().expect("explicit dev with blank urls");
+            assert!(cfg.allows_explicit_local_dev_access());
+
+            // Real Keycloak URL re-locks access.
+            jail.set_env("STOA_KEYCLOAK_URL", "https://auth.example.com");
+            let cfg = Config::load().expect("explicit dev with keycloak");
+            assert!(!cfg.allows_explicit_local_dev_access());
+
+            // Real Control Plane URL alone also re-locks access.
+            jail.set_env("STOA_KEYCLOAK_URL", "");
+            jail.set_env("STOA_CONTROL_PLANE_URL", "http://127.0.0.1:8000");
+            let cfg = Config::load().expect("explicit dev with cp");
+            assert!(!cfg.allows_explicit_local_dev_access());
+            Ok(())
+        });
+
+        // Config file setting environment: dev unlocks; omitting environment stays locked.
+        Jail::expect_with(|jail| {
+            jail.clear_env();
+            jail.create_file("config.yaml", "port: 9091\nenvironment_explicit: true\n")?;
+            let cfg = Config::load().expect("yaml without environment");
+            assert!(!cfg.environment_explicit);
+            assert!(!cfg.allows_explicit_local_dev_access());
+
+            jail.create_file("config.yaml", "environment: dev\n")?;
+            let cfg = Config::load().expect("yaml with explicit dev");
+            assert_eq!(cfg.environment, super::super::Environment::Dev);
+            assert!(cfg.environment_explicit);
+            assert!(cfg.allows_explicit_local_dev_access());
+
+            // STOA_ENVIRONMENT overrides YAML environment using the single snapshot.
+            jail.set_env("STOA_ENVIRONMENT", "prod");
+            let cfg = Config::load().expect("env prod overrides yaml dev");
+            assert_eq!(cfg.environment, super::super::Environment::Prod);
+            assert!(cfg.environment_explicit);
+            assert!(!cfg.allows_explicit_local_dev_access());
+            Ok(())
+        });
+
+        // Blank YAML environment refuses startup.
+        Jail::expect_with(|jail| {
+            jail.clear_env();
+            jail.create_file("config.yaml", "environment: \"   \"\n")?;
+            assert!(
+                Config::load().is_err(),
+                "blank YAML environment must fail Config::load()"
+            );
+            Ok(())
+        });
+
+        // Blank or unknown STOA_ENVIRONMENT refuses startup.
+        for bad in ["", "   ", "mordor"] {
+            Jail::expect_with(|jail| {
+                jail.clear_env();
+                jail.set_env("STOA_ENVIRONMENT", bad);
+                assert!(
+                    Config::load().is_err(),
+                    "STOA_ENVIRONMENT={bad:?} must fail Config::load()"
+                );
+                Ok(())
+            });
+        }
+    }
+
+    #[test]
+    #[allow(clippy::result_large_err)]
+    fn environment_load_preserves_case_variant_and_quoted_env_overrides() {
+        use figment::Jail;
+
+        // Case-variant env override takes precedence over explicit YAML dev.
+        Jail::expect_with(|jail| {
+            jail.clear_env();
+            jail.create_file("config.yaml", "environment: dev\n")?;
+            jail.set_env("STOA_environment", "staging");
+            let cfg = Config::load().expect("case-variant staging override");
+            assert_eq!(cfg.environment, super::super::Environment::Staging);
+            assert!(cfg.environment_explicit);
+            assert!(!cfg.allows_explicit_local_dev_access());
+            Ok(())
+        });
+
+        // Case-variant unknown environment value fails Config::load().
+        Jail::expect_with(|jail| {
+            jail.clear_env();
+            jail.set_env("STOA_environment", "mordor");
+            assert!(
+                Config::load().is_err(),
+                "case-variant unknown environment must fail Config::load()"
+            );
+            Ok(())
+        });
+
+        // Figment-parsed quoted env values continue to work as overrides.
+        Jail::expect_with(|jail| {
+            jail.clear_env();
+            jail.create_file("config.yaml", "environment: dev\n")?;
+            jail.set_env("STOA_ENVIRONMENT", "\"staging\"");
+            let cfg = Config::load().expect("quoted staging override");
+            assert_eq!(cfg.environment, super::super::Environment::Staging);
+            assert!(cfg.environment_explicit);
+            assert!(!cfg.allows_explicit_local_dev_access());
+            Ok(())
+        });
+    }
+
+    #[test]
+    #[allow(clippy::result_large_err)]
+    fn environment_load_rejects_numeric_indexes_in_env_and_yaml() {
+        use figment::Jail;
+
+        // Numeric env values fail alone (no enum index deserialization).
+        for bad in ["0", "1", "2", "\"0\""] {
+            Jail::expect_with(|jail| {
+                jail.clear_env();
+                jail.set_env("STOA_ENVIRONMENT", bad);
+                assert!(
+                    Config::load().is_err(),
+                    "STOA_ENVIRONMENT={bad} must fail Config::load()"
+                );
+                Ok(())
+            });
+        }
+
+        // Numeric env override over explicit YAML staging/prod fails closed.
+        for yaml_env in ["staging", "prod"] {
+            Jail::expect_with(|jail| {
+                jail.clear_env();
+                jail.create_file("config.yaml", &format!("environment: {yaml_env}\n"))?;
+                jail.set_env("STOA_ENVIRONMENT", "0");
+                assert!(
+                    Config::load().is_err(),
+                    "STOA_ENVIRONMENT=0 over YAML {yaml_env} must fail Config::load()"
+                );
+                Ok(())
+            });
+        }
+
+        // Numeric YAML environment fails Config::load().
+        for yaml_val in ["0", "1", "2"] {
+            Jail::expect_with(|jail| {
+                jail.clear_env();
+                jail.create_file("config.yaml", &format!("environment: {yaml_val}\n"))?;
+                assert!(
+                    Config::load().is_err(),
+                    "YAML environment: {yaml_val} must fail Config::load()"
+                );
+                Ok(())
+            });
+        }
+
+        // Literal dev / staging / prod continue to load cleanly.
+        for (label, expected, allows_local) in [
+            ("dev", super::super::Environment::Dev, true),
+            ("staging", super::super::Environment::Staging, false),
+            ("prod", super::super::Environment::Prod, false),
+        ] {
+            Jail::expect_with(|jail| {
+                jail.clear_env();
+                jail.set_env("STOA_ENVIRONMENT", label);
+                let cfg = Config::load().expect("literal environment load");
+                assert_eq!(cfg.environment, expected);
+                assert!(cfg.environment_explicit);
+                assert_eq!(cfg.allows_explicit_local_dev_access(), allows_local);
+                Ok(())
+            });
+        }
     }
 }

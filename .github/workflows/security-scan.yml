@@ -342,6 +342,161 @@ jobs:
           fi
 
   # ==========================================================================
+  # 6a. Secret Guard (local hook rules on the commit range)
+  # ==========================================================================
+  # Runs scripts/ci/precommit_secrets.py --range on the commits of the event.
+  # The scanner always comes from the protected base revision (pull request
+  # base, merge group base, or the revision a branch pointed to before a push),
+  # never from the revision under test: it is read as git data from the fetched
+  # history into a temporary directory outside the checkout, and no file of the
+  # candidate checkout is executed. A base revision that is not in that history,
+  # or whose scanner has no range mode, is an error; there is no fallback to
+  # the candidate scanner.
+  # Events without a commit range (schedule, manual run, branch creation or
+  # deletion) skip the checkout and end with an explicit successful no-op.
+  secret-guard:
+    name: Secret Guard (Hook Rules)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      # Decided from event fields alone, before any checkout.
+      - name: Select commit range
+        id: range
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          MG_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          MG_HEAD_SHA: ${{ github.event.merge_group.head_sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+          PUSH_AFTER_SHA: ${{ github.event.after }}
+          PUSH_CREATED: ${{ github.event.created }}
+          PUSH_DELETED: ${{ github.event.deleted }}
+        run: |
+          set -euo pipefail
+          full_id='^([0-9a-f]{40}|[0-9a-f]{64})$'
+          no_id='^0+$'
+
+          # scan BASE HEAD MODE: a range is selected only between two full commit ids.
+          scan() {
+            local id
+            for id in "$1" "$2"; do
+              if [[ ! "$id" =~ $full_id || "$id" =~ $no_id ]]; then
+                echo "::error::Secret guard: the event does not provide two full commit ids"
+                exit 1
+              fi
+            done
+            printf 'scan=true\nbase=%s\nhead=%s\nmode=%s\n' "$1" "$2" "$3" >> "$GITHUB_OUTPUT"
+          }
+
+          skip() {
+            echo "$1"
+            echo "scan=false" >> "$GITHUB_OUTPUT"
+          }
+
+          case "$EVENT_NAME" in
+            pull_request)
+              scan "$PR_BASE_SHA" "$PR_HEAD_SHA" merge-base
+              ;;
+            merge_group)
+              scan "$MG_BASE_SHA" "$MG_HEAD_SHA" merge-base
+              ;;
+            push)
+              if [[ "$PUSH_DELETED" == "true" || "$PUSH_AFTER_SHA" =~ $no_id ]]; then
+                # Branch deletion: the ref has no commit left to scan.
+                skip "::notice::Secret guard: branch deletion, no commit to scan"
+              elif [[ "$PUSH_CREATED" == "true" || "$PUSH_BEFORE_SHA" =~ $no_id ]]; then
+                # Branch creation: there is no prior revision to compare with, and so no
+                # protected base revision to take the scanner from. Commits reach a
+                # protected branch through pull_request or merge_group runs, which scan
+                # their own range, and the Gitleaks job scans the pushed tree.
+                skip "::notice::Secret guard: branch creation, no prior revision to compare with"
+              else
+                # The branch may have moved backwards: compare with the previous revision
+                # itself (--direct), and accept a push that adds no commit (--allow-empty).
+                scan "$PUSH_BEFORE_SHA" "$PUSH_AFTER_SHA" direct
+              fi
+              ;;
+            schedule|workflow_dispatch)
+              skip "Secret guard: this event has no commit range, nothing to scan"
+              ;;
+            *)
+              echo "::error::Secret guard: unsupported event"
+              exit 1
+              ;;
+          esac
+
+      - name: Checkout candidate revision
+        if: steps.range.outputs.scan == 'true'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          path: candidate
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Run secret guard on commit range
+        if: steps.range.outputs.scan == 'true'
+        shell: bash
+        # The git commands of this step and of the scanner act on the repository of the
+        # current directory.
+        working-directory: candidate
+        env:
+          BASE_SHA: ${{ steps.range.outputs.base }}
+          HEAD_SHA: ${{ steps.range.outputs.head }}
+          SCAN_MODE: ${{ steps.range.outputs.mode }}
+        run: |
+          set -euo pipefail
+
+          fail() {
+            echo "::error::Secret guard: $1"
+            exit 1
+          }
+
+          # The scanner is the blob of the protected base revision, read from the fetched
+          # history and written outside the checkout. Git output is never shown.
+          git rev-parse --verify --quiet "${BASE_SHA}^{commit}" >/dev/null 2>&1 \
+            || fail "the protected base revision does not resolve to a commit"
+          scanner_dir="$(mktemp -d "${RUNNER_TEMP:-/tmp}/secret-guard.XXXXXX" 2>/dev/null)" \
+            || fail "unable to create a temporary directory"
+          trap 'rm -rf -- "$scanner_dir"' EXIT
+          scanner="$scanner_dir/precommit_secrets.py"
+          git show "${BASE_SHA}:scripts/ci/precommit_secrets.py" >"$scanner" 2>/dev/null \
+            || fail "unable to read the scanner from the protected base revision"
+          # No fallback: a base revision without the range mode marker cannot scan this event.
+          grep -qxF -- 'RANGE_MODE_SUPPORTED = True' "$scanner" 2>/dev/null \
+            || fail "the scanner of the protected base revision has no range mode"
+
+          # Isolated mode (-I) and no bytecode (-B): nothing is loaded from the candidate.
+          case "$SCAN_MODE" in
+            merge-base)
+              python3 -I -B "$scanner" --range "$BASE_SHA" "$HEAD_SHA"
+              ;;
+            direct)
+              python3 -I -B "$scanner" --range "$BASE_SHA" "$HEAD_SHA" --direct --allow-empty
+              ;;
+            *)
+              fail "unknown scan mode"
+              ;;
+          esac
+
+      # Explicit success keeps "Scan results" green; a missing decision fails closed.
+      - name: Confirm there is no commit range to scan
+        if: steps.range.outputs.scan != 'true'
+        shell: bash
+        env:
+          SCAN: ${{ steps.range.outputs.scan }}
+        run: |
+          set -euo pipefail
+          if [[ "$SCAN" != "false" ]]; then
+            echo "::error::Secret guard: the commit range selection gave no decision"
+            exit 1
+          fi
+          echo "Secret guard: no checkout and no scan for this event"
+
+  # ==========================================================================
   # 6b. OpSec Scan (infrastructure IPs, financial data, client refs)
   # ==========================================================================
   opsec-scan:
@@ -475,7 +630,7 @@ jobs:
   scan-summary:
     name: Scan results
     if: always()
-    needs: [scan-changes, dependency-scan, container-scan, sast-rust, sast-python, sast-javascript]
+    needs: [scan-changes, secret-guard, dependency-scan, container-scan, sast-rust, sast-python, sast-javascript]
     runs-on: ubuntu-latest
     steps:
       - name: Require selected scans or accept ignored paths
@@ -484,6 +639,7 @@ jobs:
         run: |
           echo "$RESULTS" | jq -e '
             .["scan-changes"].result == "success" and
+            .["secret-guard"].result == "success" and
             (. as $results | [
               ["dependency-scan", "container-scan"],
               ["container-scan", "container-scan"],

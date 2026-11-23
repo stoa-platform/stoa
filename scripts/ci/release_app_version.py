@@ -13,7 +13,13 @@ from pathlib import Path
 
 VERSIONED_SERVICES = ("control-plane-api", "control-plane-ui", "portal")
 DEFAULT_DEV_VERSION = "0.0.0-dev"
-_SEMVER = re.compile(r"^\d+\.\d+\.\d+(?:[0-9A-Za-z.-]*)?$")
+# Official SemVer 2.0.0 grammar (ASCII digits/letters, anchored for fullmatch).
+_SEMVER = re.compile(
+    r"^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
+    r"(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)"
+    r"(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?"
+    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
+)
 
 
 def version_from_tag(tag: str, service: str) -> str | None:

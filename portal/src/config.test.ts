@@ -94,17 +94,17 @@ describe('vite resolveAppVersion', () => {
 
   it('skips blank env values in the Vitest branch and falls back to 0.0.0-dev', () => {
     expect(resolveAppVersion('test', { env: { VITEST: 'true', VITE_APP_VERSION: '   ' } })).toBe(
-      '0.0.0-dev',
+      '0.0.0-dev'
     );
     expect(
       resolveAppVersion('test', {
         env: { VITEST: 'true', VITE_APP_VERSION: '   ', APP_VERSION: ' 2.1.0 ' },
-      }),
+      })
     ).toBe('2.1.0');
     expect(
       resolveAppVersion('test', {
         env: { VITEST: 'true', VITE_APP_VERSION: '', APP_VERSION: '   ' },
-      }),
+      })
     ).toBe('0.0.0-dev');
   });
 
@@ -115,7 +115,7 @@ describe('vite resolveAppVersion', () => {
         resolveAppVersion('production', {
           env: { VITE_APP_VERSION: '   ', APP_VERSION: '  ' },
           pkgDir,
-        }),
+        })
       ).toBe('1.4.0');
       expect(mockLoadEnv).toHaveBeenLastCalledWith('production', pkgDir, 'VITE_');
 
@@ -124,7 +124,7 @@ describe('vite resolveAppVersion', () => {
         resolveAppVersion('production', {
           env: { VITE_APP_VERSION: '   ', APP_VERSION: ' 2.4.0 ' },
           pkgDir,
-        }),
+        })
       ).toBe('2.4.0');
 
       mockLoadEnv.mockReturnValueOnce({ VITE_APP_VERSION: ' 3.1.0 ' });
@@ -132,7 +132,7 @@ describe('vite resolveAppVersion', () => {
         resolveAppVersion('production', {
           env: { VITE_APP_VERSION: '   ' },
           pkgDir,
-        }),
+        })
       ).toBe('3.1.0');
     });
   });
@@ -144,7 +144,7 @@ describe('vite resolveAppVersion', () => {
           resolveAppVersion('production', {
             env: { VITE_APP_VERSION: '', APP_VERSION: '   ' },
             pkgDir,
-          }),
+          })
         ).toBe('0.0.0-dev');
       });
     }

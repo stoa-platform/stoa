@@ -3,8 +3,41 @@ import react from '@vitejs/plugin-react';
 import fs from 'fs';
 import path from 'path';
 
+const VERSION_ENV_KEYS = ['VITE_APP_VERSION', 'APP_VERSION'] as const;
+
 function nonEmptyVersion(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function loadEnvWithoutBlankOverrides(
+  mode: string,
+  pkgDir: string,
+  processEnv: Record<string, string | undefined>,
+): Record<string, string> {
+  const saved: Partial<Record<(typeof VERSION_ENV_KEYS)[number], string | undefined>> = {};
+  for (const key of VERSION_ENV_KEYS) {
+    saved[key] = Object.prototype.hasOwnProperty.call(process.env, key)
+      ? process.env[key]
+      : undefined;
+    const cleaned = nonEmptyVersion(processEnv[key]);
+    if (cleaned) {
+      process.env[key] = cleaned;
+    } else {
+      delete process.env[key];
+    }
+  }
+  try {
+    return loadEnv(mode, pkgDir, 'VITE_');
+  } finally {
+    for (const key of VERSION_ENV_KEYS) {
+      const prev = saved[key];
+      if (prev === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = prev;
+      }
+    }
+  }
 }
 
 export interface ResolveAppVersionOptions {
@@ -25,11 +58,11 @@ export function resolveAppVersion(
     );
   }
   const pkgDir = options.pkgDir ?? __dirname;
-  const env = loadEnv(mode, pkgDir, 'VITE_');
+  const env = loadEnvWithoutBlankOverrides(mode, pkgDir, processEnv);
   const fromEnv =
     nonEmptyVersion(processEnv.VITE_APP_VERSION) ||
-    nonEmptyVersion(env.VITE_APP_VERSION) ||
-    nonEmptyVersion(processEnv.APP_VERSION);
+    nonEmptyVersion(processEnv.APP_VERSION) ||
+    nonEmptyVersion(env.VITE_APP_VERSION);
   if (fromEnv) {
     return fromEnv;
   }

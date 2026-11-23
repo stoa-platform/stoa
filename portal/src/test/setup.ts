@@ -6,50 +6,52 @@
 import '@testing-library/jest-dom';
 import { beforeEach, afterEach } from 'vitest';
 
-// Mock window.matchMedia
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  value: (query: string) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: () => {},
-    removeListener: () => {},
-    addEventListener: () => {},
-    removeEventListener: () => {},
-    dispatchEvent: () => false,
-  }),
-});
+if (typeof window !== 'undefined') {
+  // Mock window.matchMedia
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  });
 
-// Mock IntersectionObserver
-class MockIntersectionObserver {
-  observe = () => null;
-  disconnect = () => null;
-  unobserve = () => null;
+  // Mock IntersectionObserver
+  class MockIntersectionObserver {
+    observe = () => null;
+    disconnect = () => null;
+    unobserve = () => null;
+  }
+
+  Object.defineProperty(window, 'IntersectionObserver', {
+    writable: true,
+    value: MockIntersectionObserver,
+  });
+
+  // Mock ResizeObserver
+  class MockResizeObserver {
+    observe = () => null;
+    disconnect = () => null;
+    unobserve = () => null;
+  }
+
+  Object.defineProperty(window, 'ResizeObserver', {
+    writable: true,
+    value: MockResizeObserver,
+  });
+
+  // Mock scrollTo
+  Object.defineProperty(window, 'scrollTo', {
+    writable: true,
+    value: () => {},
+  });
 }
-
-Object.defineProperty(window, 'IntersectionObserver', {
-  writable: true,
-  value: MockIntersectionObserver,
-});
-
-// Mock ResizeObserver
-class MockResizeObserver {
-  observe = () => null;
-  disconnect = () => null;
-  unobserve = () => null;
-}
-
-Object.defineProperty(window, 'ResizeObserver', {
-  writable: true,
-  value: MockResizeObserver,
-});
-
-// Mock scrollTo
-Object.defineProperty(window, 'scrollTo', {
-  writable: true,
-  value: () => {},
-});
 
 // Reset mocks between tests
 beforeEach(() => {
@@ -61,7 +63,7 @@ afterEach(() => {
 });
 
 // jsdom models neither the native top layer nor inertness; browser checks remain required.
-if (!HTMLDialogElement.prototype.showModal) {
+if (typeof HTMLDialogElement !== 'undefined' && !HTMLDialogElement.prototype.showModal) {
   HTMLDialogElement.prototype.showModal = function () {
     this.setAttribute('open', '');
   };

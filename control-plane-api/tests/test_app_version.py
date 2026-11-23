@@ -103,9 +103,54 @@ def test_default_app_version_falls_back_to_dev_for_blank_pyproject(
     assert _default_app_version() == "0.0.0-dev"
 
 
-def test_settings_blank_version_falls_through_to_app_version(monkeypatch):
-    _settings_env(monkeypatch, VERSION="   ", APP_VERSION=" 8.8.8 ")
+@pytest.mark.parametrize("blank_version", ["", "   \t\n"])
+def test_settings_blank_version_falls_through_to_app_version(monkeypatch, blank_version):
+    _settings_env(monkeypatch, VERSION=blank_version, APP_VERSION=" 8.8.8 ")
     assert Settings().VERSION == "8.8.8"
+
+
+@pytest.mark.parametrize("blank_version", ["", "   \t "])
+def test_settings_blank_env_falls_through_to_dotenv_before_merge(
+    monkeypatch, tmp_path, blank_version
+):
+    env_file = tmp_path / ".env"
+    env_file.write_text("VERSION= 2.5.0 \n", encoding="utf-8")
+    _settings_env(monkeypatch, VERSION=blank_version, APP_VERSION="  ")
+    assert Settings(_env_file=str(env_file)).VERSION == "2.5.0"
+
+
+def test_settings_blank_dotenv_version_falls_through_to_dotenv_app_version(
+    monkeypatch, tmp_path
+):
+    env_file = tmp_path / ".env"
+    env_file.write_text('VERSION="   "\nAPP_VERSION=" 2.6.0 "\n', encoding="utf-8")
+    _settings_env(monkeypatch, VERSION="")
+    assert Settings(_env_file=str(env_file)).VERSION == "2.6.0"
+
+
+def test_settings_env_app_version_beats_dotenv_version_when_env_version_is_blank(
+    monkeypatch, tmp_path
+):
+    env_file = tmp_path / ".env"
+    env_file.write_text("VERSION=2.5.0\n", encoding="utf-8")
+    _settings_env(monkeypatch, VERSION="   ", APP_VERSION=" 8.8.8 ")
+    assert Settings(_env_file=str(env_file)).VERSION == "8.8.8"
+
+
+def test_settings_blank_init_kwarg_falls_through_to_env_source(monkeypatch):
+    _settings_env(monkeypatch, VERSION="9.9.9")
+    assert Settings(VERSION="   ").VERSION == "9.9.9"
+
+
+def test_settings_blank_secret_version_falls_through_to_secret_app_version(
+    monkeypatch, tmp_path
+):
+    secrets_dir = tmp_path / "secrets"
+    secrets_dir.mkdir()
+    (secrets_dir / "VERSION").write_text("   \n", encoding="utf-8")
+    (secrets_dir / "APP_VERSION").write_text(" 3.4.5 \n", encoding="utf-8")
+    _settings_env(monkeypatch, VERSION="", APP_VERSION="   ")
+    assert Settings(_secrets_dir=str(secrets_dir)).VERSION == "3.4.5"
 
 
 def test_settings_trims_version_override(monkeypatch):

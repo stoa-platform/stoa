@@ -18,6 +18,9 @@ import release_app_version as rav  # noqa: E402
 
 def test_version_from_component_tags():
     assert rav.version_from_tag("portal-v1.4.0", "portal") == "1.4.0"
+    assert rav.version_from_tag("portal-v1.4.0-rc.1", "portal") == "1.4.0-rc.1"
+    assert rav.version_from_tag("portal-v9.8.7+build.1", "portal") == "9.8.7+build.1"
+    assert rav.version_from_tag("portal-v2.4.0-rc.1+build.1", "portal") == "2.4.0-rc.1+build.1"
     assert rav.version_from_tag("control-plane-ui-v1.13.0", "control-plane-ui") == "1.13.0"
     assert rav.version_from_tag("control-plane-api-v1.15.0", "control-plane-api") == "1.15.0"
     assert rav.version_from_tag("stoa-gateway-v0.9.27", "stoa-gateway") == "0.9.27"
@@ -28,20 +31,44 @@ def test_version_from_tag_rejects_mismatched_or_invalid_tags():
     assert rav.version_from_tag("portal-v1.4.0", "control-plane-api") is None
     assert rav.version_from_tag("v1.4.0", "portal") is None
     assert rav.version_from_tag("portal-v", "portal") is None
+    assert rav.version_from_tag("portal-v2.4", "portal") is None
     assert rav.version_from_tag("main", "portal") is None
     assert rav.version_from_tag("portal-vnot-a-version", "portal") is None
+    for bad in (
+        "portal-v2.4.0garbage",
+        "portal-v2.4.0-",
+        "portal-v2.4.0+",
+        "portal-v02.4.0",
+        "portal-v2.4.0-01",
+        "portal-v2.4.0-rc.",
+        "portal-v2.4.0+build.",
+        "portal-v2.4.0\n",
+    ):
+        assert rav.version_from_tag(bad, "portal") is None, bad
 
 
 def test_version_from_platform_tags():
     assert rav.version_from_platform_tag("v2.4.0") == "2.4.0"
     assert rav.version_from_platform_tag("v2.4.0-rc.1") == "2.4.0-rc.1"
+    assert rav.version_from_platform_tag("v2.4.0+build.1") == "2.4.0+build.1"
+    assert rav.version_from_platform_tag("v2.4.0-rc.1+build.1") == "2.4.0-rc.1+build.1"
     for bad in (
         "",
         "v",
         "v2.4",
         "vnot-a-version",
-        "v2.4.0+build.1",
+        "v2.4.0garbage",
+        "v2.4.0-",
+        "v2.4.0+",
+        "v02.4.0",
+        "v2.4.0-01",
+        "v2.4.0-rc.",
+        "v2.4.0+build.",
+        "v2.4.0\n",
         "2.4.0",
+        "2.4.0garbage",
+        "2.4.0-",
+        "2.4.0+",
         "portal-v1.4.0",
         "control-plane-ui-v1.13.0",
         "main",
@@ -103,7 +130,40 @@ def test_version_from_source_api_missing_or_blank_falls_back_to_dev(
     ) == ("0.0.0-dev", True)
 
 
-@pytest.mark.parametrize("bad_version", ["not-a-version", "1.2", "1.2.3+build.1", 123])
+@pytest.mark.parametrize(
+    "valid_version",
+    ["2.4.0", "2.4.0-rc.1", "2.4.0+build.1", "2.4.0-rc.1+build.1"],
+)
+def test_version_from_source_accepts_valid_semver(tmp_path, valid_version):
+    portal_pkg = tmp_path / "portal" / "package.json"
+    portal_pkg.parent.mkdir(parents=True)
+    portal_pkg.write_text(json.dumps({"version": valid_version}), encoding="utf-8")
+    assert rav.version_from_source(tmp_path, "portal") == valid_version
+
+    api_pyproject = tmp_path / "control-plane-api" / "pyproject.toml"
+    api_pyproject.parent.mkdir(parents=True)
+    api_pyproject.write_text(
+        f"[project]\nversion = {json.dumps(valid_version)}\n", encoding="utf-8"
+    )
+    assert rav.version_from_source(tmp_path, "control-plane-api") == valid_version
+
+
+@pytest.mark.parametrize(
+    "bad_version",
+    [
+        "not-a-version",
+        "1.2",
+        "2.4",
+        "2.4.0garbage",
+        "2.4.0-",
+        "2.4.0+",
+        "02.4.0",
+        "2.4.0-01",
+        "2.4.0-rc.",
+        "2.4.0+build.",
+        123,
+    ],
+)
 def test_version_from_source_rejects_present_invalid_version(tmp_path, bad_version):
     portal_pkg = tmp_path / "portal" / "package.json"
     portal_pkg.parent.mkdir(parents=True)
@@ -130,9 +190,29 @@ def test_resolve_prefers_matching_tag_over_version_file():
     assert prerelease == "9.9.9-rc.1"
     assert verify_pre is True
 
+    build_meta, verify_build = rav.resolve_app_version(
+        "portal", "portal-v9.8.7+build.1", ROOT, event_name="release"
+    )
+    assert build_meta == "9.8.7+build.1"
+    assert verify_build is True
+
+    pre_build, verify_pre_build = rav.resolve_app_version(
+        "portal", "portal-v9.8.7-rc.1+build.1", ROOT, event_name="release"
+    )
+    assert pre_build == "9.8.7-rc.1+build.1"
+    assert verify_pre_build is True
+
 
 @pytest.mark.parametrize("service", ["portal", "control-plane-ui", "control-plane-api"])
-@pytest.mark.parametrize("tag,expected", [("v2.4.0", "2.4.0"), ("v2.4.0-rc.1", "2.4.0-rc.1")])
+@pytest.mark.parametrize(
+    "tag,expected",
+    [
+        ("v2.4.0", "2.4.0"),
+        ("v2.4.0-rc.1", "2.4.0-rc.1"),
+        ("v2.4.0+build.1", "2.4.0+build.1"),
+        ("v2.4.0-rc.1+build.1", "2.4.0-rc.1+build.1"),
+    ],
+)
 def test_resolve_release_injects_platform_tag_for_versioned_services(
     service, tag, expected, tmp_path
 ):
@@ -171,10 +251,15 @@ def test_resolve_release_injects_platform_tag_for_versioned_services(
         assert "VITE_APP_VERSION=" not in text
 
 
-@pytest.mark.parametrize("bad_tag", ["portal-v9.8.7+build.1", "portal-v9.8", "portal-v"])
-def test_resolve_rejects_malformed_component_release_tags(bad_tag, tmp_path):
+@pytest.mark.parametrize("service", ["portal", "control-plane-ui", "control-plane-api"])
+@pytest.mark.parametrize(
+    "suffix",
+    ["2.4.0garbage", "2.4.0-", "2.4.0+", "9.8", "", "02.4.0", "2.4.0-01"],
+)
+def test_resolve_rejects_malformed_component_release_tags(service, suffix, tmp_path):
+    bad_tag = f"{service}-v{suffix}"
     with pytest.raises(ValueError, match="Invalid component release tag"):
-        rav.resolve_app_version("portal", bad_tag, ROOT, event_name="release")
+        rav.resolve_app_version(service, bad_tag, ROOT, event_name="release")
 
     output = tmp_path / "output"
     result = subprocess.run(
@@ -183,7 +268,7 @@ def test_resolve_rejects_malformed_component_release_tags(bad_tag, tmp_path):
             "-B",
             str(SCRIPT),
             "--service",
-            "portal",
+            service,
             "--tag",
             bad_tag,
             "--event-name",
@@ -202,7 +287,19 @@ def test_resolve_rejects_malformed_component_release_tags(bad_tag, tmp_path):
 
 
 @pytest.mark.parametrize("service", ["portal", "control-plane-ui", "control-plane-api"])
-@pytest.mark.parametrize("bad_tag", ["v", "v2.4", "vnot-a-version", "v2.4.0+build.1"])
+@pytest.mark.parametrize(
+    "bad_tag",
+    [
+        "v",
+        "v2.4",
+        "vnot-a-version",
+        "v2.4.0garbage",
+        "v2.4.0-",
+        "v2.4.0+",
+        "v02.4.0",
+        "v2.4.0-01",
+    ],
+)
 def test_resolve_rejects_malformed_platform_release_tags(service, bad_tag, tmp_path):
     with pytest.raises(ValueError, match="Invalid platform release tag"):
         rav.resolve_app_version(service, bad_tag, ROOT, event_name="release")
@@ -256,10 +353,16 @@ def test_resolve_release_other_component_tag_uses_source_or_dev_fallback(tmp_pat
         "portal-v9.9.9",
         "portal-v9.8",
         "portal-v9.8.7+build.1",
+        "portal-v2.4.0garbage",
+        "portal-v2.4.0-",
+        "portal-v2.4.0+",
         "v2.4.0",
         "v2.4",
         "v",
         "vnot-a-version",
+        "v2.4.0garbage",
+        "v2.4.0-",
+        "v2.4.0+",
     ],
 )
 def test_resolve_non_release_events_ignore_component_and_platform_tags(event_name, tag):
@@ -277,8 +380,16 @@ def test_resolve_falls_back_to_version_file_when_tag_is_not_component_scoped():
 def test_resolve_skips_unversioned_services():
     assert rav.resolve_app_version("keycloak", "keycloak-v1.0.0", ROOT) == ("", False)
     assert rav.resolve_app_version("keycloak", "v2.4.0", ROOT, event_name="release") == ("", False)
+    assert rav.resolve_app_version("keycloak", "v2.4.0garbage", ROOT, event_name="release") == (
+        "",
+        False,
+    )
     assert rav.resolve_app_version("stoa-gateway", "stoa-gateway-v0.9.27", ROOT) == ("", False)
     assert rav.resolve_app_version("stoa-gateway", "v2.4.0", ROOT, event_name="release") == (
+        "",
+        False,
+    )
+    assert rav.resolve_app_version("stoa-gateway", "v2.4.0garbage", ROOT, event_name="release") == (
         "",
         False,
     )

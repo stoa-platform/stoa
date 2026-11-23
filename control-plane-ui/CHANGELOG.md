@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.13.1](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.13.0...control-plane-ui-v1.13.1) (2026-11-23)
+
+
+### Bug Fixes
+
+* inject the release tag version into component images ([#3216](https://github.com/stoa-platform/stoa/issues/3216)) ([4e91528](https://github.com/stoa-platform/stoa/commit/4e91528d49285907d8a3d1d6ee73d6905b107c25))
+
 ## [1.13.0](https://github.com/stoa-platform/stoa/compare/control-plane-ui-v1.12.0...control-plane-ui-v1.13.0) (2026-11-22)
 
 

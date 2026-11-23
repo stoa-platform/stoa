@@ -17,8 +17,13 @@ import verify_image_version as viv  # noqa: E402
 
 
 class FakeRunner:
-    def __init__(self, responses: list[tuple[tuple[str, ...], SimpleNamespace]]):
+    def __init__(
+        self,
+        responses: list[tuple[tuple[str, ...], SimpleNamespace]],
+        cp_handler=None,
+    ):
         self.responses = responses
+        self.cp_handler = cp_handler
         self.calls: list[list[str]] = []
 
     def __call__(self, argv, **kwargs):
@@ -27,6 +32,8 @@ class FakeRunner:
         for expected, result in self.responses:
             if key == expected:
                 return result
+        if self.cp_handler is not None and argv[:2] == ["docker", "cp"] and len(argv) == 4:
+            return self.cp_handler(argv[2], Path(argv[3]))
         # allow docker rm -f to be ignored
         if argv[:3] == ["docker", "rm", "-f"]:
             return SimpleNamespace(returncode=0, stdout="", stderr="")
@@ -35,6 +42,10 @@ class FakeRunner:
 
 def _ok(stdout=""):
     return SimpleNamespace(returncode=0, stdout=stdout, stderr="")
+
+
+def _fail(stderr="", returncode=1):
+    return SimpleNamespace(returncode=returncode, stdout="", stderr=stderr)
 
 
 def test_first_image_tag_and_health_parser():
@@ -211,8 +222,213 @@ def test_verify_api_health_mismatch():
 
 def test_verify_skips_unversioned_services():
     runner = FakeRunner([])
-    viv.verify_image_version("keycloak", "ignored", "img:tag", runner=runner)
+    viv.verify_image_version("unknown-service", "ignored", "img:tag", runner=runner)
     assert runner.calls == []
+
+
+def test_parse_gateway_discovery_version():
+    payload = json.dumps(
+        {
+            "server": {
+                "name": "STOA Gateway",
+                "version": "0.9.27",
+                "protocolVersion": "2025-11-25",
+            },
+            "endpoints": {"capabilities": "/mcp/capabilities"},
+        }
+    )
+    assert viv.parse_gateway_discovery_version(payload) == "0.9.27"
+    for bad in (
+        "{}",
+        '{"server": null}',
+        '{"server": {}}',
+        '{"server": {"version": 123}}',
+        '{"server": {"version": "   "}}',
+        "[]",
+    ):
+        with pytest.raises(ValueError):
+            viv.parse_gateway_discovery_version(bad)
+
+
+def _gateway_run_command(image_ref="img:tag"):
+    return (
+        "docker",
+        "run",
+        "-d",
+        "--name",
+        "stoa-version-check-gateway",
+        "-p",
+        "127.0.0.1::8080",
+        "-e",
+        "STOA_PORT=8080",
+        "-e",
+        "STOA_GATEWAY_MODE=edge-mcp",
+        "-e",
+        "STOA_ENVIRONMENT=dev",
+        "-e",
+        "STOA_AUTO_REGISTER=false",
+        "-e",
+        "STOA_OTEL_ENABLED=false",
+        "-e",
+        "STOA_KAFKA_ENABLED=false",
+        "-e",
+        "STOA_K8S_ENABLED=false",
+        "-e",
+        "STOA_ZOMBIE_DETECTION_ENABLED=false",
+        "-e",
+        "STOA_NATIVE_TOOLS_ENABLED=false",
+        image_ref,
+    )
+
+
+def test_verify_gateway_discovery_success():
+    inspect_payload = json.dumps([
+        {"NetworkSettings": {"Ports": {"8080/tcp": [{"HostIp": "127.0.0.1", "HostPort": "34568"}]}}}
+    ])
+    runner = FakeRunner([
+        (_gateway_run_command(), _ok("cid\n")),
+        (("docker", "inspect", "stoa-version-check-gateway"), _ok(inspect_payload)),
+    ])
+
+    def fake_wait(url, timeout_seconds, **kwargs):
+        assert url == "http://127.0.0.1:34568/mcp"
+        return '{"server": {"name": "STOA Gateway", "version": "0.9.27", "protocolVersion": "2025-11-25"}}'
+
+    viv.verify_image_version("stoa-gateway", "0.9.27", "img:tag", runner=runner, wait=fake_wait)
+    assert ["docker", "rm", "-f", "stoa-version-check-gateway"] in runner.calls
+
+
+def test_verify_gateway_discovery_mismatch():
+    inspect_payload = json.dumps([
+        {"NetworkSettings": {"Ports": {"8080/tcp": [{"HostIp": "127.0.0.1", "HostPort": "34568"}]}}}
+    ])
+    runner = FakeRunner([
+        (_gateway_run_command(), _ok("cid\n")),
+        (("docker", "inspect", "stoa-version-check-gateway"), _ok(inspect_payload)),
+    ])
+
+    def fake_wait(url, timeout_seconds, **kwargs):
+        assert url == "http://127.0.0.1:34568/mcp"
+        return '{"server": {"name": "STOA Gateway", "version": "0.9.26", "protocolVersion": "2025-11-25"}}'
+
+    with pytest.raises(viv.VersionMismatch, match="expected '0.9.27'"):
+        viv.verify_image_version("stoa-gateway", "0.9.27", "img:tag", runner=runner, wait=fake_wait)
+    assert ["docker", "rm", "-f", "stoa-version-check-gateway"] in runner.calls
+
+
+@pytest.mark.parametrize("version", ["2.4.0", "0.0.0-dev"])
+def test_verify_keycloak_baked_file_success(version):
+    def cp_handler(source, dest):
+        assert source == "stoa-version-check-keycloak:/opt/keycloak/stoa-version.txt"
+        dest.write_text(f"{version}\n", encoding="utf-8")
+        return _ok()
+
+    runner = FakeRunner(
+        [(("docker", "create", "--name", "stoa-version-check-keycloak", "img:tag"), _ok("cid\n"))],
+        cp_handler=cp_handler,
+    )
+    viv.verify_image_version("keycloak", version, "img:tag", runner=runner)
+    assert ["docker", "rm", "-f", "stoa-version-check-keycloak"] in runner.calls
+
+
+def test_verify_keycloak_baked_file_mismatch():
+    def cp_handler(source, dest):
+        assert source == "stoa-version-check-keycloak:/opt/keycloak/stoa-version.txt"
+        dest.write_text("0.0.0-dev\n", encoding="utf-8")
+        return _ok()
+
+    runner = FakeRunner(
+        [(("docker", "create", "--name", "stoa-version-check-keycloak", "img:tag"), _ok("cid\n"))],
+        cp_handler=cp_handler,
+    )
+    with pytest.raises(viv.VersionMismatch, match="expected '2.4.0'"):
+        viv.verify_image_version("keycloak", "2.4.0", "img:tag", runner=runner)
+    assert ["docker", "rm", "-f", "stoa-version-check-keycloak"] in runner.calls
+
+
+def test_verify_keycloak_baked_file_missing():
+    def cp_handler(source, dest):
+        assert source == "stoa-version-check-keycloak:/opt/keycloak/stoa-version.txt"
+        return _fail("Could not find the file /opt/keycloak/stoa-version.txt")
+
+    runner = FakeRunner(
+        [(("docker", "create", "--name", "stoa-version-check-keycloak", "img:tag"), _ok("cid\n"))],
+        cp_handler=cp_handler,
+    )
+    with pytest.raises(RuntimeError, match="copy /opt/keycloak/stoa-version.txt failed"):
+        viv.verify_image_version("keycloak", "2.4.0", "img:tag", runner=runner)
+    assert ["docker", "rm", "-f", "stoa-version-check-keycloak"] in runner.calls
+
+
+@pytest.mark.parametrize("contents", ["", "   \n\t "])
+def test_verify_keycloak_baked_file_empty(contents):
+    def cp_handler(source, dest):
+        assert source == "stoa-version-check-keycloak:/opt/keycloak/stoa-version.txt"
+        dest.write_text(contents, encoding="utf-8")
+        return _ok()
+
+    runner = FakeRunner(
+        [(("docker", "create", "--name", "stoa-version-check-keycloak", "img:tag"), _ok("cid\n"))],
+        cp_handler=cp_handler,
+    )
+    with pytest.raises(viv.VersionMismatch, match="/opt/keycloak/stoa-version.txt was empty"):
+        viv.verify_image_version("keycloak", "2.4.0", "img:tag", runner=runner)
+    assert ["docker", "rm", "-f", "stoa-version-check-keycloak"] in runner.calls
+
+
+def test_verify_keycloak_baked_file_rejects_non_regular_file():
+    def cp_handler(source, dest):
+        assert source == "stoa-version-check-keycloak:/opt/keycloak/stoa-version.txt"
+        dest.mkdir()
+        return _ok()
+
+    runner = FakeRunner(
+        [(("docker", "create", "--name", "stoa-version-check-keycloak", "img:tag"), _ok("cid\n"))],
+        cp_handler=cp_handler,
+    )
+    with pytest.raises(viv.VersionMismatch, match="is not a regular file"):
+        viv.verify_image_version("keycloak", "2.4.0", "img:tag", runner=runner)
+    assert ["docker", "rm", "-f", "stoa-version-check-keycloak"] in runner.calls
+
+
+def test_keycloak_dockerfile_bakes_and_normalizes_app_version(tmp_path):
+    text = (ROOT / "keycloak" / "Dockerfile").read_text(encoding="utf-8")
+    assert "ARG APP_VERSION=0.0.0-dev" in text
+    assert 'ENTRYPOINT ["/opt/keycloak/bin/kc.sh"]' in text
+    match = re.search(
+        r"^RUN (.*?) > /opt/keycloak/stoa-version\.txt$",
+        text,
+        flags=re.MULTILINE,
+    )
+    assert match is not None, "missing stoa-version.txt RUN step in keycloak/Dockerfile"
+    out_file = tmp_path / "stoa-version.txt"
+    shell_cmd = f"{match.group(1)} > {out_file}"
+    base_env = {"PATH": os.environ.get("PATH", "")}
+    cases = [
+        ({}, "0.0.0-dev\n"),
+        ({"APP_VERSION": ""}, "0.0.0-dev\n"),
+        ({"APP_VERSION": "   \t "}, "0.0.0-dev\n"),
+        ({"APP_VERSION": "2.4.0"}, "2.4.0\n"),
+        ({"APP_VERSION": "  2.4.0-rc.1+build.1  "}, "2.4.0-rc.1+build.1\n"),
+    ]
+    for extra_env, expected in cases:
+        result = subprocess.run(
+            ["/bin/sh", "-c", shell_cmd],
+            env={**base_env, **extra_env},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        assert out_file.read_text(encoding="utf-8") == expected
+
+
+def test_docker_publish_all_services_match_verified_services():
+    workflow = (ROOT / ".github" / "workflows" / "docker-publish.yml").read_text(encoding="utf-8")
+    match = re.search(r"ALL_SERVICES='(\[[^\n']+\])'", workflow)
+    assert match is not None
+    all_services = json.loads(match.group(1))
+    assert set(all_services) == set(viv.VERSIONED_SERVICES)
 
 def test_extract_meta_app_version():
     html = """<!doctype html><html><head>

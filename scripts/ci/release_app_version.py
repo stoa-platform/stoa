@@ -11,7 +11,21 @@ import sys
 import tomllib
 from pathlib import Path
 
-VERSIONED_SERVICES = ("control-plane-api", "control-plane-ui", "portal")
+VERSIONED_SERVICES = (
+    "control-plane-api",
+    "control-plane-ui",
+    "keycloak",
+    "portal",
+    "stoa-gateway",
+)
+# Services whose Dockerfiles consume APP_VERSION as a build-arg.
+# stoa-gateway compiles CARGO_PKG_VERSION from Cargo.toml into the binary.
+APP_VERSION_BUILD_ARG_SERVICES = (
+    "control-plane-api",
+    "control-plane-ui",
+    "keycloak",
+    "portal",
+)
 DEFAULT_DEV_VERSION = "0.0.0-dev"
 # Official SemVer 2.0.0 grammar (ASCII digits/letters, anchored for fullmatch).
 _SEMVER = re.compile(
@@ -67,6 +81,18 @@ def version_from_source(repo_root: Path, service: str) -> str:
         if not isinstance(data, dict):
             raise ValueError(f"Invalid manifest object in {path}")
         version = data.get("version")
+    elif service == "stoa-gateway":
+        path = repo_root / "stoa-gateway" / "Cargo.toml"
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+        package = data.get("package")
+        if package is None:
+            version = None
+        elif isinstance(package, dict):
+            version = package.get("version")
+        else:
+            raise ValueError(f"Invalid [package] section in {path}")
+    elif service == "keycloak":
+        return DEFAULT_DEV_VERSION
     else:
         raise ValueError(f"No version file mapping for service {service!r}")
     if version is None:
@@ -118,7 +144,7 @@ def resolve_app_version(
 
 def build_args_for(service: str, version: str) -> str:
     version = version.strip()
-    if service not in VERSIONED_SERVICES or not version:
+    if service not in APP_VERSION_BUILD_ARG_SERVICES or not version:
         return ""
     lines = [f"APP_VERSION={version}"]
     if service in ("control-plane-ui", "portal"):

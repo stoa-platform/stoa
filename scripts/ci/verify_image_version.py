@@ -9,16 +9,26 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Sequence
+from pathlib import Path
 
-VERSIONED_SERVICES = ("control-plane-api", "control-plane-ui", "portal")
+VERSIONED_SERVICES = (
+    "control-plane-api",
+    "control-plane-ui",
+    "keycloak",
+    "portal",
+    "stoa-gateway",
+)
 FRONTEND_HTML_ROOT = "/usr/share/nginx/html"
 FRONTEND_VERSION_PATH = f"{FRONTEND_HTML_ROOT}/version.txt"
 FRONTEND_INDEX_PATH = f"{FRONTEND_HTML_ROOT}/index.html"
 API_HEALTH_PATH = "/health"
+GATEWAY_DISCOVERY_PATH = "/mcp"
+KEYCLOAK_VERSION_PATH = "/opt/keycloak/stoa-version.txt"
 
 Runner = Callable[..., subprocess.CompletedProcess[str]]
 
@@ -42,6 +52,17 @@ def parse_health_version(payload: str) -> str:
     version = data["version"].strip()
     if not version:
         raise ValueError("Empty version in /health payload")
+    return version
+
+
+def parse_gateway_discovery_version(payload: str) -> str:
+    data = json.loads(payload)
+    server = data.get("server") if isinstance(data, dict) else None
+    if not isinstance(server, dict) or not isinstance(server.get("version"), str):
+        raise ValueError(f"Unexpected {GATEWAY_DISCOVERY_PATH} payload: {payload!r}")
+    version = server["version"].strip()
+    if not version:
+        raise ValueError(f"Empty version in {GATEWAY_DISCOVERY_PATH} payload")
     return version
 
 
@@ -249,6 +270,97 @@ def served_api_health_version(
     return _run_and_cleanup(name, runner, _body)
 
 
+def read_copied_image_text(
+    image_ref: str,
+    path: str,
+    container_name: str,
+    runner: Runner = default_runner,
+) -> str:
+    runner(["docker", "rm", "-f", container_name])
+    _require_ok(
+        runner(["docker", "create", "--name", container_name, image_ref]),
+        f"create container for {path}",
+    )
+
+    def _body() -> str:
+        with tempfile.TemporaryDirectory(prefix="stoa-version-check-") as tmpdir:
+            dest = Path(tmpdir) / Path(path).name
+            _require_ok(
+                runner(["docker", "cp", f"{container_name}:{path}", str(dest)]),
+                f"copy {path}",
+            )
+            if dest.is_symlink() or not dest.is_file():
+                raise VersionMismatch(f"{path} is not a regular file")
+            return dest.read_text(encoding="utf-8")
+
+    return _run_and_cleanup(container_name, runner, _body)
+
+
+def read_keycloak_version_file(image_ref: str, runner: Runner = default_runner) -> str:
+    version = read_copied_image_text(
+        image_ref,
+        KEYCLOAK_VERSION_PATH,
+        "stoa-version-check-keycloak",
+        runner=runner,
+    ).strip()
+    if not version:
+        raise VersionMismatch(f"{KEYCLOAK_VERSION_PATH} was empty")
+    return version
+
+
+def served_gateway_version(
+    image_ref: str,
+    runner: Runner = default_runner,
+    wait=wait_for_url,
+) -> str:
+    name = "stoa-version-check-gateway"
+    runner(["docker", "rm", "-f", name])
+    _require_ok(
+        runner(
+            [
+                "docker",
+                "run",
+                "-d",
+                "--name",
+                name,
+                "-p",
+                "127.0.0.1::8080",
+                "-e",
+                "STOA_PORT=8080",
+                "-e",
+                "STOA_GATEWAY_MODE=edge-mcp",
+                "-e",
+                "STOA_ENVIRONMENT=dev",
+                "-e",
+                "STOA_AUTO_REGISTER=false",
+                "-e",
+                "STOA_OTEL_ENABLED=false",
+                "-e",
+                "STOA_KAFKA_ENABLED=false",
+                "-e",
+                "STOA_K8S_ENABLED=false",
+                "-e",
+                "STOA_ZOMBIE_DETECTION_ENABLED=false",
+                "-e",
+                "STOA_NATIVE_TOOLS_ENABLED=false",
+                image_ref,
+            ]
+        ),
+        "start gateway image",
+    )
+
+    def _body() -> str:
+        inspect = _require_ok(
+            runner(["docker", "inspect", name]),
+            "inspect gateway container",
+        )
+        port = _host_port(inspect.stdout, 8080)
+        payload = wait(f"http://127.0.0.1:{port}{GATEWAY_DISCOVERY_PATH}", 60)
+        return parse_gateway_discovery_version(payload)
+
+    return _run_and_cleanup(name, runner, _body)
+
+
 def verify_image_version(
     service: str,
     expected: str,
@@ -279,11 +391,28 @@ def verify_image_version(
             "frontend /version.txt",
         )
         return
-    compare_version(
-        served_api_health_version(image_ref, runner=runner, wait=wait),
-        expected,
-        "API /health",
-    )
+    if service == "control-plane-api":
+        compare_version(
+            served_api_health_version(image_ref, runner=runner, wait=wait),
+            expected,
+            "API /health",
+        )
+        return
+    if service == "stoa-gateway":
+        compare_version(
+            served_gateway_version(image_ref, runner=runner, wait=wait),
+            expected,
+            f"gateway {GATEWAY_DISCOVERY_PATH}",
+        )
+        return
+    if service == "keycloak":
+        compare_version(
+            read_keycloak_version_file(image_ref, runner=runner),
+            expected,
+            KEYCLOAK_VERSION_PATH,
+        )
+        return
+    raise ValueError(f"Unsupported versioned service {service!r}")
 
 
 def main(argv: list[str] | None = None) -> int:

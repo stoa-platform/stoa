@@ -292,3 +292,153 @@ async fn regression_non_edge_modes_keep_anonymous_health() {
         assert_eq!(code(&router, "GET", "/health", None).await, 200);
     }
 }
+
+#[tokio::test]
+async fn regression_rest_resources_mtls_sender_constrained_jwt() {
+    use std::collections::HashMap;
+    use std::sync::Arc;
+    use stoa_gateway::mcp::tools::{dynamic_tool::DynamicTool, ToolSchema};
+
+    let oidc = jwt::oidc_server().await;
+    let mut config = jwt::config(&oidc);
+    config.mtls.enabled = true;
+    config.mtls.trusted_proxies = vec!["127.0.0.1/32".to_string()];
+    config.sender_constraint.enabled = true;
+    config.sender_constraint.mtls_required = true;
+
+    let state = AppState::new(config);
+    let schema = ToolSchema {
+        schema_type: "object".to_string(),
+        properties: HashMap::new(),
+        required: Vec::new(),
+    };
+    state.tool_registry.register(Arc::new(DynamicTool::new(
+        "tenant_a_tool",
+        "Tool visible to tenant-a",
+        "http://localhost:9/tenant-a",
+        "GET",
+        schema.clone(),
+        "tenant-a",
+    )));
+    state.tool_registry.register(Arc::new(DynamicTool::new(
+        "tenant_b_tool",
+        "Private tool owned by tenant-b",
+        "http://localhost:9/tenant-b",
+        "GET",
+        schema,
+        "tenant-b",
+    )));
+
+    let router = stoa_gateway::build_router(state);
+    let token = jwt::mtls_token();
+    let matching_fp = "11".repeat(32);
+    let wrong_fp = "22".repeat(32);
+
+    let send_mtls = |uri: &str, payload: &str, peer: &str, cert_fp: Option<&str>| {
+        let mut builder = Request::builder()
+            .method("POST")
+            .uri(uri)
+            .header("content-type", "application/json")
+            .header("authorization", format!("Bearer {token}"));
+        if let Some(fp) = cert_fp {
+            builder = builder
+                .header("X-SSL-Client-Verify", "SUCCESS")
+                .header("X-SSL-Client-Fingerprint", fp);
+        }
+        let mut req = builder.body(Body::from(payload.to_owned())).unwrap();
+        req.extensions_mut().insert(axum::extract::ConnectInfo(
+            peer.parse::<std::net::SocketAddr>().unwrap(),
+        ));
+        router.clone().oneshot(req)
+    };
+
+    // Matching client cert from trusted proxy succeeds on resources/list and scopes to tenant-a.
+    let list_resp = send_mtls(
+        "/mcp/resources/list",
+        "{}",
+        "127.0.0.1:443",
+        Some(&matching_fp),
+    )
+    .await
+    .unwrap();
+    assert_eq!(list_resp.status().as_u16(), 200);
+    let list_json = body(list_resp).await;
+    let names: Vec<&str> = list_json["resources"]
+        .as_array()
+        .expect("resources array")
+        .iter()
+        .filter_map(|item| item["name"].as_str())
+        .collect();
+    assert!(
+        names.contains(&"tenant_a_tool"),
+        "missing tenant_a_tool: {names:?}"
+    );
+    assert!(
+        !names.contains(&"tenant_b_tool"),
+        "tenant_b_tool leaked: {names:?}"
+    );
+
+    // Matching client cert succeeds on resources/read for tenant-a and returns 404 for tenant-b.
+    let read_a_payload = r#"{"uri":"stoa://tools/tenant_a_tool"}"#;
+    let read_a = send_mtls(
+        "/mcp/resources/read",
+        read_a_payload,
+        "127.0.0.1:443",
+        Some(&matching_fp),
+    )
+    .await
+    .unwrap();
+    assert_eq!(read_a.status().as_u16(), 200);
+    let read_a_json = body(read_a).await;
+    assert_eq!(
+        read_a_json["contents"][0]["uri"],
+        "stoa://tools/tenant_a_tool"
+    );
+
+    let read_b_payload = r#"{"uri":"stoa://tools/tenant_b_tool"}"#;
+    let read_b = send_mtls(
+        "/mcp/resources/read",
+        read_b_payload,
+        "127.0.0.1:443",
+        Some(&matching_fp),
+    )
+    .await
+    .unwrap();
+    assert_eq!(read_b.status().as_u16(), 404);
+
+    // Missing client certificate or mismatched fingerprint must not succeed (401 or 403).
+    for (uri, payload) in [
+        ("/mcp/resources/list", "{}"),
+        ("/mcp/resources/read", read_a_payload),
+    ] {
+        let no_cert = send_mtls(uri, payload, "127.0.0.1:443", None)
+            .await
+            .unwrap()
+            .status()
+            .as_u16();
+        assert!(
+            matches!(no_cert, 401 | 403),
+            "{uri} without cert returned {no_cert}"
+        );
+
+        let mismatch = send_mtls(uri, payload, "127.0.0.1:443", Some(&wrong_fp))
+            .await
+            .unwrap()
+            .status()
+            .as_u16();
+        assert!(
+            matches!(mismatch, 401 | 403),
+            "{uri} with mismatched fingerprint returned {mismatch}"
+        );
+
+        let untrusted = send_mtls(uri, payload, "192.0.2.1:443", Some(&matching_fp))
+            .await
+            .unwrap()
+            .status()
+            .as_u16();
+        assert!(
+            matches!(untrusted, 401 | 403),
+            "{uri} from untrusted proxy returned {untrusted}"
+        );
+    }
+}

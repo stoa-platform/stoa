@@ -129,20 +129,18 @@ impl Config {
         let mut figment = Figment::new()
             // Start with defaults
             .merge(Serialized::defaults(Config::default()));
+        // Track explicit overrides (file -> STOA_* env) without defaults so
+        // `environment_explicit` reflects the winning provider value only.
+        let mut explicit_figment = Figment::new();
 
         // Try config.yaml if exists. Read the file once and reuse the captured
         // contents for both extraction and environment provenance.
         let config_paths = ["config.yaml", "config.yml", "/etc/stoa/config.yaml"];
-        let mut file_environment_explicit = false;
         for path in config_paths {
             match std::fs::read_to_string(path) {
                 Ok(contents) => {
                     info!(path = path, "Loading config from file");
-                    file_environment_explicit = Figment::from(Yaml::string(&contents))
-                        .find_value("environment")
-                        .ok()
-                        .and_then(|value| value.as_str().map(|env| !env.trim().is_empty()))
-                        .unwrap_or(false);
+                    explicit_figment = explicit_figment.merge(Yaml::string(&contents));
                     figment = figment.merge(Yaml::string(&contents));
                     break;
                 }
@@ -163,11 +161,7 @@ impl Config {
         // Materialize the prefixed env provider once and reuse that snapshot
         // for both environment provenance and extraction.
         let env_figment = Figment::from(Env::prefixed("STOA_").split("__"));
-        let env_environment_explicit = env_figment
-            .find_value("environment")
-            .ok()
-            .and_then(|value| value.as_str().map(|env| !env.trim().is_empty()))
-            .unwrap_or(false);
+        explicit_figment = explicit_figment.merge(env_figment.clone());
         figment = figment.merge(env_figment);
 
         // Legacy env vars (backward compat with envy)
@@ -189,7 +183,11 @@ impl Config {
         ]));
 
         let mut config: Config = figment.extract()?;
-        config.environment_explicit = file_environment_explicit || env_environment_explicit;
+        config.environment_explicit = explicit_figment
+            .find_value("environment")
+            .ok()
+            .and_then(|value| value.as_str().and_then(super::Environment::parse_literal))
+            .is_some();
 
         info!(
             port = config.port,
@@ -871,5 +869,68 @@ mod tests {
             assert!(!cfg.allows_explicit_local_dev_access());
             Ok(())
         });
+    }
+
+    #[test]
+    #[allow(clippy::result_large_err)]
+    fn environment_load_rejects_numeric_indexes_in_env_and_yaml() {
+        use figment::Jail;
+
+        // Numeric env values fail alone (no enum index deserialization).
+        for bad in ["0", "1", "2", "\"0\""] {
+            Jail::expect_with(|jail| {
+                jail.clear_env();
+                jail.set_env("STOA_ENVIRONMENT", bad);
+                assert!(
+                    Config::load().is_err(),
+                    "STOA_ENVIRONMENT={bad} must fail Config::load()"
+                );
+                Ok(())
+            });
+        }
+
+        // Numeric env override over explicit YAML staging/prod fails closed.
+        for yaml_env in ["staging", "prod"] {
+            Jail::expect_with(|jail| {
+                jail.clear_env();
+                jail.create_file("config.yaml", &format!("environment: {yaml_env}\n"))?;
+                jail.set_env("STOA_ENVIRONMENT", "0");
+                assert!(
+                    Config::load().is_err(),
+                    "STOA_ENVIRONMENT=0 over YAML {yaml_env} must fail Config::load()"
+                );
+                Ok(())
+            });
+        }
+
+        // Numeric YAML environment fails Config::load().
+        for yaml_val in ["0", "1", "2"] {
+            Jail::expect_with(|jail| {
+                jail.clear_env();
+                jail.create_file("config.yaml", &format!("environment: {yaml_val}\n"))?;
+                assert!(
+                    Config::load().is_err(),
+                    "YAML environment: {yaml_val} must fail Config::load()"
+                );
+                Ok(())
+            });
+        }
+
+        // Literal dev / staging / prod continue to load cleanly.
+        for (label, expected, allows_local) in [
+            ("dev", super::super::Environment::Dev, true),
+            ("staging", super::super::Environment::Staging, false),
+            ("prod", super::super::Environment::Prod, false),
+        ] {
+            Jail::expect_with(|jail| {
+                jail.clear_env();
+                jail.set_env("STOA_ENVIRONMENT", label);
+                let cfg = Config::load().expect("literal environment load");
+                assert_eq!(cfg.environment, expected);
+                assert!(cfg.environment_explicit);
+                assert_eq!(cfg.allows_explicit_local_dev_access(), allows_local);
+                Ok(())
+            });
+        }
     }
 }

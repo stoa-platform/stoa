@@ -14,7 +14,7 @@
 
 use axum::{
     extract::State,
-    http::{HeaderMap, StatusCode},
+    http::{header::AUTHORIZATION, HeaderMap, StatusCode},
     response::IntoResponse,
     Json,
 };
@@ -22,7 +22,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tracing::debug;
 
-use crate::mcp::handlers::extract_auth_context;
+use crate::auth::middleware::{AuthenticatedUser, OptionalAuthUser};
+use crate::auth::tenant::{require_tenant, LOCAL_DEV_TENANT};
 use crate::state::AppState;
 
 // =============================================================================
@@ -317,21 +318,45 @@ fn resource_auth_error((status, message): (StatusCode, &'static str)) -> (Status
     )
 }
 
+/// Derive the caller's tenant from the middleware-validated `AuthenticatedUser`,
+/// falling back to the restricted `local` tenant only in explicit local dev mode
+/// (no JWT validator configured and no `Authorization` header).
+fn resolve_resource_tenant(
+    state: &AppState,
+    auth_user: Option<&AuthenticatedUser>,
+    headers: &HeaderMap,
+) -> Result<String, (StatusCode, &'static str)> {
+    if let Some(user) = auth_user {
+        let tenant = require_tenant(&user.claims)
+            .map_err(|_| (StatusCode::FORBIDDEN, "A tenant claim is required"))?;
+        return Ok(tenant.to_string());
+    }
+
+    if state.jwt_validator.is_none()
+        && state.config.allows_explicit_local_dev_access()
+        && !headers.contains_key(AUTHORIZATION)
+    {
+        return Ok(LOCAL_DEV_TENANT.to_string());
+    }
+
+    Err((StatusCode::UNAUTHORIZED, "Authentication required"))
+}
+
 /// POST /mcp/resources/list — List available resources
 ///
 /// Maps each registered tool visible to the caller's tenant to an MCP resource
 /// with `stoa://tools/{name}` URI.
 pub async fn mcp_resources_list(
     State(state): State<AppState>,
+    OptionalAuthUser(auth_user): OptionalAuthUser,
     headers: HeaderMap,
     Json(_request): Json<ResourcesListRequest>,
 ) -> Result<Json<ResourcesListResponse>, (StatusCode, Json<Value>)> {
-    let auth = extract_auth_context(&state, &headers)
-        .await
+    let tenant_id = resolve_resource_tenant(&state, auth_user.as_ref(), &headers)
         .map_err(resource_auth_error)?;
-    debug!(tenant_id = %auth.tenant_id, "Listing MCP resources");
+    debug!(tenant_id = %tenant_id, "Listing MCP resources");
 
-    let tools = state.tool_registry.list(Some(&auth.tenant_id));
+    let tools = state.tool_registry.list(Some(&tenant_id));
     let resources: Vec<Resource> = tools
         .iter()
         .map(|t| Resource {
@@ -354,13 +379,13 @@ pub async fn mcp_resources_list(
 /// Supports `stoa://tools/{name}` URIs — returns the tool definition as JSON.
 pub async fn mcp_resources_read(
     State(state): State<AppState>,
+    OptionalAuthUser(auth_user): OptionalAuthUser,
     headers: HeaderMap,
     Json(request): Json<ResourcesReadRequest>,
 ) -> Result<Json<ResourcesReadResponse>, (StatusCode, Json<Value>)> {
-    let auth = extract_auth_context(&state, &headers)
-        .await
+    let tenant_id = resolve_resource_tenant(&state, auth_user.as_ref(), &headers)
         .map_err(resource_auth_error)?;
-    debug!(tenant_id = %auth.tenant_id, uri = %request.uri, "Reading MCP resource");
+    debug!(tenant_id = %tenant_id, uri = %request.uri, "Reading MCP resource");
 
     let tool_name = match request.uri.strip_prefix("stoa://tools/") {
         Some(n) => n.to_string(),
@@ -380,7 +405,7 @@ pub async fn mcp_resources_read(
         }
     };
 
-    let tools = state.tool_registry.list(Some(&auth.tenant_id));
+    let tools = state.tool_registry.list(Some(&tenant_id));
     let found = tools.iter().find(|t| t.name == tool_name);
 
     match found {

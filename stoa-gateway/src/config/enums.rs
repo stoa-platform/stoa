@@ -75,7 +75,9 @@ pub enum LogFormat {
 /// Deployment environment label for registration + observability.
 ///
 /// Env: `STOA_ENVIRONMENT` (canonical values: `dev` | `staging` | `prod`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+/// Custom `Deserialize` accepts only literal strings so numeric enum variant
+/// indexes (e.g. `0`) are rejected instead of mapping to `Dev`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum Environment {
     #[default]
@@ -91,6 +93,43 @@ impl Environment {
             Self::Staging => "staging",
             Self::Prod => "prod",
         }
+    }
+
+    pub fn parse_literal(value: &str) -> Option<Self> {
+        match value {
+            "dev" => Some(Self::Dev),
+            "staging" => Some(Self::Staging),
+            "prod" => Some(Self::Prod),
+            _ => None,
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Environment {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct EnvironmentVisitor;
+
+        impl serde::de::Visitor<'_> for EnvironmentVisitor {
+            type Value = Environment;
+
+            fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str("one of `dev`, `staging`, or `prod`")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Environment::parse_literal(value).ok_or_else(|| {
+                    serde::de::Error::unknown_variant(value, &["dev", "staging", "prod"])
+                })
+            }
+        }
+
+        deserializer.deserialize_str(EnvironmentVisitor)
     }
 }
 
@@ -246,6 +285,9 @@ mod tests {
     fn environment_rejects_unknown() {
         assert!(serde_json::from_str::<Environment>("\"mordor\"").is_err());
         assert!(serde_json::from_str::<Environment>("\"production\"").is_err());
+        assert!(serde_json::from_str::<Environment>("0").is_err());
+        assert!(serde_json::from_str::<Environment>("1").is_err());
+        assert!(serde_json::from_str::<Environment>("\"0\"").is_err());
     }
 
     #[test]

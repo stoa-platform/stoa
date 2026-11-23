@@ -4,7 +4,7 @@
 
 set -e
 
-export VAULT_ADDR="${VAULT_ADDR:-https://vault.gostoa.dev}"
+export VAULT_ADDR="${VAULT_ADDR:?VAULT_ADDR is required (vault.gostoa.dev was the retired Infisical)}"
 
 echo "=== STOA Vault E2E Setup ==="
 echo "Vault Address: $VAULT_ADDR"

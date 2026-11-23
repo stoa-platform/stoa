@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.28](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.27...stoa-gateway-v0.9.28) (2026-11-23)
+
+
+### Bug Fixes
+
+* **gateway:** allow a clean local dev start without a control plane ([#3217](https://github.com/stoa-platform/stoa/issues/3217)) ([ec62b10](https://github.com/stoa-platform/stoa/commit/ec62b1089782ffef3f0c964bd3f82bf15c1a0f5c))
+
 ## [0.9.27](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.26...stoa-gateway-v0.9.27) (2026-11-22)
 
 

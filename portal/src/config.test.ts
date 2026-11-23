@@ -8,7 +8,6 @@ beforeEach(() => {
   vi.stubEnv('VITE_PORTAL_MODE', '');
   vi.stubEnv('VITE_API_URL', 'http://127.0.0.1:18000');
   vi.stubEnv('VITE_APP_VERSION', '');
-  vi.stubEnv('VITE_APP_VERSION_MARK', '');
   delete runtimeWindow.__STOA_RUNTIME__;
 });
 
@@ -39,26 +38,13 @@ describe('private testing gateway runtime config', () => {
 
 describe('application version', () => {
   it('falls back to 0.0.0-dev when VITE_APP_VERSION is unset', async () => {
-    const { config, APP_VERSION_MARK } = await import('./config');
+    const { config } = await import('./config');
     expect(config.app.version).toBe('0.0.0-dev');
-    expect(config.app.versionMark).toBe('stoa-app-version:0.0.0-dev');
-    expect(APP_VERSION_MARK).toBe('stoa-app-version:0.0.0-dev');
   });
 
   it('uses VITE_APP_VERSION when set', async () => {
     vi.stubEnv('VITE_APP_VERSION', '1.4.0');
-    const { config, APP_VERSION_MARK } = await import('./config');
-    expect(config.app.version).toBe('1.4.0');
-    expect(config.app.versionMark).toBe('stoa-app-version:1.4.0');
-    expect(APP_VERSION_MARK).toBe('stoa-app-version:1.4.0');
-  });
-
-  it('derives config.app.version from VITE_APP_VERSION_MARK when set', async () => {
-    vi.stubEnv('VITE_APP_VERSION', '9.9.9');
-    vi.stubEnv('VITE_APP_VERSION_MARK', 'stoa-app-version:1.4.0');
-    const { config, APP_VERSION_MARK } = await import('./config');
-    expect(APP_VERSION_MARK).toBe('stoa-app-version:1.4.0');
-    expect(config.app.versionMark).toBe('stoa-app-version:1.4.0');
+    const { config } = await import('./config');
     expect(config.app.version).toBe('1.4.0');
   });
 });

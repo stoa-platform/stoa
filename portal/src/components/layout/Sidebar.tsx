@@ -77,19 +77,6 @@ function isItemVisible(
   return true;
 }
 
-const VERSION_MARK_PREFIX = 'stoa-app-version:';
-
-function displayedAppVersion(): string {
-  const mark = config.app.versionMark;
-  if (mark && mark.startsWith(VERSION_MARK_PREFIX)) {
-    const version = mark.slice(VERSION_MARK_PREFIX.length);
-    if (version) {
-      return version;
-    }
-  }
-  return config.app.version;
-}
-
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { hasPermission, hasScope, hasRole, user } = useAuth();
 
@@ -185,7 +172,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           </a>
           <div className="text-xs text-neutral-500 dark:text-neutral-400">
             <p>STOA Developer Portal</p>
-            <p data-stoa-app-version-mark={config.app.versionMark}>v{displayedAppVersion()}</p>
+            <p>v{config.app.version}</p>
           </div>
 
           {/* Debug: show user roles in development */}

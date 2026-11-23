@@ -83,7 +83,6 @@ vi.mock('../config', () => ({
     features: { enableI18n: true },
     app: {
       version: '0.0.0-dev',
-      versionMark: 'stoa-app-version:0.0.0-dev',
     },
   },
 }));
@@ -190,9 +189,7 @@ describe('Layout', () => {
   it('renders user info in sidebar', () => {
     renderLayout();
     expect(screen.getByText('Parzival')).toBeInTheDocument();
-    const version = screen.getByText('v0.0.0-dev');
-    expect(version).toBeInTheDocument();
-    expect(version).toHaveAttribute('data-stoa-app-version-mark', 'stoa-app-version:0.0.0-dev');
+    expect(screen.getByText('v0.0.0-dev')).toBeInTheDocument();
   });
 
   it('does not expose logs as a primary observability navigation item', () => {

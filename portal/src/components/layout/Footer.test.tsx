@@ -9,7 +9,7 @@ import { renderWithProviders } from '../../test/helpers';
 
 vi.mock('../../config', () => ({
   config: {
-    app: { version: '1.2.3', versionMark: 'stoa-app-version:1.2.3' },
+    app: { version: '1.2.3' },
     services: { docs: { url: 'https://docs.example.com' } },
   },
 }));
@@ -35,9 +35,7 @@ describe('Footer', () => {
 
   it('renders the version number', () => {
     renderWithProviders(<Footer />);
-    const version = screen.getByText('v1.2.3');
-    expect(version).toBeInTheDocument();
-    expect(version).toHaveAttribute('data-stoa-app-version-mark', 'stoa-app-version:1.2.3');
+    expect(screen.getByText('v1.2.3')).toBeInTheDocument();
   });
 
   it('renders as a footer element', () => {

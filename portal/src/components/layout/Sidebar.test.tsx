@@ -18,7 +18,7 @@ vi.mock('../../config', () => ({
       console: { url: 'https://console.example.com' },
       docs: { url: 'https://docs.example.com' },
     },
-    app: { version: '1.0.0', versionMark: 'stoa-app-version:1.0.0' },
+    app: { version: '1.0.0' },
     baseDomain: 'example.com',
   },
 }));

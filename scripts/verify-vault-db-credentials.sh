@@ -51,7 +51,7 @@ echo ""
 # ---- Step 1: Check Vault health ----
 echo "--- Step 1: Vault Health Check ---"
 
-VAULT_ADDR="${VAULT_ADDR:-https://vault.gostoa.dev}"
+VAULT_ADDR="${VAULT_ADDR:?VAULT_ADDR is required (vault.gostoa.dev was the retired Infisical)}"
 echo "[INFO] Vault address: $VAULT_ADDR"
 
 VAULT_HEALTH_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$VAULT_ADDR/v1/sys/health" 2>/dev/null || echo "000")

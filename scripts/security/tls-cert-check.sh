@@ -9,7 +9,7 @@ JOB_NAME="tls_cert_monitor"
 CONNECT_TIMEOUT="${CONNECT_TIMEOUT:-5}"
 
 # Endpoints to check — all *.gostoa.dev HTTPS services
-HOSTS="${HOSTS:-console.gostoa.dev portal.gostoa.dev api.gostoa.dev mcp.gostoa.dev auth.gostoa.dev vault.gostoa.dev argocd.gostoa.dev}"
+HOSTS="${HOSTS:-console.gostoa.dev portal.gostoa.dev api.gostoa.dev mcp.gostoa.dev auth.gostoa.dev argocd.gostoa.dev}"
 
 metrics=""
 

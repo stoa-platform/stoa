@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.1](https://github.com/stoa-platform/stoa/compare/portal-v1.4.0...portal-v1.4.1) (2026-11-23)
+
+
+### Bug Fixes
+
+* inject the release tag version into component images ([#3216](https://github.com/stoa-platform/stoa/issues/3216)) ([4e91528](https://github.com/stoa-platform/stoa/commit/4e91528d49285907d8a3d1d6ee73d6905b107c25))
+
 ## [1.4.0](https://github.com/stoa-platform/stoa/compare/portal-v1.3.4...portal-v1.4.0) (2026-11-22)
 
 

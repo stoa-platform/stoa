@@ -156,28 +156,19 @@ impl Config {
             }
         }
 
-        // Capture STOA_ENVIRONMENT once so the extracted value and its
-        // provenance come from the same snapshot.
-        let env_environment = match std::env::var("STOA_ENVIRONMENT") {
-            Ok(value) => Some(value),
-            Err(std::env::VarError::NotPresent) => None,
-            Err(std::env::VarError::NotUnicode(_)) => {
-                return Err(figment::Error::from("STOA_ENVIRONMENT is not valid UTF-8").into());
-            }
-        };
-        let env_environment_explicit = env_environment
-            .as_deref()
-            .is_some_and(|env| !env.trim().is_empty());
-
         // Environment variables override (STOA_ prefix).
         // `.split("__")` lets nested struct fields be driven via env: e.g.
         // `STOA_MTLS__ENABLED=true` → `mtls.enabled`. Single-underscore forms
         // bind to root-level flat fields only (unchanged behaviour).
-        // `environment` is excluded here and merged from the snapshot above.
-        figment = figment.merge(Env::prefixed("STOA_").split("__").ignore(&["environment"]));
-        if let Some(ref environment) = env_environment {
-            figment = figment.merge(Serialized::default("environment", environment));
-        }
+        // Materialize the prefixed env provider once and reuse that snapshot
+        // for both environment provenance and extraction.
+        let env_figment = Figment::from(Env::prefixed("STOA_").split("__"));
+        let env_environment_explicit = env_figment
+            .find_value("environment")
+            .ok()
+            .and_then(|value| value.as_str().map(|env| !env.trim().is_empty()))
+            .unwrap_or(false);
+        figment = figment.merge(env_figment);
 
         // Legacy env vars (backward compat with envy)
         figment = figment.merge(Env::raw().only(&[
@@ -839,5 +830,46 @@ mod tests {
                 Ok(())
             });
         }
+    }
+
+    #[test]
+    #[allow(clippy::result_large_err)]
+    fn environment_load_preserves_case_variant_and_quoted_env_overrides() {
+        use figment::Jail;
+
+        // Case-variant env override takes precedence over explicit YAML dev.
+        Jail::expect_with(|jail| {
+            jail.clear_env();
+            jail.create_file("config.yaml", "environment: dev\n")?;
+            jail.set_env("STOA_environment", "staging");
+            let cfg = Config::load().expect("case-variant staging override");
+            assert_eq!(cfg.environment, super::super::Environment::Staging);
+            assert!(cfg.environment_explicit);
+            assert!(!cfg.allows_explicit_local_dev_access());
+            Ok(())
+        });
+
+        // Case-variant unknown environment value fails Config::load().
+        Jail::expect_with(|jail| {
+            jail.clear_env();
+            jail.set_env("STOA_environment", "mordor");
+            assert!(
+                Config::load().is_err(),
+                "case-variant unknown environment must fail Config::load()"
+            );
+            Ok(())
+        });
+
+        // Figment-parsed quoted env values continue to work as overrides.
+        Jail::expect_with(|jail| {
+            jail.clear_env();
+            jail.create_file("config.yaml", "environment: dev\n")?;
+            jail.set_env("STOA_ENVIRONMENT", "\"staging\"");
+            let cfg = Config::load().expect("quoted staging override");
+            assert_eq!(cfg.environment, super::super::Environment::Staging);
+            assert!(cfg.environment_explicit);
+            assert!(!cfg.allows_explicit_local_dev_access());
+            Ok(())
+        });
     }
 }

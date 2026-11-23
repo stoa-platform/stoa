@@ -125,19 +125,13 @@ fn local_dev_claims() -> Claims {
 }
 
 /// Headers select only the Bearer token, never its tenant or user identity.
+///
+/// Always fails closed when no JWT validator is configured.
 pub async fn request_identity(
     state: &AppState,
     headers: &HeaderMap,
 ) -> Result<(Claims, String), AuthError> {
     let Some(validator) = state.jwt_validator.as_ref() else {
-        // Explicit local dev allows unauthenticated local access only when no
-        // Authorization header was presented; a Bearer token without a validator
-        // must still fail closed.
-        if state.config.allows_explicit_local_dev_access()
-            && !headers.contains_key(AUTHORIZATION)
-        {
-            return Ok((local_dev_claims(), String::new()));
-        }
         return Err(AuthError::unauthorized("JWT validation unavailable"));
     };
     let header = headers
@@ -159,6 +153,26 @@ pub async fn request_identity(
     require_unbound_token(&claims)?;
     check_federation_claims(state, &claims)?;
     Ok((claims, token.to_string()))
+}
+
+/// MCP-only identity extraction.
+///
+/// Synthesizes the restricted local-dev identity (`local-dev`, tenant `local`,
+/// scope `stoa:read`, no roles, empty token) only when no JWT validator is
+/// configured, `allows_explicit_local_dev_access()` is true, and no
+/// `Authorization` header was presented. A Bearer token without a validator
+/// still fails closed via [`request_identity`].
+pub async fn request_mcp_identity(
+    state: &AppState,
+    headers: &HeaderMap,
+) -> Result<(Claims, String), AuthError> {
+    if state.jwt_validator.is_none()
+        && state.config.allows_explicit_local_dev_access()
+        && !headers.contains_key(AUTHORIZATION)
+    {
+        return Ok((local_dev_claims(), String::new()));
+    }
+    request_identity(state, headers).await
 }
 
 #[cfg(test)]
@@ -209,7 +223,28 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn request_identity_explicit_local_dev_returns_restricted_identity() {
+    async fn request_identity_stays_fail_closed_in_explicit_local_dev() {
+        let state = AppState::new(Config {
+            environment: crate::config::Environment::Dev,
+            environment_explicit: true,
+            ..Config::default()
+        });
+        assert!(state.config.allows_explicit_local_dev_access());
+        assert!(state.jwt_validator.is_none());
+
+        let anonymous = request_identity(&state, &HeaderMap::new())
+            .await
+            .unwrap_err();
+        assert_eq!(anonymous.into_response().status(), StatusCode::UNAUTHORIZED);
+
+        let mut bearer_headers = HeaderMap::new();
+        bearer_headers.insert(AUTHORIZATION, HeaderValue::from_static("Bearer fake-token"));
+        let bearer = request_identity(&state, &bearer_headers).await.unwrap_err();
+        assert_eq!(bearer.into_response().status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn request_mcp_identity_explicit_local_dev_returns_restricted_identity() {
         let state = AppState::new(Config {
             environment: crate::config::Environment::Dev,
             environment_explicit: true,
@@ -219,7 +254,7 @@ mod tests {
         // Client tenant headers must still be ignored.
         headers.insert("X-Tenant-ID", HeaderValue::from_static("other"));
 
-        let (claims, token) = request_identity(&state, &headers)
+        let (claims, token) = request_mcp_identity(&state, &headers)
             .await
             .expect("explicit local dev without Authorization should succeed");
         assert_eq!(claims.sub, LOCAL_DEV_SUBJECT);
@@ -231,7 +266,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn request_identity_explicit_local_dev_rejects_bearer_without_validator() {
+    async fn request_mcp_identity_explicit_local_dev_rejects_bearer_without_validator() {
         let state = AppState::new(Config {
             environment: crate::config::Environment::Dev,
             environment_explicit: true,
@@ -240,15 +275,15 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert(AUTHORIZATION, HeaderValue::from_static("Bearer fake-token"));
 
-        let error = request_identity(&state, &headers).await.unwrap_err();
+        let error = request_mcp_identity(&state, &headers).await.unwrap_err();
         assert_eq!(error.into_response().status(), StatusCode::UNAUTHORIZED);
     }
 
     #[tokio::test]
-    async fn request_identity_rejects_implicit_dev_and_configured_dependencies() {
+    async fn request_mcp_identity_rejects_implicit_dev_and_configured_dependencies() {
         // Implicit default Dev (environment_explicit = false) stays locked.
         let implicit_dev = AppState::new(Config::default());
-        let error = request_identity(&implicit_dev, &HeaderMap::new())
+        let error = request_mcp_identity(&implicit_dev, &HeaderMap::new())
             .await
             .unwrap_err();
         assert_eq!(error.into_response().status(), StatusCode::UNAUTHORIZED);
@@ -260,7 +295,7 @@ mod tests {
             control_plane_url: Some("http://127.0.0.1:1".to_string()),
             ..Config::default()
         });
-        let error = request_identity(&dev_with_cp, &HeaderMap::new())
+        let error = request_mcp_identity(&dev_with_cp, &HeaderMap::new())
             .await
             .unwrap_err();
         assert_eq!(error.into_response().status(), StatusCode::UNAUTHORIZED);
@@ -272,7 +307,7 @@ mod tests {
             keycloak_url: Some("http://127.0.0.1:1".to_string()),
             ..Config::default()
         });
-        let error = request_identity(&dev_with_keycloak, &HeaderMap::new())
+        let error = request_mcp_identity(&dev_with_keycloak, &HeaderMap::new())
             .await
             .unwrap_err();
         assert_eq!(error.into_response().status(), StatusCode::UNAUTHORIZED);

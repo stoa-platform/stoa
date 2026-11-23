@@ -361,7 +361,9 @@ async fn register_tools(state: &AppState, registrar: Option<std::sync::Arc<Gatew
             );
             info!("Control Plane not configured — registered native tool catalog for explicit local dev");
         } else {
-            info!("Control Plane not configured — skipping Control Plane tool and catalog discovery");
+            info!(
+                "Control Plane not configured — skipping Control Plane tool and catalog discovery"
+            );
         }
         return;
     };

@@ -14,7 +14,6 @@ use figment::{
     providers::{Env, Format, Serialized, Yaml},
     Figment,
 };
-use std::path::Path;
 use thiserror::Error;
 use tracing::info;
 
@@ -130,25 +129,55 @@ impl Config {
         let mut figment = Figment::new()
             // Start with defaults
             .merge(Serialized::defaults(Config::default()));
-        let mut explicit_figment = Figment::new();
 
-        // Try config.yaml if exists
+        // Try config.yaml if exists. Read the file once and reuse the captured
+        // contents for both extraction and environment provenance.
         let config_paths = ["config.yaml", "config.yml", "/etc/stoa/config.yaml"];
+        let mut file_environment_explicit = false;
         for path in config_paths {
-            if Path::new(path).exists() {
-                info!(path = path, "Loading config from file");
-                figment = figment.merge(Yaml::file(path));
-                explicit_figment = explicit_figment.merge(Yaml::file(path));
-                break;
+            match std::fs::read_to_string(path) {
+                Ok(contents) => {
+                    info!(path = path, "Loading config from file");
+                    file_environment_explicit = Figment::from(Yaml::string(&contents))
+                        .find_value("environment")
+                        .ok()
+                        .and_then(|value| value.as_str().map(|env| !env.trim().is_empty()))
+                        .unwrap_or(false);
+                    figment = figment.merge(Yaml::string(&contents));
+                    break;
+                }
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(err) => {
+                    return Err(figment::Error::from(format!(
+                        "failed to read config file {path}: {err}"
+                    ))
+                    .into());
+                }
             }
         }
+
+        // Capture STOA_ENVIRONMENT once so the extracted value and its
+        // provenance come from the same snapshot.
+        let env_environment = match std::env::var("STOA_ENVIRONMENT") {
+            Ok(value) => Some(value),
+            Err(std::env::VarError::NotPresent) => None,
+            Err(std::env::VarError::NotUnicode(_)) => {
+                return Err(figment::Error::from("STOA_ENVIRONMENT is not valid UTF-8").into());
+            }
+        };
+        let env_environment_explicit = env_environment
+            .as_deref()
+            .is_some_and(|env| !env.trim().is_empty());
 
         // Environment variables override (STOA_ prefix).
         // `.split("__")` lets nested struct fields be driven via env: e.g.
         // `STOA_MTLS__ENABLED=true` → `mtls.enabled`. Single-underscore forms
         // bind to root-level flat fields only (unchanged behaviour).
-        figment = figment.merge(Env::prefixed("STOA_").split("__"));
-        explicit_figment = explicit_figment.merge(Env::prefixed("STOA_").split("__"));
+        // `environment` is excluded here and merged from the snapshot above.
+        figment = figment.merge(Env::prefixed("STOA_").split("__").ignore(&["environment"]));
+        if let Some(ref environment) = env_environment {
+            figment = figment.merge(Serialized::default("environment", environment));
+        }
 
         // Legacy env vars (backward compat with envy)
         figment = figment.merge(Env::raw().only(&[
@@ -169,11 +198,7 @@ impl Config {
         ]));
 
         let mut config: Config = figment.extract()?;
-        config.environment_explicit = explicit_figment
-            .find_value("environment")
-            .ok()
-            .and_then(|value| value.as_str().map(|env| !env.trim().is_empty()))
-            .unwrap_or(false);
+        config.environment_explicit = file_environment_explicit || env_environment_explicit;
 
         info!(
             port = config.port,
@@ -781,6 +806,24 @@ mod tests {
             assert_eq!(cfg.environment, super::super::Environment::Dev);
             assert!(cfg.environment_explicit);
             assert!(cfg.allows_explicit_local_dev_access());
+
+            // STOA_ENVIRONMENT overrides YAML environment using the single snapshot.
+            jail.set_env("STOA_ENVIRONMENT", "prod");
+            let cfg = Config::load().expect("env prod overrides yaml dev");
+            assert_eq!(cfg.environment, super::super::Environment::Prod);
+            assert!(cfg.environment_explicit);
+            assert!(!cfg.allows_explicit_local_dev_access());
+            Ok(())
+        });
+
+        // Blank YAML environment refuses startup.
+        Jail::expect_with(|jail| {
+            jail.clear_env();
+            jail.create_file("config.yaml", "environment: \"   \"\n")?;
+            assert!(
+                Config::load().is_err(),
+                "blank YAML environment must fail Config::load()"
+            );
             Ok(())
         });
 

@@ -435,7 +435,7 @@ pub async fn handle_sse_get(
     let session_id = params
         .session_id
         .unwrap_or_else(|| Uuid::new_v4().to_string());
-    let (claims, _) = match crate::auth::tenant::request_identity(&state, &headers).await {
+    let (claims, _) = match crate::auth::tenant::request_mcp_identity(&state, &headers).await {
         Ok(identity) => identity,
         Err(error) => return error.into_response(),
     };
@@ -519,14 +519,14 @@ pub async fn handle_sse_delete(
     Query(params): Query<SseQueryParams>,
     headers: HeaderMap,
 ) -> Response {
-    let (claims, _) = match crate::auth::tenant::request_identity(&state, &headers).await {
+    let (claims, _) = match crate::auth::tenant::request_mcp_identity(&state, &headers).await {
         Ok(identity) => identity,
         Err(error) => return error.into_response(),
     };
     if let Some(session_id) = params.session_id {
         let tenant = claims
             .tenant_id()
-            .expect("request_identity requires tenant");
+            .expect("request_mcp_identity requires tenant");
         if state.session_manager.remove_for_tenant(&session_id, tenant) {
             info!(session_id = %session_id, "Session closed");
             metrics::update_session_count(state.session_manager.count());

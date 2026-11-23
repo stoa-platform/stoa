@@ -241,7 +241,7 @@ pub(super) async fn extract_auth_context(
     state: &AppState,
     headers: &HeaderMap,
 ) -> Result<AuthContext, AuthError> {
-    let (claims, token) = crate::auth::tenant::request_identity(state, headers)
+    let (claims, token) = crate::auth::tenant::request_mcp_identity(state, headers)
         .await
         .map_err(|error| {
             let status = if error.error == "forbidden" {

@@ -12,11 +12,17 @@
 //! by providing direct REST endpoints at `/mcp/resources/*`, `/mcp/prompts/*`,
 //! and `/mcp/completion/complete`.
 
-use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
+use axum::{
+    extract::State,
+    http::{HeaderMap, StatusCode},
+    response::IntoResponse,
+    Json,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tracing::debug;
 
+use crate::mcp::handlers::extract_auth_context;
 use crate::state::AppState;
 
 // =============================================================================
@@ -299,16 +305,33 @@ pub struct CompletionCompleteResponse {
 // REST Handlers
 // =============================================================================
 
+fn resource_auth_error((status, message): (StatusCode, &'static str)) -> (StatusCode, Json<Value>) {
+    (
+        status,
+        Json(json!({
+            "error": {
+                "code": -32001,
+                "message": message
+            }
+        })),
+    )
+}
+
 /// POST /mcp/resources/list — List available resources
 ///
-/// Maps each registered tool to an MCP resource with `stoa://tools/{name}` URI.
+/// Maps each registered tool visible to the caller's tenant to an MCP resource
+/// with `stoa://tools/{name}` URI.
 pub async fn mcp_resources_list(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(_request): Json<ResourcesListRequest>,
-) -> impl IntoResponse {
-    debug!("Listing MCP resources");
+) -> Result<Json<ResourcesListResponse>, (StatusCode, Json<Value>)> {
+    let auth = extract_auth_context(&state, &headers)
+        .await
+        .map_err(resource_auth_error)?;
+    debug!(tenant_id = %auth.tenant_id, "Listing MCP resources");
 
-    let tools = state.tool_registry.list(None);
+    let tools = state.tool_registry.list(Some(&auth.tenant_id));
     let resources: Vec<Resource> = tools
         .iter()
         .map(|t| Resource {
@@ -320,10 +343,10 @@ pub async fn mcp_resources_list(
         })
         .collect();
 
-    Json(ResourcesListResponse {
+    Ok(Json(ResourcesListResponse {
         resources,
         next_cursor: None,
-    })
+    }))
 }
 
 /// POST /mcp/resources/read — Read resource contents
@@ -331,9 +354,13 @@ pub async fn mcp_resources_list(
 /// Supports `stoa://tools/{name}` URIs — returns the tool definition as JSON.
 pub async fn mcp_resources_read(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(request): Json<ResourcesReadRequest>,
 ) -> Result<Json<ResourcesReadResponse>, (StatusCode, Json<Value>)> {
-    debug!(uri = %request.uri, "Reading MCP resource");
+    let auth = extract_auth_context(&state, &headers)
+        .await
+        .map_err(resource_auth_error)?;
+    debug!(tenant_id = %auth.tenant_id, uri = %request.uri, "Reading MCP resource");
 
     let tool_name = match request.uri.strip_prefix("stoa://tools/") {
         Some(n) => n.to_string(),
@@ -353,7 +380,7 @@ pub async fn mcp_resources_read(
         }
     };
 
-    let tools = state.tool_registry.list(None);
+    let tools = state.tool_registry.list(Some(&auth.tenant_id));
     let found = tools.iter().find(|t| t.name == tool_name);
 
     match found {

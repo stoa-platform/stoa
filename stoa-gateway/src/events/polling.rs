@@ -159,7 +159,7 @@ pub async fn poll_events(
     Query(query): Query<PollQuery>,
     headers: axum::http::HeaderMap,
 ) -> axum::response::Response {
-    let (claims, _) = match crate::auth::tenant::request_identity(&state, &headers).await {
+    let (claims, _) = match crate::auth::tenant::request_mcp_identity(&state, &headers).await {
         Ok(identity) => identity,
         Err(error) => return error.into_response(),
     };

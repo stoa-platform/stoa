@@ -374,13 +374,25 @@ async fn test_staging_and_prod_without_idp_or_cp_stay_401() {
             ..Config::default()
         });
         let (rest_status, _) = app.post_json("/mcp/tools/list", "{}").await;
-        assert_eq!(rest_status, StatusCode::UNAUTHORIZED, "{env:?} REST tools/list");
+        assert_eq!(
+            rest_status,
+            StatusCode::UNAUTHORIZED,
+            "{env:?} REST tools/list"
+        );
         let (rpc_status, _) = app.post_json("/mcp", rpc_list).await;
-        assert_eq!(rpc_status, StatusCode::UNAUTHORIZED, "{env:?} RPC tools/list");
+        assert_eq!(
+            rpc_status,
+            StatusCode::UNAUTHORIZED,
+            "{env:?} RPC tools/list"
+        );
         let (v1_status, _) = app.get("/mcp/v1/tools").await;
         assert_eq!(v1_status, StatusCode::UNAUTHORIZED, "{env:?} REST v1 tools");
         let (res_status, _) = app.post_json("/mcp/resources/list", "{}").await;
-        assert_eq!(res_status, StatusCode::UNAUTHORIZED, "{env:?} REST resources/list");
+        assert_eq!(
+            res_status,
+            StatusCode::UNAUTHORIZED,
+            "{env:?} REST resources/list"
+        );
     }
 }
 
@@ -402,4 +414,109 @@ async fn test_implicit_dev_default_remains_locked_while_ready_succeeds() {
     assert_eq!(rpc_status, StatusCode::UNAUTHORIZED);
     let (res_status, _) = app.post_json("/mcp/resources/list", "{}").await;
     assert_eq!(res_status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_explicit_local_dev_resources_and_tools_are_tenant_scoped() {
+    let app = TestApp::with_config(Config {
+        environment: stoa_gateway::config::Environment::Dev,
+        environment_explicit: true,
+        ..Config::default()
+    });
+    let schema = ToolSchema {
+        schema_type: "object".to_string(),
+        properties: HashMap::new(),
+        required: Vec::new(),
+    };
+    let other_tenant_tool = DynamicTool::new(
+        "other_tenant_tool",
+        "Private tool owned by another tenant",
+        "http://localhost:9/other",
+        "GET",
+        schema.clone(),
+        "other-tenant",
+    );
+    let local_tenant_tool = DynamicTool::new(
+        "local_tenant_tool",
+        "Tool owned by the local dev tenant",
+        "http://localhost:9/local",
+        "GET",
+        schema.clone(),
+        "local",
+    );
+    let global_tool = DynamicTool::new(
+        "global_public_tool",
+        "Global tool visible across tenants",
+        "http://localhost:9/global",
+        "GET",
+        schema,
+        "default",
+    )
+    .into_public();
+
+    app.state
+        .tool_registry
+        .register(Arc::new(other_tenant_tool));
+    app.state
+        .tool_registry
+        .register(Arc::new(local_tenant_tool));
+    app.state.tool_registry.register(Arc::new(global_tool));
+
+    // POST /mcp/resources/list includes local and global tools, never another tenant's tool.
+    let (res_list_status, res_list_body) = app.post_json("/mcp/resources/list", "{}").await;
+    assert_eq!(res_list_status, StatusCode::OK);
+    let res_list_json: serde_json::Value =
+        serde_json::from_str(&res_list_body).expect("valid JSON");
+    let resource_names: Vec<&str> = res_list_json["resources"]
+        .as_array()
+        .expect("resources array")
+        .iter()
+        .filter_map(|item| item["name"].as_str())
+        .collect();
+    assert!(
+        !resource_names.contains(&"other_tenant_tool"),
+        "other tenant tool leaked in resources/list: {resource_names:?}"
+    );
+    assert!(resource_names.contains(&"local_tenant_tool"));
+    assert!(resource_names.contains(&"global_public_tool"));
+
+    // POST /mcp/resources/read refuses another tenant's tool with 404.
+    let (other_read_status, other_read_body) = app
+        .post_json(
+            "/mcp/resources/read",
+            r#"{"uri":"stoa://tools/other_tenant_tool"}"#,
+        )
+        .await;
+    assert_eq!(other_read_status, StatusCode::NOT_FOUND);
+    assert!(!other_read_body.contains("Private tool owned by another tenant"));
+
+    // Local and global resources remain readable.
+    for uri in [
+        "stoa://tools/local_tenant_tool",
+        "stoa://tools/global_public_tool",
+    ] {
+        let payload = serde_json::json!({ "uri": uri }).to_string();
+        let (read_status, read_body) = app.post_json("/mcp/resources/read", &payload).await;
+        assert_eq!(read_status, StatusCode::OK, "uri: {uri}");
+        let read_json: serde_json::Value = serde_json::from_str(&read_body).expect("valid JSON");
+        assert_eq!(read_json["contents"][0]["uri"], uri);
+    }
+
+    // POST /mcp/tools/list also omits the other tenant's tool.
+    let (tools_list_status, tools_list_body) = app.post_json("/mcp/tools/list", "{}").await;
+    assert_eq!(tools_list_status, StatusCode::OK);
+    let tools_list_json: serde_json::Value =
+        serde_json::from_str(&tools_list_body).expect("valid JSON");
+    let tool_names: Vec<&str> = tools_list_json["tools"]
+        .as_array()
+        .expect("tools array")
+        .iter()
+        .filter_map(|item| item["name"].as_str())
+        .collect();
+    assert!(
+        !tool_names.contains(&"other_tenant_tool"),
+        "other tenant tool leaked in tools/list: {tool_names:?}"
+    );
+    assert!(tool_names.contains(&"local_tenant_tool"));
+    assert!(tool_names.contains(&"global_public_tool"));
 }

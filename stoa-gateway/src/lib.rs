@@ -836,7 +836,13 @@ async fn ready(
     }
 
     // Check Control Plane connectivity (non-blocking, short timeout)
-    if let Some(cp_url) = &state.config.control_plane_url {
+    if let Some(cp_url) = state
+        .config
+        .control_plane_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|url| !url.is_empty())
+    {
         let health_url = format!("{}/health", cp_url);
         match state.http_client.get(&health_url).send().await {
             Ok(resp) if resp.status().is_success() => {}

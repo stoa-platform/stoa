@@ -76,12 +76,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize mode-specific components
     init_mode_components(&config).await;
 
+    let control_plane_url = config
+        .control_plane_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|url| !url.is_empty())
+        .map(str::to_string);
+
     // Auto-register with Control Plane (ADR-028, CAB-1915)
     // Registration runs in background with retry so the gateway becomes visible
     // even if the CP API is not ready at startup (common in K8s).
     // The registrar is kept alive so api_bridge can read the assigned gateway_id (CAB-1940).
     let registrar: Option<std::sync::Arc<GatewayRegistrar>> = if config.auto_register {
-        match (&config.control_plane_url, &config.control_plane_api_key) {
+        match (&control_plane_url, &config.control_plane_api_key) {
             (Some(cp_url), Some(api_key)) => {
                 info!(
                     "Starting background registration with Control Plane: {}",
@@ -129,7 +136,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Pre-warm connection pool: establish TCP+TLS connections to Control Plane
     // before the first real request, so ramp_up traffic doesn't pay cold-start cost.
-    if let Some(cp_url) = &config.control_plane_url {
+    if let Some(cp_url) = &control_plane_url {
         prewarm_connections(cp_url).await;
     }
 
@@ -341,7 +348,21 @@ async fn register_tools(state: &AppState, registrar: Option<std::sync::Arc<Gatew
     use stoa_gateway::mcp::tools::{api_bridge, stoa_tools};
 
     let Some(control_plane) = state.control_plane.as_ref() else {
-        info!("Control Plane not configured — skipping Control Plane tool and catalog discovery");
+        if state.config.allows_explicit_local_dev_access() && state.config.native_tools_enabled {
+            let http_client = stoa_gateway::mcp::tools::native_tool::create_http_client();
+            stoa_gateway::mcp::tools::native_tool::register_native_tools(
+                &state.tool_registry,
+                http_client,
+                "",
+                state.tool_registry.clone(),
+                Some(state.session_manager.clone()),
+                Some(state.circuit_breakers.clone()),
+                Some(state.prompt_cache.clone()),
+            );
+            info!("Control Plane not configured — registered native tool catalog for explicit local dev");
+        } else {
+            info!("Control Plane not configured — skipping Control Plane tool and catalog discovery");
+        }
         return;
     };
 

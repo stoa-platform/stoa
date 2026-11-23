@@ -182,7 +182,23 @@ impl AppState {
         let circuit_breakers = Arc::new(CircuitBreakerRegistry::new(cb_config));
         tracing::info!("Per-upstream circuit breaker registry initialized");
 
-        let control_plane = config.control_plane_url.as_deref().map(|cp_url| {
+        let control_plane_url = config
+            .control_plane_url
+            .as_deref()
+            .map(str::trim)
+            .filter(|url| !url.is_empty());
+        let keycloak_url = config
+            .keycloak_url
+            .as_deref()
+            .map(str::trim)
+            .filter(|url| !url.is_empty());
+        let keycloak_internal_url = config
+            .keycloak_internal_url
+            .as_deref()
+            .map(str::trim)
+            .filter(|url| !url.is_empty());
+
+        let control_plane = control_plane_url.map(|cp_url| {
             // Build OIDC config if Keycloak credentials are provided.
             // Use internal URL for token endpoint (service-to-service), fall back to external URL.
             // A signing key (private_key_jwt) takes precedence over a client secret.
@@ -203,13 +219,10 @@ impl AppState {
                 }
                 (None, None) => None,
             };
-            let oidc = match (&config.keycloak_url, &config.keycloak_client_id, credential) {
+            let oidc = match (keycloak_url, &config.keycloak_client_id, credential) {
                 (Some(url), Some(client_id), Some(credential)) => {
                     let realm = config.keycloak_realm.as_deref().unwrap_or("stoa");
-                    let token_base = config
-                        .keycloak_internal_url
-                        .as_deref()
-                        .unwrap_or(url.as_str());
+                    let token_base = keycloak_internal_url.unwrap_or(url);
                     let token_url = format!(
                         "{}/realms/{}/protocol/openid-connect/token",
                         token_base.trim_end_matches('/'),
@@ -234,7 +247,7 @@ impl AppState {
         let policy_registry = Arc::new(PolicyRegistry::new());
 
         // Build JWT validator if Keycloak is configured (for user token validation)
-        let jwt_validator = if let Some(url) = &config.keycloak_url {
+        let jwt_validator = if let Some(url) = keycloak_url {
             let realm = config.keycloak_realm.as_deref().unwrap_or("stoa");
             let issuer_url = format!("{}/realms/{}", url.trim_end_matches('/'), realm);
             let client_id = config
@@ -245,7 +258,7 @@ impl AppState {
             let oidc_config = OidcProviderConfig {
                 issuer_url,
                 audience: client_id.to_string(),
-                internal_base_url: config.keycloak_internal_url.clone(),
+                internal_base_url: keycloak_internal_url.map(str::to_string),
                 ..OidcProviderConfig::default()
             };
             let oidc_provider = Arc::new(OidcProvider::new(oidc_config));
@@ -259,7 +272,7 @@ impl AppState {
             tracing::info!("JWT validator initialized for user token authentication");
             Some(Arc::new(validator))
         } else {
-            if config.environment == Environment::Dev && config.control_plane_url.is_none() {
+            if config.environment == Environment::Dev && control_plane_url.is_none() {
                 tracing::debug!("Keycloak not configured — JWT user auth disabled");
             } else {
                 tracing::warn!("Keycloak not configured — JWT user auth disabled");
@@ -592,9 +605,7 @@ impl AppState {
 
         // Tenant tool permissions require a valid signed policy and a pinned trust set.
         let policy_trust = config.policy_trust_jwks_file.as_deref();
-        let tool_permissions = config
-            .control_plane_url
-            .as_ref()
+        let tool_permissions = control_plane_url
             .zip(control_plane.as_ref())
             .map(|(cp_url, cp)| {
                 tracing::info!("Tenant tool permission cache enabled (60s TTL)");
@@ -698,12 +709,24 @@ impl AppState {
     /// tenants keep ADR-070 fail-closed readiness gating.
     pub fn is_standalone_dev(&self) -> bool {
         self.config.environment == Environment::Dev
-            && self.config.control_plane_url.is_none()
+            && self
+                .config
+                .control_plane_url
+                .as_deref()
+                .is_none_or(|url| url.trim().is_empty())
             && self.config.policy_boot_tenants.is_empty()
     }
 
     /// Start background tasks
     pub fn start_background_tasks(&self) {
+        if self.config.allows_explicit_local_dev_access() {
+            tracing::warn!(
+                mode = "explicit_local_dev",
+                local_tenant = crate::auth::tenant::LOCAL_DEV_TENANT,
+                "Local unauthenticated MCP tool access is enabled with a restricted local identity; restricted to explicit local dev without Keycloak and without a Control Plane. Set STOA_KEYCLOAK_URL or STOA_CONTROL_PLANE_URL to make JWT authentication mandatory again."
+            );
+        }
+
         match &self.tool_permissions {
             Some(permissions) if !self.config.policy_boot_tenants.is_empty() => {
                 permissions.spawn_policy_refresher(self.config.policy_boot_tenants.clone());
@@ -1236,5 +1259,71 @@ mod tests {
                 "expected startup_policy_inputs_missing in {environment:?}: {captured}"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn explicit_local_dev_emits_single_startup_warn_and_implicit_dev_does_not() {
+        use crate::control_plane::tool_proxy::tests::LogBuffer;
+
+        // Implicit dev: standalone readiness still works, no explicit-local-dev WARN.
+        let implicit = AppState::new(Config {
+            quota_enforcement_enabled: false,
+            ..Config::default()
+        });
+        assert!(implicit.is_standalone_dev());
+        assert!(!implicit.config.allows_explicit_local_dev_access());
+
+        let logs = LogBuffer::default();
+        let subscriber = tracing_subscriber::fmt()
+            .with_writer(logs.clone())
+            .with_ansi(false)
+            .finish();
+        {
+            let _guard = tracing::subscriber::set_default(subscriber);
+            implicit.start_background_tasks();
+        }
+        let implicit_captured = String::from_utf8(logs.0.lock().clone()).unwrap();
+        assert!(
+            !implicit_captured.contains("explicit_local_dev"),
+            "implicit dev must not emit explicit_local_dev warning: {implicit_captured}"
+        );
+
+        // Explicit dev with whitespace URLs: treated as unset, emits one WARN.
+        let explicit = AppState::new(Config {
+            environment: Environment::Dev,
+            environment_explicit: true,
+            keycloak_url: Some("  ".to_string()),
+            control_plane_url: Some("".to_string()),
+            quota_enforcement_enabled: false,
+            ..Config::default()
+        });
+        assert!(explicit.jwt_validator.is_none());
+        assert!(explicit.control_plane.is_none());
+        assert!(explicit.config.allows_explicit_local_dev_access());
+
+        let logs = LogBuffer::default();
+        let subscriber = tracing_subscriber::fmt()
+            .with_writer(logs.clone())
+            .with_ansi(false)
+            .finish();
+        {
+            let _guard = tracing::subscriber::set_default(subscriber);
+            explicit.start_background_tasks();
+        }
+        let explicit_captured = String::from_utf8(logs.0.lock().clone()).unwrap();
+        assert_eq!(
+            explicit_captured.matches("explicit_local_dev").count(),
+            1,
+            "expected a single explicit_local_dev WARN: {explicit_captured}"
+        );
+        assert!(explicit_captured.contains("WARN"), "{explicit_captured}");
+        assert!(
+            explicit_captured.contains("STOA_KEYCLOAK_URL"),
+            "{explicit_captured}"
+        );
+        assert!(
+            explicit_captured.contains("STOA_CONTROL_PLANE_URL"),
+            "{explicit_captured}"
+        );
     }
 }

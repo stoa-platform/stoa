@@ -281,7 +281,8 @@ pub(super) async fn extract_auth_context(
         raw_token: state
             .config
             .mcp_forward_user_token
-            .then(|| token.to_string()),
+            .then(|| token.to_string())
+            .filter(|t| !t.is_empty()),
         admin_authorization: validate_privileged_claims(&state.config, &claims),
         sub_account_id: claims.sub_account_id.clone(),
         master_account_id: claims.master_account_id.clone(),

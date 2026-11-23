@@ -261,13 +261,13 @@ pub async fn require_auth(
     auth_middleware(State(state), request, next).await
 }
 
-/// Require JWT authentication on MCP REST routes (CAB-2121).
+/// Require JWT authentication on MCP REST routes.
 ///
 /// Runs on `State<AppState>` so it can read `Option<Arc<JwtValidator>>` directly.
 /// Returns 401 with `WWW-Authenticate: Bearer …` when the caller is anonymous or
-/// presents an invalid token. When `state.jwt_validator` is `None` (dev/test
-/// configurations without Keycloak), the middleware is a passthrough. Production
-/// always has `keycloak_url` set so `jwt_validator` is `Some`.
+/// presents an invalid token. When `state.jwt_validator` is `None`, requests are
+/// denied with 401 unless explicit local dev access is enabled and no
+/// `Authorization` header was presented.
 #[instrument(name = "auth.mcp_jwt_required", skip_all, fields(otel.kind = "internal"))]
 pub async fn mcp_jwt_required(
     State(state): State<AppState>,
@@ -277,8 +277,14 @@ pub async fn mcp_jwt_required(
     let validator = match &state.jwt_validator {
         Some(v) => v.clone(),
         None => {
-            warn!("JWT validator not configured — /mcp/* auth gate bypassed");
-            return next.run(request).await;
+            if state.config.allows_explicit_local_dev_access()
+                && !request.headers().contains_key(AUTHORIZATION)
+            {
+                debug!("Explicit local dev mode — allowing unauthenticated /mcp/* request");
+                return next.run(request).await;
+            }
+            warn!("JWT validator not configured — /mcp/* request denied");
+            return mcp_jwt_unavailable_response();
         }
     };
 
@@ -380,6 +386,27 @@ pub async fn api_proxy_jwt_required(
     } else {
         next.run(request).await
     }
+}
+
+/// Build a 401 response for MCP REST routes when JWT validation is unavailable.
+fn mcp_jwt_unavailable_response() -> Response {
+    let mut response = (
+        StatusCode::UNAUTHORIZED,
+        Json(crate::mcp::handlers::ToolsCallResponse {
+            content: vec![crate::mcp::handlers::ToolContent::Text {
+                text: "JWT authentication is unavailable".to_string(),
+            }],
+            is_error: Some(true),
+        }),
+    )
+        .into_response();
+    response.headers_mut().insert(
+        axum::http::header::WWW_AUTHENTICATE,
+        axum::http::HeaderValue::from_static(
+            r#"Bearer resource_metadata="/.well-known/oauth-protected-resource""#,
+        ),
+    );
+    response
 }
 
 /// Build a JWT 401 response with a uniform body shape.

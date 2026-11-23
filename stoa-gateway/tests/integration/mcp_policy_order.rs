@@ -188,9 +188,21 @@ async fn regression_public_and_streaming_routes_keep_native_negotiation_and_expi
     let router = stoa_gateway::build_router(AppState::new(config));
     assert_eq!(
         code(&router, "POST", "/mcp/resources/list", None).await,
-        200
+        401
     );
     assert_eq!(code(&router, "POST", "/mcp/tools/list", None).await, 401);
+
+    let explicit_dev = Config {
+        environment_explicit: true,
+        auto_register: false,
+        ..Config::default()
+    };
+    let router = stoa_gateway::build_router(AppState::new(explicit_dev));
+    assert_eq!(
+        code(&router, "POST", "/mcp/resources/list", None).await,
+        200
+    );
+    assert_eq!(code(&router, "POST", "/mcp/tools/list", None).await, 200);
 }
 #[tokio::test]
 async fn regression_websocket_keeps_subprotocol_auth_and_expired_handshake_refusal() {

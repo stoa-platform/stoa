@@ -55,6 +55,9 @@ jobs:
       - name: Run Jalon 3 compose scenario
         working-directory: deploy/poc-roles-agents
         run: bash scripts/run_jalon3.sh
+      - name: Run revocation saturation compose scenario
+        working-directory: deploy/poc-roles-agents
+        run: bash scripts/run_revocation_saturation.sh
       - name: Run Jalon 5 floor persistence scenario
         working-directory: deploy/poc-roles-agents
         run: bash scripts/run_jalon5_floor.sh

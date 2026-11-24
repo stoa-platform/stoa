@@ -559,6 +559,21 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::result_large_err)]
+    fn env_var_sets_poc_role_policy_check_interval_ms() {
+        figment::Jail::expect_with(|jail| {
+            jail.clear_env();
+            let default_cfg = Config::load().expect("default load");
+            assert_eq!(default_cfg.poc_role_policy_check_interval_ms, 1000);
+
+            jail.set_env("STOA_POC_ROLE_POLICY_CHECK_INTERVAL_MS", "250");
+            let cfg = Config::load().expect("env override load");
+            assert_eq!(cfg.poc_role_policy_check_interval_ms, 250);
+            Ok(())
+        });
+    }
+
+    #[test]
     fn test_validate_rejects_mtls_without_trusted_proxies() {
         let mut config = Config::default();
         config.mtls.enabled = true;

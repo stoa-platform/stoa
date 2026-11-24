@@ -671,15 +671,21 @@ impl AppState {
                 tracing::info!(
                     roles_dir = %roles_dir,
                     floor_dir = %floor_dir,
+                    check_interval_ms = config.poc_role_policy_check_interval_ms,
                     "Signed local agent-role policy store enabled"
                 );
-                Arc::new(crate::control_plane::role_policy::RolePolicyStore::new(
-                    roles_dir,
-                    floor_dir,
-                    &config.policy_expected_issuer,
-                    &config.policy_audience,
-                    policy_trust.map(PolicyTrustStore::open),
-                ))
+                Arc::new(
+                    crate::control_plane::role_policy::RolePolicyStore::new(
+                        roles_dir,
+                        floor_dir,
+                        &config.policy_expected_issuer,
+                        &config.policy_audience,
+                        policy_trust.map(PolicyTrustStore::open),
+                    )
+                    .with_check_interval(Duration::from_millis(
+                        config.poc_role_policy_check_interval_ms,
+                    )),
+                )
             })
         } else {
             None

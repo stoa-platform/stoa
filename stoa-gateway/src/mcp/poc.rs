@@ -301,8 +301,9 @@ pub async fn handle_poc_bootstrap(
         policy_version: Some(policy_version),
     }) {
         Ok(issued) => {
-            if let Err(err) = state.poc_admission.register_chain(
+            if let Err(err) = state.poc_admission.register_chain_for_tenant(
                 &issued.claims.chain_id,
+                &issued.claims.tenant_id,
                 issued.claims.exp,
                 chrono::Utc::now().timestamp(),
             ) {
@@ -491,6 +492,13 @@ pub async fn handle_poc_delegate(
 #[derive(Debug, Deserialize)]
 pub struct PocRevokeRequest {
     pub chain_id: String,
+    #[serde(default)]
+    pub tenant_id: Option<String>,
+}
+
+enum RevokeAuth {
+    BootstrapSecret,
+    ParentToken,
 }
 
 /// `POST /mcp/poc/revoke` — atomically revoke a `chain_id` across tokens and chain budget.
@@ -503,48 +511,55 @@ pub async fn handle_poc_revoke(
         return StatusCode::NOT_FOUND.into_response();
     };
 
-    let mut authorized = false;
-    if let Some(expected_secret) = state
+    let secret_authorized = state
         .config
         .poc_bootstrap_secret
         .as_deref()
         .filter(|s| !s.is_empty())
-    {
-        if let Some(provided) = headers
-            .get("X-Stoa-Poc-Bootstrap-Secret")
-            .and_then(|v| v.to_str().ok())
-        {
-            if bool::from(provided.as_bytes().ct_eq(expected_secret.as_bytes())) {
-                authorized = true;
-            }
-        }
-    }
+        .zip(
+            headers
+                .get("X-Stoa-Poc-Bootstrap-Secret")
+                .and_then(|v| v.to_str().ok()),
+        )
+        .is_some_and(|(expected, provided)| {
+            bool::from(provided.as_bytes().ct_eq(expected.as_bytes()))
+        });
 
-    if !authorized {
+    let auth_kind = if secret_authorized {
+        Some(RevokeAuth::BootstrapSecret)
+    } else {
         let base = public_base_url(&state);
         let revoke_htu = format!("{base}/mcp/poc/revoke");
         let mcp_aud = format!("{base}/mcp/poc");
         match auth.validate_mcp_request(&headers, "POST", &revoke_htu, &mcp_aud) {
             Ok(claims) if claims.depth == 0 && claims.chain_id == req.chain_id.trim() => {
-                authorized = true;
+                Some(RevokeAuth::ParentToken)
             }
-            _ => {}
+            _ => None,
         }
-    }
+    };
 
-    if !authorized {
+    let Some(auth_kind) = auth_kind else {
         return (
             StatusCode::UNAUTHORIZED,
             Json(json!({ "error": "unauthorized" })),
         )
             .into_response();
-    }
+    };
 
     let now_epoch = chrono::Utc::now().timestamp();
-    match state
-        .poc_admission
-        .revoke_chain(&req.chain_id, None, now_epoch)
-    {
+    let revoke_result = match auth_kind {
+        RevokeAuth::BootstrapSecret => state.poc_admission.revoke_known_chain(
+            &req.chain_id,
+            req.tenant_id.as_deref(),
+            None,
+            now_epoch,
+        ),
+        RevokeAuth::ParentToken => state
+            .poc_admission
+            .revoke_chain(&req.chain_id, None, now_epoch),
+    };
+    match revoke_result {
         Ok(receipt) => (
             StatusCode::OK,
             Json(json!({
@@ -552,6 +567,16 @@ pub async fn handle_poc_revoke(
                 "chain_id": receipt.chain_id,
                 "retain_until_epoch": receipt.retain_until_epoch
             })),
+        )
+            .into_response(),
+        Err(AdmissionError::UnknownChain) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": "unknown_chain" })),
+        )
+            .into_response(),
+        Err(AdmissionError::TenantMismatch) => (
+            StatusCode::FORBIDDEN,
+            Json(json!({ "error": "tenant_mismatch" })),
         )
             .into_response(),
         Err(AdmissionError::RevocationTableFull) => (
@@ -766,7 +791,9 @@ fn admission_rejection(err: AdmissionError) -> PocToolRejection {
         AdmissionError::AdmissionTableFull | AdmissionError::RevocationTableFull => {
             (-32005, "Admission unavailable")
         }
-        AdmissionError::InvalidInput(_) => (-32003, "Admission rejected"),
+        AdmissionError::UnknownChain
+        | AdmissionError::TenantMismatch
+        | AdmissionError::InvalidInput(_) => (-32003, "Admission rejected"),
     }
 }
 
@@ -4566,5 +4593,318 @@ allow if {
         let list_calls = reqs.iter().filter(|r| r.url.path() == "/payments").count();
         assert_eq!(export_calls, 1);
         assert_eq!(list_calls, 1);
+    }
+
+    #[tokio::test]
+    async fn secret_revocation_requires_known_active_chain_and_respects_tenant() {
+        let upstream = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/payments"))
+            .and(header("X-API-Key", "ky-rev"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"ok": true})))
+            .mount(&upstream)
+            .await;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let signer = PolicyFixtureSigner::new();
+        let trust_file = signer.write_trust(tmp.path());
+
+        let policies_dir = tmp.path().join("policies");
+        let roles_dir = tmp.path().join("roles");
+        let floor_dir = tmp.path().join("floors");
+        let contracts_dir = tmp.path().join("contracts");
+        for d in [&policies_dir, &roles_dir, &contracts_dir] {
+            std::fs::create_dir_all(d).unwrap();
+        }
+
+        for tenant in ["acme", "beta"] {
+            let tool_name = format!("{tenant}_payments_list");
+            std::fs::write(
+                policies_dir.join(format!("{tenant}.jws")),
+                signer.sign_tool_policy(tenant, &[tool_name.as_str()]),
+            )
+            .unwrap();
+            std::fs::write(
+                roles_dir.join(format!("{tenant}.roles.jws")),
+                signer.sign_role_policy(
+                    tenant,
+                    1,
+                    json!({
+                        "reader": { "allowed_tools": [tool_name] }
+                    }),
+                ),
+            )
+            .unwrap();
+            std::fs::write(
+                contracts_dir.join(format!("{tenant}.uac.json")),
+                serde_json::to_string(&json!({
+                    "name": format!("payments-{tenant}"),
+                    "version": "1.0.0",
+                    "tenant_id": tenant,
+                    "display_name": "Payments Revoke",
+                    "description": "Revocation fixture",
+                    "classification": "H",
+                    "endpoints": [{
+                        "path": "/payments",
+                        "methods": ["GET"],
+                        "backend_url": format!("{}/payments", upstream.uri()),
+                        "operation_id": format!("list_payments_{tenant}"),
+                        "llm": {
+                            "summary": "List payments",
+                            "intent": "Read payments",
+                            "tool_name": tool_name,
+                            "side_effects": "read",
+                            "safe_for_agents": true,
+                            "requires_human_approval": false,
+                            "examples": []
+                        }
+                    }],
+                    "required_policies": [],
+                    "status": "published"
+                }))
+                .unwrap(),
+            )
+            .unwrap();
+        }
+
+        let creds_file = tmp.path().join("credentials.json");
+        std::fs::write(
+            &creds_file,
+            serde_json::to_string(&json!([
+                {
+                    "route_id": "mcp-tool:acme:acme_payments_list",
+                    "auth_type": "api_key",
+                    "header_name": "X-API-Key",
+                    "header_value": "ky-rev",
+                    "allowed_origin": upstream.uri(),
+                    "shared_with_tenants": false
+                },
+                {
+                    "route_id": "mcp-tool:beta:beta_payments_list",
+                    "auth_type": "api_key",
+                    "header_name": "X-API-Key",
+                    "header_value": "ky-rev",
+                    "allowed_origin": upstream.uri(),
+                    "shared_with_tenants": false
+                }
+            ]))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let base_url = "http://stoa-gateway:8080";
+        let config = Config {
+            auto_register: false,
+            admin_routes_disabled: true,
+            policy_enabled: false,
+            policy_boot_tenants: vec!["acme".to_string(), "beta".to_string()],
+            policy_trust_jwks_file: Some(trust_file),
+            policy_local_artifacts_dir: Some(policies_dir.to_string_lossy().to_string()),
+            policy_expected_issuer: "stoa-poc-policy".to_string(),
+            policy_audience: "stoa-gateway".to_string(),
+            poc_agents_enabled: true,
+            poc_bootstrap_secret: Some("bt-rev".to_string()),
+            poc_uac_contracts_dir: Some(contracts_dir.to_string_lossy().to_string()),
+            poc_credentials_file: Some(creds_file.to_string_lossy().to_string()),
+            poc_public_base_url: Some(base_url.to_string()),
+            poc_role_artifacts_dir: Some(roles_dir.to_string_lossy().to_string()),
+            poc_role_floor_dir: Some(floor_dir.to_string_lossy().to_string()),
+            poc_outbound_allowed_origins: vec![upstream.uri()],
+            poc_max_revoked_chains: 3,
+            ..Config::default()
+        };
+
+        let state = AppState::new(config);
+        load_poc_fixtures(&state).await.unwrap();
+        let perms = state.tool_permissions.as_ref().unwrap();
+        perms.load_policy("acme").await.unwrap();
+        perms.load_policy("beta").await.unwrap();
+        let app = build_router(state.clone());
+
+        let boot_htu = format!("{base_url}/mcp/poc/bootstrap");
+        let rev_htu = format!("{base_url}/mcp/poc/revoke");
+        let mcp_htu = format!("{base_url}/mcp/poc");
+
+        let secret_revoke = |payload: Value| {
+            let app = app.clone();
+            let body = payload.to_string();
+            async move {
+                let resp = app
+                    .oneshot(
+                        Request::builder()
+                            .method("POST")
+                            .uri("/mcp/poc/revoke")
+                            .header("content-type", "application/json")
+                            .header("X-Stoa-Poc-Bootstrap-Secret", "bt-rev")
+                            .body(Body::from(body))
+                            .unwrap(),
+                    )
+                    .await
+                    .unwrap();
+                let status = resp.status();
+                let bytes = axum::body::to_bytes(resp.into_body(), 16 * 1024)
+                    .await
+                    .unwrap();
+                let json_body: Value = serde_json::from_slice(&bytes).unwrap();
+                (status, json_body)
+            }
+        };
+
+        let mint_parent = |dpop: &TestDpop, tenant: &str, sub: &str, jti: &str| {
+            let app = app.clone();
+            let proof = dpop.proof("POST", &boot_htu, jti, None);
+            let payload = json!({
+                "sub": sub,
+                "tenant_id": tenant,
+                "role": "reader"
+            })
+            .to_string();
+            async move {
+                let resp = app
+                    .oneshot(
+                        Request::builder()
+                            .method("POST")
+                            .uri("/mcp/poc/bootstrap")
+                            .header("content-type", "application/json")
+                            .header("X-Stoa-Poc-Bootstrap-Secret", "bt-rev")
+                            .header("DPoP", proof)
+                            .body(Body::from(payload))
+                            .unwrap(),
+                    )
+                    .await
+                    .unwrap();
+                assert_eq!(resp.status(), StatusCode::OK);
+                let bytes = axum::body::to_bytes(resp.into_body(), 16 * 1024)
+                    .await
+                    .unwrap();
+                serde_json::from_slice::<Value>(&bytes).unwrap()
+            }
+        };
+
+        let call_payments = |dpop: &TestDpop, tok: &str, jti: &str, id: i64| {
+            let app = app.clone();
+            let auth_header = format!("DPoP {tok}");
+            let proof = dpop.proof("POST", &mcp_htu, jti, Some(tok));
+            let payload = json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "method": "tools/call",
+                "params": { "name": "acme_payments_list", "arguments": {} }
+            })
+            .to_string();
+            async move {
+                let resp = app
+                    .oneshot(
+                        Request::builder()
+                            .method("POST")
+                            .uri("/mcp/poc")
+                            .header("content-type", "application/json")
+                            .header("Authorization", auth_header)
+                            .header("DPoP", proof)
+                            .body(Body::from(payload))
+                            .unwrap(),
+                    )
+                    .await
+                    .unwrap();
+                assert_eq!(resp.status(), StatusCode::OK);
+                let bytes = axum::body::to_bytes(resp.into_body(), 16 * 1024)
+                    .await
+                    .unwrap();
+                serde_json::from_slice::<Value>(&bytes).unwrap()
+            }
+        };
+
+        // 1. Unknown chain_ids via bootstrap secret return 404 unknown_chain and insert nothing.
+        for idx in 0..5 {
+            let (status, body) = secret_revoke(json!({
+                "chain_id": format!("unknown-chain-{idx}"),
+                "tenant_id": "acme"
+            }))
+            .await;
+            assert_eq!(status, StatusCode::NOT_FOUND);
+            assert_eq!(body["error"], "unknown_chain");
+        }
+        assert_eq!(state.poc_admission.revoked_count(), 0);
+
+        // 2. Bootstrap a chain for acme and refuse secret revocation with another tenant_id.
+        let dpop_acme = TestDpop::new();
+        let acme_boot = mint_parent(&dpop_acme, "acme", "agent-acme", "rev-b1").await;
+        let tok_acme = acme_boot["access_token"].as_str().unwrap().to_string();
+        let cid_acme = acme_boot["chain_id"].as_str().unwrap().to_string();
+
+        let (status, body) = secret_revoke(json!({
+            "chain_id": cid_acme,
+            "tenant_id": "beta"
+        }))
+        .await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert_eq!(body["error"], "tenant_mismatch");
+        assert_eq!(state.poc_admission.revoked_count(), 0);
+
+        // Chain remains usable after rejected tenant mismatch.
+        let rpc_ok = call_payments(&dpop_acme, &tok_acme, "rev-c1", 1).await;
+        assert!(
+            rpc_ok.get("error").is_none(),
+            "expected active chain: {rpc_ok}"
+        );
+
+        // 3. Secret revocation with matching tenant succeeds and blocks subsequent calls.
+        let (status, body) = secret_revoke(json!({
+            "chain_id": cid_acme,
+            "tenant_id": "acme"
+        }))
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["revoked"], json!(true));
+        assert_eq!(state.poc_admission.revoked_count(), 1);
+
+        let rpc_revoked = call_payments(&dpop_acme, &tok_acme, "rev-c2", 2).await;
+        assert_eq!(rpc_revoked["error"]["code"], -32003);
+        assert_eq!(rpc_revoked["error"]["message"], "Chain revoked");
+
+        // Re-revoking an already-revoked chain via secret returns 404 unknown_chain.
+        let (status, body) = secret_revoke(json!({
+            "chain_id": cid_acme,
+            "tenant_id": "acme"
+        }))
+        .await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert_eq!(body["error"], "unknown_chain");
+        assert_eq!(state.poc_admission.revoked_count(), 1);
+
+        // 4. Secret revocation without optional tenant_id still revokes a known active chain.
+        let dpop_beta1 = TestDpop::new();
+        let beta1_boot = mint_parent(&dpop_beta1, "beta", "agent-beta-1", "rev-b2").await;
+        let cid_beta1 = beta1_boot["chain_id"].as_str().unwrap().to_string();
+        let (status, body) = secret_revoke(json!({ "chain_id": cid_beta1 })).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["revoked"], json!(true));
+        assert_eq!(state.poc_admission.revoked_count(), 2);
+
+        // 5. Token-based self-revoke path remains unchanged.
+        let dpop_beta2 = TestDpop::new();
+        let beta2_boot = mint_parent(&dpop_beta2, "beta", "agent-beta-2", "rev-b3").await;
+        let tok_beta2 = beta2_boot["access_token"].as_str().unwrap().to_string();
+        let cid_beta2 = beta2_boot["chain_id"].as_str().unwrap().to_string();
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/mcp/poc/revoke")
+                    .header("content-type", "application/json")
+                    .header("Authorization", format!("DPoP {tok_beta2}"))
+                    .header(
+                        "DPoP",
+                        dpop_beta2.proof("POST", &rev_htu, "rev-self", Some(&tok_beta2)),
+                    )
+                    .body(Body::from(json!({ "chain_id": cid_beta2 }).to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(state.poc_admission.revoked_count(), 3);
+        assert_eq!(upstream.received_requests().await.unwrap().len(), 1);
     }
 }

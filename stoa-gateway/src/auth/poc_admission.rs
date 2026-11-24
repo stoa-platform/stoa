@@ -77,6 +77,12 @@ pub enum AdmissionError {
     #[error("delegation chain is unregistered or expired")]
     ChainInactive,
 
+    #[error("delegation chain is not known")]
+    UnknownChain,
+
+    #[error("delegation chain belongs to another tenant")]
+    TenantMismatch,
+
     #[error("session has expired")]
     SessionExpired,
 
@@ -156,8 +162,14 @@ impl<T> ExpiryTable<T> {
 }
 
 #[derive(Debug, Default)]
+struct ChainState {
+    used: u64,
+    tenant_hash: Option<AdmissionKey>,
+}
+
+#[derive(Debug, Default)]
 struct AdmissionState {
-    chains: ExpiryTable<u64>,
+    chains: ExpiryTable<ChainState>,
     callers: ExpiryTable<u64>,
     revoked_chains: ExpiryTable<()>,
     last_now_epoch: Option<i64>,
@@ -200,6 +212,28 @@ impl PocAdmissionController {
         expires_at: i64,
         now_epoch: i64,
     ) -> Result<(), AdmissionError> {
+        self.register_chain_internal(chain_id, None, expires_at, now_epoch)
+    }
+
+    /// Reserve the chain together with its owning tenant before publishing the root token.
+    pub fn register_chain_for_tenant(
+        &self,
+        chain_id: &str,
+        tenant_id: &str,
+        expires_at: i64,
+        now_epoch: i64,
+    ) -> Result<(), AdmissionError> {
+        let tenant_hash = tenant_key(tenant_id)?;
+        self.register_chain_internal(chain_id, Some(tenant_hash), expires_at, now_epoch)
+    }
+
+    fn register_chain_internal(
+        &self,
+        chain_id: &str,
+        tenant_hash: Option<AdmissionKey>,
+        expires_at: i64,
+        now_epoch: i64,
+    ) -> Result<(), AdmissionError> {
         let chain_hash = chain_key(chain_id)?;
         let mut st = self.state.lock();
         let now_epoch = st.advance_time(now_epoch);
@@ -213,7 +247,14 @@ impl PocAdmissionController {
         if st.chains.entries.len() >= self.config.max_admission_entries {
             return Err(AdmissionError::AdmissionTableFull);
         }
-        st.chains.insert(chain_hash, expires_at, 0);
+        st.chains.insert(
+            chain_hash,
+            expires_at,
+            ChainState {
+                used: 0,
+                tenant_hash,
+            },
+        );
         Ok(())
     }
 
@@ -298,6 +339,65 @@ impl PocAdmissionController {
         })
     }
 
+    /// Atomically revoke a currently active chain known to the controller.
+    ///
+    /// Unknown, expired, or already-revoked chains return [`AdmissionError::UnknownChain`]
+    /// without inserting anything into the revocation table. When `expected_tenant_id` is
+    /// provided, chains belonging to another tenant return [`AdmissionError::TenantMismatch`].
+    pub fn revoke_known_chain(
+        &self,
+        chain_id: &str,
+        expected_tenant_id: Option<&str>,
+        explicit_retain_until: Option<i64>,
+        now_epoch: i64,
+    ) -> Result<RevocationReceipt, AdmissionError> {
+        let chain_hash = chain_key(chain_id)?;
+        let expected_tenant_hash = match expected_tenant_id {
+            Some(raw) => Some(tenant_key(raw)?),
+            None => None,
+        };
+        let mut st = self.state.lock();
+        let now_epoch = st.advance_time(now_epoch);
+        let Some(chain) = st.chains.entries.get(&chain_hash) else {
+            return Err(AdmissionError::UnknownChain);
+        };
+        if expected_tenant_hash
+            .is_some_and(|expected_hash| chain.value.tenant_hash != Some(expected_hash))
+        {
+            return Err(AdmissionError::TenantMismatch);
+        }
+        let chain_expires_at = chain.expires_at;
+        let existing = st.revoked_chains.entries.get(&chain_hash);
+        if existing.is_none() && st.revoked_chains.entries.len() >= self.config.max_revoked_chains {
+            return Err(AdmissionError::RevocationTableFull);
+        }
+
+        let retain_until = [
+            explicit_retain_until,
+            Some(chain_expires_at),
+            existing.map(|entry| entry.expires_at),
+        ]
+        .into_iter()
+        .flatten()
+        .fold(
+            now_epoch.saturating_add(FALLBACK_REVOCATION_RETENTION_SECS),
+            i64::max,
+        );
+        if retain_until <= now_epoch {
+            return Err(AdmissionError::InvalidInput(
+                "revocation deadline out of range",
+            ));
+        }
+
+        st.revoked_chains.insert(chain_hash, retain_until, ());
+        st.chains.remove(&chain_hash);
+
+        Ok(RevocationReceipt {
+            chain_id: chain_id.trim().to_string(),
+            retain_until_epoch: retain_until,
+        })
+    }
+
     /// Debit both budgets atomically, without allocating or charging either
     /// budget if the admission fails.
     pub fn admit_call(
@@ -327,6 +427,7 @@ impl PocAdmissionController {
 
         let next_chain = chain
             .value
+            .used
             .checked_add(req.cost)
             .filter(|&used| used <= chain_limit)
             .ok_or(AdmissionError::ChainBudgetExceeded)?;
@@ -351,7 +452,7 @@ impl PocAdmissionController {
                 ))?;
             st.callers.insert(caller_hash, deadline, next_caller);
         }
-        chain.value = next_chain;
+        chain.value.used = next_chain;
 
         Ok(AdmissionReceipt {
             chain_used: next_chain,
@@ -379,7 +480,8 @@ impl PocAdmissionController {
             .entries
             .get(&chain_hash)
             .ok_or(AdmissionError::ChainInactive)?
-            .value;
+            .value
+            .used;
         let caller_used = st
             .callers
             .entries
@@ -404,7 +506,7 @@ impl PocAdmissionController {
             .chains
             .entries
             .get(&key)
-            .map_or(0, |entry| entry.value)
+            .map_or(0, |entry| entry.value.used)
     }
 
     /// Caller debit as of the last processed admission time.
@@ -440,6 +542,17 @@ fn chain_key(chain_id: &str) -> Result<AdmissionKey, AdmissionError> {
         return Err(AdmissionError::InvalidInput("chain_id exceeds max length"));
     }
     Ok(hash_id(chain_id))
+}
+
+fn tenant_key(tenant_id: &str) -> Result<AdmissionKey, AdmissionError> {
+    let tenant_id = tenant_id.trim();
+    if tenant_id.is_empty() {
+        return Err(AdmissionError::InvalidInput("empty tenant_id"));
+    }
+    if tenant_id.len() > MAX_ADMISSION_ID_LEN {
+        return Err(AdmissionError::InvalidInput("tenant_id exceeds max length"));
+    }
+    Ok(hash_id(tenant_id))
 }
 
 fn budget_keys(
@@ -1056,6 +1169,90 @@ mod tests {
         assert_eq!(
             ctrl.check_chain_active("chain", i64::MAX, 140),
             Err(AdmissionError::ChainInactive)
+        );
+    }
+
+    #[test]
+    fn revoke_known_chain_requires_active_chain_and_matching_tenant() {
+        let ctrl = PocAdmissionController::new(PocAdmissionConfig {
+            max_revoked_chains: 2,
+            ..Default::default()
+        });
+        let now = 1_700_000_000;
+
+        // Unknown chain fails without modifying the revocation table.
+        assert_eq!(
+            ctrl.revoke_known_chain("unknown-chain", Some("acme"), None, now)
+                .unwrap_err(),
+            AdmissionError::UnknownChain
+        );
+        assert_eq!(ctrl.revoked_count(), 0);
+
+        ctrl.register_chain_for_tenant("chain-acme", "acme", now + 300, now)
+            .unwrap();
+        ctrl.register_chain_for_tenant("chain-expired", "acme", now + 10, now)
+            .unwrap();
+        ctrl.register_chain_for_tenant("chain-beta", "beta", now + 300, now)
+            .unwrap();
+        ctrl.register_chain_for_tenant("chain-gamma", "acme", now + 300, now)
+            .unwrap();
+
+        // Wrong or blank tenant is refused without revoking the chain.
+        assert_eq!(
+            ctrl.revoke_known_chain("chain-acme", Some("beta"), None, now + 1)
+                .unwrap_err(),
+            AdmissionError::TenantMismatch
+        );
+        assert_eq!(
+            ctrl.revoke_known_chain("chain-acme", Some("   "), None, now + 1)
+                .unwrap_err(),
+            AdmissionError::InvalidInput("empty tenant_id")
+        );
+        assert_eq!(ctrl.revoked_count(), 0);
+        ctrl.check_chain_active("chain-acme", now + 300, now + 1)
+            .unwrap();
+
+        // Expired chain is no longer active and returns UnknownChain without insertion.
+        assert_eq!(
+            ctrl.revoke_known_chain("chain-expired", Some("acme"), None, now + 10)
+                .unwrap_err(),
+            AdmissionError::UnknownChain
+        );
+        assert_eq!(ctrl.revoked_count(), 0);
+
+        // Matching tenant revokes the active chain and prevents duplicate secret revokes.
+        let receipt = ctrl
+            .revoke_known_chain("chain-acme", Some("acme"), None, now + 10)
+            .expect("known chain with matching tenant revokes");
+        assert_eq!(receipt.chain_id, "chain-acme");
+        assert_eq!(ctrl.revoked_count(), 1);
+        assert_eq!(
+            ctrl.check_chain_active("chain-acme", now + 300, now + 11)
+                .unwrap_err(),
+            AdmissionError::ChainRevoked
+        );
+        assert_eq!(
+            ctrl.revoke_known_chain("chain-acme", Some("acme"), None, now + 11)
+                .unwrap_err(),
+            AdmissionError::UnknownChain
+        );
+        assert_eq!(ctrl.revoked_count(), 1);
+
+        // Omitting optional tenant_id still revokes a known active chain (fills 2/2).
+        ctrl.revoke_known_chain("chain-beta", None, None, now + 11)
+            .expect("known chain without tenant filter revokes");
+        assert_eq!(ctrl.revoked_count(), 2);
+
+        // Saturated table still returns UnknownChain for unknown chains and RevocationTableFull for known ones.
+        assert_eq!(
+            ctrl.revoke_known_chain("never-registered", None, None, now + 12)
+                .unwrap_err(),
+            AdmissionError::UnknownChain
+        );
+        assert_eq!(
+            ctrl.revoke_known_chain("chain-gamma", Some("acme"), None, now + 12)
+                .unwrap_err(),
+            AdmissionError::RevocationTableFull
         );
     }
 }

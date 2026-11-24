@@ -21,7 +21,7 @@ use aws_lc_rs::rsa::{KeyPair, KeySize, PublicKeyComponents};
 use aws_lc_rs::signature::KeyPair as _;
 use axum::http::header::AUTHORIZATION;
 use axum::http::HeaderMap;
-use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use jsonwebtoken::{
     decode, decode_header, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation,
@@ -215,20 +215,6 @@ impl fmt::Debug for LocalAgentAuth {
     }
 }
 
-fn encode_pkcs8_pem(der: &[u8]) -> String {
-    let b64 = STANDARD.encode(der);
-    let mut pem = String::with_capacity(b64.len() + 64);
-    pem.push_str("-----BEGIN PRIVATE KEY-----\n");
-    for chunk in b64.as_bytes().chunks(64) {
-        if let Ok(line) = std::str::from_utf8(chunk) {
-            pem.push_str(line);
-            pem.push('\n');
-        }
-    }
-    pem.push_str("-----END PRIVATE KEY-----\n");
-    pem
-}
-
 fn build_act_chain(parent: &LocalAgentClaims) -> Value {
     match &parent.act {
         Some(prev) => json!({ "sub": parent.sub, "act": prev }),
@@ -244,7 +230,7 @@ impl LocalAgentAuth {
         let der: Pkcs8V1Der<'_> = keypair
             .as_der()
             .map_err(|_| LocalTokenError::KeyGeneration("PKCS#8 encoding failed".into()))?;
-        let pem = encode_pkcs8_pem(der.as_ref());
+        let pem = pem::encode(&pem::Pem::new("PRIVATE KEY", der.as_ref()));
         let encoding_key = EncodingKey::from_rsa_pem(pem.as_bytes())
             .map_err(|e| LocalTokenError::KeyGeneration(e.to_string()))?;
         drop(pem);

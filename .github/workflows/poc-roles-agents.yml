@@ -4,13 +4,23 @@ on:
   pull_request:
     paths:
       - 'deploy/poc-roles-agents/**'
+      - 'stoa-gateway/Dockerfile'
+      - 'stoa-gateway/Cargo.toml'
       - 'stoa-gateway/src/auth/local_agent_token.rs'
       - 'stoa-gateway/src/auth/dpop.rs'
       - 'stoa-gateway/src/auth/poc_admission.rs'
+      - 'stoa-gateway/src/config.rs'
+      - 'stoa-gateway/src/config/**'
       - 'stoa-gateway/src/control_plane/role_policy.rs'
+      - 'stoa-gateway/src/control_plane/tool_permissions.rs'
+      - 'stoa-gateway/src/lib.rs'
+      - 'stoa-gateway/src/main.rs'
       - 'stoa-gateway/src/mcp/poc.rs'
-      - 'stoa-gateway/src/mcp/poc/**'
+      - 'stoa-gateway/src/mcp/tools/dynamic_tool.rs'
+      - 'stoa-gateway/src/proxy/credentials.rs'
       - 'stoa-gateway/src/proxy/outbound_policy.rs'
+      - 'stoa-gateway/src/state.rs'
+      - 'stoa-gateway/src/uac/binders/mcp.rs'
       - '.github/workflows/poc-roles-agents.yml'
   workflow_dispatch:
 

@@ -4,8 +4,11 @@ set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$DIR"
 
-export STOA_POC_BOOTSTRAP_SECRET="${STOA_POC_BOOTSTRAP_SECRET:-poc-parent-boot-$(openssl rand -hex 12)}"
-export STOA_POC_UPSTREAM_API_KEY="${STOA_POC_UPSTREAM_API_KEY:-poc-backend-key-$(openssl rand -hex 12)}"
+bootstrap_rand="$(openssl rand -hex 24)"
+upstream_rand="$(openssl rand -hex 24)"
+STOA_POC_BOOTSTRAP_SECRET="${bootstrap_rand}"
+STOA_POC_UPSTREAM_API_KEY="${upstream_rand}"
+export STOA_POC_BOOTSTRAP_SECRET STOA_POC_UPSTREAM_API_KEY
 
 cleanup() {
   docker compose down -v --remove-orphans >/dev/null 2>&1 || true

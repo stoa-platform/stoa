@@ -3100,4 +3100,335 @@ allow if {
         assert!(ok_json["access_token"].as_str().is_some());
         assert_eq!(ok_json["tenant_id"], "acme");
     }
+
+    #[tokio::test]
+    async fn revocation_table_saturation_fails_closed_at_router_level() {
+        let upstream = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/payments"))
+            .and(header("X-API-Key", "ky-sat"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"ok": true})))
+            .mount(&upstream)
+            .await;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let signer = PolicyFixtureSigner::new();
+        let trust_file = signer.write_trust(tmp.path());
+
+        let policies_dir = tmp.path().join("policies");
+        let roles_dir = tmp.path().join("roles");
+        let floor_dir = tmp.path().join("floors");
+        let contracts_dir = tmp.path().join("contracts");
+        for d in [&policies_dir, &roles_dir, &contracts_dir] {
+            std::fs::create_dir_all(d).unwrap();
+        }
+
+        std::fs::write(
+            policies_dir.join("acme.jws"),
+            signer.sign_tool_policy("acme", &["payments_list"]),
+        )
+        .unwrap();
+        std::fs::write(
+            roles_dir.join("acme.roles.jws"),
+            signer.sign_role_policy(
+                "acme",
+                1,
+                json!({
+                    "reader": { "allowed_tools": ["payments_list"] }
+                }),
+            ),
+        )
+        .unwrap();
+        std::fs::write(
+            contracts_dir.join("payments.uac.json"),
+            serde_json::to_string(&json!({
+                "name": "payments",
+                "version": "1.0.0",
+                "tenant_id": "acme",
+                "display_name": "Payments Sat",
+                "description": "Revocation saturation fixture",
+                "classification": "H",
+                "endpoints": [{
+                    "path": "/payments",
+                    "methods": ["GET"],
+                    "backend_url": format!("{}/payments", upstream.uri()),
+                    "operation_id": "list_payments",
+                    "llm": {
+                        "summary": "List payments",
+                        "intent": "Read payments",
+                        "tool_name": "payments_list",
+                        "side_effects": "read",
+                        "safe_for_agents": true,
+                        "requires_human_approval": false,
+                        "examples": []
+                    }
+                }],
+                "required_policies": [],
+                "status": "published"
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let creds_file = tmp.path().join("credentials.json");
+        std::fs::write(
+            &creds_file,
+            serde_json::to_string(&json!([{
+                "route_id": "mcp-tool:acme:payments_list",
+                "auth_type": "api_key",
+                "header_name": "X-API-Key",
+                "header_value": "ky-sat",
+                "allowed_origin": upstream.uri(),
+                "shared_with_tenants": false
+            }]))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let base_url = "http://stoa-gateway:8080";
+        let config = Config {
+            auto_register: false,
+            admin_routes_disabled: true,
+            policy_enabled: false,
+            policy_boot_tenants: vec!["acme".to_string()],
+            policy_trust_jwks_file: Some(trust_file),
+            policy_local_artifacts_dir: Some(policies_dir.to_string_lossy().to_string()),
+            policy_expected_issuer: "stoa-poc-policy".to_string(),
+            policy_audience: "stoa-gateway".to_string(),
+            poc_agents_enabled: true,
+            poc_bootstrap_secret: Some("bt-sat".to_string()),
+            poc_uac_contracts_dir: Some(contracts_dir.to_string_lossy().to_string()),
+            poc_credentials_file: Some(creds_file.to_string_lossy().to_string()),
+            poc_public_base_url: Some(base_url.to_string()),
+            poc_role_artifacts_dir: Some(roles_dir.to_string_lossy().to_string()),
+            poc_role_floor_dir: Some(floor_dir.to_string_lossy().to_string()),
+            poc_outbound_allowed_origins: vec![upstream.uri()],
+            poc_max_revoked_chains: 2,
+            ..Config::default()
+        };
+
+        let state = AppState::new(config);
+        load_poc_fixtures(&state).await.unwrap();
+        state
+            .tool_permissions
+            .as_ref()
+            .unwrap()
+            .load_policy("acme")
+            .await
+            .unwrap();
+        let app = build_router(state.clone());
+
+        let boot_htu = format!("{base_url}/mcp/poc/bootstrap");
+        let rev_htu = format!("{base_url}/mcp/poc/revoke");
+        let del_htu = format!("{base_url}/mcp/poc/delegate");
+        let mcp_htu = format!("{base_url}/mcp/poc");
+
+        let mint_parent = |dpop: &TestDpop, sub: &str, jti: &str| {
+            let app = app.clone();
+            let proof = dpop.proof("POST", &boot_htu, jti, None);
+            let payload = json!({
+                "sub": sub,
+                "tenant_id": "acme",
+                "role": "reader"
+            })
+            .to_string();
+            async move {
+                let resp = app
+                    .oneshot(
+                        Request::builder()
+                            .method("POST")
+                            .uri("/mcp/poc/bootstrap")
+                            .header("content-type", "application/json")
+                            .header("X-Stoa-Poc-Bootstrap-Secret", "bt-sat")
+                            .header("DPoP", proof)
+                            .body(Body::from(payload))
+                            .unwrap(),
+                    )
+                    .await
+                    .unwrap();
+                let status = resp.status();
+                let body = axum::body::to_bytes(resp.into_body(), 16 * 1024)
+                    .await
+                    .unwrap();
+                let json_body: Value = serde_json::from_slice(&body).unwrap();
+                (status, json_body)
+            }
+        };
+
+        let revoke_chain = |dpop: &TestDpop, tok: &str, chain_id: &str, jti: &str| {
+            let app = app.clone();
+            let auth_header = format!("DPoP {tok}");
+            let proof = dpop.proof("POST", &rev_htu, jti, Some(tok));
+            let payload = json!({ "chain_id": chain_id }).to_string();
+            async move {
+                let resp = app
+                    .oneshot(
+                        Request::builder()
+                            .method("POST")
+                            .uri("/mcp/poc/revoke")
+                            .header("content-type", "application/json")
+                            .header("Authorization", auth_header)
+                            .header("DPoP", proof)
+                            .body(Body::from(payload))
+                            .unwrap(),
+                    )
+                    .await
+                    .unwrap();
+                let status = resp.status();
+                let body = axum::body::to_bytes(resp.into_body(), 16 * 1024)
+                    .await
+                    .unwrap();
+                let json_body: Value = serde_json::from_slice(&body).unwrap();
+                (status, json_body)
+            }
+        };
+
+        let call_payments = |dpop: &TestDpop, tok: &str, jti: &str, id: i64| {
+            let app = app.clone();
+            let auth_header = format!("DPoP {tok}");
+            let proof = dpop.proof("POST", &mcp_htu, jti, Some(tok));
+            let payload = json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "method": "tools/call",
+                "params": { "name": "payments_list", "arguments": {} }
+            })
+            .to_string();
+            async move {
+                let resp = app
+                    .oneshot(
+                        Request::builder()
+                            .method("POST")
+                            .uri("/mcp/poc")
+                            .header("content-type", "application/json")
+                            .header("Authorization", auth_header)
+                            .header("DPoP", proof)
+                            .body(Body::from(payload))
+                            .unwrap(),
+                    )
+                    .await
+                    .unwrap();
+                let status = resp.status();
+                let body = axum::body::to_bytes(resp.into_body(), 16 * 1024)
+                    .await
+                    .unwrap();
+                let json_body: Value = serde_json::from_slice(&body).unwrap();
+                (status, json_body)
+            }
+        };
+
+        let dpop1 = TestDpop::new();
+        let dpop2 = TestDpop::new();
+        let dpop3 = TestDpop::new();
+        let dpop4 = TestDpop::new();
+        let child_dpop = TestDpop::new();
+
+        let (s1, b1) = mint_parent(&dpop1, "agent-sat-1", "sat-b1").await;
+        assert_eq!(s1, StatusCode::OK);
+        let tok1 = b1["access_token"].as_str().unwrap().to_string();
+        let cid1 = b1["chain_id"].as_str().unwrap().to_string();
+
+        let (s2, b2) = mint_parent(&dpop2, "agent-sat-2", "sat-b2").await;
+        assert_eq!(s2, StatusCode::OK);
+        let tok2 = b2["access_token"].as_str().unwrap().to_string();
+        let cid2 = b2["chain_id"].as_str().unwrap().to_string();
+
+        let (s3, b3) = mint_parent(&dpop3, "agent-sat-3", "sat-b3").await;
+        assert_eq!(s3, StatusCode::OK);
+        let tok3 = b3["access_token"].as_str().unwrap().to_string();
+        let cid3 = b3["chain_id"].as_str().unwrap().to_string();
+
+        // Baseline: chain 3 works normally before the revocation table saturates.
+        let (st, rpc) = call_payments(&dpop3, &tok3, "sat-c3-pre", 1).await;
+        assert_eq!(st, StatusCode::OK);
+        assert!(rpc.get("error").is_none(), "baseline call failed: {rpc}");
+        assert_eq!(upstream.received_requests().await.unwrap().len(), 1);
+
+        // Revoke chain 1 (1/2) and confirm it is immediately refused without hitting upstream.
+        let (rs1, rb1) = revoke_chain(&dpop1, &tok1, &cid1, "sat-r1").await;
+        assert_eq!(rs1, StatusCode::OK);
+        assert_eq!(rb1["revoked"], json!(true));
+        let (st, rpc) = call_payments(&dpop1, &tok1, "sat-c1-rev", 2).await;
+        assert_eq!(st, StatusCode::OK);
+        assert_eq!(rpc["error"]["code"], -32003);
+        assert_eq!(rpc["error"]["message"], "Chain revoked");
+
+        // Revoke chain 2 (2/2): revocation table is now at capacity.
+        let (rs2, rb2) = revoke_chain(&dpop2, &tok2, &cid2, "sat-r2").await;
+        assert_eq!(rs2, StatusCode::OK);
+        assert_eq!(rb2["revoked"], json!(true));
+        assert_eq!(state.poc_admission.revoked_count(), 2);
+
+        // 3rd revoke fails closed with 503 and revocation_table_full.
+        let (rs3, rb3) = revoke_chain(&dpop3, &tok3, &cid3, "sat-r3").await;
+        assert_eq!(rs3, StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(rb3["error"], "revocation_table_full");
+
+        // Delegation on the 3rd chain and a 4th bootstrap both fail closed via
+        // admission_http_rejection with 503 and the saturation reason.
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/mcp/poc/delegate")
+                    .header("content-type", "application/json")
+                    .header("Authorization", format!("DPoP {tok3}"))
+                    .header(
+                        "DPoP",
+                        dpop3.proof("POST", &del_htu, "sat-del3", Some(&tok3)),
+                    )
+                    .body(Body::from(
+                        json!({
+                            "sub": "agent-sat-child",
+                            "target_tool": "payments_list",
+                            "child_dpop_jwk": {
+                                "kty": child_dpop.jwk.kty,
+                                "crv": child_dpop.jwk.crv,
+                                "x": child_dpop.jwk.x,
+                                "y": child_dpop.jwk.y
+                            },
+                            "allowed_tools": ["payments_list"],
+                            "ttl_secs": 60
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+        let del_body = axum::body::to_bytes(resp.into_body(), 16 * 1024)
+            .await
+            .unwrap();
+        let del_json: Value = serde_json::from_slice(&del_body).unwrap();
+        assert_eq!(
+            del_json["error"],
+            "revocation table is saturated; failing closed"
+        );
+
+        let (s4, b4) = mint_parent(&dpop4, "agent-sat-4", "sat-b4").await;
+        assert_eq!(s4, StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(b4["error"], "revocation table is saturated; failing closed");
+
+        // Tool call on the non-revoked 3rd chain fails closed without reaching upstream.
+        let (st, rpc) = call_payments(&dpop3, &tok3, "sat-c3-post", 3).await;
+        assert_eq!(st, StatusCode::OK);
+        assert_eq!(rpc["error"]["code"], -32005);
+        assert_eq!(rpc["error"]["message"], "Admission unavailable");
+
+        // Previously revoked chains stay refused without reaching upstream.
+        let (st, rpc) = call_payments(&dpop1, &tok1, "sat-c1-post", 4).await;
+        assert_eq!(st, StatusCode::OK);
+        assert_eq!(rpc["error"]["code"], -32005);
+        assert_eq!(rpc["error"]["message"], "Admission unavailable");
+
+        let (st, rpc) = call_payments(&dpop2, &tok2, "sat-c2-post", 5).await;
+        assert_eq!(st, StatusCode::OK);
+        assert_eq!(rpc["error"]["code"], -32005);
+        assert_eq!(rpc["error"]["message"], "Admission unavailable");
+
+        // Only the pre-saturation baseline call reached upstream.
+        assert_eq!(upstream.received_requests().await.unwrap().len(), 1);
+    }
 }

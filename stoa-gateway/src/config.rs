@@ -998,11 +998,13 @@ pub struct Config {
 
     /// Optional local directory containing signed `<tenant_id>.jws` tool-policy artifacts
     /// for autonomous mode without a Control Plane HTTP endpoint.
+    /// Requires `poc_agents_enabled=true`.
     /// Env: STOA_POLICY_LOCAL_ARTIFACTS_DIR
     #[serde(default)]
     pub policy_local_artifacts_dir: Option<String>,
 
     /// Enable the autonomous local RS256 + DPoP agent-roles PoC endpoints (`/mcp/poc/*`).
+    /// Refused at startup when `environment: prod`.
     /// Env: STOA_POC_AGENTS_ENABLED (default: false)
     #[serde(default)]
     pub poc_agents_enabled: bool,

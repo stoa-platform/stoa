@@ -59,8 +59,19 @@ pub enum ConfigError {
     )]
     SenderConstraintWithoutBacking,
 
-    /// Local agent admission needs a positive capacity and window.
-    #[error("poc_agents_enabled=true requires positive poc_max_admission_entries and poc_caller_budget_window_secs")]
+    /// Local tool-policy artifacts are only available in autonomous PoC mode.
+    #[error("policy_local_artifacts_dir requires poc_agents_enabled=true")]
+    PolicyLocalArtifactsRequiresPoc,
+
+    /// Autonomous PoC agent endpoints are not permitted in production.
+    #[error("poc_agents_enabled=true is not permitted when environment=prod")]
+    PocAgentsForbiddenInProd,
+
+    /// Local agent admission needs positive capacities and window.
+    #[error(
+        "poc_agents_enabled=true requires positive poc_max_admission_entries, \
+         poc_caller_budget_window_secs, and poc_max_revoked_chains"
+    )]
     InvalidPocAdmissionBounds,
 
     /// An API proxy backend declares an inconsistent access setting.
@@ -230,8 +241,18 @@ impl Config {
             return Err(ConfigError::SenderConstraintWithoutBacking);
         }
 
+        if !self.poc_agents_enabled && self.policy_local_artifacts_dir.is_some() {
+            return Err(ConfigError::PolicyLocalArtifactsRequiresPoc);
+        }
+
+        if self.poc_agents_enabled && self.environment == super::Environment::Prod {
+            return Err(ConfigError::PocAgentsForbiddenInProd);
+        }
+
         if self.poc_agents_enabled
-            && (self.poc_max_admission_entries == 0 || self.poc_caller_budget_window_secs == 0)
+            && (self.poc_max_admission_entries == 0
+                || self.poc_caller_budget_window_secs == 0
+                || self.poc_max_revoked_chains == 0)
         {
             return Err(ConfigError::InvalidPocAdmissionBounds);
         }
@@ -556,6 +577,125 @@ mod tests {
             config.poc_agents_enabled = false;
             config.validate().expect("PoC disabled");
         }
+    }
+
+    #[test]
+    #[allow(clippy::result_large_err)]
+    fn test_validate_rejects_policy_local_artifacts_dir_without_poc() {
+        for dir in ["/tmp/policies", ""] {
+            let mut config = Config {
+                poc_agents_enabled: false,
+                policy_local_artifacts_dir: Some(dir.to_string()),
+                ..Config::default()
+            };
+            assert!(matches!(
+                config.validate(),
+                Err(ConfigError::PolicyLocalArtifactsRequiresPoc)
+            ));
+
+            config.poc_agents_enabled = true;
+            config
+                .validate()
+                .expect("policy_local_artifacts_dir allowed when PoC enabled");
+        }
+
+        figment::Jail::expect_with(|jail| {
+            jail.clear_env();
+            jail.set_env("STOA_POLICY_LOCAL_ARTIFACTS_DIR", "/tmp/policies");
+            let cfg = Config::load().expect("load");
+            assert!(matches!(
+                cfg.validate(),
+                Err(ConfigError::PolicyLocalArtifactsRequiresPoc)
+            ));
+            Ok(())
+        });
+    }
+
+    #[test]
+    #[allow(clippy::result_large_err)]
+    fn test_validate_rejects_zero_poc_max_revoked_chains() {
+        let mut config = Config {
+            poc_agents_enabled: true,
+            poc_max_revoked_chains: 0,
+            ..Config::default()
+        };
+        assert!(matches!(
+            config.validate(),
+            Err(ConfigError::InvalidPocAdmissionBounds)
+        ));
+
+        config.poc_max_revoked_chains = 1;
+        config
+            .validate()
+            .expect("positive poc_max_revoked_chains must validate");
+
+        config.poc_max_revoked_chains = 0;
+        config.poc_agents_enabled = false;
+        config.validate().expect("PoC disabled");
+
+        figment::Jail::expect_with(|jail| {
+            jail.clear_env();
+            jail.set_env("STOA_POC_AGENTS_ENABLED", "true");
+            jail.set_env("STOA_POC_MAX_REVOKED_CHAINS", "0");
+            let cfg = Config::load().expect("load");
+            assert!(matches!(
+                cfg.validate(),
+                Err(ConfigError::InvalidPocAdmissionBounds)
+            ));
+            Ok(())
+        });
+    }
+
+    #[test]
+    #[allow(clippy::result_large_err)]
+    fn test_validate_rejects_poc_agents_in_prod() {
+        let config = Config {
+            environment: super::super::Environment::Prod,
+            mcp_audience: Some("stoa-mcp".to_string()),
+            poc_agents_enabled: true,
+            ..Config::default()
+        };
+        assert!(matches!(
+            config.validate(),
+            Err(ConfigError::PocAgentsForbiddenInProd)
+        ));
+
+        let prod_disabled = Config {
+            environment: super::super::Environment::Prod,
+            mcp_audience: Some("stoa-mcp".to_string()),
+            poc_agents_enabled: false,
+            ..Config::default()
+        };
+        prod_disabled
+            .validate()
+            .expect("prod with PoC disabled must validate");
+
+        for env in [
+            super::super::Environment::Dev,
+            super::super::Environment::Staging,
+        ] {
+            let non_prod = Config {
+                environment: env,
+                poc_agents_enabled: true,
+                ..Config::default()
+            };
+            non_prod
+                .validate()
+                .expect("non-prod with PoC enabled must validate");
+        }
+
+        figment::Jail::expect_with(|jail| {
+            jail.clear_env();
+            jail.set_env("STOA_ENVIRONMENT", "prod");
+            jail.set_env("STOA_MCP_AUDIENCE", "stoa-mcp");
+            jail.set_env("STOA_POC_AGENTS_ENABLED", "true");
+            let cfg = Config::load().expect("load");
+            assert!(matches!(
+                cfg.validate(),
+                Err(ConfigError::PocAgentsForbiddenInProd)
+            ));
+            Ok(())
+        });
     }
 
     #[test]

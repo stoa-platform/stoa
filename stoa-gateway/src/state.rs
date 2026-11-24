@@ -617,7 +617,11 @@ impl AppState {
         // Supports either a Control Plane HTTP endpoint or a local directory of signed
         // `<tenant_id>.jws` artifacts for autonomous mode.
         let policy_trust = config.policy_trust_jwks_file.as_deref();
-        let tool_permissions = if let Some(ref dir) = config.policy_local_artifacts_dir {
+        let tool_permissions = if let Some(dir) = config
+            .policy_local_artifacts_dir
+            .as_deref()
+            .filter(|_| config.poc_agents_enabled)
+        {
             tracing::info!(
                 artifacts_dir = %dir,
                 "Tenant tool permission cache enabled (local signed artifacts, 60s TTL)"

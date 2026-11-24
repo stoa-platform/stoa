@@ -12,6 +12,7 @@ export STOA_POC_BOOTSTRAP_SECRET STOA_POC_UPSTREAM_API_KEY
 
 cleanup() {
   docker compose down -v --remove-orphans >/dev/null 2>&1 || true
+  rm -rf ./.runtime
 }
 trap cleanup EXIT
 

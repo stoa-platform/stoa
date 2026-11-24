@@ -13,6 +13,7 @@ export STOA_POC_MAX_REVOKED_CHAINS=2
 
 cleanup() {
   docker compose down -v --remove-orphans >/dev/null 2>&1 || true
+  rm -rf ./.runtime
 }
 trap cleanup EXIT
 

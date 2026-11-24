@@ -157,7 +157,7 @@ kubectl create secret docker-registry ghcr-registry -n jenkins \
 # Test Git access
 kubectl run git-test --rm -it --restart=Never \
   --image=bitnami/git -n jenkins -- \
-  git ls-remote https://github.com/PotoMitan/stoa.git
+  git ls-remote https://github.com/stoa-platform/stoa.git
 
 # Check GitLab token
 kubectl get secret gitlab-credentials -n jenkins -o jsonpath='{.data.token}' | base64 -d

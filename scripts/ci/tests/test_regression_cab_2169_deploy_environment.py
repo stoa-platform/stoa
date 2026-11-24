@@ -114,6 +114,6 @@ def test_control_plane_api_environment_safety_boundary_is_unchanged() -> None:
     dispatch = next(
         step for step in reusable["steps"] if "repository-dispatch@" in step.get("uses", "")
     )
-    assert dispatch["with"]["repository"] == "PotoMitan/stoa-infra"
+    assert dispatch["with"]["repository"] == "caboulicam/stoa-infra"
     assert dispatch["with"]["event-type"] == "image-updated"
     assert dispatch["with"]["token"] == "${{ secrets.STOA_INFRA_DISPATCH_TOKEN }}"

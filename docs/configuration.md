@@ -92,7 +92,7 @@ spec:
 ```yaml
 global:
   baseDomain: gostoa.dev
-  imageRegistry: ghcr.io/potomitan
+  imageRegistry: ghcr.io/stoa-platform
   imagePullSecrets: []
 ```
 
@@ -102,7 +102,7 @@ global:
 controlPlaneApi:
   replicas: 2
   image:
-    repository: ghcr.io/potomitan/stoa-control-plane-api
+    repository: ghcr.io/stoa-platform/stoa-control-plane-api
     tag: latest
   resources:
     limits:

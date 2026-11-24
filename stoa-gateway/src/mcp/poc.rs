@@ -2976,4 +2976,128 @@ allow if {
         }"#;
         assert!(serde_json::from_str::<LocalAgentClaims>(imprecise_claims).is_err());
     }
+
+    #[tokio::test]
+    async fn bootstrap_refuses_empty_and_whitespace_tenant_id() {
+        let tmp = tempfile::tempdir().unwrap();
+        let signer = PolicyFixtureSigner::new();
+        let trust_file = signer.write_trust(tmp.path());
+
+        let policies_dir = tmp.path().join("policies");
+        let roles_dir = tmp.path().join("roles");
+        let floor_dir = tmp.path().join("floors");
+        std::fs::create_dir_all(&policies_dir).unwrap();
+        std::fs::create_dir_all(&roles_dir).unwrap();
+
+        std::fs::write(
+            policies_dir.join("acme.jws"),
+            signer.sign_tool_policy("acme", &["payments_list"]),
+        )
+        .unwrap();
+        std::fs::write(
+            roles_dir.join("acme.roles.jws"),
+            signer.sign_role_policy(
+                "acme",
+                1,
+                json!({
+                    "reader": { "allowed_tools": ["payments_list"] }
+                }),
+            ),
+        )
+        .unwrap();
+
+        let base_url = "http://stoa-gateway:8080";
+        let config = Config {
+            auto_register: false,
+            admin_routes_disabled: true,
+            policy_enabled: false,
+            policy_boot_tenants: vec!["acme".to_string()],
+            policy_trust_jwks_file: Some(trust_file),
+            policy_local_artifacts_dir: Some(policies_dir.to_string_lossy().to_string()),
+            policy_expected_issuer: "stoa-poc-policy".to_string(),
+            policy_audience: "stoa-gateway".to_string(),
+            poc_agents_enabled: true,
+            poc_bootstrap_secret: Some("boot-r7".to_string()),
+            poc_public_base_url: Some(base_url.to_string()),
+            poc_role_artifacts_dir: Some(roles_dir.to_string_lossy().to_string()),
+            poc_role_floor_dir: Some(floor_dir.to_string_lossy().to_string()),
+            ..Config::default()
+        };
+
+        let state = AppState::new(config);
+        load_poc_fixtures(&state).await.unwrap();
+        let app = build_router(state);
+
+        let dpop = TestDpop::new();
+        let boot_htu = format!("{base_url}/mcp/poc/bootstrap");
+
+        for (label, bad_tenant) in [("empty", ""), ("spaces", "   ")] {
+            let resp = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/mcp/poc/bootstrap")
+                        .header("content-type", "application/json")
+                        .header("X-Stoa-Poc-Bootstrap-Secret", "boot-r7")
+                        .header(
+                            "DPoP",
+                            dpop.proof("POST", &boot_htu, &format!("boot-{label}"), None),
+                        )
+                        .body(Body::from(
+                            json!({
+                                "sub": "agent-parent",
+                                "tenant_id": bad_tenant,
+                                "role": "reader"
+                            })
+                            .to_string(),
+                        ))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert!(
+                resp.status().is_client_error(),
+                "expected 4xx for {label} tenant_id, got {}",
+                resp.status()
+            );
+            let body = axum::body::to_bytes(resp.into_body(), 16 * 1024)
+                .await
+                .unwrap();
+            let body_json: Value = serde_json::from_slice(&body).unwrap();
+            assert!(
+                body_json.get("access_token").is_none(),
+                "unexpected access_token for {label} tenant_id"
+            );
+        }
+
+        // Control check: a valid tenant_id on the same router succeeds.
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/mcp/poc/bootstrap")
+                    .header("content-type", "application/json")
+                    .header("X-Stoa-Poc-Bootstrap-Secret", "boot-r7")
+                    .header("DPoP", dpop.proof("POST", &boot_htu, "boot-valid", None))
+                    .body(Body::from(
+                        json!({
+                            "sub": "agent-parent",
+                            "tenant_id": "acme",
+                            "role": "reader"
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(resp.into_body(), 16 * 1024)
+            .await
+            .unwrap();
+        let ok_json: Value = serde_json::from_slice(&body).unwrap();
+        assert!(ok_json["access_token"].as_str().is_some());
+        assert_eq!(ok_json["tenant_id"], "acme");
+    }
 }

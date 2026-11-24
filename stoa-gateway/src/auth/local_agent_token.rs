@@ -1081,6 +1081,140 @@ mod tests {
     }
 
     #[test]
+    fn empty_and_whitespace_tenant_id_are_refused_on_issuance_validation_and_delegation() {
+        let auth = LocalAgentAuth::new().expect("init local auth");
+        let parent_key = TestDpopKey::generate();
+        let child_key = TestDpopKey::generate();
+        let audience = "http://stoa-gateway:8080/mcp/poc";
+
+        for bad_tenant in ["", "   ", "\t\n"] {
+            let err = auth
+                .issue_parent_token(IssueParentTokenRequest {
+                    sub: "agent-parent".to_string(),
+                    tenant_id: bad_tenant.to_string(),
+                    role: "payments-reader".to_string(),
+                    aud: audience.to_string(),
+                    cnf_jkt: parent_key.jkt.clone(),
+                    ttl_secs: 300,
+                    policy_version: Some(1),
+                })
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LocalTokenError::InvalidRequest("invalid or empty tenant_id")
+            ));
+        }
+
+        let parent = issue_sample_parent(&auth, &parent_key);
+        let parent_tools: HashSet<String> = ["payments_list".to_string()].into_iter().collect();
+
+        for bad_tenant in ["", "   "] {
+            let mut empty_tenant_claims = parent.claims.clone();
+            empty_tenant_claims.tenant_id = bad_tenant.to_string();
+            let signed = auth.sign_claims(empty_tenant_claims.clone()).unwrap();
+            let val_err = auth
+                .validate_token(signed.as_str(), None, audience)
+                .unwrap_err();
+            assert!(matches!(
+                val_err,
+                LocalTokenError::InvalidClaims("invalid or empty tenant_id")
+            ));
+
+            let del_err = auth
+                .issue_child_token(
+                    &empty_tenant_claims,
+                    &parent_tools,
+                    None,
+                    DelegateChildTokenRequest {
+                        sub: "agent-child".to_string(),
+                        target_tool: "payments_list".to_string(),
+                        child_dpop_jwk: child_key.jwk.clone(),
+                        allowed_tools: vec!["payments_list".to_string()],
+                        arg_constraints: None,
+                        ttl_secs: Some(60),
+                    },
+                )
+                .unwrap_err();
+            assert!(matches!(
+                del_err,
+                LocalTokenError::DelegationDenied("parent tenant_id is empty or invalid")
+            ));
+        }
+
+        // A gateway-signed child token whose tenant_id is empty is also refused by validation.
+        let valid_child = auth
+            .issue_child_token(
+                &parent.claims,
+                &parent_tools,
+                None,
+                DelegateChildTokenRequest {
+                    sub: "agent-child".to_string(),
+                    target_tool: "payments_list".to_string(),
+                    child_dpop_jwk: child_key.jwk,
+                    allowed_tools: vec!["payments_list".to_string()],
+                    arg_constraints: None,
+                    ttl_secs: Some(60),
+                },
+            )
+            .expect("issue valid child");
+        let child_aud = valid_child.claims.aud.clone();
+        let mut child_empty_tenant = valid_child.claims;
+        child_empty_tenant.tenant_id = String::new();
+        let signed_child = auth.sign_claims(child_empty_tenant).unwrap();
+        let child_err = auth
+            .validate_token(signed_child.as_str(), Some(DELEGATION_ISSUER), &child_aud)
+            .unwrap_err();
+        assert!(matches!(
+            child_err,
+            LocalTokenError::InvalidClaims("invalid or empty tenant_id")
+        ));
+    }
+
+    #[test]
+    fn child_tokens_strictly_inherit_parent_tenant_across_delegation_hops() {
+        let auth = LocalAgentAuth::new().expect("init local auth");
+        let parent_key = TestDpopKey::generate();
+        let child_key = TestDpopKey::generate();
+        let tenant = "tenant-beta";
+        let parent = auth
+            .issue_parent_token(IssueParentTokenRequest {
+                sub: "agent-parent".to_string(),
+                tenant_id: tenant.to_string(),
+                role: "payments-reader".to_string(),
+                aud: "http://stoa-gateway:8080/mcp/poc".to_string(),
+                cnf_jkt: parent_key.jkt,
+                ttl_secs: 300,
+                policy_version: Some(1),
+            })
+            .expect("issue parent token");
+        let parent_tools: HashSet<String> = ["payments_list".to_string()].into_iter().collect();
+        let expected_aud = canonical_tool_audience(tenant, "payments_list");
+
+        let mut current = parent.claims;
+        for depth in 1..=MAX_DELEGATION_DEPTH {
+            let child = auth
+                .issue_child_token(
+                    &current,
+                    &parent_tools,
+                    None,
+                    DelegateChildTokenRequest {
+                        sub: format!("agent-child-{depth}"),
+                        target_tool: "payments_list".to_string(),
+                        child_dpop_jwk: child_key.jwk.clone(),
+                        allowed_tools: vec!["payments_list".to_string()],
+                        arg_constraints: None,
+                        ttl_secs: Some(60),
+                    },
+                )
+                .expect("issue delegated child");
+            assert_eq!(child.claims.depth, depth);
+            assert_eq!(child.claims.tenant_id, tenant);
+            assert_eq!(child.claims.aud, expected_aud);
+            current = child.claims;
+        }
+    }
+
+    #[test]
     fn debug_output_redacts_token_and_keys() {
         let auth = LocalAgentAuth::new().expect("init local auth");
         let dpop_key = TestDpopKey::generate();

@@ -9,6 +9,7 @@ from pathlib import Path
 
 STATS_PATH = Path("/tmp/upstream_stats.json")
 EXPECTED_API_KEY = os.environ.get("EXPECTED_API_KEY", "")
+OAUTH_STUB_VALUE = os.environ.get("UPSTREAM_OAUTH_STUB", "stub")
 STATS_LOCK = threading.Lock()
 
 STATS = {
@@ -99,7 +100,7 @@ class MockHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         if self.path.startswith("/oauth2/token"):
             bump_stat("oauth2_calls")
-            self._send_json(200, {"access_token": "mock-oauth2-token", "expires_in": 300})
+            self._send_json(200, {"access_token": OAUTH_STUB_VALUE, "expires_in": 300})
             return
         self._send_json(404, {"error": "not_found"})
 

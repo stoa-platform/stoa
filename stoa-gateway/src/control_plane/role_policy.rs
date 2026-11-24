@@ -45,6 +45,9 @@ const MAX_ROLE_POLICY_BYTES: usize = 1024 * 1024;
 /// Maximum number of historical versions kept per tenant for session intersection.
 const MAX_VERSION_HISTORY: usize = 64;
 
+/// Hard upper bound on the number of tenants tracked in memory by [`RolePolicyStore`].
+pub const MAX_TRACKED_TENANTS: usize = 1024;
+
 static KID_FORMAT: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"^cp-policy-[0-9]{4}(0[1-9]|1[0-2])-[1-9][0-9]*$").expect("kid regex")
 });
@@ -457,6 +460,8 @@ pub struct RolePolicyStore {
     issuer: String,
     audience: String,
     trust: Option<Arc<PolicyTrustStore>>,
+    allowed_tenants: Option<Arc<HashSet<String>>>,
+    max_tracked_tenants: usize,
     tenants: Arc<RwLock<HashMap<String, TenantPolicyState>>>,
     refresh_locks: Arc<RwLock<HashMap<String, Arc<tokio::sync::Mutex<()>>>>>,
     #[cfg(test)]
@@ -477,6 +482,8 @@ impl RolePolicyStore {
             issuer: issuer.into(),
             audience: audience.into(),
             trust,
+            allowed_tenants: None,
+            max_tracked_tenants: MAX_TRACKED_TENANTS,
             tenants: Arc::new(RwLock::new(HashMap::new())),
             refresh_locks: Arc::new(RwLock::new(HashMap::new())),
             #[cfg(test)]
@@ -484,9 +491,43 @@ impl RolePolicyStore {
         }
     }
 
+    /// Restrict tracked tenants to an explicit allowlist when non-empty (e.g. `policy_boot_tenants`).
+    ///
+    /// An empty iterator leaves the store bounded by on-disk artifacts and [`MAX_TRACKED_TENANTS`].
+    pub fn with_allowed_tenants<I, S>(mut self, tenants: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        let set: HashSet<String> = tenants
+            .into_iter()
+            .map(Into::into)
+            .filter(|tenant| !tenant.trim().is_empty())
+            .collect();
+        self.allowed_tenants = (!set.is_empty()).then(|| Arc::new(set));
+        self
+    }
+
+    #[cfg(test)]
+    fn with_max_tracked_tenants(mut self, max: usize) -> Self {
+        self.max_tracked_tenants = max;
+        self
+    }
+
     #[cfg(test)]
     pub(crate) fn reload_count(&self) -> usize {
         self.reload_count.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    fn ensure_tenant_allowed(&self, tenant_id: &str) -> Result<(), RolePolicyError> {
+        if self
+            .allowed_tenants
+            .as_ref()
+            .is_some_and(|allowed| !allowed.contains(tenant_id))
+        {
+            return Err(RolePolicyError::ArtifactMissing);
+        }
+        Ok(())
     }
 
     /// Verify the in-memory snapshot for `tenant_id` against the current on-disk artifact.
@@ -496,8 +537,9 @@ impl RolePolicyStore {
     /// very next request without blocking async runtime worker threads.
     pub async fn refresh_tenant(&self, tenant_id: &str) -> Result<(), RolePolicyError> {
         validate_tenant_filename(tenant_id)?;
+        self.ensure_tenant_allowed(tenant_id)?;
 
-        let lock = self.tenant_refresh_lock(tenant_id);
+        let lock = self.resolve_tenant_refresh_lock(tenant_id).await?;
         let _guard = lock.lock().await;
 
         let store = self.clone();
@@ -522,16 +564,45 @@ impl RolePolicyStore {
         Ok(())
     }
 
-    fn tenant_refresh_lock(&self, tenant_id: &str) -> Arc<tokio::sync::Mutex<()>> {
+    async fn resolve_tenant_refresh_lock(
+        &self,
+        tenant_id: &str,
+    ) -> Result<Arc<tokio::sync::Mutex<()>>, RolePolicyError> {
         if let Some(lock) = self.refresh_locks.read().get(tenant_id) {
-            return Arc::clone(lock);
+            return Ok(Arc::clone(lock));
         }
+
+        let already_tracked = self.tenants.read().contains_key(tenant_id);
+        if !already_tracked {
+            if self.tenants.read().len() >= self.max_tracked_tenants
+                || self.refresh_locks.read().len() >= self.max_tracked_tenants
+            {
+                return Err(RolePolicyError::ArtifactMissing);
+            }
+
+            let artifact_path = self.artifacts_dir.join(format!("{tenant_id}.roles.jws"));
+            let exists_and_readable = tokio::task::spawn_blocking(move || {
+                File::open(&artifact_path)
+                    .and_then(|file| file.metadata())
+                    .is_ok_and(|meta| meta.is_file())
+            })
+            .await
+            .map_err(|_| RolePolicyError::ArtifactMissing)?;
+            if !exists_and_readable {
+                return Err(RolePolicyError::ArtifactMissing);
+            }
+        }
+
         let mut locks = self.refresh_locks.write();
-        Arc::clone(
-            locks
-                .entry(tenant_id.to_string())
-                .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(()))),
-        )
+        if let Some(lock) = locks.get(tenant_id) {
+            return Ok(Arc::clone(lock));
+        }
+        if locks.len() >= self.max_tracked_tenants {
+            return Err(RolePolicyError::ArtifactMissing);
+        }
+        let lock = Arc::new(tokio::sync::Mutex::new(()));
+        locks.insert(tenant_id.to_string(), Arc::clone(&lock));
+        Ok(lock)
     }
 
     fn refresh_tenant_blocking(&self, tenant_id: &str) -> Result<(), RolePolicyError> {
@@ -563,24 +634,35 @@ impl RolePolicyStore {
     /// artifact `<artifacts_dir>/<tenant_id>.roles.jws`.
     pub fn reload_tenant(&self, tenant_id: &str) -> Result<VerifiedRolePolicy, RolePolicyError> {
         validate_tenant_filename(tenant_id)?;
+        self.ensure_tenant_allowed(tenant_id)?;
+
+        let (already_tracked, start_generation) = {
+            let map = self.tenants.read();
+            match map.get(tenant_id) {
+                Some(state) => (true, state.snapshot_generation),
+                None => {
+                    if map.len() >= self.max_tracked_tenants {
+                        return Err(RolePolicyError::ArtifactMissing);
+                    }
+                    (false, 0)
+                }
+            }
+        };
+
         #[cfg(test)]
         self.reload_count
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
-        let start_generation = self
-            .tenants
-            .read()
-            .get(tenant_id)
-            .map_or(0, |state| state.snapshot_generation);
-
         let artifact_path = self.artifacts_dir.join(format!("{tenant_id}.roles.jws"));
         let Some(fingerprint) = file_fingerprint(&artifact_path) else {
-            self.record_error_snapshot(
-                tenant_id,
-                &RolePolicyError::ArtifactMissing,
-                None,
-                start_generation,
-            );
+            if already_tracked {
+                self.record_error_snapshot(
+                    tenant_id,
+                    &RolePolicyError::ArtifactMissing,
+                    None,
+                    start_generation,
+                );
+            }
             return Err(RolePolicyError::ArtifactMissing);
         };
         let result = self
@@ -609,6 +691,14 @@ impl RolePolicyStore {
         start_generation: u64,
     ) {
         let mut map = self.tenants.write();
+        if !map.contains_key(tenant_id)
+            && (matches!(
+                err,
+                RolePolicyError::ArtifactMissing | RolePolicyError::InvalidTenant
+            ) || map.len() >= self.max_tracked_tenants)
+        {
+            return;
+        }
         let state = map.entry(tenant_id.to_string()).or_default();
         let newer_snapshot_present = state
             .snapshot
@@ -694,6 +784,8 @@ impl RolePolicyStore {
                     return Err(RolePolicyError::VersionRollback);
                 }
                 state.current_version
+            } else if map.len() >= self.max_tracked_tenants {
+                return Err(RolePolicyError::ArtifactMissing);
             } else {
                 0
             }
@@ -741,6 +833,9 @@ impl RolePolicyStore {
 
         let verified_arc = Arc::new(verified.clone());
         let mut map = self.tenants.write();
+        if !map.contains_key(tenant_id) && map.len() >= self.max_tracked_tenants {
+            return Err(RolePolicyError::ArtifactMissing);
+        }
         let state = map.entry(tenant_id.to_string()).or_default();
         if let Some(newer_err) = newer_error_snapshot(state, start_generation) {
             return Err(newer_err);
@@ -793,6 +888,7 @@ impl RolePolicyStore {
         role: &str,
     ) -> Result<(u64, RolePolicySpec), RolePolicyError> {
         validate_tenant_filename(tenant_id)?;
+        self.ensure_tenant_allowed(tenant_id)?;
         self.require_trust_loaded()?;
         let map = self.tenants.read();
         let state = map.get(tenant_id).ok_or(RolePolicyError::ArtifactMissing)?;
@@ -846,6 +942,7 @@ impl RolePolicyStore {
             token_constraints,
         } = *input;
         validate_tenant_filename(tenant_id)?;
+        self.ensure_tenant_allowed(tenant_id)?;
         self.require_trust_loaded()?;
 
         let map = self.tenants.read();
@@ -929,6 +1026,7 @@ impl RolePolicyStore {
         token_allowed_tools: Option<&[String]>,
     ) -> Result<(u64, HashSet<String>, RolePolicySpec), RolePolicyError> {
         validate_tenant_filename(tenant_id)?;
+        self.ensure_tenant_allowed(tenant_id)?;
         self.require_trust_loaded()?;
 
         let map = self.tenants.read();
@@ -1065,7 +1163,7 @@ impl RolePolicyStore {
         let roles: HashMap<String, RolePolicySpec> =
             serde_json::from_str(roles_raw.get()).map_err(|_| RolePolicyError::Malformed)?;
 
-        let content_sha256 = compute_roles_digest(&roles);
+        let content_sha256 = compute_roles_digest(&roles)?;
 
         Ok(VerifiedRolePolicy {
             tenant_id: tenant_id.to_string(),
@@ -1133,8 +1231,16 @@ fn validate_tenant_filename(tenant_id: &str) -> Result<(), RolePolicyError> {
     Ok(())
 }
 
+fn digest_serializable<T: Serialize>(value: &T) -> Result<String, RolePolicyError> {
+    let bytes = serde_json::to_vec(value).map_err(|_| RolePolicyError::Malformed)?;
+    let hash = Sha256::digest(&bytes);
+    Ok(hash.iter().map(|b| format!("{b:02x}")).collect())
+}
+
 /// Deterministic SHA-256 digest of role rules (canonicalized key order).
-fn compute_roles_digest(roles: &HashMap<String, RolePolicySpec>) -> String {
+fn compute_roles_digest(
+    roles: &HashMap<String, RolePolicySpec>,
+) -> Result<String, RolePolicyError> {
     let mut canonical: BTreeMap<&str, Value> = BTreeMap::new();
     for (role_name, spec) in roles {
         let mut tools: Vec<&String> = spec.allowed_tools.iter().collect();
@@ -1144,21 +1250,25 @@ fn compute_roles_digest(roles: &HashMap<String, RolePolicySpec>) -> String {
         for (tool_name, arg_map) in &spec.argument_constraints {
             let mut sorted_args = BTreeMap::new();
             for (arg_name, c) in arg_map {
+                if matches!(c, ArgumentConstraint::MaxNumber { max } if !max.is_finite()) {
+                    return Err(RolePolicyError::Malformed);
+                }
                 sorted_args.insert(arg_name.as_str(), c);
             }
             tool_constraints.insert(tool_name.as_str(), sorted_args);
         }
-        canonical.insert(
-            role_name.as_str(),
-            serde_json::json!({
-                "allowed_tools": tools,
-                "argument_constraints": tool_constraints,
-            }),
+        let mut entry = Map::new();
+        entry.insert(
+            "allowed_tools".to_string(),
+            serde_json::to_value(&tools).map_err(|_| RolePolicyError::Malformed)?,
         );
+        entry.insert(
+            "argument_constraints".to_string(),
+            serde_json::to_value(&tool_constraints).map_err(|_| RolePolicyError::Malformed)?,
+        );
+        canonical.insert(role_name.as_str(), Value::Object(entry));
     }
-    let bytes = serde_json::to_vec(&canonical).unwrap_or_default();
-    let hash = Sha256::digest(&bytes);
-    hash.iter().map(|b| format!("{b:02x}")).collect()
+    digest_serializable(&canonical)
 }
 
 fn lock_floor(floor_dir: &Path, tenant_id: &str) -> Result<File, RolePolicyError> {
@@ -2000,7 +2110,7 @@ mod tests {
         assert_eq!(loaded_v1.version, 1);
         assert_eq!(
             loaded_v1.content_sha256,
-            compute_roles_digest(&loaded_v1.roles)
+            compute_roles_digest(&loaded_v1.roles).unwrap()
         );
         let floor_path = floor_dir.join("acme.floor.json");
         let floor_v1 = read_persisted_floor(&floor_path).unwrap().unwrap();
@@ -2642,6 +2752,160 @@ mod tests {
                 .unwrap_err(),
             RolePolicyError::InvalidTenant
         );
+        assert!(store.tenants.read().is_empty());
+        assert!(store.refresh_locks.read().is_empty());
+    }
+
+    #[tokio::test]
+    async fn tenant_maps_are_bounded_by_allowlist_existence_and_hard_cap() {
+        assert_eq!(MAX_TRACKED_TENANTS, 1024);
+
+        let tmp = tempfile::tempdir().unwrap();
+        let signer = RoleSigner::new();
+        let trust_path = tmp.path().join("trust.json");
+        fs::write(&trust_path, signer.trust_jwks()).unwrap();
+        let artifacts_dir = tmp.path().join("roles");
+        let floor_dir = tmp.path().join("floors");
+        fs::create_dir_all(&artifacts_dir).unwrap();
+
+        let roles = json!({ "reader": { "allowed_tools": ["payments_list"] } });
+        for tenant in ["acme", "other", "t1", "t2", "t3"] {
+            fs::write(
+                artifacts_dir.join(format!("{tenant}.roles.jws")),
+                signer.sign(tenant, 1, 600, roles.clone()),
+            )
+            .unwrap();
+        }
+
+        // Allowlist (policy_boot_tenants non-empty): rejects tenants outside the allowlist without insertion.
+        let allowlisted = RolePolicyStore::new(
+            &artifacts_dir,
+            &floor_dir,
+            "stoa-poc-policy",
+            "stoa-gateway",
+            Some(PolicyTrustStore::open(&trust_path)),
+        )
+        .with_allowed_tenants(["acme"]);
+
+        allowlisted.refresh_tenant("acme").await.unwrap();
+        assert_eq!(allowlisted.tenants.read().len(), 1);
+        assert_eq!(allowlisted.refresh_locks.read().len(), 1);
+
+        assert_eq!(
+            allowlisted.refresh_tenant("other").await.unwrap_err(),
+            RolePolicyError::ArtifactMissing
+        );
+        assert_eq!(
+            allowlisted.reload_tenant("other").unwrap_err(),
+            RolePolicyError::ArtifactMissing
+        );
+        assert!(!allowlisted.tenants.read().contains_key("other"));
+        assert!(!allowlisted.refresh_locks.read().contains_key("other"));
+
+        // Hard cap & ArtifactMissing / InvalidTenant leave no map entry.
+        let capped = RolePolicyStore::new(
+            &artifacts_dir,
+            &floor_dir,
+            "stoa-poc-policy",
+            "stoa-gateway",
+            Some(PolicyTrustStore::open(&trust_path)),
+        )
+        .with_max_tracked_tenants(2);
+
+        assert_eq!(
+            capped.refresh_tenant("ghost").await.unwrap_err(),
+            RolePolicyError::ArtifactMissing
+        );
+        assert_eq!(
+            capped.reload_tenant("ghost").unwrap_err(),
+            RolePolicyError::ArtifactMissing
+        );
+        assert_eq!(
+            capped.refresh_tenant("../escape").await.unwrap_err(),
+            RolePolicyError::InvalidTenant
+        );
+        assert_eq!(
+            capped.reload_tenant("../escape").unwrap_err(),
+            RolePolicyError::InvalidTenant
+        );
+        assert!(capped.tenants.read().is_empty());
+        assert!(capped.refresh_locks.read().is_empty());
+
+        capped.refresh_tenant("t1").await.unwrap();
+        capped.refresh_tenant("t2").await.unwrap();
+        assert_eq!(capped.tenants.read().len(), 2);
+        assert_eq!(capped.refresh_locks.read().len(), 2);
+
+        // Tenant beyond the hard cap fails closed without insertion.
+        assert_eq!(
+            capped.refresh_tenant("t3").await.unwrap_err(),
+            RolePolicyError::ArtifactMissing
+        );
+        assert_eq!(
+            capped.reload_tenant("t3").unwrap_err(),
+            RolePolicyError::ArtifactMissing
+        );
+        assert_eq!(capped.tenants.read().len(), 2);
+        assert_eq!(capped.refresh_locks.read().len(), 2);
+        assert!(!capped.tenants.read().contains_key("t3"));
+        assert!(!capped.refresh_locks.read().contains_key("t3"));
+
+        // Already-tracked tenants continue refreshing normally.
+        capped.refresh_tenant("t1").await.unwrap();
+        assert_eq!(capped.current_role_snapshot("t1", "reader").unwrap().0, 1);
+    }
+
+    #[test]
+    fn compute_roles_digest_propagates_malformed_error() {
+        struct FailingSerialize;
+        impl Serialize for FailingSerialize {
+            fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: serde::Serializer,
+            {
+                Err(serde::ser::Error::custom("serialization error"))
+            }
+        }
+
+        assert_eq!(
+            digest_serializable(&FailingSerialize).unwrap_err(),
+            RolePolicyError::Malformed
+        );
+
+        let mut bad_roles = HashMap::new();
+        bad_roles.insert(
+            "reader".to_string(),
+            RolePolicySpec {
+                allowed_tools: HashSet::from(["payments_list".to_string()]),
+                argument_constraints: HashMap::from([(
+                    "payments_list".to_string(),
+                    HashMap::from([(
+                        "limit".to_string(),
+                        ArgumentConstraint::MaxNumber { max: f64::NAN },
+                    )]),
+                )]),
+            },
+        );
+        assert_eq!(
+            compute_roles_digest(&bad_roles).unwrap_err(),
+            RolePolicyError::Malformed
+        );
+
+        let mut valid_roles = HashMap::new();
+        valid_roles.insert(
+            "reader".to_string(),
+            RolePolicySpec {
+                allowed_tools: HashSet::from(["payments_list".to_string()]),
+                argument_constraints: HashMap::new(),
+            },
+        );
+        let digest = compute_roles_digest(&valid_roles).expect("valid roles digest");
+        assert_eq!(digest.len(), 64);
+        let empty_digest: String = Sha256::digest(b"")
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect();
+        assert_ne!(digest, empty_digest);
     }
 
     #[test]

@@ -5,7 +5,7 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$DIR"
 
 export STOA_POC_BOOTSTRAP_SECRET="${STOA_POC_BOOTSTRAP_SECRET:-poc-parent-boot-$(openssl rand -hex 12)}"
-export STOA_POC_UPSTREAM_API_KEY="${STOA_POC_UPSTREAM_API_KEY:-poc-vault-key-$(openssl rand -hex 12)}"
+export STOA_POC_UPSTREAM_API_KEY="${STOA_POC_UPSTREAM_API_KEY:-poc-backend-key-$(openssl rand -hex 12)}"
 
 cleanup() {
   docker compose down -v --remove-orphans >/dev/null 2>&1 || true
@@ -34,7 +34,7 @@ assert s["upstream_calls"] == 1, f"expected exactly 1 upstream call, got {s}"
 assert s["valid_api_key_calls"] == 1, f"expected 1 valid API key call, got {s}"
 assert s["caller_auth_headers_seen"] == 0, f"caller Authorization header leaked upstream: {s}"
 assert s["oauth2_calls"] == 0, f"unexpected oauth2 calls: {s}"
-print("PASS: upstream-mock saw exactly 1 authorized vault-authenticated call and 0 caller tokens")
+print("PASS: upstream-mock saw exactly 1 authorized backend-key-authenticated call and 0 caller tokens")
 '
 
 echo "=== JALON 1 DOCKER COMPOSE VERIFICATION PASSED ==="

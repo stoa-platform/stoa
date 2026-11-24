@@ -5,7 +5,7 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$DIR"
 
 export STOA_POC_BOOTSTRAP_SECRET="${STOA_POC_BOOTSTRAP_SECRET:-poc-parent-boot-$(openssl rand -hex 12)}"
-export STOA_POC_UPSTREAM_API_KEY="${STOA_POC_UPSTREAM_API_KEY:-poc-vault-key-$(openssl rand -hex 12)}"
+export STOA_POC_UPSTREAM_API_KEY="${STOA_POC_UPSTREAM_API_KEY:-poc-backend-key-$(openssl rand -hex 12)}"
 export STOA_POC_CHAIN_BUDGET=5
 export STOA_POC_CALLER_BUDGET=8
 export STOA_POC_MAX_REVOKED_CHAINS=100
@@ -40,7 +40,7 @@ assert s["forbidden_calls"] == 0, f"payments_hidden (/forbidden) was reached: {s
 assert s["caller_auth_headers_seen"] == 0, f"caller Authorization header leaked upstream: {s}"
 assert s["redirect_target_calls"] == 0, f"redirect target reached: {s}"
 assert s["oauth2_calls"] == 0, f"unexpected oauth2 calls: {s}"
-print("PASS: upstream-mock saw exact 11 vault-authenticated /payments calls, 2 /fail calls, 0 /forbidden calls, 0 caller tokens")
+print("PASS: upstream-mock saw exact 11 backend-key-authenticated /payments calls, 2 /fail calls, 0 /forbidden calls, 0 caller tokens")
 '
 
 echo "=== JALON 3 DOCKER COMPOSE VERIFICATION PASSED ==="

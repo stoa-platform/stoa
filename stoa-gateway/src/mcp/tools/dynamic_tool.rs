@@ -432,33 +432,48 @@ impl Tool for DynamicTool {
 
         // Execute request
         let response = req.send().await.map_err(|e| {
-            warn!(
-                tool = %self.name,
-                error = %e.without_url(),
-                "Dynamic tool HTTP request failed"
-            );
-            ToolError::ExecutionFailed("Upstream HTTP request failed".to_string())
+            if self.outbound_policy.is_some() {
+                warn!(
+                    tool = %self.name,
+                    error = %e.without_url(),
+                    "Dynamic tool HTTP request failed"
+                );
+                ToolError::ExecutionFailed("Upstream HTTP request failed".to_string())
+            } else {
+                warn!(tool = %self.name, error = %e, "Dynamic tool HTTP request failed");
+                ToolError::ExecutionFailed(format!("HTTP request failed: {}", e))
+            }
         })?;
 
         let status = response.status();
         let body = response.text().await.map_err(|e| {
-            warn!(
-                tool = %self.name,
-                error = %e.without_url(),
-                "Failed to read dynamic tool response body"
-            );
-            ToolError::ExecutionFailed("Failed to read upstream response body".to_string())
+            if self.outbound_policy.is_some() {
+                warn!(
+                    tool = %self.name,
+                    error = %e.without_url(),
+                    "Failed to read dynamic tool response body"
+                );
+                ToolError::ExecutionFailed("Failed to read upstream response body".to_string())
+            } else {
+                ToolError::ExecutionFailed(format!("Failed to read response body: {}", e))
+            }
         })?;
 
         if !status.is_success() {
-            warn!(
-                tool = %self.name,
-                status = status.as_u16(),
-                "Dynamic tool upstream returned non-success status"
-            );
+            if self.outbound_policy.is_some() {
+                warn!(
+                    tool = %self.name,
+                    status = status.as_u16(),
+                    "Dynamic tool upstream returned non-success status"
+                );
+                return Err(ToolError::ExecutionFailed(format!(
+                    "Upstream returned HTTP {}",
+                    status.as_u16()
+                )));
+            }
             return Err(ToolError::ExecutionFailed(format!(
-                "Upstream returned HTTP {}",
-                status.as_u16()
+                "HTTP {} from {}: {}",
+                status, self.endpoint, body
             )));
         }
 
@@ -1802,7 +1817,7 @@ pub(crate) mod tests {
         assert!(err.contains("302"), "unexpected error: {err}");
         assert!(!err.contains("sensitive-redirect-body"));
 
-        // 4. Non-2xx upstream error body is masked even without outbound_policy.
+        // 4. Non-2xx upstream error body is masked when outbound_policy is attached.
         let err_tool = DynamicTool::new(
             "err_tool",
             "Error",
@@ -1814,7 +1829,8 @@ pub(crate) mod tests {
                 required: vec![],
             },
             "acme",
-        );
+        )
+        .with_outbound_policy(policy);
         let err = err_tool
             .execute(json!({}), &ctx)
             .await
@@ -1823,5 +1839,81 @@ pub(crate) mod tests {
         assert!(err.contains("502"), "unexpected error: {err}");
         assert!(!err.contains("internal-stack-trace-xyz"));
         assert!(!err.contains(&allowed_server.uri()));
+    }
+
+    #[tokio::test]
+    async fn dynamic_tool_without_outbound_policy_preserves_upstream_error_details() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let upstream_body = "upstream-diagnostic-payload-502";
+        Mock::given(method("GET"))
+            .and(path("/err"))
+            .respond_with(ResponseTemplate::new(502).set_body_string(upstream_body))
+            .mount(&server)
+            .await;
+
+        let endpoint = format!("{}/err", server.uri());
+        let tool = DynamicTool::new(
+            "err_tool",
+            "Error",
+            &endpoint,
+            "GET",
+            schema_empty_object(),
+            "acme",
+        );
+        let err = tool
+            .execute(json!({}), &ctx_for_tenant("acme"))
+            .await
+            .unwrap_err()
+            .to_string();
+
+        assert_eq!(
+            err,
+            format!(
+                "Execution failed: HTTP {} from {}: {}",
+                reqwest::StatusCode::BAD_GATEWAY,
+                endpoint,
+                upstream_body
+            )
+        );
+    }
+
+    #[tokio::test]
+    async fn dynamic_tool_with_outbound_policy_returns_generic_upstream_error() {
+        use crate::proxy::outbound_policy::OutboundAddressPolicy;
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let upstream_body = "upstream-diagnostic-payload-502";
+        Mock::given(method("GET"))
+            .and(path("/err"))
+            .respond_with(ResponseTemplate::new(502).set_body_string(upstream_body))
+            .mount(&server)
+            .await;
+
+        let policy = Arc::new(OutboundAddressPolicy::new([server.uri()]));
+        let endpoint = format!("{}/err", server.uri());
+        let tool = DynamicTool::new(
+            "err_tool_poc",
+            "Error PoC",
+            &endpoint,
+            "GET",
+            schema_empty_object(),
+            "acme",
+        )
+        .with_outbound_policy(policy);
+        let err = tool
+            .execute(json!({}), &ctx_for_tenant("acme"))
+            .await
+            .unwrap_err()
+            .to_string();
+
+        assert_eq!(err, "Execution failed: Upstream returned HTTP 502");
+        assert!(!err.contains(&endpoint));
+        assert!(!err.contains(&server.uri()));
+        assert!(!err.contains(upstream_body));
     }
 }

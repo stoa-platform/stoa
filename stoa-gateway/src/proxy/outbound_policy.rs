@@ -420,7 +420,7 @@ mod tests {
         Mock::given(method("POST"))
             .and(path("/oauth2/token"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "access_token": "should-never-be-fetched",
+                "access_token": "unused",
                 "expires_in": 300
             })))
             .expect(0)

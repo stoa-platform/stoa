@@ -16,7 +16,7 @@ The platform uses `BASE_DOMAIN` as the single source of truth for all URLs. Envi
 | `KEYCLOAK_URL` | Keycloak server URL | `https://auth.{domain}` |
 | `KEYCLOAK_REALM` | Keycloak realm name | `stoa` |
 | `DATABASE_URL` | PostgreSQL connection string | Required |
-| `KAFKA_BOOTSTRAP_SERVERS` | Kafka broker addresses | `redpanda:9092` |
+| `KAFKA_BOOTSTRAP_SERVERS` | Kafka broker addresses | `redpanda` on port 9092 |
 | `AWX_URL` | AWX automation URL | `https://awx.{domain}` |
 | `CORS_ORIGINS` | Allowed CORS origins | `https://console.{domain}` |
 | `LOG_LEVEL` | Logging level | `INFO` |
@@ -102,8 +102,8 @@ global:
 controlPlaneApi:
   replicas: 2
   image:
-    repository: ghcr.io/stoa-platform/stoa-control-plane-api
-    tag: latest
+    repository: ghcr.io/stoa-platform/control-plane-api
+    digest: sha256:6100c45b0416dc916d80c145509a1abd007253e6d57239dfbab0e96ea7c840f0
   resources:
     limits:
       cpu: 1000m
@@ -125,7 +125,7 @@ stoaGateway:
   replicas: 2
   image:
     repository: ghcr.io/stoa-platform/stoa-gateway
-    tag: latest
+    digest: sha256:0ea4741d3b83c4de5f5f221a42969e4afbee17ed1d66d40fb92500d77dce991e
 ```
 
 ### Observability

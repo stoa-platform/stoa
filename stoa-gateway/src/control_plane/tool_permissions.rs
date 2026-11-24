@@ -216,6 +216,33 @@ impl ToolPermissionService {
             .await
     }
 
+    /// Evaluate whether `requested_name` / `canonical_name` is explicitly allowed by a
+    /// complete fresh tenant policy without emitting a `tool_call_denied` audit warning.
+    ///
+    /// Returns `None` when allowed or `Some(reason)` when denied (fail-closed).
+    pub async fn check_tool_permission_decision(
+        &self,
+        tenant_id: &str,
+        requested_name: &str,
+        canonical_name: &str,
+    ) -> Option<PermissionDenyReason> {
+        // A blank tenant is not an identity. Deny before any cache or Control Plane read.
+        if tenant_id.trim().is_empty() {
+            return Some(PermissionDenyReason::PermissionAbsent);
+        }
+        let state = if self.trust_set_not_loaded() {
+            PermissionState::Unavailable {
+                reason: PermissionDenyReason::TrustSetNotLoaded,
+            }
+        } else {
+            let state = self.get_permission_state(tenant_id).await;
+            self.record_state(&state);
+            state
+        };
+
+        state.deny_reason(requested_name, canonical_name)
+    }
+
     /// Check a call requested as `requested_name` that the tool registry
     /// resolved to `canonical_name` (they differ only for deprecated aliases).
     ///
@@ -228,29 +255,10 @@ impl ToolPermissionService {
         requested_name: &str,
         canonical_name: &str,
     ) -> bool {
-        // A blank tenant is not an identity. Deny before any cache or Control Plane read.
-        if tenant_id.trim().is_empty() {
-            warn!(
-                audit_event = "tool_call_denied",
-                tenant_id = %tenant_id,
-                tool_name = %canonical_name,
-                requested_name = %requested_name,
-                reason = %PermissionDenyReason::PermissionAbsent.as_str(),
-                "Tool permission fail-closed deny"
-            );
-            return false;
-        }
-        let state = if self.trust_set_not_loaded() {
-            PermissionState::Unavailable {
-                reason: PermissionDenyReason::TrustSetNotLoaded,
-            }
-        } else {
-            let state = self.get_permission_state(tenant_id).await;
-            self.record_state(&state);
-            state
-        };
-
-        match state.deny_reason(requested_name, canonical_name) {
+        match self
+            .check_tool_permission_decision(tenant_id, requested_name, canonical_name)
+            .await
+        {
             None => true,
             Some(reason) => {
                 warn!(

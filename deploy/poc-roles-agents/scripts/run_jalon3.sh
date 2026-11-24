@@ -43,7 +43,7 @@ assert s["forbidden_calls"] == 0, f"payments_hidden (/forbidden) was reached: {s
 assert s["caller_auth_headers_seen"] == 0, f"caller Authorization header leaked upstream: {s}"
 assert s["redirect_target_calls"] == 0, f"redirect target reached: {s}"
 assert s["oauth2_calls"] == 0, f"unexpected oauth2 calls: {s}"
-print("PASS: upstream-mock saw exact 11 vault-authenticated /payments calls, 2 /fail calls, 0 /forbidden calls, 0 caller tokens")
+print("PASS: upstream-mock saw exact 11 backend-key-authenticated /payments calls, 2 /fail calls, 0 /forbidden calls, 0 caller tokens")
 '
 
 echo "=== JALON 3 DOCKER COMPOSE VERIFICATION PASSED ==="

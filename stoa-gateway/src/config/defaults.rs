@@ -510,7 +510,6 @@ impl Default for Config {
             poc_public_base_url: None,
             poc_role_artifacts_dir: None,
             poc_role_floor_dir: None,
-            poc_role_policy_check_interval_ms: default_poc_role_policy_check_interval_ms(),
             poc_outbound_allowed_origins: vec![],
             poc_max_revoked_chains: default_poc_max_revoked_chains(),
             poc_chain_budget: default_poc_chain_budget(),
@@ -519,10 +518,6 @@ impl Default for Config {
             poc_caller_budget_window_secs: default_poc_caller_budget_window_secs(),
         }
     }
-}
-
-pub(super) fn default_poc_role_policy_check_interval_ms() -> u64 {
-    crate::control_plane::role_policy::DEFAULT_ROLE_POLICY_CHECK_INTERVAL_MS
 }
 
 pub(super) fn default_poc_max_revoked_chains() -> usize {

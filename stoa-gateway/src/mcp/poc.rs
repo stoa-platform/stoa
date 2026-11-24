@@ -4248,4 +4248,323 @@ allow if {
         assert_eq!(reqs.len(), 1);
         assert_eq!(reqs[0].url.path(), "/payments");
     }
+
+    #[tokio::test]
+    async fn role_policy_reduction_takes_effect_on_next_call_and_tools_list() {
+        let upstream = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/payments"))
+            .and(header("X-API-Key", "ky-red"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"ok": "list"})))
+            .mount(&upstream)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/export"))
+            .and(header("X-API-Key", "ky-red"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"ok": "export"})))
+            .mount(&upstream)
+            .await;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let signer = PolicyFixtureSigner::new();
+        let trust_file = signer.write_trust(tmp.path());
+
+        let policies_dir = tmp.path().join("policies");
+        let roles_dir = tmp.path().join("roles");
+        let floor_dir = tmp.path().join("floors");
+        let contracts_dir = tmp.path().join("contracts");
+        for d in [&policies_dir, &roles_dir, &contracts_dir] {
+            std::fs::create_dir_all(d).unwrap();
+        }
+
+        std::fs::write(
+            policies_dir.join("acme.jws"),
+            signer.sign_tool_policy("acme", &["payments_list", "payments_export"]),
+        )
+        .unwrap();
+
+        let role_file = roles_dir.join("acme.roles.jws");
+        std::fs::write(
+            &role_file,
+            signer.sign_role_policy(
+                "acme",
+                1,
+                json!({
+                    "reader": {
+                        "allowed_tools": ["payments_list", "payments_export"]
+                    }
+                }),
+            ),
+        )
+        .unwrap();
+
+        std::fs::write(
+            contracts_dir.join("payments.uac.json"),
+            serde_json::to_string(&json!({
+                "name": "payments",
+                "version": "1.0.0",
+                "tenant_id": "acme",
+                "display_name": "Payments Reduction",
+                "description": "Immediate role reduction fixture",
+                "classification": "H",
+                "endpoints": [
+                    {
+                        "path": "/payments",
+                        "methods": ["GET"],
+                        "backend_url": format!("{}/payments", upstream.uri()),
+                        "operation_id": "list_payments",
+                        "llm": {
+                            "summary": "List payments",
+                            "intent": "Read payments",
+                            "tool_name": "payments_list",
+                            "side_effects": "read",
+                            "safe_for_agents": true,
+                            "requires_human_approval": false,
+                            "examples": []
+                        }
+                    },
+                    {
+                        "path": "/export",
+                        "methods": ["GET"],
+                        "backend_url": format!("{}/export", upstream.uri()),
+                        "operation_id": "export_payments",
+                        "llm": {
+                            "summary": "Export payments",
+                            "intent": "Export payments",
+                            "tool_name": "payments_export",
+                            "side_effects": "read",
+                            "safe_for_agents": true,
+                            "requires_human_approval": false,
+                            "examples": []
+                        }
+                    }
+                ],
+                "required_policies": [],
+                "status": "published"
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let creds_file = tmp.path().join("credentials.json");
+        std::fs::write(
+            &creds_file,
+            serde_json::to_string(&json!([
+                {
+                    "route_id": "mcp-tool:acme:payments_list",
+                    "auth_type": "api_key",
+                    "header_name": "X-API-Key",
+                    "header_value": "ky-red",
+                    "allowed_origin": upstream.uri(),
+                    "shared_with_tenants": false
+                },
+                {
+                    "route_id": "mcp-tool:acme:payments_export",
+                    "auth_type": "api_key",
+                    "header_name": "X-API-Key",
+                    "header_value": "ky-red",
+                    "allowed_origin": upstream.uri(),
+                    "shared_with_tenants": false
+                }
+            ]))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let base_url = "http://stoa-gateway:8080";
+        let config = Config {
+            auto_register: false,
+            admin_routes_disabled: true,
+            policy_enabled: false,
+            policy_boot_tenants: vec!["acme".to_string()],
+            policy_trust_jwks_file: Some(trust_file),
+            policy_local_artifacts_dir: Some(policies_dir.to_string_lossy().to_string()),
+            policy_expected_issuer: "stoa-poc-policy".to_string(),
+            policy_audience: "stoa-gateway".to_string(),
+            poc_agents_enabled: true,
+            poc_bootstrap_secret: Some("bt-red".to_string()),
+            poc_uac_contracts_dir: Some(contracts_dir.to_string_lossy().to_string()),
+            poc_credentials_file: Some(creds_file.to_string_lossy().to_string()),
+            poc_public_base_url: Some(base_url.to_string()),
+            poc_role_artifacts_dir: Some(roles_dir.to_string_lossy().to_string()),
+            poc_role_floor_dir: Some(floor_dir.to_string_lossy().to_string()),
+            poc_outbound_allowed_origins: vec![upstream.uri()],
+            ..Config::default()
+        };
+
+        let state = AppState::new(config);
+        load_poc_fixtures(&state).await.unwrap();
+        state
+            .tool_permissions
+            .as_ref()
+            .unwrap()
+            .load_policy("acme")
+            .await
+            .unwrap();
+        let app = build_router(state);
+
+        let dpop = TestDpop::new();
+        let boot_htu = format!("{base_url}/mcp/poc/bootstrap");
+        let mcp_htu = format!("{base_url}/mcp/poc");
+
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/mcp/poc/bootstrap")
+                    .header("content-type", "application/json")
+                    .header("X-Stoa-Poc-Bootstrap-Secret", "bt-red")
+                    .header("DPoP", dpop.proof("POST", &boot_htu, "red-b1", None))
+                    .body(Body::from(
+                        json!({
+                            "sub": "agent-reduction",
+                            "tenant_id": "acme",
+                            "role": "reader"
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let token = serde_json::from_slice::<Value>(
+            &axum::body::to_bytes(resp.into_body(), 16 * 1024)
+                .await
+                .unwrap(),
+        )
+        .unwrap()["access_token"]
+            .as_str()
+            .unwrap()
+            .to_string();
+
+        let send_mcp = |jti: &str, payload: Value| {
+            let app = app.clone();
+            let auth_header = format!("DPoP {token}");
+            let proof = dpop.proof("POST", &mcp_htu, jti, Some(&token));
+            let body = payload.to_string();
+            async move {
+                let resp = app
+                    .oneshot(
+                        Request::builder()
+                            .method("POST")
+                            .uri("/mcp/poc")
+                            .header("content-type", "application/json")
+                            .header("Authorization", auth_header)
+                            .header("DPoP", proof)
+                            .body(Body::from(body))
+                            .unwrap(),
+                    )
+                    .await
+                    .unwrap();
+                assert_eq!(resp.status(), StatusCode::OK);
+                serde_json::from_slice::<Value>(
+                    &axum::body::to_bytes(resp.into_body(), 16 * 1024)
+                        .await
+                        .unwrap(),
+                )
+                .unwrap()
+            }
+        };
+
+        // Baseline: payments_export is listed and callable under v1.
+        let list_v1 = send_mcp(
+            "red-list-1",
+            json!({"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}),
+        )
+        .await;
+        let names_v1: Vec<&str> = list_v1["result"]["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|t| t["name"].as_str())
+            .collect();
+        assert!(names_v1.contains(&"payments_list"));
+        assert!(names_v1.contains(&"payments_export"));
+
+        let call_v1 = send_mcp(
+            "red-call-1",
+            json!({
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/call",
+                "params": { "name": "payments_export", "arguments": {} }
+            }),
+        )
+        .await;
+        assert!(
+            call_v1.get("error").is_none(),
+            "baseline export failed: {call_v1}"
+        );
+
+        // Overwrite with signed v2 removing payments_export (no sleep).
+        let next_role_file = roles_dir.join("acme.roles.jws.next");
+        std::fs::write(
+            &next_role_file,
+            signer.sign_role_policy(
+                "acme",
+                2,
+                json!({
+                    "reader": {
+                        "allowed_tools": ["payments_list"]
+                    }
+                }),
+            ),
+        )
+        .unwrap();
+        std::fs::rename(&next_role_file, &role_file).unwrap();
+
+        // Immediately refused on the very next tools/call without hitting upstream.
+        let call_v2 = send_mcp(
+            "red-call-2",
+            json!({
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "tools/call",
+                "params": { "name": "payments_export", "arguments": {} }
+            }),
+        )
+        .await;
+        assert_eq!(call_v2["error"]["code"], -32003);
+        assert_eq!(
+            call_v2["error"]["message"],
+            "Tool call rejected by role policy"
+        );
+
+        // Immediately absent from tools/list, while payments_list stays listed and callable.
+        let list_v2 = send_mcp(
+            "red-list-2",
+            json!({"jsonrpc": "2.0", "id": 4, "method": "tools/list", "params": {}}),
+        )
+        .await;
+        let names_v2: Vec<&str> = list_v2["result"]["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|t| t["name"].as_str())
+            .collect();
+        assert_eq!(names_v2, vec!["payments_list"]);
+
+        let list_call_v2 = send_mcp(
+            "red-call-3",
+            json!({
+                "jsonrpc": "2.0",
+                "id": 5,
+                "method": "tools/call",
+                "params": { "name": "payments_list", "arguments": {} }
+            }),
+        )
+        .await;
+        assert!(
+            list_call_v2.get("error").is_none(),
+            "remaining allowed tool failed: {list_call_v2}"
+        );
+
+        let reqs = upstream.received_requests().await.unwrap();
+        let export_calls = reqs.iter().filter(|r| r.url.path() == "/export").count();
+        let list_calls = reqs.iter().filter(|r| r.url.path() == "/payments").count();
+        assert_eq!(export_calls, 1);
+        assert_eq!(list_calls, 1);
+    }
 }

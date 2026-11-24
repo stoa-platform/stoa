@@ -502,6 +502,14 @@ impl LocalAgentAuth {
         Ok(IssuedLocalToken { token, claims })
     }
 
+    #[cfg(test)]
+    pub(crate) fn sign_claims_for_test(
+        &self,
+        claims: LocalAgentClaims,
+    ) -> Result<IssuedLocalToken, LocalTokenError> {
+        self.sign_claims(claims)
+    }
+
     /// Decode and verify signature, `RS256`, mandatory matching `kid`, `exp`, `iss`, and
     /// structural claim invariants, then validate exact `aud` via `expected_aud_for`.
     pub fn validate_token_with_audience_fn<F>(
@@ -1212,6 +1220,128 @@ mod tests {
             assert_eq!(child.claims.aud, expected_aud);
             current = child.claims;
         }
+    }
+
+    #[test]
+    fn child_token_cannot_target_or_be_validated_for_generic_mcp_audience() {
+        let auth = LocalAgentAuth::new().expect("init local auth");
+        let parent_key = TestDpopKey::generate();
+        let child_key = TestDpopKey::generate();
+        let parent = issue_sample_parent(&auth, &parent_key);
+        let parent_tools: HashSet<String> = [
+            "payments_list".to_string(),
+            FORBIDDEN_CHILD_AUDIENCE.to_string(),
+        ]
+        .into_iter()
+        .collect();
+
+        // `issue_child_token` always emits a canonical tool audience, never the generic MCP aud.
+        let child = auth
+            .issue_child_token(
+                &parent.claims,
+                &parent_tools,
+                None,
+                DelegateChildTokenRequest {
+                    sub: "agent-child".to_string(),
+                    target_tool: "payments_list".to_string(),
+                    child_dpop_jwk: child_key.jwk.clone(),
+                    allowed_tools: vec!["payments_list".to_string()],
+                    arg_constraints: None,
+                    ttl_secs: Some(60),
+                },
+            )
+            .expect("issue tool-scoped child");
+        assert_ne!(child.claims.aud, FORBIDDEN_CHILD_AUDIENCE);
+        assert_eq!(
+            child.claims.aud,
+            canonical_tool_audience("acme", "payments_list")
+        );
+
+        let edge_child = auth
+            .issue_child_token(
+                &parent.claims,
+                &parent_tools,
+                None,
+                DelegateChildTokenRequest {
+                    sub: "agent-child-edge".to_string(),
+                    target_tool: FORBIDDEN_CHILD_AUDIENCE.to_string(),
+                    child_dpop_jwk: child_key.jwk.clone(),
+                    allowed_tools: vec![FORBIDDEN_CHILD_AUDIENCE.to_string()],
+                    arg_constraints: None,
+                    ttl_secs: Some(60),
+                },
+            )
+            .expect("issue child for edge tool name");
+        assert_ne!(edge_child.claims.aud, FORBIDDEN_CHILD_AUDIENCE);
+        assert_eq!(
+            edge_child.claims.aud,
+            canonical_tool_audience("acme", FORBIDDEN_CHILD_AUDIENCE)
+        );
+
+        // Valid tool-scoped child passes for its canonical audience, fails against generic aud.
+        assert!(auth
+            .validate_token(child.as_str(), Some(DELEGATION_ISSUER), &child.claims.aud)
+            .is_ok());
+        let mismatch_err = auth
+            .validate_token(
+                child.as_str(),
+                Some(DELEGATION_ISSUER),
+                FORBIDDEN_CHILD_AUDIENCE,
+            )
+            .unwrap_err();
+        assert!(matches!(
+            mismatch_err,
+            LocalTokenError::InvalidClaims("audience mismatch")
+        ));
+        let mismatch_any_iss = auth
+            .validate_token(child.as_str(), None, FORBIDDEN_CHILD_AUDIENCE)
+            .unwrap_err();
+        assert!(matches!(
+            mismatch_any_iss,
+            LocalTokenError::InvalidClaims("audience mismatch")
+        ));
+
+        // Gateway-signed child token carrying FORBIDDEN_CHILD_AUDIENCE is refused even when the
+        // validator's expected audience is FORBIDDEN_CHILD_AUDIENCE.
+        let mut generic_claims = child.claims;
+        generic_claims.aud = FORBIDDEN_CHILD_AUDIENCE.to_string();
+        let forged = auth.sign_claims(generic_claims).unwrap();
+
+        let err_delegation_iss = auth
+            .validate_token(
+                forged.as_str(),
+                Some(DELEGATION_ISSUER),
+                FORBIDDEN_CHILD_AUDIENCE,
+            )
+            .unwrap_err();
+        assert!(matches!(
+            err_delegation_iss,
+            LocalTokenError::InvalidClaims("child token must not target generic MCP audience")
+        ));
+
+        let err_any_iss = auth
+            .validate_token(forged.as_str(), None, FORBIDDEN_CHILD_AUDIENCE)
+            .unwrap_err();
+        assert!(matches!(
+            err_any_iss,
+            LocalTokenError::InvalidClaims("child token must not target generic MCP audience")
+        ));
+
+        let htu = "http://stoa-gateway:8080/mcp/poc";
+        let proof = child_key.sign_proof("POST", htu, "proof-generic-aud", Some(forged.as_str()));
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            AUTHORIZATION,
+            HeaderValue::from_str(&format!("DPoP {}", forged.as_str())).unwrap(),
+        );
+        headers.insert("DPoP", HeaderValue::from_str(&proof).unwrap());
+        let req_err = auth
+            .validate_mcp_request(&headers, "POST", htu, FORBIDDEN_CHILD_AUDIENCE)
+            .unwrap_err();
+        assert!(matches!(
+            req_err,
+            LocalTokenError::InvalidClaims("child token must not target generic MCP audience")
+        ));
     }
 
     #[test]

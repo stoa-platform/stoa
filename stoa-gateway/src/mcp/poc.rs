@@ -1066,6 +1066,7 @@ async fn handle_poc_tool_call(
 mod tests {
     use super::*;
     use crate::auth::dpop::{compute_ath, compute_jwk_thumbprint};
+    use crate::auth::local_agent_token::FORBIDDEN_CHILD_AUDIENCE;
     use crate::build_router;
     use crate::config::Config;
     use crate::control_plane::role_policy::ROLE_POLICY_ARTIFACT_TYP;
@@ -3429,6 +3430,350 @@ allow if {
         assert_eq!(rpc["error"]["message"], "Admission unavailable");
 
         // Only the pre-saturation baseline call reached upstream.
+        assert_eq!(upstream.received_requests().await.unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn child_token_wrong_tool_and_generic_mcp_audience_are_refused() {
+        let upstream = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/payments"))
+            .and(header("X-API-Key", "ky-aud"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"ok": "payments"})))
+            .mount(&upstream)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/other"))
+            .and(header("X-API-Key", "ky-aud"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"ok": "other"})))
+            .expect(0)
+            .mount(&upstream)
+            .await;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let signer = PolicyFixtureSigner::new();
+        let trust_file = signer.write_trust(tmp.path());
+
+        let policies_dir = tmp.path().join("policies");
+        let roles_dir = tmp.path().join("roles");
+        let floor_dir = tmp.path().join("floors");
+        let contracts_dir = tmp.path().join("contracts");
+        for d in [&policies_dir, &roles_dir, &contracts_dir] {
+            std::fs::create_dir_all(d).unwrap();
+        }
+
+        std::fs::write(
+            policies_dir.join("acme.jws"),
+            signer.sign_tool_policy("acme", &["payments_list", "payments_other"]),
+        )
+        .unwrap();
+        std::fs::write(
+            roles_dir.join("acme.roles.jws"),
+            signer.sign_role_policy(
+                "acme",
+                1,
+                json!({
+                    "reader": { "allowed_tools": ["payments_list", "payments_other"] }
+                }),
+            ),
+        )
+        .unwrap();
+        std::fs::write(
+            contracts_dir.join("payments.uac.json"),
+            serde_json::to_string(&json!({
+                "name": "payments",
+                "version": "1.0.0",
+                "tenant_id": "acme",
+                "display_name": "Payments Audience",
+                "description": "Child audience fixture",
+                "classification": "H",
+                "endpoints": [
+                    {
+                        "path": "/payments",
+                        "methods": ["GET"],
+                        "backend_url": format!("{}/payments", upstream.uri()),
+                        "operation_id": "list_payments",
+                        "llm": {
+                            "summary": "List payments",
+                            "intent": "Read payments",
+                            "tool_name": "payments_list",
+                            "side_effects": "read",
+                            "safe_for_agents": true,
+                            "requires_human_approval": false,
+                            "examples": []
+                        }
+                    },
+                    {
+                        "path": "/other",
+                        "methods": ["GET"],
+                        "backend_url": format!("{}/other", upstream.uri()),
+                        "operation_id": "other_payments",
+                        "llm": {
+                            "summary": "Other payments tool",
+                            "intent": "Read other payments",
+                            "tool_name": "payments_other",
+                            "side_effects": "read",
+                            "safe_for_agents": true,
+                            "requires_human_approval": false,
+                            "examples": []
+                        }
+                    }
+                ],
+                "required_policies": [],
+                "status": "published"
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let creds_file = tmp.path().join("credentials.json");
+        std::fs::write(
+            &creds_file,
+            serde_json::to_string(&json!([
+                {
+                    "route_id": "mcp-tool:acme:payments_list",
+                    "auth_type": "api_key",
+                    "header_name": "X-API-Key",
+                    "header_value": "ky-aud",
+                    "allowed_origin": upstream.uri(),
+                    "shared_with_tenants": false
+                },
+                {
+                    "route_id": "mcp-tool:acme:payments_other",
+                    "auth_type": "api_key",
+                    "header_name": "X-API-Key",
+                    "header_value": "ky-aud",
+                    "allowed_origin": upstream.uri(),
+                    "shared_with_tenants": false
+                }
+            ]))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let base_url = "http://stoa-gateway:8080";
+        let config = Config {
+            auto_register: false,
+            admin_routes_disabled: true,
+            policy_enabled: false,
+            policy_boot_tenants: vec!["acme".to_string()],
+            policy_trust_jwks_file: Some(trust_file),
+            policy_local_artifacts_dir: Some(policies_dir.to_string_lossy().to_string()),
+            policy_expected_issuer: "stoa-poc-policy".to_string(),
+            policy_audience: "stoa-gateway".to_string(),
+            poc_agents_enabled: true,
+            poc_bootstrap_secret: Some("bt-aud".to_string()),
+            poc_uac_contracts_dir: Some(contracts_dir.to_string_lossy().to_string()),
+            poc_credentials_file: Some(creds_file.to_string_lossy().to_string()),
+            poc_public_base_url: Some(base_url.to_string()),
+            poc_role_artifacts_dir: Some(roles_dir.to_string_lossy().to_string()),
+            poc_role_floor_dir: Some(floor_dir.to_string_lossy().to_string()),
+            poc_outbound_allowed_origins: vec![upstream.uri()],
+            ..Config::default()
+        };
+
+        let state = AppState::new(config);
+        load_poc_fixtures(&state).await.unwrap();
+        state
+            .tool_permissions
+            .as_ref()
+            .unwrap()
+            .load_policy("acme")
+            .await
+            .unwrap();
+        let app = build_router(state.clone());
+
+        let parent_dpop = TestDpop::new();
+        let child_dpop = TestDpop::new();
+        let boot_htu = format!("{base_url}/mcp/poc/bootstrap");
+        let del_htu = format!("{base_url}/mcp/poc/delegate");
+        let mcp_htu = format!("{base_url}/mcp/poc");
+
+        // 1. Bootstrap parent and delegate a child scoped to `payments_list`.
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/mcp/poc/bootstrap")
+                    .header("content-type", "application/json")
+                    .header("X-Stoa-Poc-Bootstrap-Secret", "bt-aud")
+                    .header("DPoP", parent_dpop.proof("POST", &boot_htu, "aud-b1", None))
+                    .body(Body::from(
+                        json!({
+                            "sub": "agent-parent",
+                            "tenant_id": "acme",
+                            "role": "reader"
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let parent_tok = serde_json::from_slice::<Value>(
+            &axum::body::to_bytes(resp.into_body(), 16 * 1024)
+                .await
+                .unwrap(),
+        )
+        .unwrap()["access_token"]
+            .as_str()
+            .unwrap()
+            .to_string();
+
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/mcp/poc/delegate")
+                    .header("content-type", "application/json")
+                    .header("Authorization", format!("DPoP {parent_tok}"))
+                    .header(
+                        "DPoP",
+                        parent_dpop.proof("POST", &del_htu, "aud-d1", Some(&parent_tok)),
+                    )
+                    .body(Body::from(
+                        json!({
+                            "sub": "agent-child",
+                            "target_tool": "payments_list",
+                            "child_dpop_jwk": {
+                                "kty": child_dpop.jwk.kty,
+                                "crv": child_dpop.jwk.crv,
+                                "x": child_dpop.jwk.x,
+                                "y": child_dpop.jwk.y
+                            },
+                            "allowed_tools": ["payments_list", "payments_other"],
+                            "ttl_secs": 120
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let child_json: Value = serde_json::from_slice(
+            &axum::body::to_bytes(resp.into_body(), 16 * 1024)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(child_json["aud"], "mcp-tool:acme:payments_list");
+        let child_tok = child_json["access_token"].as_str().unwrap().to_string();
+
+        let send_mcp = |tok: &str, jti: &str, payload: Value| {
+            let app = app.clone();
+            let auth_header = format!("DPoP {tok}");
+            let proof = child_dpop.proof("POST", &mcp_htu, jti, Some(tok));
+            let body = payload.to_string();
+            async move {
+                app.oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/mcp/poc")
+                        .header("content-type", "application/json")
+                        .header("Authorization", auth_header)
+                        .header("DPoP", proof)
+                        .body(Body::from(body))
+                        .unwrap(),
+                )
+                .await
+                .unwrap()
+            }
+        };
+
+        // 2. Child call on its target tool succeeds (baseline).
+        let resp = send_mcp(
+            &child_tok,
+            "aud-ok",
+            json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": { "name": "payments_list", "arguments": {} }
+            }),
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let rpc: Value = serde_json::from_slice(
+            &axum::body::to_bytes(resp.into_body(), 16 * 1024)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(rpc.get("error").is_none(), "target tool failed: {rpc}");
+        assert_eq!(upstream.received_requests().await.unwrap().len(), 1);
+
+        // 3. Valid child token used on a tool other than its target is refused (401).
+        let resp = send_mcp(
+            &child_tok,
+            "aud-wrong-tool",
+            json!({
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/call",
+                "params": { "name": "payments_other", "arguments": {} }
+            }),
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+
+        // 4. Valid child token used on a non-tool method (`tools/list`) is refused (401).
+        let resp = send_mcp(
+            &child_tok,
+            "aud-list",
+            json!({
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "tools/list",
+                "params": {}
+            }),
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+
+        // 5. Gateway-signed child token carrying FORBIDDEN_CHILD_AUDIENCE is refused on
+        //    POST /mcp/poc (for both tools/call and generic methods) without upstream calls.
+        let auth = state.local_agent_auth.as_ref().unwrap();
+        let mut generic_claims = auth
+            .validate_token(
+                &child_tok,
+                Some(DELEGATION_ISSUER),
+                "mcp-tool:acme:payments_list",
+            )
+            .unwrap();
+        generic_claims.aud = FORBIDDEN_CHILD_AUDIENCE.to_string();
+        let generic_child = auth.sign_claims_for_test(generic_claims).unwrap();
+
+        let resp = send_mcp(
+            generic_child.as_str(),
+            "aud-generic-call",
+            json!({
+                "jsonrpc": "2.0",
+                "id": 4,
+                "method": "tools/call",
+                "params": { "name": "payments_list", "arguments": {} }
+            }),
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+
+        let resp = send_mcp(
+            generic_child.as_str(),
+            "aud-generic-ping",
+            json!({
+                "jsonrpc": "2.0",
+                "id": 5,
+                "method": "ping",
+                "params": {}
+            }),
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+
+        // Only the initial target-tool call reached upstream.
         assert_eq!(upstream.received_requests().await.unwrap().len(), 1);
     }
 }

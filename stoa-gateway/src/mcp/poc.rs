@@ -3057,15 +3057,23 @@ allow if {
                 )
                 .await
                 .unwrap();
-            assert!(
-                resp.status().is_client_error(),
-                "expected 4xx for {label} tenant_id, got {}",
+            // `current_role_snapshot` rejects empty/blank tenant IDs before `issue_parent_token`
+            // runs, returning 403 `role_not_permitted`. The `issue_parent_token` tenant rule
+            // itself is covered directly by the unit test in `local_agent_token.rs`.
+            assert_eq!(
+                resp.status(),
+                StatusCode::FORBIDDEN,
+                "expected 403 for {label} tenant_id, got {}",
                 resp.status()
             );
             let body = axum::body::to_bytes(resp.into_body(), 16 * 1024)
                 .await
                 .unwrap();
             let body_json: Value = serde_json::from_slice(&body).unwrap();
+            assert_eq!(
+                body_json["error"], "role_not_permitted",
+                "expected role_not_permitted for {label} tenant_id, got {body_json}"
+            );
             assert!(
                 body_json.get("access_token").is_none(),
                 "unexpected access_token for {label} tenant_id"
@@ -3734,8 +3742,11 @@ allow if {
         .await;
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
 
-        // 5. Gateway-signed child token carrying FORBIDDEN_CHILD_AUDIENCE is refused on
-        //    POST /mcp/poc (for both tools/call and generic methods) without upstream calls.
+        // 5. Forged gateway-signed child token carrying FORBIDDEN_CHILD_AUDIENCE is refused with
+        //    401 on POST /mcp/poc without upstream calls: `tools/call` is rejected through the
+        //    audience check ("audience mismatch" against the canonical tool audience), and `ping`
+        //    is rejected as a non-tool method for a child token. The FORBIDDEN_CHILD_AUDIENCE
+        //    invariant itself is exercised directly by the unit test in `local_agent_token.rs`.
         let auth = state.local_agent_auth.as_ref().unwrap();
         let mut generic_claims = auth
             .validate_token(

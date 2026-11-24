@@ -3843,8 +3843,55 @@ allow if {
         assert_eq!(upstream.received_requests().await.unwrap().len(), 1);
     }
 
+    #[derive(Clone, Default)]
+    struct AuditBuffer(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+    impl AuditBuffer {
+        fn capture() -> (Self, tracing::Dispatch) {
+            static IDLE_DISPATCH: std::sync::OnceLock<tracing::Dispatch> =
+                std::sync::OnceLock::new();
+            // Keep a second dispatcher registered so callsite interest is computed
+            // across dispatchers when another thread first visits a callsite.
+            IDLE_DISPATCH
+                .get_or_init(|| tracing::Dispatch::new(tracing::subscriber::NoSubscriber::new()));
+
+            let buffer = Self::default();
+            let writer = buffer.clone();
+            let subscriber = tracing_subscriber::fmt()
+                .json()
+                .with_writer(move || writer.clone())
+                .with_max_level(tracing::Level::WARN)
+                .finish();
+            (buffer, tracing::Dispatch::new(subscriber))
+        }
+
+        fn offset(&self) -> usize {
+            self.0.lock().unwrap().len()
+        }
+
+        fn events_since(&self, start: usize) -> Vec<Value> {
+            let bytes = self.0.lock().unwrap();
+            String::from_utf8_lossy(&bytes[start..])
+                .lines()
+                .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+                .collect()
+        }
+    }
+
+    impl std::io::Write for AuditBuffer {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(bytes);
+            Ok(bytes.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
     #[tokio::test]
     async fn tools_list_applies_tenant_and_opa_decisions_without_consuming_budget() {
+        use tracing::instrument::WithSubscriber;
         let upstream = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/payments"))
@@ -4098,72 +4145,104 @@ allow if {
             }
         };
 
-        // Call tools/list twice (exceeding the chain/caller budget of 1 if it debited).
-        for (idx, jti) in ["list-1", "list-2"].iter().enumerate() {
-            let rpc = send_mcp(
-                jti,
-                json!({"jsonrpc": "2.0", "id": idx + 1, "method": "tools/list", "params": {}}),
+        let (audit_buffer, subscriber) = AuditBuffer::capture();
+        async {
+            // Call tools/list twice (exceeding the chain/caller budget of 1 if it debited).
+            let list_start = audit_buffer.offset();
+            for (idx, jti) in ["list-1", "list-2"].iter().enumerate() {
+                let rpc = send_mcp(
+                    jti,
+                    json!({"jsonrpc": "2.0", "id": idx + 1, "method": "tools/list", "params": {}}),
+                )
+                .await;
+                assert!(rpc.get("error").is_none(), "tools/list failed: {rpc}");
+                let names: Vec<&str> = rpc["result"]["tools"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .filter_map(|t| t["name"].as_str())
+                    .collect();
+                assert_eq!(names, vec!["payments_list"]);
+            }
+            let list_denials: Vec<Value> = audit_buffer
+                .events_since(list_start)
+                .into_iter()
+                .filter(|event| event["fields"]["audit_event"] == "tool_call_denied")
+                .collect();
+            assert!(
+                list_denials.is_empty(),
+                "tools/list must not emit tool_call_denied audit events: {list_denials:?}"
+            );
+            assert_eq!(state.poc_admission.chain_used(&chain_id), 0);
+            assert_eq!(state.poc_admission.caller_used(&caller_key), 0);
+
+            // Calling the tenant-denied tool is refused without hitting upstream or debiting budget,
+            // and still emits a tool_call_denied audit event.
+            let tenant_deny_start = audit_buffer.offset();
+            let tenant_rpc = send_mcp(
+                "call-tenant-denied",
+                json!({
+                    "jsonrpc": "2.0",
+                    "id": 10,
+                    "method": "tools/call",
+                    "params": {"name": "payments_tenant_denied", "arguments": {}}
+                }),
             )
             .await;
-            assert!(rpc.get("error").is_none(), "tools/list failed: {rpc}");
-            let names: Vec<&str> = rpc["result"]["tools"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .filter_map(|t| t["name"].as_str())
+            assert_eq!(tenant_rpc["error"]["code"], -32003);
+            assert_eq!(tenant_rpc["error"]["message"], "Tool call rejected");
+            let tenant_call_denials: Vec<Value> = audit_buffer
+                .events_since(tenant_deny_start)
+                .into_iter()
+                .filter(|event| event["fields"]["audit_event"] == "tool_call_denied")
                 .collect();
-            assert_eq!(names, vec!["payments_list"]);
+            assert_eq!(
+                tenant_call_denials.len(),
+                1,
+                "explicit denied tools/call must emit tool_call_denied: {tenant_call_denials:?}"
+            );
+            assert_eq!(
+                tenant_call_denials[0]["fields"]["tool_name"],
+                "payments_tenant_denied"
+            );
+            assert_eq!(tenant_call_denials[0]["fields"]["tenant_id"], "acme");
+
+            // Calling the OPA-denied tool is refused without hitting upstream or debiting budget.
+            let opa_rpc = send_mcp(
+                "call-opa-denied",
+                json!({
+                    "jsonrpc": "2.0",
+                    "id": 11,
+                    "method": "tools/call",
+                    "params": {"name": "payments_opa_denied", "arguments": {}}
+                }),
+            )
+            .await;
+            assert_eq!(opa_rpc["error"]["code"], -32003);
+            assert_eq!(opa_rpc["error"]["message"], "Tool call rejected by policy");
+            assert_eq!(state.poc_admission.chain_used(&chain_id), 0);
+            assert_eq!(state.poc_admission.caller_used(&caller_key), 0);
+
+            // Calling the allowed tool succeeds and consumes the single available budget slot.
+            let ok_rpc = send_mcp(
+                "call-ok",
+                json!({
+                    "jsonrpc": "2.0",
+                    "id": 12,
+                    "method": "tools/call",
+                    "params": {"name": "payments_list", "arguments": {}}
+                }),
+            )
+            .await;
+            assert!(
+                ok_rpc.get("error").is_none(),
+                "allowed call failed: {ok_rpc}"
+            );
+            assert_eq!(state.poc_admission.chain_used(&chain_id), 1);
+            assert_eq!(state.poc_admission.caller_used(&caller_key), 1);
         }
-        assert_eq!(state.poc_admission.chain_used(&chain_id), 0);
-        assert_eq!(state.poc_admission.caller_used(&caller_key), 0);
-
-        // Calling the tenant-denied tool is refused without hitting upstream or debiting budget.
-        let tenant_rpc = send_mcp(
-            "call-tenant-denied",
-            json!({
-                "jsonrpc": "2.0",
-                "id": 10,
-                "method": "tools/call",
-                "params": {"name": "payments_tenant_denied", "arguments": {}}
-            }),
-        )
+        .with_subscriber(subscriber)
         .await;
-        assert_eq!(tenant_rpc["error"]["code"], -32003);
-        assert_eq!(tenant_rpc["error"]["message"], "Tool call rejected");
-
-        // Calling the OPA-denied tool is refused without hitting upstream or debiting budget.
-        let opa_rpc = send_mcp(
-            "call-opa-denied",
-            json!({
-                "jsonrpc": "2.0",
-                "id": 11,
-                "method": "tools/call",
-                "params": {"name": "payments_opa_denied", "arguments": {}}
-            }),
-        )
-        .await;
-        assert_eq!(opa_rpc["error"]["code"], -32003);
-        assert_eq!(opa_rpc["error"]["message"], "Tool call rejected by policy");
-        assert_eq!(state.poc_admission.chain_used(&chain_id), 0);
-        assert_eq!(state.poc_admission.caller_used(&caller_key), 0);
-
-        // Calling the allowed tool succeeds and consumes the single available budget slot.
-        let ok_rpc = send_mcp(
-            "call-ok",
-            json!({
-                "jsonrpc": "2.0",
-                "id": 12,
-                "method": "tools/call",
-                "params": {"name": "payments_list", "arguments": {}}
-            }),
-        )
-        .await;
-        assert!(
-            ok_rpc.get("error").is_none(),
-            "allowed call failed: {ok_rpc}"
-        );
-        assert_eq!(state.poc_admission.chain_used(&chain_id), 1);
-        assert_eq!(state.poc_admission.caller_used(&caller_key), 1);
 
         let reqs = upstream.received_requests().await.unwrap();
         assert_eq!(reqs.len(), 1);

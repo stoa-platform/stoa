@@ -1752,7 +1752,7 @@ mod tests {
     }
 
     #[test]
-    fn session_reduction_immediate_and_widening_or_restore_refused_under_same_token() {
+    fn session_reduction_applies_on_refresh_and_widening_or_restore_refused_under_same_token() {
         let tmp = tempfile::tempdir().unwrap();
         let signer = RoleSigner::new();
         let trust_path = tmp.path().join("trust.json");
@@ -1817,7 +1817,7 @@ mod tests {
         let (v2, _) = store.current_role_snapshot("acme", "reader").unwrap();
         assert!(eval("payments_export", v2).is_ok());
 
-        // v3 withdraws payments_export -> immediate deny on next call for v2 token!
+        // v3 withdraws payments_export -> denied on next call after refresh for v2 token!
         fs::write(
             artifacts_dir.join("acme.roles.jws"),
             signer.sign(
@@ -2217,7 +2217,7 @@ mod tests {
             "stoa-gateway",
             Some(PolicyTrustStore::open(&trust_path)),
         )
-        .with_check_interval(Duration::from_millis(250));
+        .with_check_interval(Duration::from_millis(1500));
 
         store.refresh_tenant("acme").await.unwrap();
         assert_eq!(store.reload_count(), 1);
@@ -2256,7 +2256,7 @@ mod tests {
         assert!(eval("payments_export").is_ok());
 
         // Once the check interval elapses, refresh detects the modified file and activates v2.
-        tokio::time::sleep(Duration::from_millis(300)).await;
+        tokio::time::sleep(Duration::from_millis(1700)).await;
         store.refresh_tenant("acme").await.unwrap();
         assert_eq!(store.reload_count(), 2);
         assert_eq!(store.current_role_snapshot("acme", "reader").unwrap().0, 2);
@@ -2267,7 +2267,7 @@ mod tests {
         assert!(eval("payments_list").is_ok());
 
         // After another interval with an unchanged file, stat sees the same fingerprint (no reload).
-        tokio::time::sleep(Duration::from_millis(300)).await;
+        tokio::time::sleep(Duration::from_millis(1700)).await;
         store.refresh_tenant("acme").await.unwrap();
         assert_eq!(store.reload_count(), 2);
     }
@@ -2301,9 +2301,10 @@ mod tests {
             "stoa-gateway",
             Some(PolicyTrustStore::open(&trust_path)),
         )
-        .with_check_interval(Duration::from_millis(40));
+        .with_check_interval(Duration::from_millis(1500));
 
         store.refresh_tenant("acme").await.unwrap();
+        assert_eq!(store.reload_count(), 1);
         assert_eq!(store.current_role_snapshot("acme", "reader").unwrap().0, 2);
         let floor_path = floor_dir.join("acme.floor.json");
         assert_eq!(
@@ -2311,8 +2312,8 @@ mod tests {
             2
         );
 
-        // Wait past check interval and filesystem mtime granularity, then write rollback v1.
-        tokio::time::sleep(Duration::from_millis(60)).await;
+        // Wait past check interval and filesystem timestamp granularity, then write rollback v1.
+        tokio::time::sleep(Duration::from_millis(1700)).await;
         fs::write(
             &role_path,
             signer.sign(
@@ -2328,6 +2329,7 @@ mod tests {
             store.refresh_tenant("acme").await.unwrap_err(),
             RolePolicyError::VersionRollback
         );
+        assert_eq!(store.reload_count(), 2);
 
         // All sync evaluators fail closed with VersionRollback.
         assert_eq!(

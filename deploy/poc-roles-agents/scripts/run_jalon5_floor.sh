@@ -7,8 +7,11 @@ cd "$DIR"
 
 export COMPOSE_FILE="$DIR/docker-compose.yml"
 export COMPOSE_PROJECT_NAME="poc-roles-agents-floor-$(openssl rand -hex 6)"
-export STOA_POC_BOOTSTRAP_SECRET="$(openssl rand -hex 24)"
-export STOA_POC_UPSTREAM_API_KEY="floor-example-backend-marker"
+bootstrap_rand="$(openssl rand -hex 24)"
+upstream_rand="$(openssl rand -hex 24)"
+STOA_POC_BOOTSTRAP_SECRET="${bootstrap_rand}"
+STOA_POC_UPSTREAM_API_KEY="${upstream_rand}"
+export STOA_POC_BOOTSTRAP_SECRET STOA_POC_UPSTREAM_API_KEY
 
 runtime_root="$(mktemp -d /tmp/stoa-poc-floor.XXXXXXXX)"
 runtime_root="$(cd "$runtime_root" && pwd -P)"

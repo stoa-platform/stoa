@@ -70,7 +70,8 @@ pub async fn load_poc_fixtures(state: &AppState) -> Result<PocFixturesSummary, S
         .ok_or_else(|| "Role policy is not configured".to_string())?;
     for tenant in &state.config.policy_boot_tenants {
         role_store
-            .reload_tenant(tenant)
+            .refresh_tenant(tenant)
+            .await
             .map_err(|e| format!("failed to load signed role policy for '{tenant}': {e}"))?;
         summary.role_policies_loaded += 1;
     }
@@ -261,11 +262,21 @@ pub async fn handle_poc_bootstrap(
         }
     };
 
-    let Some(policy_version) = state
-        .role_policy_store
-        .as_ref()
-        .and_then(|store| store.current_role_snapshot(&req.tenant_id, &req.role).ok())
-        .map(|(version, _)| version)
+    let Some(role_store) = state.role_policy_store.as_ref() else {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({ "error": "role_not_permitted" })),
+        )
+            .into_response();
+    };
+    if role_store.refresh_tenant(&req.tenant_id).await.is_err() {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({ "error": "role_not_permitted" })),
+        )
+            .into_response();
+    }
+    let Ok((policy_version, _)) = role_store.current_role_snapshot(&req.tenant_id, &req.role)
     else {
         return (
             StatusCode::FORBIDDEN,
@@ -386,7 +397,7 @@ pub async fn handle_poc_delegate(
     }
 
     let Ok((_, parent_effective_tools, active_role)) =
-        effective_poc_allowed_tools(&state, &parent_claims)
+        effective_poc_allowed_tools(&state, &parent_claims).await
     else {
         return (
             StatusCode::FORBIDDEN,
@@ -665,30 +676,35 @@ pub async fn handle_poc_mcp(
                 "serverInfo": { "name": "stoa-gateway-poc", "version": env!("CARGO_PKG_VERSION") }
             }),
         ),
-        "tools/list" => match state
-            .poc_admission
-            .check_chain_active(&claims.chain_id, claims.exp, chrono::Utc::now().timestamp())
-            .map_err(admission_rejection)
-            .and_then(|()| effective_poc_allowed_tools(&state, &claims))
-        {
-            Ok((_, allowed_tools, _)) => {
-                let tools: Vec<Value> = state
-                    .tool_registry
-                    .list(Some(&claims.tenant_id))
-                    .into_iter()
-                    .filter(|def| allowed_tools.contains(&def.name))
-                    .map(|def| {
-                        json!({
-                            "name": def.name,
-                            "description": def.description,
-                            "inputSchema": def.input_schema
+        "tools/list" => {
+            let list_result = match state
+                .poc_admission
+                .check_chain_active(&claims.chain_id, claims.exp, chrono::Utc::now().timestamp())
+                .map_err(admission_rejection)
+            {
+                Ok(()) => effective_poc_allowed_tools(&state, &claims).await,
+                Err(err) => Err(err),
+            };
+            match list_result {
+                Ok((_, allowed_tools, _)) => {
+                    let tools: Vec<Value> = state
+                        .tool_registry
+                        .list(Some(&claims.tenant_id))
+                        .into_iter()
+                        .filter(|def| allowed_tools.contains(&def.name))
+                        .map(|def| {
+                            json!({
+                                "name": def.name,
+                                "description": def.description,
+                                "inputSchema": def.input_schema
+                            })
                         })
-                    })
-                    .collect();
-                JsonRpcResponse::success(request.id, json!({ "tools": tools }))
+                        .collect();
+                    JsonRpcResponse::success(request.id, json!({ "tools": tools }))
+                }
+                Err((code, msg)) => JsonRpcResponse::error(request.id, code, msg),
             }
-            Err((code, msg)) => JsonRpcResponse::error(request.id, code, msg),
-        },
+        }
         "tools/call" => handle_poc_tool_call(&state, &claims, request).await,
         "poc/subcalls" => handle_poc_subcalls(&state, &claims, request).await,
         other => JsonRpcResponse::error(
@@ -717,7 +733,7 @@ fn poc_tool_context(claims: &LocalAgentClaims) -> ToolContext {
     }
 }
 
-fn effective_poc_allowed_tools(
+async fn effective_poc_allowed_tools(
     state: &AppState,
     claims: &LocalAgentClaims,
 ) -> Result<(u64, HashSet<String>, RolePolicySpec), PocToolRejection> {
@@ -728,6 +744,10 @@ fn effective_poc_allowed_tools(
     let version = claims
         .policy_version
         .ok_or((-32003, "Role policy unavailable"))?;
+    store
+        .refresh_tenant(&claims.tenant_id)
+        .await
+        .map_err(|_| (-32003, "Role policy unavailable"))?;
     store
         .effective_allowed_tools(
             &claims.tenant_id,
@@ -870,6 +890,15 @@ async fn authorize_and_execute_poc_tool(
     let issued_ver = claims
         .policy_version
         .ok_or((-32003, "Role policy unavailable"))?;
+    if let Err(err) = role_store.refresh_tenant(&claims.tenant_id).await {
+        warn!(
+            tool = %canonical_name,
+            role = %claims.role,
+            error = %err,
+            "PoC call denied: role policy refresh failed"
+        );
+        return Err((-32003, "Tool call rejected by role policy"));
+    }
     if let Err(err) = role_store.evaluate_call_with_raw(
         &RoleEvalInput {
             tenant_id: &claims.tenant_id,

@@ -231,6 +231,7 @@ expression: "Config::default()"
   "poc_public_base_url": null,
   "poc_role_artifacts_dir": null,
   "poc_role_floor_dir": null,
+  "poc_role_policy_check_interval_ms": 1000,
   "poc_outbound_allowed_origins": [],
   "poc_max_revoked_chains": 10000,
   "poc_chain_budget": 50,

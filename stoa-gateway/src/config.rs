@@ -1041,6 +1041,11 @@ pub struct Config {
     #[serde(default)]
     pub poc_role_floor_dir: Option<String>,
 
+    /// Minimum interval in milliseconds between disk metadata checks for signed PoC role policies.
+    /// Env: STOA_POC_ROLE_POLICY_CHECK_INTERVAL_MS (default: 1000)
+    #[serde(default = "default_poc_role_policy_check_interval_ms")]
+    pub poc_role_policy_check_interval_ms: u64,
+
     /// Exact normalized origins (`scheme://host:port`) permitted to resolve to private/internal
     /// addresses in the PoC outbound address policy (used only for isolated local mock fixtures).
     /// Env: STOA_POC_OUTBOUND_ALLOWED_ORIGINS (CSV or JSON array)
@@ -1322,6 +1327,10 @@ impl fmt::Debug for Config {
             .field("poc_public_base_url", &self.poc_public_base_url)
             .field("poc_role_artifacts_dir", &self.poc_role_artifacts_dir)
             .field("poc_role_floor_dir", &self.poc_role_floor_dir)
+            .field(
+                "poc_role_policy_check_interval_ms",
+                &self.poc_role_policy_check_interval_ms,
+            )
             .field(
                 "poc_outbound_allowed_origins",
                 &self.poc_outbound_allowed_origins,

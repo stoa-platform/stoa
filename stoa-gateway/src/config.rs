@@ -1041,7 +1041,8 @@ pub struct Config {
     #[serde(default)]
     pub poc_role_floor_dir: Option<String>,
 
-    /// Minimum interval in milliseconds between disk metadata checks for signed PoC role policies.
+    /// Minimum interval in milliseconds between disk metadata checks for signed PoC role policies
+    /// (0 checks metadata on every refresh; maximum 60000 when `poc_agents_enabled` is true).
     /// Env: STOA_POC_ROLE_POLICY_CHECK_INTERVAL_MS (default: 1000)
     #[serde(default = "default_poc_role_policy_check_interval_ms")]
     pub poc_role_policy_check_interval_ms: u64,

@@ -2867,10 +2867,7 @@ async fn regression_fallback_targets_require_tenant_tool_permission() {
             assert_eq!((status, text), (StatusCode::OK, "fallback ran"));
         } else {
             assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
-            assert!(
-                text.starts_with("Execution failed: Upstream returned HTTP 404"),
-                "{text}"
-            );
+            assert!(text.starts_with("Execution failed: HTTP 404"), "{text}");
         }
     }
 }
@@ -2936,10 +2933,7 @@ async fn regression_fallback_targets_require_sub_account_allowlist() {
             assert_eq!((status, text), (StatusCode::OK, "fallback ran"));
         } else {
             assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
-            assert!(
-                text.starts_with("Execution failed: Upstream returned HTTP 404"),
-                "{text}"
-            );
+            assert!(text.starts_with("Execution failed: HTTP 404"), "{text}");
         }
     }
 }

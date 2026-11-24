@@ -40,6 +40,10 @@ pub const MAX_ROLE_POLICY_VALIDITY: Duration = Duration::from_secs(900);
 /// tenant's signed role policy artifact.
 pub const DEFAULT_ROLE_POLICY_CHECK_INTERVAL_MS: u64 = 1000;
 
+/// Maximum permitted interval (milliseconds) between disk metadata checks for a
+/// tenant's signed role policy artifact (60 seconds).
+pub const MAX_ROLE_POLICY_CHECK_INTERVAL_MS: u64 = 60_000;
+
 /// Maximum tolerated clock skew for `issued_at`.
 const MAX_CLOCK_SKEW_SECS: i64 = 30;
 
@@ -414,6 +418,12 @@ struct FileFingerprint {
     len: u64,
     #[cfg(unix)]
     ino: u64,
+    #[cfg(unix)]
+    ctime: i64,
+    #[cfg(unix)]
+    ctime_nsec: i64,
+    #[cfg(not(unix))]
+    created: Option<SystemTime>,
 }
 
 #[derive(Debug, Clone)]
@@ -421,6 +431,7 @@ struct TenantSnapshot {
     result: Result<Arc<VerifiedRolePolicy>, RolePolicyError>,
     fingerprint: Option<FileFingerprint>,
     last_checked: Instant,
+    generation: u64,
 }
 
 #[derive(Debug, Default)]
@@ -428,6 +439,8 @@ struct TenantPolicyState {
     current_version: u64,
     /// Ordered history of activated verified versions (bounded to `MAX_VERSION_HISTORY`).
     history: BTreeMap<u64, Arc<VerifiedRolePolicy>>,
+    /// Monotonic counter incremented each time a snapshot is stored for this tenant.
+    snapshot_generation: u64,
     /// Latest loaded snapshot (or load error) plus file fingerprint and last-check timestamp.
     snapshot: Option<TenantSnapshot>,
 }
@@ -514,7 +527,15 @@ impl RolePolicyStore {
         let tenant = tenant_id.to_string();
         tokio::task::spawn_blocking(move || store.refresh_tenant_blocking(&tenant))
             .await
-            .map_err(|_| RolePolicyError::ArtifactMissing)?
+            .map_err(|err| {
+                warn!(
+                    tenant_id = %tenant_id,
+                    cancelled = err.is_cancelled(),
+                    panicked = err.is_panic(),
+                    "Role policy refresh blocking task failed"
+                );
+                RolePolicyError::ArtifactMissing
+            })?
     }
 
     fn require_trust_loaded(&self) -> Result<(), RolePolicyError> {
@@ -593,6 +614,12 @@ impl RolePolicyStore {
         self.reload_count
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
+        let start_generation = self
+            .tenants
+            .read()
+            .get(tenant_id)
+            .map_or(0, |state| state.snapshot_generation);
+
         let artifact_path = self.artifacts_dir.join(format!("{tenant_id}.roles.jws"));
         let fingerprint = file_fingerprint(&artifact_path);
         let result = self
@@ -602,16 +629,35 @@ impl RolePolicyStore {
             });
 
         if let Err(ref err) = result {
-            let mut map = self.tenants.write();
-            let state = map.entry(tenant_id.to_string()).or_default();
-            state.snapshot = Some(TenantSnapshot {
-                result: Err(err.clone()),
-                fingerprint,
-                last_checked: Instant::now(),
-            });
+            self.record_error_snapshot(tenant_id, err, fingerprint, start_generation);
         }
 
         result
+    }
+
+    fn record_error_snapshot(
+        &self,
+        tenant_id: &str,
+        err: &RolePolicyError,
+        fingerprint: Option<FileFingerprint>,
+        start_generation: u64,
+    ) {
+        let mut map = self.tenants.write();
+        let state = map.entry(tenant_id.to_string()).or_default();
+        let newer_valid_present = state.snapshot.as_ref().is_some_and(|snapshot| {
+            snapshot.result.is_ok() && snapshot.generation > start_generation
+        });
+        if newer_valid_present {
+            return;
+        }
+        state.snapshot_generation += 1;
+        let generation = state.snapshot_generation;
+        state.snapshot = Some(TenantSnapshot {
+            result: Err(err.clone()),
+            fingerprint,
+            last_checked: Instant::now(),
+            generation,
+        });
     }
 
     fn load_verified_tenant(
@@ -742,10 +788,13 @@ impl RolePolicyStore {
                 state.history.remove(&oldest);
             }
         }
+        state.snapshot_generation += 1;
+        let generation = state.snapshot_generation;
         state.snapshot = Some(TenantSnapshot {
             result: Ok(verified_arc),
             fingerprint,
             last_checked: Instant::now(),
+            generation,
         });
 
         Ok(verified)
@@ -1049,15 +1098,23 @@ fn file_fingerprint(path: &Path) -> Option<FileFingerprint> {
     let meta = fs::metadata(path).ok()?;
     let modified = meta.modified().ok()?;
     #[cfg(unix)]
-    let ino = {
+    let (ino, ctime, ctime_nsec) = {
         use std::os::unix::fs::MetadataExt;
-        meta.ino()
+        (meta.ino(), meta.ctime(), meta.ctime_nsec())
     };
+    #[cfg(not(unix))]
+    let created = meta.created().ok();
     Some(FileFingerprint {
         modified,
         len: meta.len(),
         #[cfg(unix)]
         ino,
+        #[cfg(unix)]
+        ctime,
+        #[cfg(unix)]
+        ctime_nsec,
+        #[cfg(not(unix))]
+        created,
     })
 }
 
@@ -2425,6 +2482,106 @@ mod tests {
                 .current_role_snapshot("../escape", "reader")
                 .unwrap_err(),
             RolePolicyError::InvalidTenant
+        );
+    }
+
+    #[test]
+    fn file_fingerprint_distinguishes_ctime_changes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("acme.roles.jws");
+        fs::write(&path, "payload").unwrap();
+
+        let fp = file_fingerprint(&path).expect("fingerprint for existing file");
+        assert_eq!(fp.len, 7);
+
+        #[cfg(unix)]
+        {
+            let mut other_sec = fp;
+            other_sec.ctime = other_sec.ctime.wrapping_add(1);
+            assert_ne!(fp, other_sec);
+
+            let mut other_nsec = fp;
+            other_nsec.ctime_nsec = other_nsec.ctime_nsec.wrapping_add(1);
+            assert_ne!(fp, other_nsec);
+        }
+    }
+
+    #[test]
+    fn stale_failed_reload_does_not_overwrite_newer_valid_snapshot() {
+        let tmp = tempfile::tempdir().unwrap();
+        let signer = RoleSigner::new();
+        let trust_path = tmp.path().join("trust.json");
+        fs::write(&trust_path, signer.trust_jwks()).unwrap();
+        let artifacts_dir = tmp.path().join("roles");
+        let floor_dir = tmp.path().join("floors");
+        fs::create_dir_all(&artifacts_dir).unwrap();
+
+        let store = RolePolicyStore::new(
+            &artifacts_dir,
+            &floor_dir,
+            "stoa-poc-policy",
+            "stoa-gateway",
+            Some(PolicyTrustStore::open(&trust_path)),
+        );
+
+        let role_path = artifacts_dir.join("acme.roles.jws");
+        fs::write(
+            &role_path,
+            signer.sign(
+                "acme",
+                1,
+                600,
+                json!({ "reader": { "allowed_tools": ["payments_list"] } }),
+            ),
+        )
+        .unwrap();
+        assert_eq!(store.reload_tenant("acme").unwrap().version, 1);
+        let gen_after_v1 = store.tenants.read()["acme"].snapshot_generation;
+
+        // A concurrent reload activates v2 after an older reload started at `gen_after_v1`.
+        let v2_jws = signer.sign(
+            "acme",
+            2,
+            600,
+            json!({ "reader": { "allowed_tools": ["payments_list", "payments_export"] } }),
+        );
+        fs::write(&role_path, &v2_jws).unwrap();
+        assert_eq!(store.reload_tenant("acme").unwrap().version, 2);
+        let gen_after_v2 = store.tenants.read()["acme"].snapshot_generation;
+        assert!(gen_after_v2 > gen_after_v1);
+
+        // An older failed reload (started at `gen_after_v1`) must not overwrite the newer valid v2 snapshot.
+        store.record_error_snapshot(
+            "acme",
+            &RolePolicyError::ArtifactMissing,
+            None,
+            gen_after_v1,
+        );
+        assert_eq!(store.current_role_snapshot("acme", "reader").unwrap().0, 2);
+
+        // Genuine errors after v2 still fail closed: bad signature...
+        let (header_payload, sig) = v2_jws.rsplit_once('.').unwrap();
+        let flipped = if sig.starts_with('A') { 'B' } else { 'A' };
+        let tampered = format!("{header_payload}.{flipped}{}", &sig[1..]);
+        fs::write(&role_path, tampered).unwrap();
+        assert_eq!(
+            store.reload_tenant("acme").unwrap_err(),
+            RolePolicyError::Signature
+        );
+        assert_eq!(
+            store.current_role_snapshot("acme", "reader").unwrap_err(),
+            RolePolicyError::Signature
+        );
+
+        // ...and missing artifact.
+        fs::remove_file(&role_path).unwrap();
+        assert_eq!(
+            store.reload_tenant("acme").unwrap_err(),
+            RolePolicyError::ArtifactMissing
+        );
+        assert_eq!(
+            store.current_role_snapshot("acme", "reader").unwrap_err(),
+            RolePolicyError::ArtifactMissing
         );
     }
 }

@@ -48,6 +48,11 @@ const MAX_VERSION_HISTORY: usize = 64;
 /// Hard upper bound on the number of tenants tracked in memory by [`RolePolicyStore`].
 pub const MAX_TRACKED_TENANTS: usize = 1024;
 
+/// Window during which a file whose `mtime` or `ctime` is close to the
+/// snapshot fingerprint capture time (or current wall-clock time) is treated
+/// as potentially modified in-place within the same filesystem timestamp tick.
+const RACY_FINGERPRINT_WINDOW: Duration = Duration::from_secs(2);
+
 static KID_FORMAT: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"^cp-policy-[0-9]{4}(0[1-9]|1[0-2])-[1-9][0-9]*$").expect("kid regex")
 });
@@ -423,10 +428,16 @@ struct FileFingerprint {
     created: Option<SystemTime>,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct CapturedFingerprint {
+    fingerprint: FileFingerprint,
+    taken_at: SystemTime,
+}
+
 #[derive(Debug, Clone)]
 struct TenantSnapshot {
     result: Result<Arc<VerifiedRolePolicy>, RolePolicyError>,
-    fingerprint: Option<FileFingerprint>,
+    fingerprint: Option<CapturedFingerprint>,
     generation: u64,
 }
 
@@ -466,6 +477,8 @@ pub struct RolePolicyStore {
     refresh_locks: Arc<RwLock<HashMap<String, Arc<tokio::sync::Mutex<()>>>>>,
     #[cfg(test)]
     reload_count: Arc<std::sync::atomic::AtomicUsize>,
+    #[cfg(test)]
+    racy_clock_offset_ms: Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl RolePolicyStore {
@@ -488,6 +501,8 @@ impl RolePolicyStore {
             refresh_locks: Arc::new(RwLock::new(HashMap::new())),
             #[cfg(test)]
             reload_count: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+            #[cfg(test)]
+            racy_clock_offset_ms: Arc::new(std::sync::atomic::AtomicU64::new(0)),
         }
     }
 
@@ -517,6 +532,26 @@ impl RolePolicyStore {
     #[cfg(test)]
     pub(crate) fn reload_count(&self) -> usize {
         self.reload_count.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    #[cfg(test)]
+    fn advance_racy_clock(&self, delta: Duration) {
+        let delta_ms = u64::try_from(delta.as_millis()).expect("clock delta fits u64 ms");
+        self.racy_clock_offset_ms
+            .fetch_add(delta_ms, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    #[cfg(test)]
+    fn racy_now(&self) -> SystemTime {
+        let offset_ms = self
+            .racy_clock_offset_ms
+            .load(std::sync::atomic::Ordering::SeqCst);
+        SystemTime::now() + Duration::from_millis(offset_ms)
+    }
+
+    #[cfg(not(test))]
+    fn racy_now(&self) -> SystemTime {
+        SystemTime::now()
     }
 
     fn ensure_tenant_allowed(&self, tenant_id: &str) -> Result<(), RolePolicyError> {
@@ -607,24 +642,32 @@ impl RolePolicyStore {
 
     fn refresh_tenant_blocking(&self, tenant_id: &str) -> Result<(), RolePolicyError> {
         let artifact_path = self.artifacts_dir.join(format!("{tenant_id}.roles.jws"));
+        let now = self.racy_now();
         let current_fp = file_fingerprint(&artifact_path);
 
-        if current_fp.is_some() && self.require_trust_loaded().is_ok() {
-            let map = self.tenants.read();
-            let unchanged = map
-                .get(tenant_id)
-                .and_then(|state| state.snapshot.as_ref())
-                .is_some_and(|snapshot| {
-                    matches!(
-                        &snapshot.result,
-                        Ok(policy)
-                            if snapshot.fingerprint == current_fp
-                                && Utc::now() < policy.expires_at
-                    )
-                });
-            if unchanged {
-                return Ok(());
+        let reusable = current_fp.is_some_and(|fp| {
+            self.require_trust_loaded().is_ok() && {
+                let map = self.tenants.read();
+                map.get(tenant_id)
+                    .and_then(|state| state.snapshot.as_ref())
+                    .is_some_and(|snapshot| {
+                        matches!(
+                            (&snapshot.result, snapshot.fingerprint),
+                            (Ok(policy), Some(captured))
+                                if captured.fingerprint == fp
+                                    && !fingerprint_is_racy(
+                                        &fp,
+                                        captured.taken_at,
+                                        now,
+                                        RACY_FINGERPRINT_WINDOW,
+                                    )
+                                    && Utc::now() < policy.expires_at
+                        )
+                    })
             }
+        });
+        if reusable {
+            return Ok(());
         }
 
         self.reload_tenant(tenant_id).map(|_| ())
@@ -654,6 +697,7 @@ impl RolePolicyStore {
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
         let artifact_path = self.artifacts_dir.join(format!("{tenant_id}.roles.jws"));
+        let taken_at = self.racy_now();
         let Some(fingerprint) = file_fingerprint(&artifact_path) else {
             if already_tracked {
                 self.record_error_snapshot(
@@ -665,19 +709,23 @@ impl RolePolicyStore {
             }
             return Err(RolePolicyError::ArtifactMissing);
         };
+        let captured = CapturedFingerprint {
+            fingerprint,
+            taken_at,
+        };
         let result = self
             .load_verified_tenant(tenant_id, &artifact_path)
             .and_then(|verified| {
                 self.activate_verified_policy_with_fp(
                     tenant_id,
                     verified,
-                    Some(fingerprint),
+                    Some(captured),
                     start_generation,
                 )
             });
 
         if let Err(ref err) = result {
-            self.record_error_snapshot(tenant_id, err, Some(fingerprint), start_generation);
+            self.record_error_snapshot(tenant_id, err, Some(captured), start_generation);
         }
 
         result
@@ -687,7 +735,7 @@ impl RolePolicyStore {
         &self,
         tenant_id: &str,
         err: &RolePolicyError,
-        fingerprint: Option<FileFingerprint>,
+        fingerprint: Option<CapturedFingerprint>,
         start_generation: u64,
     ) {
         let mut map = self.tenants.write();
@@ -757,7 +805,7 @@ impl RolePolicyStore {
         &self,
         tenant_id: &str,
         verified: VerifiedRolePolicy,
-        fingerprint: Option<FileFingerprint>,
+        fingerprint: Option<CapturedFingerprint>,
         start_generation: u64,
     ) -> Result<VerifiedRolePolicy, RolePolicyError> {
         let _floor_lock = lock_floor(&self.floor_dir, tenant_id)?;
@@ -1220,6 +1268,59 @@ fn file_fingerprint(path: &Path) -> Option<FileFingerprint> {
     })
 }
 
+#[cfg(unix)]
+fn ctime_as_system_time(ctime: i64, ctime_nsec: i64) -> Option<SystemTime> {
+    let nanos = u32::try_from(ctime_nsec)
+        .ok()
+        .filter(|&ns| ns < 1_000_000_000)?;
+    if let Ok(secs) = u64::try_from(ctime) {
+        SystemTime::UNIX_EPOCH.checked_add(Duration::new(secs, nanos))
+    } else {
+        let base = SystemTime::UNIX_EPOCH.checked_sub(Duration::from_secs(ctime.unsigned_abs()))?;
+        base.checked_add(Duration::from_nanos(u64::from(nanos)))
+    }
+}
+
+fn timestamp_outside_racy_window(
+    ts: SystemTime,
+    captured_at: SystemTime,
+    now: SystemTime,
+    window: Duration,
+) -> bool {
+    captured_at
+        .duration_since(ts)
+        .is_ok_and(|age| age >= window)
+        && now.duration_since(ts).is_ok_and(|age| age >= window)
+}
+
+fn fingerprint_is_racy(
+    fp: &FileFingerprint,
+    captured_at: SystemTime,
+    now: SystemTime,
+    window: Duration,
+) -> bool {
+    if !timestamp_outside_racy_window(fp.modified, captured_at, now, window) {
+        return true;
+    }
+    #[cfg(unix)]
+    {
+        let Some(ctime) = ctime_as_system_time(fp.ctime, fp.ctime_nsec) else {
+            return true;
+        };
+        if !timestamp_outside_racy_window(ctime, captured_at, now, window) {
+            return true;
+        }
+    }
+    #[cfg(not(unix))]
+    if fp
+        .created
+        .is_some_and(|created| !timestamp_outside_racy_window(created, captured_at, now, window))
+    {
+        return true;
+    }
+    false
+}
+
 fn validate_tenant_filename(tenant_id: &str) -> Result<(), RolePolicyError> {
     if crate::telemetry::validated_tenant(Some(tenant_id)).is_none()
         || tenant_id.contains('/')
@@ -1400,7 +1501,17 @@ mod tests {
         }
 
         fn sign(&self, tenant: &str, version: u64, ttl_secs: i64, roles: Value) -> String {
-            let now = Utc::now();
+            self.sign_at(Utc::now(), tenant, version, ttl_secs, roles)
+        }
+
+        fn sign_at(
+            &self,
+            now: DateTime<Utc>,
+            tenant: &str,
+            version: u64,
+            ttl_secs: i64,
+            roles: Value,
+        ) -> String {
             let header = URL_SAFE_NO_PAD.encode(
                 serde_json::to_vec(&json!({
                     "alg": "EdDSA",
@@ -2427,6 +2538,17 @@ mod tests {
         assert!(eval("payments_list", &json!({"limit": 20})).is_ok());
     }
 
+    fn set_file_mtime_older_than_racy_window(path: &Path) {
+        let old_mtime = SystemTime::now() - (RACY_FINGERPRINT_WINDOW + Duration::from_secs(10));
+        OpenOptions::new()
+            .write(true)
+            .truncate(false)
+            .open(path)
+            .unwrap()
+            .set_modified(old_mtime)
+            .unwrap();
+    }
+
     #[tokio::test]
     async fn unchanged_policy_file_reuses_snapshot_without_reload() {
         let tmp = tempfile::tempdir().unwrap();
@@ -2437,8 +2559,9 @@ mod tests {
         let floor_dir = tmp.path().join("floors");
         fs::create_dir_all(&artifacts_dir).unwrap();
 
+        let role_path = artifacts_dir.join("acme.roles.jws");
         fs::write(
-            artifacts_dir.join("acme.roles.jws"),
+            &role_path,
             signer.sign(
                 "acme",
                 1,
@@ -2456,14 +2579,283 @@ mod tests {
             Some(PolicyTrustStore::open(&trust_path)),
         );
 
+        // Fresh file (within RACY_FINGERPRINT_WINDOW): full reload runs idempotently on
+        // same version + same digest without error and without re-staging or lowering the floor.
         store.refresh_tenant("acme").await.unwrap();
         assert_eq!(store.reload_count(), 1);
+        let floor_path = floor_dir.join("acme.floor.json");
+        let floor_bytes_before = fs::read(&floor_path).unwrap();
+        #[cfg(unix)]
+        let floor_ino_before = {
+            use std::os::unix::fs::MetadataExt;
+            fs::metadata(&floor_path).unwrap().ino()
+        };
 
+        store.refresh_tenant("acme").await.unwrap();
+        assert_eq!(store.reload_count(), 2);
+        assert_eq!(store.current_role_snapshot("acme", "reader").unwrap().0, 1);
+        assert_eq!(
+            read_persisted_floor(&floor_path).unwrap().unwrap().version,
+            1
+        );
+        assert_eq!(fs::read(&floor_path).unwrap(), floor_bytes_before);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            assert_eq!(fs::metadata(&floor_path).unwrap().ino(), floor_ino_before);
+        }
+
+        // Backdating mtime alone updates POSIX ctime to now, so Unix still treats the file as
+        // racy until ctime is also older than RACY_FINGERPRINT_WINDOW.
+        set_file_mtime_older_than_racy_window(&role_path);
+        #[cfg(unix)]
+        {
+            store.refresh_tenant("acme").await.unwrap();
+            let after_mtime_backdate = store.reload_count();
+            store.refresh_tenant("acme").await.unwrap();
+            assert_eq!(store.reload_count(), after_mtime_backdate + 1);
+        }
+
+        // Once both mtime and ctime are older than RACY_FINGERPRINT_WINDOW, a single reload
+        // records a non-racy snapshot and subsequent refreshes reuse it without reloading.
+        store.advance_racy_clock(RACY_FINGERPRINT_WINDOW + Duration::from_secs(5));
+        store.refresh_tenant("acme").await.unwrap();
+        let stable_reloads = store.reload_count();
         for _ in 0..10 {
             store.refresh_tenant("acme").await.unwrap();
         }
-        assert_eq!(store.reload_count(), 1);
+        assert_eq!(store.reload_count(), stable_reloads);
         assert_eq!(store.current_role_snapshot("acme", "reader").unwrap().0, 1);
+
+        // A fresh store observing an already-aged unchanged file loads exactly once.
+        let aged_store = RolePolicyStore::new(
+            &artifacts_dir,
+            &floor_dir,
+            "stoa-poc-policy",
+            "stoa-gateway",
+            Some(PolicyTrustStore::open(&trust_path)),
+        );
+        aged_store.advance_racy_clock(RACY_FINGERPRINT_WINDOW + Duration::from_secs(5));
+        aged_store.refresh_tenant("acme").await.unwrap();
+        assert_eq!(aged_store.reload_count(), 1);
+        for _ in 0..10 {
+            aged_store.refresh_tenant("acme").await.unwrap();
+        }
+        assert_eq!(aged_store.reload_count(), 1);
+        assert_eq!(
+            aged_store
+                .current_role_snapshot("acme", "reader")
+                .unwrap()
+                .0,
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn in_place_same_length_rewrite_within_racy_window_reloads_on_next_call() {
+        let tmp = tempfile::tempdir().unwrap();
+        let signer = RoleSigner::new();
+        let trust_path = tmp.path().join("trust.json");
+        fs::write(&trust_path, signer.trust_jwks()).unwrap();
+        let artifacts_dir = tmp.path().join("roles");
+        let floor_dir = tmp.path().join("floors");
+        fs::create_dir_all(&artifacts_dir).unwrap();
+
+        let issued = Utc::now();
+        let v1_jws = signer.sign_at(
+            issued,
+            "acme",
+            1,
+            600,
+            json!({
+                "reader": {
+                    "allowed_tools": ["payments_list", "payments_export"],
+                    "argument_constraints": {
+                        "payments_list": {
+                            "limit": { "type": "max_number", "max": 90.0 }
+                        }
+                    }
+                }
+            }),
+        );
+        let v2_jws = signer.sign_at(
+            issued,
+            "acme",
+            2,
+            600,
+            json!({
+                "reader": {
+                    "allowed_tools": ["payments_list", "payments_status"],
+                    "argument_constraints": {
+                        "payments_list": {
+                            "limit": { "type": "max_number", "max": 40.0 }
+                        }
+                    }
+                }
+            }),
+        );
+        let v3_jws = signer.sign_at(
+            issued,
+            "acme",
+            3,
+            600,
+            json!({
+                "reader": {
+                    "allowed_tools": ["payments_list", "payments_status"],
+                    "argument_constraints": {
+                        "payments_list": {
+                            "limit": { "type": "max_number", "max": 20.0 }
+                        }
+                    }
+                }
+            }),
+        );
+        let v4_jws = signer.sign_at(
+            issued,
+            "acme",
+            4,
+            600,
+            json!({
+                "reader": {
+                    "allowed_tools": ["payments_list", "payments_status"],
+                    "argument_constraints": {
+                        "payments_list": {
+                            "limit": { "type": "max_number", "max": 10.0 }
+                        }
+                    }
+                }
+            }),
+        );
+        assert_eq!(v1_jws.len(), v2_jws.len());
+        assert_eq!(v1_jws.len(), v3_jws.len());
+        assert_eq!(v1_jws.len(), v4_jws.len());
+        assert_ne!(v1_jws, v2_jws);
+        assert_ne!(v2_jws, v3_jws);
+        assert_ne!(v3_jws, v4_jws);
+
+        let role_path = artifacts_dir.join("acme.roles.jws");
+        fs::write(&role_path, &v1_jws).unwrap();
+        let fp_v1 = file_fingerprint(&role_path).unwrap();
+
+        let store = RolePolicyStore::new(
+            &artifacts_dir,
+            &floor_dir,
+            "stoa-poc-policy",
+            "stoa-gateway",
+            Some(PolicyTrustStore::open(&trust_path)),
+        );
+
+        store.refresh_tenant("acme").await.unwrap();
+        assert_eq!(store.reload_count(), 1);
+        let eval = |tool: &str, args: &Value| {
+            store.evaluate_call(&RoleEvalInput {
+                tenant_id: "acme",
+                role: "reader",
+                tool_name: tool,
+                args,
+                issued_policy_version: 1,
+                token_allowed_tools: None,
+                token_constraints: None,
+            })
+        };
+        assert!(eval("payments_export", &json!({})).is_ok());
+        assert!(eval("payments_list", &json!({"limit": 80})).is_ok());
+
+        let rewrite_in_place = |content: &str, mtime: SystemTime| {
+            let mut file = OpenOptions::new()
+                .write(true)
+                .truncate(false)
+                .open(&role_path)
+                .unwrap();
+            file.write_all(content.as_bytes()).unwrap();
+            file.sync_all().unwrap();
+            file.set_modified(mtime).unwrap();
+        };
+
+        // In-place rewrite keeping inode, byte length, and mtime within the window.
+        rewrite_in_place(&v2_jws, fp_v1.modified);
+        let fp_v2 = file_fingerprint(&role_path).unwrap();
+        assert_eq!(fp_v2.len, fp_v1.len);
+        assert_eq!(fp_v2.modified, fp_v1.modified);
+        #[cfg(unix)]
+        assert_eq!(fp_v2.ino, fp_v1.ino);
+
+        store.refresh_tenant("acme").await.unwrap();
+        assert_eq!(store.reload_count(), 2);
+        assert_eq!(store.current_role_snapshot("acme", "reader").unwrap().0, 2);
+        assert_eq!(
+            eval("payments_export", &json!({})).unwrap_err(),
+            RolePolicyError::DeniedByRole
+        );
+        assert_eq!(
+            eval("payments_list", &json!({"limit": 80})).unwrap_err(),
+            RolePolicyError::DeniedByConstraint
+        );
+        assert!(eval("payments_list", &json!({"limit": 35})).is_ok());
+
+        // Exact coarse-tick collision: even when every FileFingerprint field (including
+        // Unix ctime/ctime_nsec) equals the cached snapshot's fingerprint, the racy-window
+        // guard refuses the fast path and loads the in-place v3 reduction on the next refresh.
+        rewrite_in_place(&v3_jws, fp_v1.modified);
+        let fp_v3 = file_fingerprint(&role_path).unwrap();
+        assert_eq!(fp_v3.len, fp_v1.len);
+        assert_eq!(fp_v3.modified, fp_v1.modified);
+        #[cfg(unix)]
+        assert_eq!(fp_v3.ino, fp_v1.ino);
+        {
+            let mut map = store.tenants.write();
+            let snapshot = map
+                .get_mut("acme")
+                .and_then(|state| state.snapshot.as_mut())
+                .unwrap();
+            snapshot.fingerprint = Some(CapturedFingerprint {
+                fingerprint: fp_v3,
+                taken_at: store.racy_now(),
+            });
+        }
+        store.refresh_tenant("acme").await.unwrap();
+        assert_eq!(store.reload_count(), 3);
+        assert_eq!(store.current_role_snapshot("acme", "reader").unwrap().0, 3);
+        assert_eq!(
+            eval("payments_list", &json!({"limit": 35})).unwrap_err(),
+            RolePolicyError::DeniedByConstraint
+        );
+        assert!(eval("payments_list", &json!({"limit": 15})).is_ok());
+
+        // Delayed request after a racy capture: if v4 was rewritten in the same tick as
+        // v3's snapshot capture and the next request arrives past RACY_FINGERPRINT_WINDOW,
+        // checking against `captured.taken_at` still forces a reload and detects v4.
+        rewrite_in_place(&v4_jws, fp_v1.modified);
+        let fp_v4 = file_fingerprint(&role_path).unwrap();
+        assert_eq!(fp_v4.len, fp_v1.len);
+        assert_eq!(fp_v4.modified, fp_v1.modified);
+        #[cfg(unix)]
+        assert_eq!(fp_v4.ino, fp_v1.ino);
+        {
+            let mut map = store.tenants.write();
+            let snapshot = map
+                .get_mut("acme")
+                .and_then(|state| state.snapshot.as_mut())
+                .unwrap();
+            snapshot.fingerprint = Some(CapturedFingerprint {
+                fingerprint: fp_v4,
+                taken_at: store.racy_now(),
+            });
+        }
+        store.advance_racy_clock(RACY_FINGERPRINT_WINDOW + Duration::from_secs(5));
+        store.refresh_tenant("acme").await.unwrap();
+        assert_eq!(store.reload_count(), 4);
+        assert_eq!(store.current_role_snapshot("acme", "reader").unwrap().0, 4);
+        assert_eq!(
+            eval("payments_list", &json!({"limit": 15})).unwrap_err(),
+            RolePolicyError::DeniedByConstraint
+        );
+        assert!(eval("payments_list", &json!({"limit": 10})).is_ok());
+
+        // Once v4's snapshot is captured past RACY_FINGERPRINT_WINDOW, the next refresh
+        // reuses the cached snapshot without reloading.
+        store.refresh_tenant("acme").await.unwrap();
+        assert_eq!(store.reload_count(), 4);
     }
 
     #[tokio::test]
@@ -2636,7 +3028,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-    async fn concurrent_refreshes_coalesce_to_single_load() {
+    async fn concurrent_refreshes_each_stat_and_reload_once_when_unchanged() {
         let tmp = tempfile::tempdir().unwrap();
         let signer = RoleSigner::new();
         let trust_path = tmp.path().join("trust.json");
@@ -2644,8 +3036,9 @@ mod tests {
         let artifacts_dir = tmp.path().join("roles");
         let floor_dir = tmp.path().join("floors");
         fs::create_dir_all(&artifacts_dir).unwrap();
+        let role_path = artifacts_dir.join("acme.roles.jws");
         fs::write(
-            artifacts_dir.join("acme.roles.jws"),
+            &role_path,
             signer.sign(
                 "acme",
                 1,
@@ -2654,6 +3047,7 @@ mod tests {
             ),
         )
         .unwrap();
+        set_file_mtime_older_than_racy_window(&role_path);
 
         let store = Arc::new(RolePolicyStore::new(
             &artifacts_dir,
@@ -2662,6 +3056,9 @@ mod tests {
             "stoa-gateway",
             Some(PolicyTrustStore::open(&trust_path)),
         ));
+        // `File::set_modified` updates POSIX `ctime` to now; advance the test clock past
+        // `RACY_FINGERPRINT_WINDOW` so both `mtime` and `ctime` are aged before the test runs.
+        store.advance_racy_clock(RACY_FINGERPRINT_WINDOW + Duration::from_secs(5));
 
         let barrier = Arc::new(tokio::sync::Barrier::new(32));
         let mut handles = Vec::with_capacity(32);
@@ -2674,7 +3071,7 @@ mod tests {
             }));
         }
         for handle in handles {
-            handle.await.unwrap().expect("coalesced refresh succeeds");
+            handle.await.unwrap().expect("refresh succeeds");
         }
 
         assert_eq!(store.reload_count(), 1);
@@ -2926,6 +3323,83 @@ mod tests {
             let mut other_nsec = fp;
             other_nsec.ctime_nsec = other_nsec.ctime_nsec.wrapping_add(1);
             assert_ne!(fp, other_nsec);
+        }
+    }
+
+    #[test]
+    fn fingerprint_is_racy_guards_mtime_ctime_and_clock_skew() {
+        let base = SystemTime::UNIX_EPOCH + Duration::from_secs(1_700_000_000);
+        let fp = FileFingerprint {
+            modified: base,
+            len: 128,
+            #[cfg(unix)]
+            ino: 42,
+            #[cfg(unix)]
+            ctime: 1_700_000_000,
+            #[cfg(unix)]
+            ctime_nsec: 0,
+            #[cfg(unix)]
+            mode: 0o100_644,
+            #[cfg(not(unix))]
+            created: Some(base),
+        };
+
+        // Inside the window relative to capture time -> racy.
+        assert!(fingerprint_is_racy(
+            &fp,
+            base + Duration::from_millis(1_999),
+            base + Duration::from_secs(10),
+            RACY_FINGERPRINT_WINDOW,
+        ));
+        // Inside the window relative to `now` (e.g. backwards clock jump) -> racy.
+        assert!(fingerprint_is_racy(
+            &fp,
+            base + Duration::from_secs(10),
+            base + Duration::from_millis(1_999),
+            RACY_FINGERPRINT_WINDOW,
+        ));
+        // File timestamp ahead of capture time -> racy.
+        assert!(fingerprint_is_racy(
+            &fp,
+            base - Duration::from_secs(1),
+            base + Duration::from_secs(10),
+            RACY_FINGERPRINT_WINDOW,
+        ));
+        // At or past the window for both capture time and `now` -> clean.
+        assert!(!fingerprint_is_racy(
+            &fp,
+            base + RACY_FINGERPRINT_WINDOW,
+            base + RACY_FINGERPRINT_WINDOW,
+            RACY_FINGERPRINT_WINDOW,
+        ));
+
+        #[cfg(unix)]
+        {
+            // Old mtime with fresh ctime -> still racy.
+            let mut fresh_ctime = fp;
+            fresh_ctime.modified = base - Duration::from_secs(60);
+            fresh_ctime.ctime = 1_700_000_009;
+            assert!(fingerprint_is_racy(
+                &fresh_ctime,
+                base + Duration::from_secs(10),
+                base + Duration::from_secs(10),
+                RACY_FINGERPRINT_WINDOW,
+            ));
+
+            // Out-of-range ctime_nsec fails safe as racy.
+            let mut bad_nsec = fp;
+            bad_nsec.ctime_nsec = 1_000_000_000;
+            assert!(fingerprint_is_racy(
+                &bad_nsec,
+                base + Duration::from_secs(10),
+                base + Duration::from_secs(10),
+                RACY_FINGERPRINT_WINDOW,
+            ));
+            assert_eq!(
+                ctime_as_system_time(-1, 500_000_000),
+                Some(SystemTime::UNIX_EPOCH - Duration::from_millis(500))
+            );
+            assert_eq!(ctime_as_system_time(0, -1), None);
         }
     }
 

@@ -852,3 +852,208 @@ def run_jalon3_post_restart(gateway_url: str, dpop: DpopKey, token_c: str) -> No
     )
     assert c == 401, f"pre-restart token after gateway restart expected 401, got {c}"
     print("PASS: pre-restart token rejected with 401 after real stoa-gateway restart (ephemeral RS256 rotated)", flush=True)
+
+
+def run_revocation_saturation_parent(
+    gateway_url: str, upstream_ip: str, child_jwk: dict
+) -> str:
+    upstream_host = os.environ["UPSTREAM_MOCK_HOST"]
+    bootstrap_secret = os.environ["STOA_POC_BOOTSTRAP_SECRET"]
+
+    assert_tcp_unreachable(upstream_host, 9000, "agent-parent -> upstream-mock (DNS)")
+    assert_tcp_unreachable(upstream_ip, 9000, "agent-parent -> upstream-mock (IP)")
+
+    boot_url = f"{gateway_url}/mcp/poc/bootstrap"
+    revoke_url = f"{gateway_url}/mcp/poc/revoke"
+    del_url = f"{gateway_url}/mcp/poc/delegate"
+    mcp_url = f"{gateway_url}/mcp/poc"
+    valid_args = {"currency": "EUR", "account": "acct-sat-1", "limit": 10}
+
+    def bootstrap_parent(dpop: DpopKey, sub: str) -> tuple[int, dict]:
+        c, b = http_req(
+            "POST",
+            boot_url,
+            headers={
+                "X-Stoa-Poc-Bootstrap-Secret": bootstrap_secret,
+                "DPoP": dpop.sign_proof("POST", boot_url),
+            },
+            body={"sub": sub, "tenant_id": "acme", "role": "reader", "ttl_secs": 300},
+        )
+        return c, json.loads(b)
+
+    def revoke_chain(dpop: DpopKey, token: str, chain_id: str) -> tuple[int, dict]:
+        c, b = http_req(
+            "POST",
+            revoke_url,
+            headers={
+                "Authorization": f"DPoP {token}",
+                "DPoP": dpop.sign_proof("POST", revoke_url, access_token=token),
+            },
+            body={"chain_id": chain_id},
+        )
+        return c, json.loads(b)
+
+    def call_payments(dpop: DpopKey, token: str, req_id: int) -> tuple[int, dict]:
+        c, b = http_req(
+            "POST",
+            mcp_url,
+            headers={
+                "Authorization": f"DPoP {token}",
+                "DPoP": dpop.sign_proof("POST", mcp_url, access_token=token),
+            },
+            body={
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "method": "tools/call",
+                "params": {"name": "payments_list", "arguments": valid_args},
+            },
+        )
+        return c, json.loads(b)
+
+    dpop1, dpop2, dpop3, dpop4 = DpopKey(), DpopKey(), DpopKey(), DpopKey()
+
+    c1, b1 = bootstrap_parent(dpop1, "agent-sat-1")
+    assert c1 == 200, f"bootstrap chain 1 failed: {c1}"
+    tok1, cid1 = b1["access_token"], b1["chain_id"]
+
+    c2, b2 = bootstrap_parent(dpop2, "agent-sat-2")
+    assert c2 == 200, f"bootstrap chain 2 failed: {c2}"
+    tok2, cid2 = b2["access_token"], b2["chain_id"]
+
+    c3, b3 = bootstrap_parent(dpop3, "agent-sat-3")
+    assert c3 == 200, f"bootstrap chain 3 failed: {c3}"
+    tok3, cid3 = b3["access_token"], b3["chain_id"]
+    print("PASS: bootstrapped 3 parent chains before saturation", flush=True)
+
+    # Baseline call on chain 3 proves the route and upstream work before saturation.
+    c, rpc = call_payments(dpop3, tok3, 501)
+    assert c == 200 and "error" not in rpc and "pay_001" in json.dumps(rpc), (
+        f"baseline call on chain 3 failed: {c}"
+    )
+    print("PASS: pre-saturation baseline call on chain 3 succeeded", flush=True)
+
+    # Delegate a child token on chain 3 before saturation to verify child fail-closed too.
+    c, b = http_req(
+        "POST",
+        del_url,
+        headers={
+            "Authorization": f"DPoP {tok3}",
+            "DPoP": dpop3.sign_proof("POST", del_url, access_token=tok3),
+        },
+        body={
+            "sub": "agent-child",
+            "target_tool": "payments_list",
+            "child_dpop_jwk": child_jwk,
+            "allowed_tools": ["payments_list"],
+            "ttl_secs": 120,
+        },
+    )
+    assert c == 200, f"pre-saturation delegation on chain 3 failed: {c}"
+    child_tok = json.loads(b)["access_token"]
+
+    # Revoke chain 1 (1/2) and confirm it is denied immediately.
+    rc1, rb1 = revoke_chain(dpop1, tok1, cid1)
+    assert rc1 == 200 and rb1.get("revoked") is True, f"revoke chain 1 failed: {rc1}"
+    c, rpc = call_payments(dpop1, tok1, 502)
+    assert c == 200 and rpc.get("error", {}).get("code") == -32003, (
+        f"expected Chain revoked on chain 1: {c} {rpc.get('error')}"
+    )
+    assert rpc["error"].get("message") == "Chain revoked"
+    print("PASS: chain 1 revoked (1/2) and denied immediately", flush=True)
+
+    # Revoke chain 2 (2/2): revocation table is now saturated.
+    rc2, rb2 = revoke_chain(dpop2, tok2, cid2)
+    assert rc2 == 200 and rb2.get("revoked") is True, f"revoke chain 2 failed: {rc2}"
+    print("PASS: chain 2 revoked (2/2, revocation table saturated)", flush=True)
+
+    # 3rd revoke fails closed with 503 and revocation_table_full.
+    rc3, rb3 = revoke_chain(dpop3, tok3, cid3)
+    assert rc3 == 503 and rb3.get("error") == "revocation_table_full", (
+        f"3rd revoke expected 503 revocation_table_full, got {rc3} {rb3.get('error')}"
+    )
+    print("PASS: 3rd revoke refused with 503 revocation_table_full", flush=True)
+
+    # Delegation on chain 3 and 4th bootstrap both fail closed with 503 saturation reason.
+    dc, db = http_req(
+        "POST",
+        del_url,
+        headers={
+            "Authorization": f"DPoP {tok3}",
+            "DPoP": dpop3.sign_proof("POST", del_url, access_token=tok3),
+        },
+        body={
+            "sub": "agent-child-blocked",
+            "target_tool": "payments_list",
+            "child_dpop_jwk": child_jwk,
+            "allowed_tools": ["payments_list"],
+            "ttl_secs": 60,
+        },
+    )
+    djson = json.loads(db)
+    assert dc == 503 and djson.get("error") == "revocation table is saturated; failing closed", (
+        f"saturated delegate expected 503, got {dc} {djson.get('error')}"
+    )
+
+    c4, b4 = bootstrap_parent(dpop4, "agent-sat-4")
+    assert c4 == 503 and b4.get("error") == "revocation table is saturated; failing closed", (
+        f"saturated bootstrap expected 503, got {c4} {b4.get('error')}"
+    )
+    print(
+        "PASS: saturated delegate and bootstrap refused with 503 "
+        "(revocation table is saturated; failing closed)",
+        flush=True,
+    )
+
+    # Tool call on non-revoked chain 3 fails closed without reaching upstream.
+    c, rpc = call_payments(dpop3, tok3, 503)
+    assert c == 200 and rpc.get("error", {}).get("code") == -32005, (
+        f"chain 3 expected -32005 Admission unavailable, got {c} {rpc.get('error')}"
+    )
+    assert rpc["error"].get("message") == "Admission unavailable"
+    print("PASS: non-revoked chain 3 tool call refused fail-closed (-32005)", flush=True)
+
+    # Previously revoked chains stay refused without reaching upstream.
+    for label, dpop, tok, req_id in [
+        ("chain 1", dpop1, tok1, 504),
+        ("chain 2", dpop2, tok2, 505),
+    ]:
+        c, rpc = call_payments(dpop, tok, req_id)
+        assert c == 200 and rpc.get("error", {}).get("code") == -32005, (
+            f"revoked {label} expected -32005 under saturation, got {c} {rpc.get('error')}"
+        )
+        assert rpc["error"].get("message") == "Admission unavailable"
+    print("PASS: revoked chains 1 and 2 stay refused under table saturation", flush=True)
+
+    return child_tok
+
+
+def run_revocation_saturation_child(
+    gateway_url: str, child_dpop: DpopKey, child_tok: str
+) -> None:
+    mcp_url = f"{gateway_url}/mcp/poc"
+    c, b = http_req(
+        "POST",
+        mcp_url,
+        headers={
+            "Authorization": f"DPoP {child_tok}",
+            "DPoP": child_dpop.sign_proof("POST", mcp_url, access_token=child_tok),
+        },
+        body={
+            "jsonrpc": "2.0",
+            "id": 510,
+            "method": "tools/call",
+            "params": {
+                "name": "payments_list",
+                "arguments": {"currency": "EUR", "account": "acct-sat-child", "limit": 10},
+            },
+        },
+    )
+    rpc = json.loads(b)
+    assert c == 200 and rpc.get("error", {}).get("code") == -32005, (
+        f"child on saturated table expected -32005, got {c} {rpc.get('error')}"
+    )
+    assert rpc["error"].get("message") == "Admission unavailable"
+    print(
+        "PASS: agent-child call on non-revoked chain 3 refused fail-closed under table saturation",
+        flush=True,
+    )

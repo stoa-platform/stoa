@@ -677,13 +677,16 @@ impl AppState {
                     floor_dir = %floor_dir,
                     "Signed local agent-role policy store enabled"
                 );
-                Arc::new(crate::control_plane::role_policy::RolePolicyStore::new(
-                    roles_dir,
-                    floor_dir,
-                    &config.policy_expected_issuer,
-                    &config.policy_audience,
-                    policy_trust.map(PolicyTrustStore::open),
-                ))
+                Arc::new(
+                    crate::control_plane::role_policy::RolePolicyStore::new(
+                        roles_dir,
+                        floor_dir,
+                        &config.policy_expected_issuer,
+                        &config.policy_audience,
+                        policy_trust.map(PolicyTrustStore::open),
+                    )
+                    .with_allowed_tenants(config.policy_boot_tenants.iter().cloned()),
+                )
             })
         } else {
             None

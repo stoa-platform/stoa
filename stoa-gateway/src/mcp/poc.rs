@@ -119,8 +119,7 @@ pub async fn load_poc_fixtures(state: &AppState) -> Result<PocFixturesSummary, S
 
         let binder = McpBinder::new(state.tool_registry.clone())
             .with_credential_store(state.credential_store.clone())
-            .with_outbound_policy(state.outbound_policy.clone())
-            .with_uac_output_schemas();
+            .with_outbound_policy(state.outbound_policy.clone());
 
         for path in paths {
             let raw = tokio::fs::read_to_string(&path)

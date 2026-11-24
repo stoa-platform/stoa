@@ -1286,7 +1286,7 @@ mod tests {
         let upstream = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/payments"))
-            .and(header("X-API-Key", "backend-vault-secret"))
+            .and(header("X-API-Key", "backend-key-secret"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({"status": "ok"})))
             .expect(1)
             .mount(&upstream)
@@ -1358,7 +1358,7 @@ mod tests {
                 "route_id": format!("mcp-tool:acme:{tool_name}"),
                 "auth_type": "api_key",
                 "header_name": "X-API-Key",
-                "header_value": "backend-vault-secret",
+                "header_value": "backend-key-secret",
                 "allowed_origin": upstream.uri(),
                 "shared_with_tenants": false
             }]))
@@ -1550,7 +1550,7 @@ mod tests {
         // Allowed upstream endpoint
         Mock::given(method("GET"))
             .and(path("/payments"))
-            .and(header("X-API-Key", "vault-secret-j2"))
+            .and(header("X-API-Key", "backend-secret-j2"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({"ok": true})))
             .mount(&upstream)
             .await;
@@ -1737,7 +1737,7 @@ allow if {
                 "route_id": "mcp-tool:acme:payments_list",
                 "auth_type": "api_key",
                 "header_name": "X-API-Key",
-                "header_value": "vault-secret-j2",
+                "header_value": "backend-secret-j2",
                 "allowed_origin": upstream.uri(),
                 "shared_with_tenants": false
             }]))
@@ -2073,7 +2073,7 @@ allow if {
 
         Mock::given(method("GET"))
             .and(path("/payments"))
-            .and(header("X-API-Key", "vault-j3"))
+            .and(header("X-API-Key", "backend-key-j3"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({"ok": true})))
             .mount(&primary_up)
             .await;
@@ -2216,7 +2216,7 @@ allow if {
                 "route_id": "mcp-tool:acme:payments_list",
                 "auth_type": "api_key",
                 "header_name": "X-API-Key",
-                "header_value": "vault-j3",
+                "header_value": "backend-key-j3",
                 "allowed_origin": primary_up.uri(),
                 "shared_with_tenants": false
             }]))
@@ -2617,7 +2617,7 @@ allow if {
 
         Mock::given(method("GET"))
             .and(path("/payments"))
-            .and(header("X-API-Key", "vault-ch5"))
+            .and(header("X-API-Key", "backend-key-ch5"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({"ok": true})))
             .mount(&primary_up)
             .await;
@@ -2736,7 +2736,7 @@ allow if {
                 "route_id": "mcp-tool:acme:payments_list",
                 "auth_type": "api_key",
                 "header_name": "X-API-Key",
-                "header_value": "vault-ch5",
+                "header_value": "backend-key-ch5",
                 "allowed_origin": primary_up.uri(),
                 "shared_with_tenants": false
             }]))

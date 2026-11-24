@@ -227,6 +227,24 @@ def run_parent(gateway_url: str, upstream_ip: str, child_jwk: dict | None) -> tu
 
     child_tok = None
     if child_jwk is not None:
+        # Jalon 2 parent checks: tools/list matches tools/call decisions (OPA-denied tool hidden)
+        c, b = http_req(
+            "POST",
+            mcp_url,
+            headers={
+                "Authorization": f"DPoP {token}",
+                "DPoP": dpop.sign_proof("POST", mcp_url, access_token=token),
+            },
+            body={"jsonrpc": "2.0", "id": 19, "method": "tools/list", "params": {}},
+        )
+        assert c == 200, f"tools/list failed: {c} {b}"
+        listed_names = [t["name"] for t in json.loads(b)["result"]["tools"]]
+        assert "payments_list" in listed_names, f"expected payments_list in tools/list: {listed_names}"
+        assert "payments_opa_denied" not in listed_names, (
+            f"OPA-denied tool payments_opa_denied should be absent from tools/list: {listed_names}"
+        )
+        print("PASS: tools/list excludes OPA-denied tool (payments_opa_denied)", flush=True)
+
         # Jalon 2 parent checks: OPA negative, outbound address policy block, 3xx non-follow + scrubbed error
         for label, tool_name, expected_err in [
             ("OPA negative case (payments_opa_denied)", "payments_opa_denied", "policy"),

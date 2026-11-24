@@ -37,7 +37,7 @@ use crate::auth::local_agent_token::{
 };
 use crate::auth::poc_admission::{AdmissionError, AdmitCallRequest};
 use crate::control_plane::role_policy::{ArgumentConstraint, RoleEvalInput, RolePolicySpec};
-use crate::mcp::handlers::{check_tool_permission, check_tool_policy};
+use crate::mcp::handlers::{check_tool_permission, check_tool_permission_quiet, check_tool_policy};
 use crate::mcp::sse::{
     JsonRpcResponse, INVALID_PARAMS, INVALID_REQUEST, METHOD_NOT_FOUND, PARSE_ERROR,
 };
@@ -676,35 +676,7 @@ pub async fn handle_poc_mcp(
                 "serverInfo": { "name": "stoa-gateway-poc", "version": env!("CARGO_PKG_VERSION") }
             }),
         ),
-        "tools/list" => {
-            let list_result = match state
-                .poc_admission
-                .check_chain_active(&claims.chain_id, claims.exp, chrono::Utc::now().timestamp())
-                .map_err(admission_rejection)
-            {
-                Ok(()) => effective_poc_allowed_tools(&state, &claims).await,
-                Err(err) => Err(err),
-            };
-            match list_result {
-                Ok((_, allowed_tools, _)) => {
-                    let tools: Vec<Value> = state
-                        .tool_registry
-                        .list(Some(&claims.tenant_id))
-                        .into_iter()
-                        .filter(|def| allowed_tools.contains(&def.name))
-                        .map(|def| {
-                            json!({
-                                "name": def.name,
-                                "description": def.description,
-                                "inputSchema": def.input_schema
-                            })
-                        })
-                        .collect();
-                    JsonRpcResponse::success(request.id, json!({ "tools": tools }))
-                }
-                Err((code, msg)) => JsonRpcResponse::error(request.id, code, msg),
-            }
-        }
+        "tools/list" => handle_poc_tools_list(&state, &claims, request.id).await,
         "tools/call" => handle_poc_tool_call(&state, &claims, request).await,
         "poc/subcalls" => handle_poc_subcalls(&state, &claims, request).await,
         other => JsonRpcResponse::error(
@@ -798,17 +770,62 @@ fn admission_rejection(err: AdmissionError) -> PocToolRejection {
     }
 }
 
-async fn check_poc_tool_access<'a>(
+async fn handle_poc_tools_list(
+    state: &AppState,
+    claims: &LocalAgentClaims,
+    request_id: Option<Value>,
+) -> JsonRpcResponse {
+    if let Err(err) = state.poc_admission.check_chain_active(
+        &claims.chain_id,
+        claims.exp,
+        chrono::Utc::now().timestamp(),
+    ) {
+        let (code, msg) = admission_rejection(err);
+        return JsonRpcResponse::error(request_id, code, msg);
+    }
+    let allowed_tools = match effective_poc_allowed_tools(state, claims).await {
+        Ok((_, allowed_tools, _)) => allowed_tools,
+        Err((code, msg)) => return JsonRpcResponse::error(request_id, code, msg),
+    };
+
+    let ctx = poc_tool_context(claims);
+    let mut tools = Vec::new();
+    for def in state.tool_registry.list(Some(&claims.tenant_id)) {
+        if !allowed_tools.contains(&def.name) {
+            continue;
+        }
+        let registered = state
+            .tool_registry
+            .get_for_tenant(&def.name, &claims.tenant_id);
+        if decide_poc_tool_access(state, &ctx, &def.name, registered.as_deref(), false)
+            .await
+            .is_ok()
+        {
+            tools.push(json!({
+                "name": def.name,
+                "description": def.description,
+                "inputSchema": def.input_schema
+            }));
+        }
+    }
+    JsonRpcResponse::success(request_id, json!({ "tools": tools }))
+}
+
+async fn decide_poc_tool_access<'a>(
     state: &AppState,
     ctx: &ToolContext,
     requested_name: &str,
     tool: Option<&'a dyn Tool>,
+    audit_denial: bool,
 ) -> Result<&'a dyn Tool, PocToolRejection> {
     // Check signed tenant permissions with requested and canonical names.
     let canonical_name = tool.map_or(requested_name, Tool::name);
-    check_tool_permission(state, &ctx.tenant_id, requested_name, canonical_name)
-        .await
-        .map_err(|_| (-32003, "Tool call rejected"))?;
+    let perm_res = if audit_denial {
+        check_tool_permission(state, &ctx.tenant_id, requested_name, canonical_name).await
+    } else {
+        check_tool_permission_quiet(state, &ctx.tenant_id, requested_name, canonical_name).await
+    };
+    perm_res.map_err(|_| (-32003, "Tool call rejected"))?;
     let tool = tool.ok_or((-32004, "Tool not found"))?;
 
     // Admin actions are never granted to local agent tokens.
@@ -821,6 +838,15 @@ async fn check_poc_tool_access<'a>(
 
     check_tool_policy(state, tool, ctx).map_err(|_| (-32003, "Tool call rejected by policy"))?;
     Ok(tool)
+}
+
+async fn check_poc_tool_access<'a>(
+    state: &AppState,
+    ctx: &ToolContext,
+    requested_name: &str,
+    tool: Option<&'a dyn Tool>,
+) -> Result<&'a dyn Tool, PocToolRejection> {
+    decide_poc_tool_access(state, ctx, requested_name, tool, true).await
 }
 
 /// Parsed tool arguments paired with exact raw JSON lexemes for direct numeric fields.
@@ -3815,5 +3841,332 @@ allow if {
 
         // Only the initial target-tool call reached upstream.
         assert_eq!(upstream.received_requests().await.unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn tools_list_applies_tenant_and_opa_decisions_without_consuming_budget() {
+        let upstream = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/payments"))
+            .and(header("X-API-Key", "ky-list"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"ok": true})))
+            .mount(&upstream)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/tenant-denied"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("must-not-reach"))
+            .expect(0)
+            .mount(&upstream)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/opa-denied"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("must-not-reach"))
+            .expect(0)
+            .mount(&upstream)
+            .await;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let signer = PolicyFixtureSigner::new();
+        let trust_file = signer.write_trust(tmp.path());
+
+        let policies_dir = tmp.path().join("policies");
+        let roles_dir = tmp.path().join("roles");
+        let floor_dir = tmp.path().join("floors");
+        let contracts_dir = tmp.path().join("contracts");
+        let opa_dir = tmp.path().join("opa");
+        for d in [&policies_dir, &roles_dir, &contracts_dir, &opa_dir] {
+            std::fs::create_dir_all(d).unwrap();
+        }
+
+        // Signed tenant policy allows `payments_list` and `payments_opa_denied`,
+        // omitting `payments_tenant_denied` even though the role allows all three.
+        std::fs::write(
+            policies_dir.join("acme.jws"),
+            signer.sign_tool_policy("acme", &["payments_list", "payments_opa_denied"]),
+        )
+        .unwrap();
+
+        let opa_file = opa_dir.join("policy.rego");
+        std::fs::write(
+            &opa_file,
+            r#"package stoa.authz
+import future.keywords.if
+default allow := false
+allow if {
+    input.tenant_id == "acme"
+    input.resource_tenant_id == "acme"
+    input.tool_name != "payments_opa_denied"
+    input.action == "Read"
+}
+"#,
+        )
+        .unwrap();
+
+        std::fs::write(
+            roles_dir.join("acme.roles.jws"),
+            signer.sign_role_policy(
+                "acme",
+                1,
+                json!({
+                    "reader": {
+                        "allowed_tools": [
+                            "payments_list",
+                            "payments_tenant_denied",
+                            "payments_opa_denied"
+                        ]
+                    }
+                }),
+            ),
+        )
+        .unwrap();
+
+        std::fs::write(
+            contracts_dir.join("payments.uac.json"),
+            serde_json::to_string(&json!({
+                "name": "payments",
+                "version": "1.0.0",
+                "tenant_id": "acme",
+                "display_name": "Payments List Filter",
+                "description": "Filter tools/list by tenant and OPA policy",
+                "classification": "H",
+                "endpoints": [
+                    {
+                        "path": "/payments",
+                        "methods": ["GET"],
+                        "backend_url": format!("{}/payments", upstream.uri()),
+                        "operation_id": "list_payments",
+                        "llm": {
+                            "summary": "List payments",
+                            "intent": "Read payments",
+                            "tool_name": "payments_list",
+                            "side_effects": "read",
+                            "safe_for_agents": true,
+                            "requires_human_approval": false,
+                            "examples": []
+                        }
+                    },
+                    {
+                        "path": "/tenant-denied",
+                        "methods": ["GET"],
+                        "backend_url": format!("{}/tenant-denied", upstream.uri()),
+                        "operation_id": "tenant_denied",
+                        "llm": {
+                            "summary": "Tenant denied tool",
+                            "intent": "Denied by signed tenant policy",
+                            "tool_name": "payments_tenant_denied",
+                            "side_effects": "read",
+                            "safe_for_agents": true,
+                            "requires_human_approval": false,
+                            "examples": []
+                        }
+                    },
+                    {
+                        "path": "/opa-denied",
+                        "methods": ["GET"],
+                        "backend_url": format!("{}/opa-denied", upstream.uri()),
+                        "operation_id": "opa_denied",
+                        "llm": {
+                            "summary": "OPA denied tool",
+                            "intent": "Denied by OPA policy",
+                            "tool_name": "payments_opa_denied",
+                            "side_effects": "read",
+                            "safe_for_agents": true,
+                            "requires_human_approval": false,
+                            "examples": []
+                        }
+                    }
+                ],
+                "required_policies": [],
+                "status": "published"
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let creds_file = tmp.path().join("credentials.json");
+        std::fs::write(
+            &creds_file,
+            serde_json::to_string(&json!([{
+                "route_id": "mcp-tool:acme:payments_list",
+                "auth_type": "api_key",
+                "header_name": "X-API-Key",
+                "header_value": "ky-list",
+                "allowed_origin": upstream.uri(),
+                "shared_with_tenants": false
+            }]))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let base_url = "http://stoa-gateway:8080";
+        let config = Config {
+            auto_register: false,
+            admin_routes_disabled: true,
+            policy_enabled: true,
+            policy_path: Some(opa_file.to_string_lossy().to_string()),
+            policy_boot_tenants: vec!["acme".to_string()],
+            policy_trust_jwks_file: Some(trust_file),
+            policy_local_artifacts_dir: Some(policies_dir.to_string_lossy().to_string()),
+            policy_expected_issuer: "stoa-poc-policy".to_string(),
+            policy_audience: "stoa-gateway".to_string(),
+            poc_agents_enabled: true,
+            poc_bootstrap_secret: Some("bt-list".to_string()),
+            poc_uac_contracts_dir: Some(contracts_dir.to_string_lossy().to_string()),
+            poc_credentials_file: Some(creds_file.to_string_lossy().to_string()),
+            poc_public_base_url: Some(base_url.to_string()),
+            poc_role_artifacts_dir: Some(roles_dir.to_string_lossy().to_string()),
+            poc_role_floor_dir: Some(floor_dir.to_string_lossy().to_string()),
+            poc_outbound_allowed_origins: vec![upstream.uri()],
+            poc_chain_budget: 1,
+            poc_caller_budget: 1,
+            ..Config::default()
+        };
+
+        let state = AppState::new(config);
+        load_poc_fixtures(&state).await.unwrap();
+        state
+            .tool_permissions
+            .as_ref()
+            .unwrap()
+            .load_policy("acme")
+            .await
+            .unwrap();
+        let app = build_router(state.clone());
+
+        let dpop = TestDpop::new();
+        let boot_htu = format!("{base_url}/mcp/poc/bootstrap");
+        let mcp_htu = format!("{base_url}/mcp/poc");
+
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/mcp/poc/bootstrap")
+                    .header("content-type", "application/json")
+                    .header("X-Stoa-Poc-Bootstrap-Secret", "bt-list")
+                    .header("DPoP", dpop.proof("POST", &boot_htu, "list-b1", None))
+                    .body(Body::from(
+                        json!({
+                            "sub": "agent-list-test",
+                            "tenant_id": "acme",
+                            "role": "reader"
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let boot_json: Value = serde_json::from_slice(
+            &axum::body::to_bytes(resp.into_body(), 16 * 1024)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        let token = boot_json["access_token"].as_str().unwrap().to_string();
+        let chain_id = boot_json["chain_id"].as_str().unwrap().to_string();
+        let caller_key = caller_identity_key("acme", "agent-list-test");
+
+        let send_mcp = |jti: &str, payload: Value| {
+            let app = app.clone();
+            let auth_header = format!("DPoP {token}");
+            let proof = dpop.proof("POST", &mcp_htu, jti, Some(&token));
+            let body = payload.to_string();
+            async move {
+                let resp = app
+                    .oneshot(
+                        Request::builder()
+                            .method("POST")
+                            .uri("/mcp/poc")
+                            .header("content-type", "application/json")
+                            .header("Authorization", auth_header)
+                            .header("DPoP", proof)
+                            .body(Body::from(body))
+                            .unwrap(),
+                    )
+                    .await
+                    .unwrap();
+                assert_eq!(resp.status(), StatusCode::OK);
+                serde_json::from_slice::<Value>(
+                    &axum::body::to_bytes(resp.into_body(), 16 * 1024)
+                        .await
+                        .unwrap(),
+                )
+                .unwrap()
+            }
+        };
+
+        // Call tools/list twice (exceeding the chain/caller budget of 1 if it debited).
+        for (idx, jti) in ["list-1", "list-2"].iter().enumerate() {
+            let rpc = send_mcp(
+                jti,
+                json!({"jsonrpc": "2.0", "id": idx + 1, "method": "tools/list", "params": {}}),
+            )
+            .await;
+            assert!(rpc.get("error").is_none(), "tools/list failed: {rpc}");
+            let names: Vec<&str> = rpc["result"]["tools"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(|t| t["name"].as_str())
+                .collect();
+            assert_eq!(names, vec!["payments_list"]);
+        }
+        assert_eq!(state.poc_admission.chain_used(&chain_id), 0);
+        assert_eq!(state.poc_admission.caller_used(&caller_key), 0);
+
+        // Calling the tenant-denied tool is refused without hitting upstream or debiting budget.
+        let tenant_rpc = send_mcp(
+            "call-tenant-denied",
+            json!({
+                "jsonrpc": "2.0",
+                "id": 10,
+                "method": "tools/call",
+                "params": {"name": "payments_tenant_denied", "arguments": {}}
+            }),
+        )
+        .await;
+        assert_eq!(tenant_rpc["error"]["code"], -32003);
+        assert_eq!(tenant_rpc["error"]["message"], "Tool call rejected");
+
+        // Calling the OPA-denied tool is refused without hitting upstream or debiting budget.
+        let opa_rpc = send_mcp(
+            "call-opa-denied",
+            json!({
+                "jsonrpc": "2.0",
+                "id": 11,
+                "method": "tools/call",
+                "params": {"name": "payments_opa_denied", "arguments": {}}
+            }),
+        )
+        .await;
+        assert_eq!(opa_rpc["error"]["code"], -32003);
+        assert_eq!(opa_rpc["error"]["message"], "Tool call rejected by policy");
+        assert_eq!(state.poc_admission.chain_used(&chain_id), 0);
+        assert_eq!(state.poc_admission.caller_used(&caller_key), 0);
+
+        // Calling the allowed tool succeeds and consumes the single available budget slot.
+        let ok_rpc = send_mcp(
+            "call-ok",
+            json!({
+                "jsonrpc": "2.0",
+                "id": 12,
+                "method": "tools/call",
+                "params": {"name": "payments_list", "arguments": {}}
+            }),
+        )
+        .await;
+        assert!(
+            ok_rpc.get("error").is_none(),
+            "allowed call failed: {ok_rpc}"
+        );
+        assert_eq!(state.poc_admission.chain_used(&chain_id), 1);
+        assert_eq!(state.poc_admission.caller_used(&caller_key), 1);
+
+        let reqs = upstream.received_requests().await.unwrap();
+        assert_eq!(reqs.len(), 1);
+        assert_eq!(reqs[0].url.path(), "/payments");
     }
 }

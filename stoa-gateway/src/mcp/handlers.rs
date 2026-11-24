@@ -181,6 +181,30 @@ pub(crate) async fn check_tool_permission(
     }
 }
 
+/// Side-effect-free variant of [`check_tool_permission`] for `tools/list` filtering:
+/// applies the same fail-closed signed-policy decision without emitting a
+/// `tool_call_denied` audit warning.
+pub(crate) async fn check_tool_permission_quiet(
+    state: &AppState,
+    tenant_id: &str,
+    requested_name: &str,
+    canonical_name: &str,
+) -> Result<(), StatusCode> {
+    let permissions = state
+        .tool_permissions
+        .as_ref()
+        .ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    if permissions
+        .check_tool_permission_decision(tenant_id, requested_name, canonical_name)
+        .await
+        .is_none()
+    {
+        Ok(())
+    } else {
+        Err(StatusCode::FORBIDDEN)
+    }
+}
+
 fn require_admin_action(auth: &AuthContext, action: Action) -> Result<(), &'static str> {
     match action {
         Action::ManageTenants | Action::ManageUsers | Action::ManageContracts => {

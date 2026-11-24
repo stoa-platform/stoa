@@ -1,0 +1,54 @@
+name: PoC agent roles compose
+
+on:
+  pull_request:
+    paths:
+      - 'deploy/poc-roles-agents/**'
+      - 'stoa-gateway/src/auth/local_agent_token.rs'
+      - 'stoa-gateway/src/auth/dpop.rs'
+      - 'stoa-gateway/src/auth/poc_admission.rs'
+      - 'stoa-gateway/src/control_plane/role_policy.rs'
+      - 'stoa-gateway/src/mcp/poc.rs'
+      - 'stoa-gateway/src/mcp/poc/**'
+      - 'stoa-gateway/src/proxy/outbound_policy.rs'
+      - '.github/workflows/poc-roles-agents.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: poc-roles-agents-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  compose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: '3.12'
+      - name: Install fixture cryptography dependency
+        run: python -m pip install cryptography==46.0.3
+      - name: Run Jalon 1 compose scenario
+        working-directory: deploy/poc-roles-agents
+        run: bash scripts/run_jalon1.sh
+      - name: Run Jalon 2 compose scenario
+        working-directory: deploy/poc-roles-agents
+        run: bash scripts/run_jalon2.sh
+      - name: Run Jalon 3 compose scenario
+        working-directory: deploy/poc-roles-agents
+        run: bash scripts/run_jalon3.sh
+      - name: Run Jalon 5 floor persistence scenario
+        working-directory: deploy/poc-roles-agents
+        run: bash scripts/run_jalon5_floor.sh
+      - name: Clean up compose resources
+        if: always()
+        working-directory: deploy/poc-roles-agents
+        run: docker compose down -v --remove-orphans || true

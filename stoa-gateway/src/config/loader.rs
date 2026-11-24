@@ -63,12 +63,6 @@ pub enum ConfigError {
     #[error("poc_agents_enabled=true requires positive poc_max_admission_entries and poc_caller_budget_window_secs")]
     InvalidPocAdmissionBounds,
 
-    /// Signed PoC role policy check interval must stay bounded.
-    #[error(
-        "poc_agents_enabled=true requires poc_role_policy_check_interval_ms <= {max_ms} (got {actual_ms})"
-    )]
-    InvalidPocRolePolicyCheckInterval { actual_ms: u64, max_ms: u64 },
-
     /// An API proxy backend declares an inconsistent access setting.
     #[error("api_proxy backend `{backend}`: {reason}")]
     ApiProxyBackendAccess {
@@ -240,16 +234,6 @@ impl Config {
             && (self.poc_max_admission_entries == 0 || self.poc_caller_budget_window_secs == 0)
         {
             return Err(ConfigError::InvalidPocAdmissionBounds);
-        }
-
-        if self.poc_agents_enabled
-            && self.poc_role_policy_check_interval_ms
-                > crate::control_plane::role_policy::MAX_ROLE_POLICY_CHECK_INTERVAL_MS
-        {
-            return Err(ConfigError::InvalidPocRolePolicyCheckInterval {
-                actual_ms: self.poc_role_policy_check_interval_ms,
-                max_ms: crate::control_plane::role_policy::MAX_ROLE_POLICY_CHECK_INTERVAL_MS,
-            });
         }
 
         for (backend, b) in &self.api_proxy.backends {
@@ -572,52 +556,6 @@ mod tests {
             config.poc_agents_enabled = false;
             config.validate().expect("PoC disabled");
         }
-    }
-
-    #[test]
-    fn test_validate_poc_role_policy_check_interval_bounds() {
-        let max_ms = crate::control_plane::role_policy::MAX_ROLE_POLICY_CHECK_INTERVAL_MS;
-        for allowed in [0, 1, max_ms] {
-            let config = Config {
-                poc_agents_enabled: true,
-                poc_role_policy_check_interval_ms: allowed,
-                ..Config::default()
-            };
-            config
-                .validate()
-                .expect("bounded poc_role_policy_check_interval_ms must validate");
-        }
-
-        let over = max_ms + 1;
-        let mut config = Config {
-            poc_agents_enabled: true,
-            poc_role_policy_check_interval_ms: over,
-            ..Config::default()
-        };
-        assert!(matches!(
-            config.validate(),
-            Err(ConfigError::InvalidPocRolePolicyCheckInterval {
-                actual_ms,
-                max_ms: reported_max,
-            }) if actual_ms == over && reported_max == max_ms
-        ));
-        config.poc_agents_enabled = false;
-        config.validate().expect("PoC disabled");
-    }
-
-    #[test]
-    #[allow(clippy::result_large_err)]
-    fn env_var_sets_poc_role_policy_check_interval_ms() {
-        figment::Jail::expect_with(|jail| {
-            jail.clear_env();
-            let default_cfg = Config::load().expect("default load");
-            assert_eq!(default_cfg.poc_role_policy_check_interval_ms, 1000);
-
-            jail.set_env("STOA_POC_ROLE_POLICY_CHECK_INTERVAL_MS", "250");
-            let cfg = Config::load().expect("env override load");
-            assert_eq!(cfg.poc_role_policy_check_interval_ms, 250);
-            Ok(())
-        });
     }
 
     #[test]

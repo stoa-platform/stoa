@@ -11,7 +11,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, SystemTime};
 
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
@@ -35,14 +35,6 @@ pub const ROLE_POLICY_ARTIFACT_TYP: &str = "stoa-agent-role-policy+jws";
 
 /// Maximum permitted validity window for a signed role policy artifact (15 minutes).
 pub const MAX_ROLE_POLICY_VALIDITY: Duration = Duration::from_secs(900);
-
-/// Default minimum interval (milliseconds) between disk metadata checks for a
-/// tenant's signed role policy artifact.
-pub const DEFAULT_ROLE_POLICY_CHECK_INTERVAL_MS: u64 = 1000;
-
-/// Maximum permitted interval (milliseconds) between disk metadata checks for a
-/// tenant's signed role policy artifact (60 seconds).
-pub const MAX_ROLE_POLICY_CHECK_INTERVAL_MS: u64 = 60_000;
 
 /// Maximum tolerated clock skew for `issued_at`.
 const MAX_CLOCK_SKEW_SECS: i64 = 30;
@@ -422,6 +414,8 @@ struct FileFingerprint {
     ctime: i64,
     #[cfg(unix)]
     ctime_nsec: i64,
+    #[cfg(unix)]
+    mode: u32,
     #[cfg(not(unix))]
     created: Option<SystemTime>,
 }
@@ -430,7 +424,6 @@ struct FileFingerprint {
 struct TenantSnapshot {
     result: Result<Arc<VerifiedRolePolicy>, RolePolicyError>,
     fingerprint: Option<FileFingerprint>,
-    last_checked: Instant,
     generation: u64,
 }
 
@@ -441,7 +434,7 @@ struct TenantPolicyState {
     history: BTreeMap<u64, Arc<VerifiedRolePolicy>>,
     /// Monotonic counter incremented each time a snapshot is stored for this tenant.
     snapshot_generation: u64,
-    /// Latest loaded snapshot (or load error) plus file fingerprint and last-check timestamp.
+    /// Latest loaded snapshot (or load error) plus pre-read file fingerprint.
     snapshot: Option<TenantSnapshot>,
 }
 
@@ -464,7 +457,6 @@ pub struct RolePolicyStore {
     issuer: String,
     audience: String,
     trust: Option<Arc<PolicyTrustStore>>,
-    check_interval: Duration,
     tenants: Arc<RwLock<HashMap<String, TenantPolicyState>>>,
     refresh_locks: Arc<RwLock<HashMap<String, Arc<tokio::sync::Mutex<()>>>>>,
     #[cfg(test)]
@@ -485,7 +477,6 @@ impl RolePolicyStore {
             issuer: issuer.into(),
             audience: audience.into(),
             trust,
-            check_interval: Duration::from_millis(DEFAULT_ROLE_POLICY_CHECK_INTERVAL_MS),
             tenants: Arc::new(RwLock::new(HashMap::new())),
             refresh_locks: Arc::new(RwLock::new(HashMap::new())),
             #[cfg(test)]
@@ -493,35 +484,21 @@ impl RolePolicyStore {
         }
     }
 
-    /// Configure the minimum interval between disk metadata checks in [`Self::refresh_tenant`].
-    pub fn with_check_interval(mut self, interval: Duration) -> Self {
-        self.check_interval = interval;
-        self
-    }
-
     #[cfg(test)]
     pub(crate) fn reload_count(&self) -> usize {
         self.reload_count.load(std::sync::atomic::Ordering::SeqCst)
     }
 
-    /// Ensure the in-memory snapshot for `tenant_id` is fresh within `check_interval`.
+    /// Verify the in-memory snapshot for `tenant_id` against the current on-disk artifact.
     ///
-    /// Performs no disk I/O when `tenant_id` was checked more recently than `check_interval`.
-    /// Otherwise coalesces concurrent refreshes for the same tenant (single-flight) and runs
-    /// `stat` + conditional [`Self::reload_tenant`] inside `tokio::task::spawn_blocking`.
+    /// Serializes per-tenant checks and runs `stat` (+ conditional [`Self::reload_tenant`])
+    /// inside `tokio::task::spawn_blocking` on every call so policy reductions apply on the
+    /// very next request without blocking async runtime worker threads.
     pub async fn refresh_tenant(&self, tenant_id: &str) -> Result<(), RolePolicyError> {
         validate_tenant_filename(tenant_id)?;
 
-        if let Some(cached) = self.fresh_snapshot_status(tenant_id) {
-            return cached;
-        }
-
         let lock = self.tenant_refresh_lock(tenant_id);
         let _guard = lock.lock().await;
-
-        if let Some(cached) = self.fresh_snapshot_status(tenant_id) {
-            return cached;
-        }
 
         let store = self.clone();
         let tenant = tenant_id.to_string();
@@ -545,25 +522,6 @@ impl RolePolicyStore {
         Ok(())
     }
 
-    fn fresh_snapshot_status(&self, tenant_id: &str) -> Option<Result<(), RolePolicyError>> {
-        let map = self.tenants.read();
-        let snapshot = map.get(tenant_id)?.snapshot.as_ref()?;
-        if snapshot.last_checked.elapsed() < self.check_interval {
-            if let Err(err) = self.require_trust_loaded() {
-                return Some(Err(err));
-            }
-            Some(match &snapshot.result {
-                Ok(policy) if Utc::now() >= policy.expires_at => {
-                    Err(RolePolicyError::ValidityInvalid)
-                }
-                Ok(_) => Ok(()),
-                Err(err) => Err(err.clone()),
-            })
-        } else {
-            None
-        }
-    }
-
     fn tenant_refresh_lock(&self, tenant_id: &str) -> Arc<tokio::sync::Mutex<()>> {
         if let Some(lock) = self.refresh_locks.read().get(tenant_id) {
             return Arc::clone(lock);
@@ -580,23 +538,18 @@ impl RolePolicyStore {
         let artifact_path = self.artifacts_dir.join(format!("{tenant_id}.roles.jws"));
         let current_fp = file_fingerprint(&artifact_path);
 
-        if self.require_trust_loaded().is_ok() {
-            let mut map = self.tenants.write();
+        if current_fp.is_some() && self.require_trust_loaded().is_ok() {
+            let map = self.tenants.read();
             let unchanged = map
-                .get_mut(tenant_id)
-                .and_then(|state| state.snapshot.as_mut())
+                .get(tenant_id)
+                .and_then(|state| state.snapshot.as_ref())
                 .is_some_and(|snapshot| {
-                    let valid_match = matches!(
+                    matches!(
                         &snapshot.result,
                         Ok(policy)
-                            if current_fp.is_some()
-                                && snapshot.fingerprint == current_fp
+                            if snapshot.fingerprint == current_fp
                                 && Utc::now() < policy.expires_at
-                    );
-                    if valid_match {
-                        snapshot.last_checked = Instant::now();
-                    }
-                    valid_match
+                    )
                 });
             if unchanged {
                 return Ok(());
@@ -621,15 +574,28 @@ impl RolePolicyStore {
             .map_or(0, |state| state.snapshot_generation);
 
         let artifact_path = self.artifacts_dir.join(format!("{tenant_id}.roles.jws"));
-        let fingerprint = file_fingerprint(&artifact_path);
+        let Some(fingerprint) = file_fingerprint(&artifact_path) else {
+            self.record_error_snapshot(
+                tenant_id,
+                &RolePolicyError::ArtifactMissing,
+                None,
+                start_generation,
+            );
+            return Err(RolePolicyError::ArtifactMissing);
+        };
         let result = self
             .load_verified_tenant(tenant_id, &artifact_path)
             .and_then(|verified| {
-                self.activate_verified_policy_with_fp(tenant_id, verified, fingerprint)
+                self.activate_verified_policy_with_fp(
+                    tenant_id,
+                    verified,
+                    Some(fingerprint),
+                    start_generation,
+                )
             });
 
         if let Err(ref err) = result {
-            self.record_error_snapshot(tenant_id, err, fingerprint, start_generation);
+            self.record_error_snapshot(tenant_id, err, Some(fingerprint), start_generation);
         }
 
         result
@@ -644,10 +610,11 @@ impl RolePolicyStore {
     ) {
         let mut map = self.tenants.write();
         let state = map.entry(tenant_id.to_string()).or_default();
-        let newer_valid_present = state.snapshot.as_ref().is_some_and(|snapshot| {
-            snapshot.result.is_ok() && snapshot.generation > start_generation
-        });
-        if newer_valid_present {
+        let newer_snapshot_present = state
+            .snapshot
+            .as_ref()
+            .is_some_and(|snapshot| snapshot.generation > start_generation);
+        if newer_snapshot_present {
             return;
         }
         state.snapshot_generation += 1;
@@ -655,7 +622,6 @@ impl RolePolicyStore {
         state.snapshot = Some(TenantSnapshot {
             result: Err(err.clone()),
             fingerprint,
-            last_checked: Instant::now(),
             generation,
         });
     }
@@ -689,7 +655,12 @@ impl RolePolicyStore {
         tenant_id: &str,
         verified: VerifiedRolePolicy,
     ) -> Result<VerifiedRolePolicy, RolePolicyError> {
-        self.activate_verified_policy_with_fp(tenant_id, verified, None)
+        let start_generation = self
+            .tenants
+            .read()
+            .get(tenant_id)
+            .map_or(0, |state| state.snapshot_generation);
+        self.activate_verified_policy_with_fp(tenant_id, verified, None, start_generation)
     }
 
     fn activate_verified_policy_with_fp(
@@ -697,6 +668,7 @@ impl RolePolicyStore {
         tenant_id: &str,
         verified: VerifiedRolePolicy,
         fingerprint: Option<FileFingerprint>,
+        start_generation: u64,
     ) -> Result<VerifiedRolePolicy, RolePolicyError> {
         let _floor_lock = lock_floor(&self.floor_dir, tenant_id)?;
         if Utc::now() >= verified.expires_at {
@@ -707,6 +679,9 @@ impl RolePolicyStore {
         let prev_version = {
             let map = self.tenants.read();
             if let Some(state) = map.get(tenant_id) {
+                if let Some(newer_err) = newer_error_snapshot(state, start_generation) {
+                    return Err(newer_err);
+                }
                 if verified.version < state.current_version {
                     return Err(RolePolicyError::VersionRollback);
                 }
@@ -767,6 +742,9 @@ impl RolePolicyStore {
         let verified_arc = Arc::new(verified.clone());
         let mut map = self.tenants.write();
         let state = map.entry(tenant_id.to_string()).or_default();
+        if let Some(newer_err) = newer_error_snapshot(state, start_generation) {
+            return Err(newer_err);
+        }
         if verified.version < state.current_version {
             return Err(RolePolicyError::VersionRollback);
         }
@@ -779,6 +757,12 @@ impl RolePolicyStore {
             return Err(RolePolicyError::VersionRollback);
         }
 
+        let stale_same_version = verified.version == state.current_version
+            && state
+                .snapshot
+                .as_ref()
+                .is_some_and(|snapshot| snapshot.generation > start_generation);
+
         state.current_version = verified.version;
         state
             .history
@@ -788,14 +772,15 @@ impl RolePolicyStore {
                 state.history.remove(&oldest);
             }
         }
-        state.snapshot_generation += 1;
-        let generation = state.snapshot_generation;
-        state.snapshot = Some(TenantSnapshot {
-            result: Ok(verified_arc),
-            fingerprint,
-            last_checked: Instant::now(),
-            generation,
-        });
+        if !stale_same_version {
+            state.snapshot_generation += 1;
+            let generation = state.snapshot_generation;
+            state.snapshot = Some(TenantSnapshot {
+                result: Ok(verified_arc),
+                fingerprint,
+                generation,
+            });
+        }
 
         Ok(verified)
     }
@@ -1094,13 +1079,30 @@ impl RolePolicyStore {
     }
 }
 
+fn newer_error_snapshot(
+    state: &TenantPolicyState,
+    start_generation: u64,
+) -> Option<RolePolicyError> {
+    match state.snapshot.as_ref() {
+        Some(TenantSnapshot {
+            result: Err(err),
+            generation,
+            ..
+        }) if *generation > start_generation => Some(err.clone()),
+        _ => None,
+    }
+}
+
 fn file_fingerprint(path: &Path) -> Option<FileFingerprint> {
     let meta = fs::metadata(path).ok()?;
+    if !meta.is_file() {
+        return None;
+    }
     let modified = meta.modified().ok()?;
     #[cfg(unix)]
-    let (ino, ctime, ctime_nsec) = {
+    let (ino, ctime, ctime_nsec, mode) = {
         use std::os::unix::fs::MetadataExt;
-        (meta.ino(), meta.ctime(), meta.ctime_nsec())
+        (meta.ino(), meta.ctime(), meta.ctime_nsec(), meta.mode())
     };
     #[cfg(not(unix))]
     let created = meta.created().ok();
@@ -1113,6 +1115,8 @@ fn file_fingerprint(path: &Path) -> Option<FileFingerprint> {
         ctime,
         #[cfg(unix)]
         ctime_nsec,
+        #[cfg(unix)]
+        mode,
         #[cfg(not(unix))]
         created,
     })
@@ -1752,7 +1756,7 @@ mod tests {
     }
 
     #[test]
-    fn session_reduction_applies_on_refresh_and_widening_or_restore_refused_under_same_token() {
+    fn session_reduction_applies_on_next_call_and_widening_or_restore_refused_under_same_token() {
         let tmp = tempfile::tempdir().unwrap();
         let signer = RoleSigner::new();
         let trust_path = tmp.path().join("trust.json");
@@ -1817,7 +1821,7 @@ mod tests {
         let (v2, _) = store.current_role_snapshot("acme", "reader").unwrap();
         assert!(eval("payments_export", v2).is_ok());
 
-        // v3 withdraws payments_export -> denied on next call after refresh for v2 token!
+        // v3 withdraws payments_export -> denied on next call for v2 token!
         fs::write(
             artifacts_dir.join("acme.roles.jws"),
             signer.sign(
@@ -2188,8 +2192,14 @@ mod tests {
         );
     }
 
+    fn replace_file_atomic(target: &Path, content: &str) {
+        let tmp_path = target.with_extension(format!("tmp-{}", Uuid::new_v4()));
+        fs::write(&tmp_path, content).unwrap();
+        fs::rename(&tmp_path, target).unwrap();
+    }
+
     #[tokio::test]
-    async fn snapshot_hot_path_skips_reload_within_interval_and_refreshes_after() {
+    async fn reduction_takes_effect_on_next_call_without_sleep() {
         let tmp = tempfile::tempdir().unwrap();
         let signer = RoleSigner::new();
         let trust_path = tmp.path().join("trust.json");
@@ -2205,7 +2215,16 @@ mod tests {
                 "acme",
                 1,
                 600,
-                json!({ "reader": { "allowed_tools": ["payments_list", "payments_export"] } }),
+                json!({
+                    "reader": {
+                        "allowed_tools": ["payments_list", "payments_export"],
+                        "argument_constraints": {
+                            "payments_list": {
+                                "limit": { "type": "max_number", "max": 100.0 }
+                            }
+                        }
+                    }
+                }),
             ),
         )
         .unwrap();
@@ -2216,60 +2235,125 @@ mod tests {
             "stoa-poc-policy",
             "stoa-gateway",
             Some(PolicyTrustStore::open(&trust_path)),
-        )
-        .with_check_interval(Duration::from_millis(1500));
+        );
 
         store.refresh_tenant("acme").await.unwrap();
         assert_eq!(store.reload_count(), 1);
         let (v1, _) = store.current_role_snapshot("acme", "reader").unwrap();
         assert_eq!(v1, 1);
 
-        let eval = |tool: &str| {
+        let eval = |tool: &str, args: &Value| {
             store.evaluate_call(&RoleEvalInput {
                 tenant_id: "acme",
                 role: "reader",
                 tool_name: tool,
-                args: &json!({}),
+                args,
                 issued_policy_version: v1,
                 token_allowed_tools: None,
                 token_constraints: None,
             })
         };
-        assert!(eval("payments_export").is_ok());
+        assert!(eval("payments_export", &json!({})).is_ok());
+        assert!(eval("payments_list", &json!({"limit": 80})).is_ok());
 
-        // Update the file on disk to v2 (removing payments_export).
-        fs::write(
+        // Overwrite with v2 removing payments_export (no sleep): refused on the very next call.
+        replace_file_atomic(
             &role_path,
-            signer.sign(
+            &signer.sign(
                 "acme",
                 2,
+                600,
+                json!({
+                    "reader": {
+                        "allowed_tools": ["payments_list"],
+                        "argument_constraints": {
+                            "payments_list": {
+                                "limit": { "type": "max_number", "max": 100.0 }
+                            }
+                        }
+                    }
+                }),
+            ),
+        );
+        store.refresh_tenant("acme").await.unwrap();
+        assert_eq!(store.reload_count(), 2);
+        assert_eq!(store.current_role_snapshot("acme", "reader").unwrap().0, 2);
+        assert_eq!(
+            eval("payments_export", &json!({})).unwrap_err(),
+            RolePolicyError::DeniedByRole
+        );
+        let (_, effective_tools, _) = store
+            .effective_allowed_tools("acme", "reader", v1, None)
+            .unwrap();
+        assert!(!effective_tools.contains("payments_export"));
+        assert!(effective_tools.contains("payments_list"));
+        assert!(eval("payments_list", &json!({"limit": 80})).is_ok());
+
+        // Overwrite with v3 tightening the limit constraint (no sleep): refused on the very next call.
+        replace_file_atomic(
+            &role_path,
+            &signer.sign(
+                "acme",
+                3,
+                600,
+                json!({
+                    "reader": {
+                        "allowed_tools": ["payments_list"],
+                        "argument_constraints": {
+                            "payments_list": {
+                                "limit": { "type": "max_number", "max": 25.0 }
+                            }
+                        }
+                    }
+                }),
+            ),
+        );
+        store.refresh_tenant("acme").await.unwrap();
+        assert_eq!(store.reload_count(), 3);
+        assert_eq!(
+            eval("payments_list", &json!({"limit": 80})).unwrap_err(),
+            RolePolicyError::DeniedByConstraint
+        );
+        assert!(eval("payments_list", &json!({"limit": 20})).is_ok());
+    }
+
+    #[tokio::test]
+    async fn unchanged_policy_file_reuses_snapshot_without_reload() {
+        let tmp = tempfile::tempdir().unwrap();
+        let signer = RoleSigner::new();
+        let trust_path = tmp.path().join("trust.json");
+        fs::write(&trust_path, signer.trust_jwks()).unwrap();
+        let artifacts_dir = tmp.path().join("roles");
+        let floor_dir = tmp.path().join("floors");
+        fs::create_dir_all(&artifacts_dir).unwrap();
+
+        fs::write(
+            artifacts_dir.join("acme.roles.jws"),
+            signer.sign(
+                "acme",
+                1,
                 600,
                 json!({ "reader": { "allowed_tools": ["payments_list"] } }),
             ),
         )
         .unwrap();
 
-        // Within the check interval, hot-path refresh and evaluation serve the cached v1 snapshot.
+        let store = RolePolicyStore::new(
+            &artifacts_dir,
+            &floor_dir,
+            "stoa-poc-policy",
+            "stoa-gateway",
+            Some(PolicyTrustStore::open(&trust_path)),
+        );
+
         store.refresh_tenant("acme").await.unwrap();
         assert_eq!(store.reload_count(), 1);
+
+        for _ in 0..10 {
+            store.refresh_tenant("acme").await.unwrap();
+        }
+        assert_eq!(store.reload_count(), 1);
         assert_eq!(store.current_role_snapshot("acme", "reader").unwrap().0, 1);
-        assert!(eval("payments_export").is_ok());
-
-        // Once the check interval elapses, refresh detects the modified file and activates v2.
-        tokio::time::sleep(Duration::from_millis(1700)).await;
-        store.refresh_tenant("acme").await.unwrap();
-        assert_eq!(store.reload_count(), 2);
-        assert_eq!(store.current_role_snapshot("acme", "reader").unwrap().0, 2);
-        assert_eq!(
-            eval("payments_export").unwrap_err(),
-            RolePolicyError::DeniedByRole
-        );
-        assert!(eval("payments_list").is_ok());
-
-        // After another interval with an unchanged file, stat sees the same fingerprint (no reload).
-        tokio::time::sleep(Duration::from_millis(1700)).await;
-        store.refresh_tenant("acme").await.unwrap();
-        assert_eq!(store.reload_count(), 2);
     }
 
     #[tokio::test]
@@ -2300,8 +2384,7 @@ mod tests {
             "stoa-poc-policy",
             "stoa-gateway",
             Some(PolicyTrustStore::open(&trust_path)),
-        )
-        .with_check_interval(Duration::from_millis(1500));
+        );
 
         store.refresh_tenant("acme").await.unwrap();
         assert_eq!(store.reload_count(), 1);
@@ -2312,18 +2395,16 @@ mod tests {
             2
         );
 
-        // Wait past check interval and filesystem timestamp granularity, then write rollback v1.
-        tokio::time::sleep(Duration::from_millis(1700)).await;
-        fs::write(
+        // Immediately write rollback v1 (no sleep): fails closed on the very next call.
+        replace_file_atomic(
             &role_path,
-            signer.sign(
+            &signer.sign(
                 "acme",
                 1,
                 600,
                 json!({ "reader": { "allowed_tools": ["payments_list"] } }),
             ),
-        )
-        .unwrap();
+        );
 
         assert_eq!(
             store.refresh_tenant("acme").await.unwrap_err(),
@@ -2365,6 +2446,85 @@ mod tests {
         assert_eq!(store.tenants.read()["acme"].current_version, 2);
     }
 
+    #[tokio::test]
+    async fn stat_or_read_error_fails_closed_immediately() {
+        let tmp = tempfile::tempdir().unwrap();
+        let signer = RoleSigner::new();
+        let trust_path = tmp.path().join("trust.json");
+        fs::write(&trust_path, signer.trust_jwks()).unwrap();
+        let artifacts_dir = tmp.path().join("roles");
+        let floor_dir = tmp.path().join("floors");
+        fs::create_dir_all(&artifacts_dir).unwrap();
+
+        let role_path = artifacts_dir.join("acme.roles.jws");
+        let v1_jws = signer.sign(
+            "acme",
+            1,
+            600,
+            json!({ "reader": { "allowed_tools": ["payments_list"] } }),
+        );
+        fs::write(&role_path, &v1_jws).unwrap();
+
+        let store = RolePolicyStore::new(
+            &artifacts_dir,
+            &floor_dir,
+            "stoa-poc-policy",
+            "stoa-gateway",
+            Some(PolicyTrustStore::open(&trust_path)),
+        );
+
+        store.refresh_tenant("acme").await.unwrap();
+        assert_eq!(store.current_role_snapshot("acme", "reader").unwrap().0, 1);
+
+        // Deleting the artifact causes stat to fail and immediately puts the tenant fail-closed.
+        fs::remove_file(&role_path).unwrap();
+        assert_eq!(
+            store.refresh_tenant("acme").await.unwrap_err(),
+            RolePolicyError::ArtifactMissing
+        );
+        assert_eq!(
+            store.current_role_snapshot("acme", "reader").unwrap_err(),
+            RolePolicyError::ArtifactMissing
+        );
+        assert_eq!(
+            store
+                .evaluate_call(&RoleEvalInput {
+                    tenant_id: "acme",
+                    role: "reader",
+                    tool_name: "payments_list",
+                    args: &json!({}),
+                    issued_policy_version: 1,
+                    token_allowed_tools: None,
+                    token_constraints: None,
+                })
+                .unwrap_err(),
+            RolePolicyError::ArtifactMissing
+        );
+        assert_eq!(
+            store
+                .effective_allowed_tools("acme", "reader", 1, None)
+                .unwrap_err(),
+            RolePolicyError::ArtifactMissing
+        );
+
+        // Replacing the artifact path with a directory (unreadable as a file) stays fail-closed.
+        fs::create_dir(&role_path).unwrap();
+        assert_eq!(
+            store.refresh_tenant("acme").await.unwrap_err(),
+            RolePolicyError::ArtifactMissing
+        );
+        assert_eq!(
+            store.current_role_snapshot("acme", "reader").unwrap_err(),
+            RolePolicyError::ArtifactMissing
+        );
+
+        // Restoring the signed artifact recovers cleanly.
+        fs::remove_dir(&role_path).unwrap();
+        fs::write(&role_path, &v1_jws).unwrap();
+        store.refresh_tenant("acme").await.unwrap();
+        assert_eq!(store.current_role_snapshot("acme", "reader").unwrap().0, 1);
+    }
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     async fn concurrent_refreshes_coalesce_to_single_load() {
         let tmp = tempfile::tempdir().unwrap();
@@ -2385,16 +2545,13 @@ mod tests {
         )
         .unwrap();
 
-        let store = Arc::new(
-            RolePolicyStore::new(
-                &artifacts_dir,
-                &floor_dir,
-                "stoa-poc-policy",
-                "stoa-gateway",
-                Some(PolicyTrustStore::open(&trust_path)),
-            )
-            .with_check_interval(Duration::from_secs(60)),
-        );
+        let store = Arc::new(RolePolicyStore::new(
+            &artifacts_dir,
+            &floor_dir,
+            "stoa-poc-policy",
+            "stoa-gateway",
+            Some(PolicyTrustStore::open(&trust_path)),
+        ));
 
         let barrier = Arc::new(tokio::sync::Barrier::new(32));
         let mut handles = Vec::with_capacity(32);
@@ -2508,12 +2665,13 @@ mod tests {
         }
     }
 
-    #[test]
-    fn stale_failed_reload_does_not_overwrite_newer_valid_snapshot() {
+    #[tokio::test]
+    async fn snapshot_generation_guards_stale_activation_and_stale_error() {
         let tmp = tempfile::tempdir().unwrap();
         let signer = RoleSigner::new();
         let trust_path = tmp.path().join("trust.json");
         fs::write(&trust_path, signer.trust_jwks()).unwrap();
+        let trust_store = PolicyTrustStore::open(&trust_path);
         let artifacts_dir = tmp.path().join("roles");
         let floor_dir = tmp.path().join("floors");
         fs::create_dir_all(&artifacts_dir).unwrap();
@@ -2523,7 +2681,7 @@ mod tests {
             &floor_dir,
             "stoa-poc-policy",
             "stoa-gateway",
-            Some(PolicyTrustStore::open(&trust_path)),
+            Some(trust_store.clone()),
         );
 
         let role_path = artifacts_dir.join("acme.roles.jws");
@@ -2537,37 +2695,70 @@ mod tests {
             ),
         )
         .unwrap();
-        assert_eq!(store.reload_tenant("acme").unwrap().version, 1);
+        store.refresh_tenant("acme").await.unwrap();
         let gen_after_v1 = store.tenants.read()["acme"].snapshot_generation;
 
-        // A concurrent reload activates v2 after an older reload started at `gen_after_v1`.
+        let trust = trust_store.current().unwrap();
         let v2_jws = signer.sign(
             "acme",
             2,
             600,
             json!({ "reader": { "allowed_tools": ["payments_list", "payments_export"] } }),
         );
-        fs::write(&role_path, &v2_jws).unwrap();
-        assert_eq!(store.reload_tenant("acme").unwrap().version, 2);
-        let gen_after_v2 = store.tenants.read()["acme"].snapshot_generation;
-        assert!(gen_after_v2 > gen_after_v1);
+        let verified_v2 = store.verify_jws(&trust, "acme", &v2_jws).unwrap();
 
-        // An older failed reload (started at `gen_after_v1`) must not overwrite the newer valid v2 snapshot.
+        // A newer error snapshot is recorded after `gen_after_v1`.
+        store.record_error_snapshot("acme", &RolePolicyError::Signature, None, gen_after_v1);
+        let gen_after_err = store.tenants.read()["acme"].snapshot_generation;
+        assert!(gen_after_err > gen_after_v1);
+        assert_eq!(
+            store.current_role_snapshot("acme", "reader").unwrap_err(),
+            RolePolicyError::Signature
+        );
+
+        // An older valid activation started at `gen_after_v1` must NOT overwrite the newer error
+        // snapshot or advance the persisted floor.
+        assert_eq!(
+            store
+                .activate_verified_policy_with_fp("acme", verified_v2.clone(), None, gen_after_v1)
+                .unwrap_err(),
+            RolePolicyError::Signature
+        );
+        assert_eq!(
+            store.current_role_snapshot("acme", "reader").unwrap_err(),
+            RolePolicyError::Signature
+        );
+        let floor_path = floor_dir.join("acme.floor.json");
+        assert_eq!(
+            read_persisted_floor(&floor_path).unwrap().unwrap().version,
+            1
+        );
+
+        // A valid activation started at `gen_after_err` succeeds and replaces the error snapshot.
+        let activated = store
+            .activate_verified_policy_with_fp("acme", verified_v2, None, gen_after_err)
+            .unwrap();
+        assert_eq!(activated.version, 2);
+        let gen_after_v2 = store.tenants.read()["acme"].snapshot_generation;
+        assert!(gen_after_v2 > gen_after_err);
+        assert_eq!(store.current_role_snapshot("acme", "reader").unwrap().0, 2);
+
+        // Conversely, an older error started at `gen_after_err` must NOT overwrite the newer valid v2 snapshot.
         store.record_error_snapshot(
             "acme",
             &RolePolicyError::ArtifactMissing,
             None,
-            gen_after_v1,
+            gen_after_err,
         );
         assert_eq!(store.current_role_snapshot("acme", "reader").unwrap().0, 2);
 
-        // Genuine errors after v2 still fail closed: bad signature...
+        // Genuine errors after v2 still fail closed on refresh: bad signature...
         let (header_payload, sig) = v2_jws.rsplit_once('.').unwrap();
         let flipped = if sig.starts_with('A') { 'B' } else { 'A' };
         let tampered = format!("{header_payload}.{flipped}{}", &sig[1..]);
-        fs::write(&role_path, tampered).unwrap();
+        replace_file_atomic(&role_path, &tampered);
         assert_eq!(
-            store.reload_tenant("acme").unwrap_err(),
+            store.refresh_tenant("acme").await.unwrap_err(),
             RolePolicyError::Signature
         );
         assert_eq!(
@@ -2578,7 +2769,7 @@ mod tests {
         // ...and missing artifact.
         fs::remove_file(&role_path).unwrap();
         assert_eq!(
-            store.reload_tenant("acme").unwrap_err(),
+            store.refresh_tenant("acme").await.unwrap_err(),
             RolePolicyError::ArtifactMissing
         );
         assert_eq!(

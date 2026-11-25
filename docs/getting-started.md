@@ -15,7 +15,7 @@ This guide will help you get STOA Platform running quickly.
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/PotoMitan/stoa.git
+git clone https://github.com/stoa-platform/stoa.git
 cd stoa
 ```
 
@@ -86,4 +86,4 @@ manager before testing; these are not accounts created by the Helm chart.
 
 - Check the [documentation index](./README.md)
 - Review [runbooks](./runbooks/) for operational issues
-- Open an issue on [GitHub](https://github.com/PotoMitan/stoa/issues)
+- Open an issue on [GitHub](https://github.com/stoa-platform/stoa/issues)

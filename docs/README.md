@@ -72,8 +72,8 @@ Operational runbooks organized by severity:
 
 ## Getting Help
 
-- **Issues**: [GitHub Issues](https://github.com/PotoMitan/stoa/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/PotoMitan/stoa/discussions)
+- **Issues**: [GitHub Issues](https://github.com/stoa-platform/stoa/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/stoa-platform/stoa/discussions)
 - **Security**: See [SECURITY.md](../SECURITY.md) for reporting vulnerabilities
 
 ## Contributing

@@ -20,7 +20,7 @@
 # DEV_POST_DEPLOY_REQUIRED and reports missing verification explicitly.
 # The image-updated dispatch is unchanged.
 #
-# Requires: STOA_INFRA_DISPATCH_TOKEN secret (PAT with repo scope on PotoMitan/stoa-infra)
+# Requires: STOA_INFRA_DISPATCH_TOKEN secret (PAT with repo scope on caboulicam/stoa-infra)
 # =============================================================================
 
 name: Reusable GitOps Deploy
@@ -83,7 +83,7 @@ jobs:
         uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # v4.0.1
         with:
           token: ${{ secrets.STOA_INFRA_DISPATCH_TOKEN }}
-          repository: PotoMitan/stoa-infra
+          repository: caboulicam/stoa-infra
           event-type: image-updated
           client-payload: >-
             {

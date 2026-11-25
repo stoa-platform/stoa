@@ -137,8 +137,8 @@ kubectl create secret generic jenkins-credentials -n jenkins \
 ```bash
 # Test registry connection (GHCR)
 kubectl run docker-test --rm -it --restart=Never \
-  --image=docker:dind -n jenkins -- \
-  docker pull ghcr.io/stoa-platform/control-plane-api:latest
+  --image=docker:dind@sha256:4bbc7223f81db790097c6dea42fb93e05b8fead4f0431fbe6ccaba6e8473201c -n jenkins -- \
+  docker pull ghcr.io/stoa-platform/control-plane-api@sha256:6100c45b0416dc916d80c145509a1abd007253e6d57239dfbab0e96ea7c840f0
 
 # Check GHCR credentials
 echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
@@ -156,8 +156,8 @@ kubectl create secret docker-registry ghcr-registry -n jenkins \
 ```bash
 # Test Git access
 kubectl run git-test --rm -it --restart=Never \
-  --image=bitnami/git -n jenkins -- \
-  git ls-remote https://github.com/PotoMitan/stoa.git
+  --image=bitnami/git@sha256:704fe89fb37feb90edc0838afd5d8cd43301f338bf1eed1eaf3a8fe9f0b288d1 -n jenkins -- \
+  git ls-remote https://github.com/stoa-platform/stoa.git
 
 # Check GitLab token
 kubectl get secret gitlab-credentials -n jenkins -o jsonpath='{.data.token}' | base64 -d

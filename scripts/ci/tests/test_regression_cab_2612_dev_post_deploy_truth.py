@@ -152,7 +152,7 @@ def test_workflows_record_the_verdict_without_weakening_guards():
     assert truth["env"]["POST_DEPLOY_RAN"] == "${{ steps.wait.outputs.ran }}"
     assert truth["env"]["POST_DEPLOY_OK"] == "${{ steps.wait.outputs.ok }}"
     dispatch = next(step for step in job["steps"] if "repository-dispatch@" in step.get("uses", ""))
-    assert dispatch["with"]["repository"] == "PotoMitan/stoa-infra"
+    assert dispatch["with"]["repository"] == "caboulicam/stoa-infra"
     assert job["steps"].index(dispatch) < job["steps"].index(wait)
 
     health_text = (WF / "reusable-health-smoke.yml").read_text()

@@ -6,7 +6,7 @@ This document describes the governance model for STOA Platform.
 
 ### BDFL (Benevolent Dictator For Life)
 
-**Christophe ABOULICAM** ([@PotoMitan](https://github.com/PotoMitan))
+**Christophe ABOULICAM** ([@caboulicam](https://github.com/caboulicam))
 
 - Final decision authority on project direction
 - Can veto any change (used sparingly)
@@ -29,7 +29,7 @@ As the community grows, governance may evolve toward a foundation model.
 
 | Name | GitHub | Area | Since |
 |------|--------|------|-------|
-| Christophe ABOULICAM | [@PotoMitan](https://github.com/PotoMitan) | All | 2024 |
+| Christophe ABOULICAM | [@caboulicam](https://github.com/caboulicam) | All | 2024 |
 
 ## Decision Making
 

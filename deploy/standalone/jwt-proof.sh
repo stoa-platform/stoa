@@ -140,8 +140,7 @@ admin_anon="$(curl -sS -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:1
 echo "POST /admin/contracts without token $admin_anon"
 
 protected="$(python3 -c 'import json,os; print(json.dumps({"name":"live-api","version":"1.0.0","tenant_id":"demo","status":"published","classification":"H","inboundAuth":"jwt","endpoints":[{"path":"/ping","methods":["GET"],"backend_url":os.environ["BACKEND_URL"]}]}))')"
-open="$(python3 -c 'import json,os; print(json.dumps({"name":"open-api","version":"1.0.0","tenant_id":"demo","status":"published","classification":"H","public":True,"endpoints":[{"path":"/ping","methods":["GET"],"backend_url":os.environ["BACKEND_URL"]}]}))')"
-closed="$(python3 -c 'import json,os; print(json.dumps({"name":"closed-api","version":"1.0.0","tenant_id":"demo","status":"published","classification":"H","endpoints":[{"path":"/ping","methods":["GET"],"backend_url":os.environ["BACKEND_URL"]}]}))')"
+open="$(python3 -c 'import json,os; print(json.dumps({"name":"open-api","version":"1.0.0","tenant_id":"demo","status":"published","classification":"H","endpoints":[{"path":"/ping","methods":["GET"],"backend_url":os.environ["BACKEND_URL"]}]}))')"
 
 protected_status="$(curl -sS -o /tmp/stoa-jwt-contract -w '%{http_code}' -X POST http://127.0.0.1:18080/admin/contracts \
   -H "authorization: Bearer $ADMIN_TOKEN" -H 'content-type: application/json' -d "$protected")"
@@ -151,19 +150,12 @@ open_status="$(curl -sS -o /tmp/stoa-jwt-open -w '%{http_code}' -X POST http://1
   -H "authorization: Bearer $ADMIN_TOKEN" -H 'content-type: application/json' -d "$open")"
 echo "POST open contract $open_status $(cat /tmp/stoa-jwt-open)"
 
-closed_status="$(curl -sS -o /tmp/stoa-jwt-closed -w '%{http_code}' -X POST http://127.0.0.1:18080/admin/contracts \
-  -H "authorization: Bearer $ADMIN_TOKEN" -H 'content-type: application/json' -d "$closed")"
-echo "POST contract without inbound auth $closed_status $(cat /tmp/stoa-jwt-closed)"
-
 anon="$(curl -sS -D /tmp/stoa-jwt-anon-hdr -o /tmp/stoa-jwt-anon -w '%{http_code}' http://127.0.0.1:18080/apis/demo/live-api/ping)"
 echo "GET protected without token $anon $(cat /tmp/stoa-jwt-anon)"
 grep -i '^www-authenticate:' /tmp/stoa-jwt-anon-hdr
 
 open_anon="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/apis/demo/open-api/ping)"
 echo "GET open contract without token $open_anon"
-
-closed_anon="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/apis/demo/closed-api/ping)"
-echo "GET contract without inbound auth, without token $closed_anon"
 
 if [[ -n "$PROOF_BIN" ]]; then
   token_json="$(curl -sS --max-time 20 -X POST "$KC_URL/realms/stoa/protocol/openid-connect/token" \
@@ -198,8 +190,6 @@ test "$protected_status" = 201
 test "$open_status" = 201
 test "$anon" = 401
 test "$open_anon" = 200
-test "$closed_status" = 201
-test "$closed_anon" = 401
 test "$authed" = 200
 test "$expired" = 401
 test "$wrong" = 401

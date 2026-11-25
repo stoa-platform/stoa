@@ -1303,7 +1303,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn contract_route_without_inbound_auth_is_401() {
+    async fn regression_contract_route_without_inbound_auth_is_401() {
         let state = AppState::new(crate::config::Config::default());
         state.route_registry.upsert(ping_route());
 
@@ -1317,7 +1317,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn public_contract_route_is_not_challenged() {
+    async fn regression_public_contract_route_is_not_challenged() {
         let state = AppState::new(crate::config::Config::default());
         let mut route = ping_route();
         route.public = true;
@@ -1338,7 +1338,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn route_credential_is_never_forwarded_without_identity() {
+    async fn regression_route_credential_is_never_forwarded_without_identity() {
         use wiremock::{matchers::any, Mock, MockServer, ResponseTemplate};
 
         let backend = MockServer::start().await;
@@ -1365,7 +1365,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn admin_route_credential_is_never_forwarded_without_identity() {
+    async fn regression_admin_route_credential_is_never_forwarded_without_identity() {
         use wiremock::{matchers::any, Mock, MockServer, ResponseTemplate};
 
         let backend = MockServer::start().await;

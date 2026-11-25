@@ -708,7 +708,7 @@ mod tests {
 
     #[test]
     #[allow(clippy::result_large_err)] // figment::Jail closure returns Result<(), figment::Error>
-    fn test_validate_rejects_llm_proxy_skip_validation_in_prod() {
+    fn regression_llm_proxy_skip_validation_refused_in_prod() {
         let prod_skip = Config {
             environment: super::super::Environment::Prod,
             mcp_audience: Some("stoa-mcp".to_string()),

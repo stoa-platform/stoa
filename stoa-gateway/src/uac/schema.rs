@@ -461,7 +461,7 @@ mod tests {
     }
 
     #[test]
-    fn rest_routes_are_deny_by_default_unless_public() {
+    fn regression_rest_routes_are_deny_by_default_unless_public() {
         let mut spec = sample_contract();
         assert!(!spec.public);
         assert!(!spec.allows_anonymous_rest());

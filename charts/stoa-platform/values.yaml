@@ -414,6 +414,20 @@ vault:
     # K8s secret synced from Vault by External Secrets Operator
     secretName: postgresql-credentials
 
+# External Secrets Operator monitoring
+# Alerts when ExternalSecrets or their SecretStore fail to sync (for example
+# when the secrets store is unavailable). Needs the ESO controller metrics to be
+# scraped by Prometheus.
+externalSecrets:
+  monitoring:
+    # Namespace of the PrometheusRule; empty uses the release namespace
+    namespace: ''
+    prometheusRule:
+      enabled: false
+      notReadyFor: 15m
+      syncErrorsFor: 30m
+      storeNotReadyFor: 10m
+
 # ==============================================================================
 # Keycloak (CAB-1961, CAB-1956, CAB-1958)
 # ==============================================================================

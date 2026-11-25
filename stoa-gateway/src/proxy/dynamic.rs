@@ -229,7 +229,7 @@ pub async fn dynamic_proxy(State(state): State<AppState>, mut request: Request<B
     // this check — that list is advisory and log-only.
     if published_route_requires_jwt(&state, &route) {
         if let Err(response) = require_published_route_jwt(&state, &route, &mut request).await {
-            record_proxy_status(401);
+            record_proxy_status(response.status().as_u16());
             return *response;
         }
     } else if contract_route_denies_by_default(&route) {
@@ -1095,7 +1095,10 @@ fn contract_route_denies_by_default(route: &crate::routes::ApiRoute) -> bool {
 /// Validate the caller JWT before proxying a route that has `jwt_validation`.
 ///
 /// Missing validator, missing bearer, and invalid tokens all return 401 with
-/// `WWW-Authenticate`. A successful validation inserts [`AuthenticatedUser`].
+/// `WWW-Authenticate`. A valid token that carries no tenant, or a tenant other
+/// than the route tenant, returns 403 (see [`authorize_route_tenant`]). Only a
+/// token that passes both checks inserts [`AuthenticatedUser`], so the route
+/// credential is never resolved for a caller of another tenant.
 async fn require_published_route_jwt(
     state: &AppState,
     route: &crate::routes::ApiRoute,
@@ -1141,6 +1144,11 @@ async fn require_published_route_jwt(
     };
     let claims = match validation {
         Ok(claims) => claims,
+        Err(JwtError::TenantRequired) => {
+            return Err(Box::new(
+                crate::auth::tenant::tenant_required().into_response(),
+            ));
+        }
         Err(error) => {
             warn!(error = %error, "JWT validation failed on published route");
             return Err(Box::new(bearer_unauthorized(
@@ -1150,10 +1158,49 @@ async fn require_published_route_jwt(
         }
     };
 
+    authorize_route_tenant(route, &claims)?;
+
     let validated = ValidatedToken::new(token.to_string(), claims);
     request
         .extensions_mut()
         .insert(AuthenticatedUser::from_token(validated));
+    Ok(())
+}
+
+/// Bind a validated token to the tenant that owns the route.
+///
+/// The audience only says the token was issued for the gateway (or for the
+/// contract resource); it is shared by every tenant of the realm, so it does
+/// not authorize a tenant. The signed `tenant_id` claim must equal
+/// `route.tenant_id`, otherwise the call is refused with 403 before any
+/// upstream selection, circuit breaker or credential lookup.
+///
+/// There is no implicit exemption: a `cpi-admin` token without a tenant claim
+/// is accepted by the validator, but it is refused here like any other token
+/// without a tenant. A platform admin calls a tenant route with a token scoped
+/// to that tenant. A future cross-tenant mode must be an explicit, audited
+/// opt-in on the contract, not a role check.
+fn authorize_route_tenant(
+    route: &crate::routes::ApiRoute,
+    claims: &crate::auth::claims::Claims,
+) -> Result<(), Box<Response>> {
+    let tenant = crate::auth::tenant::require_tenant(claims)
+        .map_err(|error| Box::new(error.into_response()))?;
+    if tenant != route.tenant_id {
+        warn!(
+            audit = true,
+            action = "authorization",
+            outcome = "failure",
+            reason = "route_tenant_mismatch",
+            status = 403,
+            route_id = %route.id,
+            "Request denied"
+        );
+        return Err(Box::new(
+            crate::auth::middleware::AuthError::forbidden("Route belongs to another tenant")
+                .into_response(),
+        ));
+    }
     Ok(())
 }
 

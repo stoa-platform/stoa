@@ -648,6 +648,210 @@ pub(crate) mod tests {
         );
     }
 
+    /// A `tenant-a` contract route (`inboundAuth: jwt`) with a route credential,
+    /// served by a wiremock backend on the same server as the OIDC discovery.
+    async fn tenant_bound_route_state() -> (crate::state::AppState, String, wiremock::MockServer) {
+        use crate::uac::binders::ProtocolBinder;
+        use wiremock::{matchers::method, Mock, ResponseTemplate};
+
+        let (validator, issuer, server) = validator_against_test_key().await;
+        Mock::given(method("GET"))
+            .and(wiremock::matchers::path("/upstream/ping"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("accepted"))
+            .mount(&server)
+            .await;
+        let mut state = crate::state::AppState::new(crate::config::Config::default());
+        state.jwt_validator = Some(Arc::new(validator));
+        let contract: crate::uac::UacContractSpec = serde_json::from_value(serde_json::json!({
+            "name": "orders", "tenant_id": "tenant-a", "version": "1", "status": "published",
+            "inboundAuth": "jwt",
+            "endpoints": [{"path": "/ping", "methods": ["GET"],
+                "backend_url": format!("{}/upstream/ping", server.uri())}]
+        }))
+        .expect("contract");
+        assert!(contract.validate().is_empty());
+        crate::uac::binders::rest::RestBinder::with_policies(
+            state.route_registry.clone(),
+            state.policy_registry.clone(),
+        )
+        .bind(&contract)
+        .await
+        .expect("bind");
+        state.contract_registry.upsert(contract);
+        state
+            .credential_store
+            .upsert(crate::proxy::credentials::BackendCredential {
+                route_id: "uac:tenant-a:orders:0".into(),
+                auth_type: crate::proxy::credentials::AuthType::ApiKey,
+                header_name: "X-Backend-Key".into(),
+                header_value: "route-level-tenant-a".into(),
+                oauth2: None,
+                allowed_origin: None,
+                shared_with_tenants: false,
+            });
+        (state, issuer, server)
+    }
+
+    async fn call_tenant_route(
+        state: &crate::state::AppState,
+        token: &str,
+    ) -> axum::response::Response {
+        let request = axum::http::Request::builder()
+            .uri("/apis/tenant-a/orders/ping")
+            .header("Authorization", format!("Bearer {token}"))
+            .body(axum::body::Body::empty())
+            .expect("request");
+        crate::proxy::dynamic::dynamic_proxy(axum::extract::State(state.clone()), request).await
+    }
+
+    /// Backend requests received on `/upstream/ping`, with their credential header.
+    async fn forwarded_credentials(server: &wiremock::MockServer) -> Vec<Option<String>> {
+        server
+            .received_requests()
+            .await
+            .unwrap_or_default()
+            .iter()
+            .filter(|request| request.url.path() == "/upstream/ping")
+            .map(|request| {
+                request
+                    .headers
+                    .get("x-backend-key")
+                    .and_then(|value| value.to_str().ok())
+                    .map(str::to_string)
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn regression_route_tenant_token_of_same_tenant_forwards_credential() {
+        let (state, issuer, server) = tenant_bound_route_state().await;
+        let token = mint_tenant_payload(&issuer, serde_json::json!({"tenant_id": "tenant-a"}));
+        let response = call_tenant_route(&state, &token).await;
+        assert_eq!(response.status(), axum::http::StatusCode::OK);
+        assert_eq!(
+            forwarded_credentials(&server).await,
+            vec![Some("route-level-tenant-a".to_string())]
+        );
+    }
+
+    #[tokio::test]
+    async fn regression_route_tenant_token_of_other_tenant_is_403_without_backend_call() {
+        let (state, issuer, server) = tenant_bound_route_state().await;
+        // Same issuer, same signing key, same shared audience: only the tenant differs.
+        let token = mint_tenant_payload(&issuer, serde_json::json!({"tenant_id": "tenant-b"}));
+        let response = call_tenant_route(&state, &token).await;
+        assert_eq!(response.status(), axum::http::StatusCode::FORBIDDEN);
+        assert!(
+            forwarded_credentials(&server).await.is_empty(),
+            "the backend must not be called and the credential must not be sent"
+        );
+    }
+
+    #[tokio::test]
+    async fn regression_route_tenant_token_without_tenant_is_403() {
+        let (state, issuer, server) = tenant_bound_route_state().await;
+        let token = mint_tenant_payload(&issuer, serde_json::json!({}));
+        let response = call_tenant_route(&state, &token).await;
+        assert_eq!(response.status(), axum::http::StatusCode::FORBIDDEN);
+        assert!(forwarded_credentials(&server).await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn regression_route_tenant_platform_admin_needs_route_tenant() {
+        let (state, issuer, server) = tenant_bound_route_state().await;
+        // A cpi-admin token without a tenant passes JWT validation, but carries
+        // no tenant: there is no implicit admin exemption on tenant routes.
+        let admin = mint_tenant_payload(
+            &issuer,
+            serde_json::json!({"realm_access": {"roles": ["cpi-admin"]}}),
+        );
+        let response = call_tenant_route(&state, &admin).await;
+        assert_eq!(response.status(), axum::http::StatusCode::FORBIDDEN);
+        // An admin token scoped to another tenant is refused as well.
+        let admin_b = mint_tenant_payload(
+            &issuer,
+            serde_json::json!({"tenant_id": "tenant-b", "realm_access": {"roles": ["cpi-admin"]}}),
+        );
+        let response = call_tenant_route(&state, &admin_b).await;
+        assert_eq!(response.status(), axum::http::StatusCode::FORBIDDEN);
+        assert!(forwarded_credentials(&server).await.is_empty());
+        // An admin token scoped to the route tenant is accepted.
+        let admin_a = mint_tenant_payload(
+            &issuer,
+            serde_json::json!({"tenant_id": "tenant-a", "realm_access": {"roles": ["cpi-admin"]}}),
+        );
+        let response = call_tenant_route(&state, &admin_a).await;
+        assert_eq!(response.status(), axum::http::StatusCode::OK);
+        assert_eq!(
+            forwarded_credentials(&server).await,
+            vec![Some("route-level-tenant-a".to_string())]
+        );
+    }
+
+    #[tokio::test]
+    async fn regression_route_tenant_enforced_end_to_end_with_rs256_jwks() {
+        let (state, issuer, server) = tenant_bound_route_state().await;
+        let cases = [
+            (serde_json::json!({"tenant_id": "tenant-a"}), 200),
+            (serde_json::json!({"tenant_id": "tenant-b"}), 403),
+            (serde_json::json!({"tenant_id": "TENANT-A"}), 403),
+            (serde_json::json!({}), 403),
+            (
+                serde_json::json!({"realm_access": {"roles": ["cpi-admin"]}}),
+                403,
+            ),
+        ];
+        for (extra, expected) in cases {
+            let token = mint_tenant_payload(&issuer, extra.clone());
+            let response = call_tenant_route(&state, &token).await;
+            assert_eq!(response.status().as_u16(), expected, "claims: {extra}");
+        }
+        // A token signed by the right key for the wrong issuer stays a 401.
+        let foreign = mint_tenant_payload(
+            "http://other-issuer.invalid/realms/stoa",
+            serde_json::json!({"tenant_id": "tenant-a"}),
+        );
+        assert_eq!(
+            call_tenant_route(&state, &foreign).await.status().as_u16(),
+            401
+        );
+        assert_eq!(
+            forwarded_credentials(&server).await,
+            vec![Some("route-level-tenant-a".to_string())],
+            "only the same-tenant call reaches the backend"
+        );
+    }
+
+    #[tokio::test]
+    async fn regression_route_tenant_refusal_leaves_lb_state_untouched() {
+        let (state, issuer, _server) = tenant_bound_route_state().await;
+        let upstream_url = "http://tenant-lb-regression-upstream.invalid:9";
+        let mut route = (*state
+            .route_registry
+            .get("uac:tenant-a:orders:0")
+            .expect("bound route"))
+        .clone();
+        route.upstreams = vec![crate::lb::Upstream {
+            url: upstream_url.into(),
+            weight: 1,
+            health_check_path: None,
+        }];
+        state.route_registry.upsert(route);
+
+        let gauge = crate::metrics::LB_UPSTREAM_ACTIVE.with_label_values(&[upstream_url]);
+        let before = gauge.get();
+        let token = mint_tenant_payload(&issuer, serde_json::json!({"tenant_id": "tenant-b"}));
+        for _ in 0..3 {
+            let response = call_tenant_route(&state, &token).await;
+            assert_eq!(response.status(), axum::http::StatusCode::FORBIDDEN);
+        }
+        assert_eq!(
+            gauge.get(),
+            before,
+            "a refused call must not select an upstream"
+        );
+    }
+
     #[tokio::test]
     async fn regression_signed_tenant_claim_contract() {
         let (validator, issuer, _server) = validator_against_test_key().await;

@@ -158,6 +158,10 @@ def _convert_tool_to_response(tool: ExternalMCPServerTool) -> ExternalMCPServerT
 
 admin_router = APIRouter(prefix="/v1/admin/external-mcp-servers", tags=["External MCP Servers - Admin"])
 
+# Returned when credentials were supplied but the secret store could not save
+# them: the server is not created or changed, so it never runs without them.
+SECRET_STORE_UNAVAILABLE_DETAIL = "Secret store unavailable; credentials were not saved. Retry later."
+
 
 @admin_router.get("", response_model=ExternalMCPServerListResponse)
 async def list_servers(
@@ -237,18 +241,20 @@ async def create_server(
         created_by=user.id,
     )
 
-    # Store credentials in Vault if provided (graceful degradation if Vault unavailable)
+    # Store credentials in Vault if provided; a store failure refuses the request (503)
     if request.credentials and request.auth_type != AuthTypeEnum.NONE:
         try:
             vault = get_vault_client()
             credentials_dict = request.credentials.model_dump(exclude_none=True)
             vault_path = await vault.store_credential(str(server.id), credentials_dict)
-            if vault_path:
-                server.credential_vault_path = vault_path
-            else:
-                logger.warning("Vault unavailable — credentials not stored for server %s", server.name)
         except Exception as e:
-            logger.warning(f"Vault error — credentials not stored: {e}")
+            logger.warning("Secret store error — server not created: %s", type(e).__name__)
+            raise HTTPException(status_code=503, detail=SECRET_STORE_UNAVAILABLE_DETAIL) from None
+        if not vault_path:
+            # Secret store disabled: saving the server would drop the supplied credentials.
+            logger.warning("Secret store disabled — server not created: credentials supplied")
+            raise HTTPException(status_code=503, detail=SECRET_STORE_UNAVAILABLE_DETAIL)
+        server.credential_vault_path = vault_path
 
     try:
         server = await repo.create(server)
@@ -327,18 +333,22 @@ async def update_server(
     if request.gateway_instance_id is not None:
         server.gateway_instance_id = request.gateway_instance_id
 
-    # Update credentials in Vault if provided (graceful degradation)
+    # Update credentials in Vault if provided; a store failure refuses the request (503)
     if request.credentials:
         try:
             vault = get_vault_client()
             credentials_dict = request.credentials.model_dump(exclude_none=True)
             vault_path = await vault.store_credential(str(server.id), credentials_dict)
-            if vault_path:
-                server.credential_vault_path = vault_path
-            else:
-                logger.warning("Vault unavailable — credentials not updated for server %s", server.name)
         except Exception as e:
-            logger.warning(f"Vault error — credentials not updated: {e}")
+            await db.rollback()
+            logger.warning("Secret store error — server not updated: %s", type(e).__name__)
+            raise HTTPException(status_code=503, detail=SECRET_STORE_UNAVAILABLE_DETAIL) from None
+        if not vault_path:
+            # Secret store disabled: saving the server would drop the supplied credentials.
+            await db.rollback()
+            logger.warning("Secret store disabled — server not updated: credentials supplied")
+            raise HTTPException(status_code=503, detail=SECRET_STORE_UNAVAILABLE_DETAIL)
+        server.credential_vault_path = vault_path
 
     try:
         server = await repo.update(server)

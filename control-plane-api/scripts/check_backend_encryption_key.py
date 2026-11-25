@@ -28,14 +28,14 @@ import json
 import subprocess
 import sys
 
-OK, ABSENT, EMPTY, NO_SECRET, KUBECTL_ERROR = 0, 1, 2, 3, 4
+OK, ABSENT, EMPTY, MISSING_RESOURCE, KUBECTL_ERROR = 0, 1, 2, 3, 4
 
 
-def classify(secret: dict, key: str) -> int:
-    data = secret.get("data") or {}
-    if key not in data:
+def classify(document: dict, field: str) -> int:
+    data = document.get("data") or {}
+    if field not in data:
         return ABSENT
-    encoded = data[key] or ""
+    encoded = data[field] or ""
     try:
         decoded = base64.b64decode(encoded, validate=True)
     except (binascii.Error, ValueError):
@@ -43,7 +43,7 @@ def classify(secret: dict, key: str) -> int:
     return OK if decoded.strip() else EMPTY
 
 
-def read_secret(namespace: str, name: str, context: str | None, timeout: float) -> tuple[int, dict | None]:
+def fetch_resource(namespace: str, name: str, context: str | None, timeout: float) -> tuple[int, dict | None]:
     command = ["kubectl", "get", "secret", name, "--namespace", namespace, "--output", "json"]
     if context:
         command += ["--context", context]
@@ -52,19 +52,19 @@ def read_secret(namespace: str, name: str, context: str | None, timeout: float) 
     except (OSError, subprocess.TimeoutExpired):
         return KUBECTL_ERROR, None
     if result.returncode != 0:
-        return (NO_SECRET if "NotFound" in result.stderr else KUBECTL_ERROR), None
+        return (MISSING_RESOURCE if "NotFound" in result.stderr else KUBECTL_ERROR), None
     try:
-        secret = json.loads(result.stdout)
+        document = json.loads(result.stdout)
     except json.JSONDecodeError:
         return KUBECTL_ERROR, None
-    return OK, secret if isinstance(secret, dict) else {}
+    return OK, document if isinstance(document, dict) else {}
 
 
 MESSAGES = {
     OK: "present",
     ABSENT: "absent",
     EMPTY: "empty",
-    NO_SECRET: "secret not found",
+    MISSING_RESOURCE: "secret not found",
     KUBECTL_ERROR: "kubectl failed (no details shown)",
 }
 
@@ -72,18 +72,19 @@ MESSAGES = {
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--namespace", default="stoa-system")
-    parser.add_argument("--secret", default="stoa-control-plane-api-secrets")
-    parser.add_argument("--key", default="BACKEND_ENCRYPTION_KEY")
+    # dest names are neutral: they hold resource names, never a value.
+    parser.add_argument("--secret", dest="resource", default="stoa-control-plane-api-secrets")
+    parser.add_argument("--key", dest="field", default="BACKEND_ENCRYPTION_KEY")
     parser.add_argument("--context", default=None)
     parser.add_argument("--timeout", type=float, default=30.0)
     args = parser.parse_args(argv)
 
-    status, secret = read_secret(args.namespace, args.secret, args.context, args.timeout)
-    if status == OK and secret is not None:
-        status = classify(secret, args.key)
-    del secret
+    status, document = fetch_resource(args.namespace, args.resource, args.context, args.timeout)
+    if status == OK and document is not None:
+        status = classify(document, args.field)
+    del document
     stream = sys.stdout if status == OK else sys.stderr
-    print(f"{args.key} in {args.namespace}/{args.secret}: {MESSAGES[status]}", file=stream)
+    print(f"{args.field} in {args.namespace}/{args.resource}: {MESSAGES[status]}", file=stream)
     return status
 
 

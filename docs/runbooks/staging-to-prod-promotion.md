@@ -26,29 +26,6 @@ The `promote-to-prod.yml` workflow promotes a dev-tagged Docker image from GHCR 
 3. Settings > Environments > prod > Environment secrets > Add secret
 4. The reusable-promote workflow declares `environment: prod` to access this secret
 
-## Before promoting the Control Plane API
-
-Check that the backend encryption key is set in the target cluster. The check
-prints only `present`, `absent` or `empty`, never the value:
-
-```bash
-python3 control-plane-api/scripts/check_backend_encryption_key.py \
-  --namespace stoa-system --secret stoa-control-plane-api-secrets --context <prod-context>
-```
-
-| Exit code | Meaning | Action |
-|-----------|---------|--------|
-| 0 | `BACKEND_ENCRYPTION_KEY` present and non-empty | Promote |
-| 1 | Key absent from the Secret | Stop; have the key added to the Secret |
-| 2 | Key empty or not valid base64 | Stop; have the key set |
-| 3 | Secret not found | Stop; check namespace, context and Secret name |
-| 4 | kubectl failed (access, context) | Fix access and rerun |
-
-Without the key, production falls back to the public development key and logs
-an error. Setting `BACKEND_ENCRYPTION_KEY_REQUIRED=true` makes the API refuse
-to start instead; it is off by default, so enable it only once this check
-passes in every environment.
-
 ## How to promote
 
 ### Via GitHub Actions UI

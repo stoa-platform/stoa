@@ -9,6 +9,7 @@ This directory contains operational procedures for incident management on the ST
 ## Runbook Index
 
 - [Site Backup, Restore and Verification](site-backup-restore.md): recovery inventory, offline key custody and acceptance gates for site operators.
+- [Control Plane API Backend Encryption Key Check](control-plane-api-encryption-key-check.md): pre-deployment check that the key is set, without showing it.
 - [Messaging HA Failover Proof](messaging-failover-proof.md): reproducible local proof that the retained three-broker sizing survives the loss of one broker.
 
 ### Critical (Immediate action required)

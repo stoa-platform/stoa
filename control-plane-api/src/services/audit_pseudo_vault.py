@@ -25,7 +25,7 @@ def _authenticated_vault_client() -> hvac.Client:
     if not settings.VAULT_ENABLED:
         raise VaultPseudoWrapError("Vault is disabled; refusing to store raw pseudonymization key")
 
-    client = hvac.Client(url=settings.VAULT_ADDR)
+    client = hvac.Client(url=settings.VAULT_ADDR, timeout=settings.VAULT_TIMEOUT_SECONDS)
 
     jwt_path = "/var/run/secrets/kubernetes.io/serviceaccount/token"
     if settings.VAULT_KUBERNETES_ROLE and os.path.exists(jwt_path):

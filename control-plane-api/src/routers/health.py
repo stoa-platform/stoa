@@ -6,6 +6,9 @@ K8s-standard health endpoints for pod monitoring:
 - /health/startup - Startup probe (boot complete)
 """
 
+import asyncio
+import logging
+import time
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException
@@ -16,6 +19,8 @@ from ..services import kafka_service, keycloak_service
 from ..services.gateway_service import gateway_service
 from ..services.git_provider import git_provider_factory
 from ..services.vault_client import get_vault_client
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/health", tags=["Health"])
 
@@ -48,6 +53,59 @@ def _check_gateway_connected() -> bool:
     if settings.GATEWAY_USE_OIDC_PROXY:
         return True  # Proxy mode is always available
     return gateway_service._client is not None
+
+
+# The secrets store is not a readiness dependency, but checking it is a
+# blocking network call. It runs in a worker thread, bounded by this timeout,
+# and its result is reused for the TTL so probes never queue behind it.
+VAULT_READINESS_TIMEOUT_SECONDS = 2.0
+VAULT_READINESS_CACHE_TTL_SECONDS = 30.0
+_vault_readiness_cache: tuple[float, str] | None = None
+_vault_readiness_task: asyncio.Future[bool] | None = None
+
+
+def _reset_vault_readiness_cache() -> None:
+    """Forget the cached secrets-store status (tests, client reset)."""
+    global _vault_readiness_cache, _vault_readiness_task
+    _vault_readiness_cache = None
+    _vault_readiness_task = None
+
+
+def _check_error(name: str, error: Exception) -> str:
+    """Readiness status for a failed check: fixed in the response, exception type in the logs."""
+    logger.warning("Readiness check %s failed: %s", name, type(error).__name__)
+    return "error"
+
+
+async def _vault_readiness_status() -> str:
+    """Secrets-store status for /health/ready, never blocking the event loop.
+
+    At most one check runs at a time; a check still running after the timeout
+    reports "timeout" and that result is cached like any other.
+    """
+    global _vault_readiness_cache, _vault_readiness_task
+
+    now = time.monotonic()
+    if _vault_readiness_cache is not None and now - _vault_readiness_cache[0] < VAULT_READINESS_CACHE_TTL_SECONDS:
+        return _vault_readiness_cache[1]
+
+    vault = get_vault_client()
+    if not vault.enabled:
+        return "disabled"
+
+    if _vault_readiness_task is None or _vault_readiness_task.done():
+        _vault_readiness_task = asyncio.ensure_future(asyncio.to_thread(vault.health_check))
+
+    try:
+        healthy = await asyncio.wait_for(asyncio.shield(_vault_readiness_task), VAULT_READINESS_TIMEOUT_SECONDS)
+        status = "ok" if healthy else "disconnected"
+    except TimeoutError:
+        status = "timeout"
+    except Exception:
+        status = "error"
+
+    _vault_readiness_cache = (time.monotonic(), status)
+    return status
 
 
 class HealthCheck(BaseModel):
@@ -100,7 +158,7 @@ async def readiness():
             if not kafka_healthy:
                 all_healthy = False
         except Exception as e:
-            checks["kafka"] = f"error: {e!s}"
+            checks["kafka"] = _check_error("kafka", e)
             all_healthy = False
     else:
         checks["kafka"] = "disabled"
@@ -112,7 +170,7 @@ async def readiness():
         if not keycloak_healthy:
             all_healthy = False
     except Exception as e:
-        checks["keycloak"] = f"error: {e!s}"
+        checks["keycloak"] = _check_error("keycloak", e)
         all_healthy = False
 
     # Check git provider connection (non-critical)
@@ -120,26 +178,21 @@ async def readiness():
         git_healthy = _check_git_connected()
         checks["git"] = "ok" if git_healthy else "disconnected"
     except Exception as e:
-        checks["git"] = f"error: {e!s}"
+        checks["git"] = _check_error("git", e)
 
     # Check Gateway connection (non-critical)
     try:
         gateway_healthy = _check_gateway_connected()
         checks["gateway"] = "ok" if gateway_healthy else "disconnected"
     except Exception as e:
-        checks["gateway"] = f"error: {e!s}"
+        checks["gateway"] = _check_error("gateway", e)
 
-    # Check Vault connection (non-critical — MCP credentials feature)
+    # Check Vault connection (non-critical — MCP credentials feature).
+    # Bounded and cached: a slow secrets store must not hold the probe.
     try:
-        vault = get_vault_client()
-        if not vault.enabled:
-            checks["vault"] = "disabled"
-        elif vault.health_check():
-            checks["vault"] = "ok"
-        else:
-            checks["vault"] = "disconnected"
+        checks["vault"] = await _vault_readiness_status()
     except Exception as e:
-        checks["vault"] = f"error: {e!s}"
+        checks["vault"] = _check_error("vault", e)
 
     status = "healthy" if all_healthy else "degraded"
 

@@ -9,8 +9,11 @@ route. The dynamic proxy then requires a Keycloak RS256 bearer:
 - expired token → `401` (`Token expired`)
 - token the realm key did not sign → `401` (`Invalid token`)
 
-A contract with no such policy is unchanged, including when classification
-still lists advisory `auth-jwt`. Audience validation stays off.
+A contract with no such policy is deny-by-default: its REST routes answer
+`401` (`error="invalid_request"`), including when classification still lists
+advisory `auth-jwt`. Set `public: true` on the contract to allow anonymous
+callers explicitly. A route-level backend credential is never forwarded for a
+caller without an identity. Audience validation stays off.
 
 Issuer is `{STOA_KEYCLOAK_URL}/realms/{STOA_KEYCLOAK_REALM}`.
 

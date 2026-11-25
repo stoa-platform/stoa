@@ -79,6 +79,7 @@ impl RestBinder {
                     upstreams: vec![],
                     load_balancer: Default::default(),
                     trusted_backend: true,
+                    public: contract.allows_anonymous_rest(),
                 }
             })
             .collect()
@@ -186,6 +187,25 @@ mod tests {
             },
         ];
         spec
+    }
+
+    #[test]
+    fn generated_routes_are_not_public_by_default() {
+        let routes = RestBinder::generate_routes(&sample_contract());
+        assert!(routes.iter().all(|route| !route.public));
+    }
+
+    #[test]
+    fn generated_routes_follow_explicit_public_opt_in() {
+        let mut contract = sample_contract();
+        contract.public = true;
+        let routes = RestBinder::generate_routes(&contract);
+        assert!(routes.iter().all(|route| route.public));
+
+        // A JWT requirement always wins over the public flag.
+        contract.inbound_auth = Some("jwt".into());
+        let routes = RestBinder::generate_routes(&contract);
+        assert!(routes.iter().all(|route| !route.public));
     }
 
     #[test]
@@ -343,6 +363,7 @@ mod tests {
             upstreams: vec![],
             load_balancer: Default::default(),
             trusted_backend: false,
+            public: false,
         });
 
         let contract = sample_contract();

@@ -72,6 +72,11 @@ pub struct ApiRoute {
     /// Only URLs from untrusted sources (OAuth2 token endpoints, consumer-provided) need SSRF validation.
     #[serde(default)]
     pub trusted_backend: bool,
+    /// Contract-generated route explicitly opened to anonymous callers
+    /// (`public: true` on the contract). Only read when `contract_key` is set:
+    /// contract routes without JWT caller authentication answer 401 otherwise.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub public: bool,
 }
 
 /// Snapshot of the full route table (immutable once created).
@@ -215,6 +220,7 @@ mod tests {
             upstreams: vec![],
             load_balancer: LbStrategy::default(),
             trusted_backend: false,
+            public: false,
         }
     }
 

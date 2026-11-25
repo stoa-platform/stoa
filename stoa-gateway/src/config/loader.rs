@@ -67,6 +67,10 @@ pub enum ConfigError {
     #[error("poc_agents_enabled=true is not permitted when environment=prod")]
     PocAgentsForbiddenInProd,
 
+    /// Skipping LLM proxy subscription validation is a local-only mode.
+    #[error("llm_proxy_skip_validation=true is not permitted when environment=prod")]
+    LlmProxySkipValidationForbiddenInProd,
+
     /// Local agent admission needs positive capacities and window.
     #[error(
         "poc_agents_enabled=true requires positive poc_max_admission_entries, \
@@ -247,6 +251,10 @@ impl Config {
 
         if self.poc_agents_enabled && self.environment == super::Environment::Prod {
             return Err(ConfigError::PocAgentsForbiddenInProd);
+        }
+
+        if self.llm_proxy_skip_validation && self.environment == super::Environment::Prod {
+            return Err(ConfigError::LlmProxySkipValidationForbiddenInProd);
         }
 
         if self.poc_agents_enabled
@@ -694,6 +702,66 @@ mod tests {
                 cfg.validate(),
                 Err(ConfigError::PocAgentsForbiddenInProd)
             ));
+            Ok(())
+        });
+    }
+
+    #[test]
+    #[allow(clippy::result_large_err)] // figment::Jail closure returns Result<(), figment::Error>
+    fn test_validate_rejects_llm_proxy_skip_validation_in_prod() {
+        let prod_skip = Config {
+            environment: super::super::Environment::Prod,
+            mcp_audience: Some("stoa-mcp".to_string()),
+            llm_proxy_skip_validation: true,
+            ..Config::default()
+        };
+        assert!(matches!(
+            prod_skip.validate(),
+            Err(ConfigError::LlmProxySkipValidationForbiddenInProd)
+        ));
+
+        let prod_validated = Config {
+            llm_proxy_skip_validation: false,
+            ..prod_skip
+        };
+        prod_validated
+            .validate()
+            .expect("prod with LLM proxy validation must validate");
+
+        for env in [
+            super::super::Environment::Dev,
+            super::super::Environment::Staging,
+        ] {
+            let non_prod = Config {
+                environment: env,
+                llm_proxy_skip_validation: true,
+                ..Config::default()
+            };
+            non_prod
+                .validate()
+                .expect("non-prod with skip validation must validate");
+        }
+
+        figment::Jail::expect_with(|jail| {
+            jail.clear_env();
+            jail.set_env("STOA_ENVIRONMENT", "prod");
+            jail.set_env("STOA_MCP_AUDIENCE", "stoa-mcp");
+            jail.set_env("STOA_LLM_PROXY_SKIP_VALIDATION", "true");
+            let cfg = Config::load().expect("load");
+            assert!(matches!(
+                cfg.validate(),
+                Err(ConfigError::LlmProxySkipValidationForbiddenInProd)
+            ));
+            Ok(())
+        });
+
+        figment::Jail::expect_with(|jail| {
+            jail.clear_env();
+            jail.set_env("STOA_ENVIRONMENT", "staging");
+            jail.set_env("STOA_LLM_PROXY_SKIP_VALIDATION", "true");
+            let cfg = Config::load().expect("load");
+            cfg.validate()
+                .expect("staging with skip validation must start");
             Ok(())
         });
     }

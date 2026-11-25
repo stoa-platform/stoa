@@ -851,6 +851,7 @@ pub struct Config {
     /// Skip API key validation against Control Plane (local dogfood mode).
     /// When true, the LLM proxy accepts any API key without CP subscription check.
     /// NEVER enable in production — use only for local `stoa-dogfood.sh` testing.
+    /// Startup is refused when `environment=prod` and this flag is set.
     /// Env: STOA_LLM_PROXY_SKIP_VALIDATION
     #[serde(default)]
     pub llm_proxy_skip_validation: bool,

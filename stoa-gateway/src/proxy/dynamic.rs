@@ -232,6 +232,18 @@ pub async fn dynamic_proxy(State(state): State<AppState>, mut request: Request<B
             record_proxy_status(401);
             return *response;
         }
+    } else if contract_route_denies_by_default(&route) {
+        // Contract routes without caller authentication are deny-by-default.
+        // Opening them requires an explicit `public: true` on the contract.
+        warn!(
+            route_id = %route.id,
+            "Contract route has no caller authentication and is not public"
+        );
+        record_proxy_status(401);
+        return bearer_unauthorized(
+            "invalid_request",
+            "This route requires caller authentication (set inbound_auth on the contract, or public: true to allow anonymous access)",
+        );
     }
 
     // Soft-mode classification enforcement (CAB-1299)
@@ -363,8 +375,13 @@ pub async fn dynamic_proxy(State(state): State<AppState>, mut request: Request<B
     // Per-consumer credential injection (CAB-1432) with BYOK fallback (CAB-1250 + CAB-1317)
     // 1. Try consumer-specific credential (from JWT sub claim)
     // 2. Fall back to route-level BYOK credential
+    // 3. Never forward a route-level credential for a caller without an identity
+    let has_identity = request
+        .extensions()
+        .get::<crate::auth::middleware::AuthenticatedUser>()
+        .is_some();
     let consumer_id = extract_user_id(request.extensions());
-    let consumer_cred = if consumer_id != "anonymous" {
+    let consumer_cred = if has_identity {
         state.consumer_credential_store.get(&route.id, &consumer_id)
     } else {
         None
@@ -373,6 +390,17 @@ pub async fn dynamic_proxy(State(state): State<AppState>, mut request: Request<B
         Some((cc.header_name.clone(), cc.header_value.clone()))
     } else {
         let credential = state.credential_store.get(&route.id);
+        if credential.is_some() && !has_identity {
+            warn!(
+                route_id = %route.id,
+                "Route credential not forwarded: caller has no identity"
+            );
+            record_proxy_status(401);
+            return bearer_unauthorized(
+                "invalid_request",
+                "This route requires caller authentication",
+            );
+        }
         match resolve_credential_header(&state, &route.id, credential.as_ref()).await {
             Ok(header) => header,
             Err(response) => {
@@ -1040,6 +1068,13 @@ fn published_route_requires_jwt(state: &AppState, route: &crate::routes::ApiRout
     })
 }
 
+/// Contract-generated routes need caller authentication unless the contract
+/// explicitly opted in with `public: true`. Routes registered directly through
+/// `/admin/apis` (no `contract_key`) keep their existing behaviour.
+fn contract_route_denies_by_default(route: &crate::routes::ApiRoute) -> bool {
+    route.contract_key.is_some() && !route.public
+}
+
 /// Validate the caller JWT before proxying a route that has `jwt_validation`.
 ///
 /// Missing validator, missing bearer, and invalid tokens all return 401 with
@@ -1170,6 +1205,7 @@ mod tests {
             upstreams: vec![],
             load_balancer: Default::default(),
             trusted_backend: true,
+            public: false,
         }
     }
 
@@ -1201,12 +1237,185 @@ mod tests {
             .unwrap()
     }
 
+    fn www_authenticate(response: &axum::response::Response) -> String {
+        response
+            .headers()
+            .get(axum::http::header::WWW_AUTHENTICATE)
+            .expect("WWW-Authenticate header")
+            .to_str()
+            .unwrap()
+            .to_string()
+    }
+
+    fn route_credential(route_id: &str) -> crate::proxy::credentials::BackendCredential {
+        crate::proxy::credentials::BackendCredential {
+            route_id: route_id.into(),
+            auth_type: crate::proxy::credentials::AuthType::ApiKey,
+            header_name: "X-Backend-Key".into(),
+            header_value: "route-level-test-value".into(),
+            oauth2: None,
+            allowed_origin: None,
+            shared_with_tenants: false,
+        }
+    }
+
+    fn identified_user() -> crate::auth::middleware::AuthenticatedUser {
+        let now = chrono::Utc::now().timestamp();
+        let claims: crate::auth::claims::Claims = serde_json::from_value(serde_json::json!({
+            "sub": "consumer-1",
+            "exp": now + 3600,
+            "iat": now,
+            "iss": "https://issuer.invalid/realms/stoa",
+            "aud": "stoa",
+        }))
+        .expect("claims");
+        crate::auth::middleware::AuthenticatedUser {
+            user_id: "consumer-1".into(),
+            username: None,
+            email: None,
+            tenant_id: Some("demo".into()),
+            claims,
+            raw_token: String::new(),
+        }
+    }
+
+    /// Call the proxy, optionally with an identity already established by an
+    /// upstream middleware.
+    async fn call_with_identity(
+        state: AppState,
+        identity: Option<crate::auth::middleware::AuthenticatedUser>,
+    ) -> axum::response::Response {
+        use axum::body::Body;
+        use axum::http::Request;
+        use tower::ServiceExt;
+
+        let app = axum::Router::new()
+            .fallback(dynamic_proxy)
+            .with_state(state);
+        let mut request = Request::builder()
+            .uri("/apis/demo/live-api/ping")
+            .body(Body::empty())
+            .unwrap();
+        if let Some(identity) = identity {
+            request.extensions_mut().insert(identity);
+        }
+        app.oneshot(request).await.unwrap()
+    }
+
     #[tokio::test]
-    async fn route_without_jwt_policy_is_not_challenged() {
+    async fn contract_route_without_inbound_auth_is_401() {
         let state = AppState::new(crate::config::Config::default());
         state.route_registry.upsert(ping_route());
+
+        let response = call(state.clone(), None).await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert!(www_authenticate(&response).contains("error=\"invalid_request\""));
+
+        // A bearer does not open a route that declares no caller authentication.
+        let response = call(state, Some("any-token")).await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn public_contract_route_is_not_challenged() {
+        let state = AppState::new(crate::config::Config::default());
+        let mut route = ping_route();
+        route.public = true;
+        state.route_registry.upsert(route);
         let response = call(state, None).await;
         assert_ne!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn admin_route_without_contract_is_unchanged() {
+        let state = AppState::new(crate::config::Config::default());
+        let mut route = ping_route();
+        route.id = "admin-ping".into();
+        route.contract_key = None;
+        state.route_registry.upsert(route);
+        let response = call(state, None).await;
+        assert_ne!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn route_credential_is_never_forwarded_without_identity() {
+        use wiremock::{matchers::any, Mock, MockServer, ResponseTemplate};
+
+        let backend = MockServer::start().await;
+        Mock::given(any())
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&backend)
+            .await;
+
+        let state = AppState::new(crate::config::Config::default());
+        let mut route = ping_route();
+        route.public = true;
+        route.backend_url = backend.uri();
+        state.credential_store.upsert(route_credential(&route.id));
+        state.route_registry.upsert(route);
+
+        let response = call_with_identity(state, None).await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert!(www_authenticate(&response).contains("error=\"invalid_request\""));
+        let received = backend.received_requests().await.unwrap_or_default();
+        assert!(
+            received.is_empty(),
+            "backend must not be called with the route credential for an anonymous caller"
+        );
+    }
+
+    #[tokio::test]
+    async fn admin_route_credential_is_never_forwarded_without_identity() {
+        use wiremock::{matchers::any, Mock, MockServer, ResponseTemplate};
+
+        let backend = MockServer::start().await;
+        Mock::given(any())
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&backend)
+            .await;
+
+        let state = AppState::new(crate::config::Config::default());
+        let mut route = ping_route();
+        route.id = "admin-ping".into();
+        route.contract_key = None;
+        route.backend_url = backend.uri();
+        state.credential_store.upsert(route_credential(&route.id));
+        state.route_registry.upsert(route);
+
+        let response = call_with_identity(state, None).await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        let received = backend.received_requests().await.unwrap_or_default();
+        assert!(received.is_empty());
+    }
+
+    #[tokio::test]
+    async fn route_credential_is_forwarded_for_identified_caller() {
+        use wiremock::{matchers::any, Mock, MockServer, ResponseTemplate};
+
+        let backend = MockServer::start().await;
+        Mock::given(any())
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&backend)
+            .await;
+
+        let state = AppState::new(crate::config::Config::default());
+        let mut route = ping_route();
+        route.public = true;
+        route.backend_url = backend.uri();
+        state.credential_store.upsert(route_credential(&route.id));
+        state.route_registry.upsert(route);
+
+        let response = call_with_identity(state, Some(identified_user())).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let received = backend.received_requests().await.unwrap_or_default();
+        assert_eq!(received.len(), 1);
+        assert_eq!(
+            received[0]
+                .headers
+                .get("x-backend-key")
+                .and_then(|value| value.to_str().ok()),
+            Some("route-level-test-value")
+        );
     }
 
     #[tokio::test]

@@ -198,6 +198,14 @@ pub struct UacContractSpec {
     /// Explicit policies. A `jwt_validation` entry is enforced on the REST proxy.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub policies: Vec<ContractPolicy>,
+    /// Explicit opt-in for anonymous access to the generated REST routes.
+    ///
+    /// REST routes of a contract without caller authentication (no JWT
+    /// `inbound_auth` and no `jwt_validation` policy) answer 401 unless this
+    /// is `true`. Route-level backend credentials are never forwarded for a
+    /// caller without an identity, even on a public contract.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub public: bool,
 }
 
 impl UacContractSpec {
@@ -227,6 +235,7 @@ impl UacContractSpec {
             inbound_auth: None,
             inbound_auth_audience: None,
             policies: Vec::new(),
+            public: false,
         }
     }
 
@@ -238,6 +247,14 @@ impl UacContractSpec {
                 .policies
                 .iter()
                 .any(|policy| is_jwt_validation_policy(&policy.policy_type))
+    }
+
+    /// True when the generated REST routes accept callers without an identity.
+    ///
+    /// Only an explicit `public: true` on a contract that does not require a
+    /// JWT opens the routes. Everything else is deny-by-default.
+    pub fn allows_anonymous_rest(&self) -> bool {
+        self.public && !self.requires_jwt_validation()
     }
 
     /// Recompute required_policies from the current classification.
@@ -283,6 +300,13 @@ impl UacContractSpec {
             if !self.requires_jwt_validation() {
                 errors.push("inbound_auth_audience requires JWT authentication".to_string());
             }
+        }
+
+        if self.public && self.requires_jwt_validation() {
+            errors.push(
+                "public: true cannot be combined with JWT inbound_auth or a jwt_validation policy"
+                    .to_string(),
+            );
         }
 
         // Validate LLM config if present
@@ -434,6 +458,36 @@ mod tests {
             round_trip.inbound_auth_audience.as_deref(),
             Some("items-read")
         );
+    }
+
+    #[test]
+    fn rest_routes_are_deny_by_default_unless_public() {
+        let mut spec = sample_contract();
+        assert!(!spec.public);
+        assert!(!spec.allows_anonymous_rest());
+
+        spec.public = true;
+        assert!(spec.allows_anonymous_rest());
+        assert!(spec.validate().is_empty());
+
+        spec.inbound_auth = Some("jwt".into());
+        assert!(!spec.allows_anonymous_rest());
+        assert!(spec
+            .validate()
+            .iter()
+            .any(|error| error.contains("public: true cannot be combined")));
+    }
+
+    #[test]
+    fn public_flag_parses_and_is_omitted_when_false() {
+        let parsed: UacContractSpec = serde_json::from_str(
+            r#"{"name":"open","version":"1.0.0","tenant_id":"demo","public":true,"endpoints":[]}"#,
+        )
+        .unwrap();
+        assert!(parsed.public);
+
+        let closed = serde_json::to_value(sample_contract()).expect("serialize");
+        assert!(closed.get("public").is_none());
     }
 
     #[test]

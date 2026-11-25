@@ -102,15 +102,29 @@ def map_quota_to_policy(app_spec: dict, subscription_id: str) -> dict | None:
     }
 
 
+def _non_empty_str(value: object) -> str | None:
+    """Return a stripped string, or None when the value is not a non-empty string."""
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
 def map_uac_to_stoa_contract(contract_spec: dict) -> dict:
     """Map a UacContractSpec dict to the stoa-gateway /admin/contracts payload.
 
     The gateway expects:
     {name, version, tenant_id, display_name, description, classification,
      endpoints: [{path, methods, backend_url, operation_id, input_schema, output_schema}],
-     required_policies, status, source_spec_url, spec_hash}
+     required_policies, status, source_spec_url, spec_hash,
+     inbound_auth?, inbound_auth_audience?, public?}
+
+    Caller authentication fields are optional and only sent when set:
+    - ``inbound_auth`` / ``inbound_auth_audience`` (also read from the
+      ``inboundAuth`` / ``inboundAuthAudience`` aliases) when non-empty strings;
+    - ``public`` only when it is the boolean ``True``. Gateways that do not know
+      the field ignore it, and an absent field means ``false``.
     """
-    return {
+    payload = {
         "name": contract_spec.get("name", ""),
         "version": contract_spec.get("version", "1.0.0"),
         "tenant_id": contract_spec.get("tenant_id", ""),
@@ -133,3 +147,15 @@ def map_uac_to_stoa_contract(contract_spec: dict) -> dict:
         "source_spec_url": contract_spec.get("source_spec_url"),
         "spec_hash": contract_spec.get("spec_hash"),
     }
+
+    inbound_auth = _non_empty_str(contract_spec.get("inbound_auth", contract_spec.get("inboundAuth")))
+    if inbound_auth is not None:
+        payload["inbound_auth"] = inbound_auth
+    inbound_auth_audience = _non_empty_str(
+        contract_spec.get("inbound_auth_audience", contract_spec.get("inboundAuthAudience"))
+    )
+    if inbound_auth_audience is not None:
+        payload["inbound_auth_audience"] = inbound_auth_audience
+    if contract_spec.get("public") is True:
+        payload["public"] = True
+    return payload

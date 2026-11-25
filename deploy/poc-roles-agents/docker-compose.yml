@@ -1,0 +1,100 @@
+services:
+  stoa-gateway:
+    build:
+      context: ../../stoa-gateway
+      dockerfile: Dockerfile
+      target: runtime-debian
+    networks:
+      - mcp-net
+      - upstream-net
+    environment:
+      STOA_HOST: "0.0.0.0"
+      STOA_PORT: "8080"
+      STOA_LOG_LEVEL: "info"
+      STOA_AUTO_REGISTER: "false"
+      STOA_ADMIN_ROUTES_DISABLED: "true"
+      STOA_POLICY_ENABLED: "true"
+      STOA_POLICY_PATH: "/etc/stoa/poc/opa/policy.rego"
+      STOA_POLICY_TRUST_JWKS_FILE: "/etc/stoa/poc/trust-jwks.json"
+      STOA_POLICY_LOCAL_ARTIFACTS_DIR: "/etc/stoa/poc/policies"
+      STOA_POLICY_BOOT_TENANTS: "acme"
+      STOA_POLICY_EXPECTED_ISSUER: "stoa-poc-policy"
+      STOA_POLICY_AUDIENCE: "stoa-gateway"
+      STOA_POC_AGENTS_ENABLED: "true"
+      STOA_POC_BOOTSTRAP_SECRET: "${STOA_POC_BOOTSTRAP_SECRET}"
+      STOA_POC_UAC_CONTRACTS_DIR: "/etc/stoa/poc/contracts"
+      STOA_POC_CREDENTIALS_FILE: "/etc/stoa/poc/credentials.json"
+      STOA_POC_PUBLIC_BASE_URL: "http://stoa-gateway:8080"
+      STOA_POC_ROLE_ARTIFACTS_DIR: "/etc/stoa/poc/roles"
+      STOA_POC_ROLE_FLOOR_DIR: "/tmp/stoa-poc-floors"
+      STOA_POC_OUTBOUND_ALLOWED_ORIGINS: "http://upstream-mock:9000"
+      STOA_POC_CHAIN_BUDGET: "${STOA_POC_CHAIN_BUDGET:-50}"
+      STOA_POC_CALLER_BUDGET: "${STOA_POC_CALLER_BUDGET:-100}"
+      STOA_POC_MAX_REVOKED_CHAINS: "${STOA_POC_MAX_REVOKED_CHAINS:-10000}"
+      STOA_POC_MAX_ADMISSION_ENTRIES: "${STOA_POC_MAX_ADMISSION_ENTRIES:-10000}"
+      STOA_POC_CALLER_BUDGET_WINDOW_SECS: "${STOA_POC_CALLER_BUDGET_WINDOW_SECS:-900}"
+    volumes:
+      - role-floors:/tmp/stoa-poc-floors
+      - "${STOA_POC_RUNTIME_DIR:-./.runtime}/trust-jwks.json:/etc/stoa/poc/trust-jwks.json:ro"
+      - "${STOA_POC_RUNTIME_DIR:-./.runtime}/policies:/etc/stoa/poc/policies:ro"
+      - "${STOA_POC_RUNTIME_DIR:-./.runtime}/roles:/etc/stoa/poc/roles:ro"
+      - "${STOA_POC_RUNTIME_DIR:-./.runtime}/contracts:/etc/stoa/poc/contracts:ro"
+      - "${STOA_POC_RUNTIME_DIR:-./.runtime}/credentials.json:/etc/stoa/poc/credentials.json:ro"
+      - "${STOA_POC_RUNTIME_DIR:-./.runtime}/opa:/etc/stoa/poc/opa:ro"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:8080/ready"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+      start_period: 2s
+    depends_on:
+      - upstream-mock
+
+  upstream-mock:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+    command: ["python3", "/app/upstream_mock.py"]
+    networks:
+      - upstream-net
+    environment:
+      UPSTREAM_PORT: "9000"
+      EXPECTED_API_KEY: "${STOA_POC_UPSTREAM_API_KEY}"
+
+  agent-parent:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+    networks:
+      - mcp-net
+    environment:
+      STOA_GATEWAY_URL: "http://stoa-gateway:8080"
+      STOA_POC_BOOTSTRAP_SECRET: "${STOA_POC_BOOTSTRAP_SECRET}"
+      UPSTREAM_MOCK_HOST: "upstream-mock"
+    depends_on:
+      stoa-gateway:
+        condition: service_healthy
+
+  agent-child:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+    networks:
+      - mcp-net
+    environment:
+      STOA_GATEWAY_URL: "http://stoa-gateway:8080"
+      UPSTREAM_MOCK_HOST: "upstream-mock"
+    depends_on:
+      stoa-gateway:
+        condition: service_healthy
+
+volumes:
+  role-floors:
+
+networks:
+  mcp-net:
+    driver: bridge
+    internal: true
+  upstream-net:
+    driver: bridge
+    internal: true

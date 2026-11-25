@@ -15,6 +15,7 @@ use moka::sync::Cache;
 use reqwest::Client;
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 use tracing::{debug, warn};
@@ -143,6 +144,9 @@ pub struct ToolPermissionService {
     /// Process-lifetime floors survive cache expiry, but not a gateway restart.
     accepted_policies: Arc<RwLock<HashMap<String, PolicyIdentity>>>,
     max_policy_age: Duration,
+    /// Optional local directory holding signed `<tenant_id>.jws` artifacts for
+    /// autonomous mode without a Control Plane HTTP endpoint.
+    local_artifacts_dir: Option<PathBuf>,
 }
 
 impl ToolPermissionService {
@@ -167,7 +171,16 @@ impl ToolPermissionService {
             loaded_policy: Arc::new(RwLock::new(None)),
             accepted_policies: Arc::new(RwLock::new(HashMap::new())),
             max_policy_age: MAX_POLICY_AGE,
+            local_artifacts_dir: None,
         }
+    }
+
+    /// Read signed `<tenant_id>.jws` policy artifacts from a local directory instead
+    /// of fetching them over HTTP from a Control Plane. Uses the exact same EdDSA
+    /// verification, pinned trust store, expiry checks, and version floor.
+    pub fn with_local_artifacts_dir(mut self, dir: impl Into<PathBuf>) -> Self {
+        self.local_artifacts_dir = Some(dir.into());
+        self
     }
 
     /// Authenticate with the gateway service account.
@@ -203,6 +216,33 @@ impl ToolPermissionService {
             .await
     }
 
+    /// Evaluate whether `requested_name` / `canonical_name` is explicitly allowed by a
+    /// complete fresh tenant policy without emitting a `tool_call_denied` audit warning.
+    ///
+    /// Returns `None` when allowed or `Some(reason)` when denied (fail-closed).
+    pub async fn check_tool_permission_decision(
+        &self,
+        tenant_id: &str,
+        requested_name: &str,
+        canonical_name: &str,
+    ) -> Option<PermissionDenyReason> {
+        // A blank tenant is not an identity. Deny before any cache or Control Plane read.
+        if tenant_id.trim().is_empty() {
+            return Some(PermissionDenyReason::PermissionAbsent);
+        }
+        let state = if self.trust_set_not_loaded() {
+            PermissionState::Unavailable {
+                reason: PermissionDenyReason::TrustSetNotLoaded,
+            }
+        } else {
+            let state = self.get_permission_state(tenant_id).await;
+            self.record_state(&state);
+            state
+        };
+
+        state.deny_reason(requested_name, canonical_name)
+    }
+
     /// Check a call requested as `requested_name` that the tool registry
     /// resolved to `canonical_name` (they differ only for deprecated aliases).
     ///
@@ -215,29 +255,10 @@ impl ToolPermissionService {
         requested_name: &str,
         canonical_name: &str,
     ) -> bool {
-        // A blank tenant is not an identity. Deny before any cache or Control Plane read.
-        if tenant_id.trim().is_empty() {
-            warn!(
-                audit_event = "tool_call_denied",
-                tenant_id = %tenant_id,
-                tool_name = %canonical_name,
-                requested_name = %requested_name,
-                reason = %PermissionDenyReason::PermissionAbsent.as_str(),
-                "Tool permission fail-closed deny"
-            );
-            return false;
-        }
-        let state = if self.trust_set_not_loaded() {
-            PermissionState::Unavailable {
-                reason: PermissionDenyReason::TrustSetNotLoaded,
-            }
-        } else {
-            let state = self.get_permission_state(tenant_id).await;
-            self.record_state(&state);
-            state
-        };
-
-        match state.deny_reason(requested_name, canonical_name) {
+        match self
+            .check_tool_permission_decision(tenant_id, requested_name, canonical_name)
+            .await
+        {
             None => true,
             Some(reason) => {
                 warn!(
@@ -506,6 +527,9 @@ impl ToolPermissionService {
         &self,
         tenant_id: &str,
     ) -> Result<CachedPermissions, PermissionDenyReason> {
+        if let Some(ref dir) = self.local_artifacts_dir {
+            return self.read_local_artifact(dir, tenant_id).await;
+        }
         // Only a signing-key (private_key_jwt) service identity reads permissions.
         let auth = self
             .auth
@@ -558,50 +582,85 @@ impl ToolPermissionService {
                 reissue = true;
                 continue;
             }
-            let items: Vec<PermissionItem> = serde_json::from_value(
-                verified
-                    .claims
-                    .get("permissions")
-                    .cloned()
-                    .unwrap_or_default(),
-            )
-            .map_err(|_| PermissionDenyReason::PolicyArtifactInvalid)?;
-            if items.len() > 5000 {
-                return Err(PermissionDenyReason::PolicyArtifactInvalid);
-            }
-            let mut seen = HashSet::new();
-            let mut overrides = HashMap::new();
-            for item in items {
-                if item.mcp_server.trim().is_empty()
-                    || item.tool.trim().is_empty()
-                    || !seen.insert((item.mcp_server, item.tool.clone()))
-                {
-                    return Err(PermissionDenyReason::PolicyArtifactInvalid);
-                }
-                let entry = overrides.entry(item.tool).or_insert(true);
-                *entry &= item.allowed;
-            }
-            let remaining = (verified.expires_at - Utc::now())
-                .to_std()
-                .map_err(|_| PermissionDenyReason::PolicyArtifactInvalid)?;
-            if remaining.is_zero() {
-                return Err(PermissionDenyReason::PolicyArtifactInvalid);
-            }
-            // Publish the floor only after the entire permission set is valid.
-            self.accept_policy(&verified)?;
-            let refresh_after = if remaining > POLICY_REFRESH_MARGIN {
-                remaining - POLICY_REFRESH_MARGIN
-            } else {
-                remaining.min(BOOT_RETRY_INTERVAL)
-            };
-            let fetched_at = Instant::now();
-            return Ok(CachedPermissions {
-                artifact,
-                rules: PermissionRules { overrides },
-                fetched_at,
-                expires_at: fetched_at + self.cache_ttl.min(refresh_after),
-            });
+            return self.parse_and_accept_artifact(artifact, verified);
         }
+    }
+
+    async fn read_local_artifact(
+        &self,
+        dir: &std::path::Path,
+        tenant_id: &str,
+    ) -> Result<CachedPermissions, PermissionDenyReason> {
+        if crate::telemetry::validated_tenant(Some(tenant_id)).is_none()
+            || tenant_id.contains('/')
+            || tenant_id.contains('\\')
+            || tenant_id.contains("..")
+        {
+            return Err(PermissionDenyReason::PermissionAbsent);
+        }
+        let path = dir.join(format!("{tenant_id}.jws"));
+        let bytes = tokio::fs::read(&path)
+            .await
+            .map_err(|_| PermissionDenyReason::PermissionAbsent)?;
+        if bytes.len() > MAX_POLICY_BYTES {
+            return Err(PermissionDenyReason::PolicyArtifactInvalid);
+        }
+        let artifact = String::from_utf8(bytes)
+            .map_err(|_| PermissionDenyReason::PolicyArtifactInvalid)?
+            .trim()
+            .to_string();
+        let verified = self.verify_artifact(tenant_id, &artifact)?;
+        self.parse_and_accept_artifact(artifact, verified)
+    }
+
+    fn parse_and_accept_artifact(
+        &self,
+        artifact: String,
+        verified: VerifiedPolicyArtifact,
+    ) -> Result<CachedPermissions, PermissionDenyReason> {
+        let items: Vec<PermissionItem> = serde_json::from_value(
+            verified
+                .claims
+                .get("permissions")
+                .cloned()
+                .unwrap_or_default(),
+        )
+        .map_err(|_| PermissionDenyReason::PolicyArtifactInvalid)?;
+        if items.len() > 5000 {
+            return Err(PermissionDenyReason::PolicyArtifactInvalid);
+        }
+        let mut seen = HashSet::new();
+        let mut overrides = HashMap::new();
+        for item in items {
+            if item.mcp_server.trim().is_empty()
+                || item.tool.trim().is_empty()
+                || !seen.insert((item.mcp_server, item.tool.clone()))
+            {
+                return Err(PermissionDenyReason::PolicyArtifactInvalid);
+            }
+            let entry = overrides.entry(item.tool).or_insert(true);
+            *entry &= item.allowed;
+        }
+        let remaining = (verified.expires_at - Utc::now())
+            .to_std()
+            .map_err(|_| PermissionDenyReason::PolicyArtifactInvalid)?;
+        if remaining.is_zero() {
+            return Err(PermissionDenyReason::PolicyArtifactInvalid);
+        }
+        // Publish the floor only after the entire permission set is valid.
+        self.accept_policy(&verified)?;
+        let refresh_after = if remaining > POLICY_REFRESH_MARGIN {
+            remaining - POLICY_REFRESH_MARGIN
+        } else {
+            remaining.min(BOOT_RETRY_INTERVAL)
+        };
+        let fetched_at = Instant::now();
+        Ok(CachedPermissions {
+            artifact,
+            rules: PermissionRules { overrides },
+            fetched_at,
+            expires_at: fetched_at + self.cache_ttl.min(refresh_after),
+        })
     }
 }
 
@@ -1603,5 +1662,38 @@ pub(crate) mod tests {
         assert!(svc.is_tool_allowed("tenant-a", "ok_tool").await);
         assert!(!svc.is_tool_allowed("tenant-b", "ok_tool").await);
         assert!(!svc.is_tool_allowed("tenant-b", "ok_tool").await);
+    }
+
+    #[tokio::test]
+    async fn local_signed_artifact_loads_without_control_plane_and_enforces_signature() {
+        let dir = tempfile::tempdir().unwrap();
+        let artifacts_dir = dir.path().join("policies");
+        std::fs::create_dir_all(&artifacts_dir).unwrap();
+        let signed = policy::artifact(
+            "tenant-local",
+            serde_json::json!([
+                {"mcp_server": "srv1", "tool": "ok_tool", "allowed": true}
+            ]),
+        );
+        std::fs::write(artifacts_dir.join("tenant-local.jws"), &signed).unwrap();
+        std::fs::write(
+            artifacts_dir.join("tenant-tampered.jws"),
+            format!("{signed}x"),
+        )
+        .unwrap();
+
+        let svc = ToolPermissionService::new(Client::new(), "", Duration::from_secs(60))
+            .with_local_artifacts_dir(&artifacts_dir)
+            .with_trust_store(Some(test_trust_store()));
+
+        assert_eq!(svc.policy_readiness_failure(), Some("policy_not_loaded"));
+        svc.load_policy("tenant-local")
+            .await
+            .expect("valid local signed artifact must load");
+        assert_eq!(svc.policy_readiness_failure(), None);
+        assert!(svc.is_tool_allowed("tenant-local", "ok_tool").await);
+        assert!(!svc.is_tool_allowed("tenant-local", "other_tool").await);
+        assert!(!svc.is_tool_allowed("tenant-tampered", "ok_tool").await);
+        assert!(!svc.is_tool_allowed("../tenant-local", "ok_tool").await);
     }
 }

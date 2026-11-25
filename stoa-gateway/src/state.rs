@@ -148,6 +148,16 @@ pub struct AppState {
     /// Tenant tool permission cache — checks if tools are allowed per tenant.
     /// Fetches from CP-API and denies unless a fresh explicit allow exists.
     pub tool_permissions: Option<Arc<ToolPermissionService>>,
+    /// Dedicated local RS256 + DPoP auth for the autonomous agent-roles PoC.
+    /// Strictly separated from OIDC `jwt_validator`. None unless `STOA_POC_AGENTS_ENABLED=true`.
+    pub local_agent_auth: Option<Arc<crate::auth::local_agent_token::LocalAgentAuth>>,
+    /// Signed local agent-role policy store with durable anti-rollback floor (`0600`)
+    /// and 15-minute maximum validity.
+    pub role_policy_store: Option<Arc<crate::control_plane::role_policy::RolePolicyStore>>,
+    /// Outbound address policy attached to PoC dynamic tools and OAuth2 token fetches.
+    pub outbound_policy: Arc<crate::proxy::outbound_policy::OutboundAddressPolicy>,
+    /// Unified atomic admission controller for PoC revocation (`chain_id`) and 2-level budgets.
+    pub poc_admission: Arc<crate::auth::poc_admission::PocAdmissionController>,
     /// Error snapshot store for 5xx response capture (CAB-1645).
     pub snapshot_store: Arc<SnapshotStore>,
     /// Memory budget monitor for backpressure (CAB-1829).
@@ -604,22 +614,97 @@ impl AppState {
         };
 
         // Tenant tool permissions require a valid signed policy and a pinned trust set.
+        // Supports either a Control Plane HTTP endpoint or a local directory of signed
+        // `<tenant_id>.jws` artifacts for autonomous mode.
         let policy_trust = config.policy_trust_jwks_file.as_deref();
-        let tool_permissions = control_plane_url
-            .zip(control_plane.as_ref())
-            .map(|(cp_url, cp)| {
-                tracing::info!("Tenant tool permission cache enabled (60s TTL)");
-                Arc::new(
-                    ToolPermissionService::new(
-                        http_client.clone(),
-                        cp_url,
-                        Duration::from_secs(60),
-                    )
-                    .with_auth(cp.clone())
+        let tool_permissions = if let Some(dir) = config
+            .policy_local_artifacts_dir
+            .as_deref()
+            .filter(|_| config.poc_agents_enabled)
+        {
+            tracing::info!(
+                artifacts_dir = %dir,
+                "Tenant tool permission cache enabled (local signed artifacts, 60s TTL)"
+            );
+            Some(Arc::new(
+                ToolPermissionService::new(http_client.clone(), "", Duration::from_secs(60))
+                    .with_local_artifacts_dir(dir)
                     .with_policy_identity(&config.policy_expected_issuer, &config.policy_audience)
                     .with_trust_store(policy_trust.map(PolicyTrustStore::open)),
+            ))
+        } else {
+            control_plane_url
+                .zip(control_plane.as_ref())
+                .map(|(cp_url, cp)| {
+                    tracing::info!("Tenant tool permission cache enabled (60s TTL)");
+                    Arc::new(
+                        ToolPermissionService::new(
+                            http_client.clone(),
+                            cp_url,
+                            Duration::from_secs(60),
+                        )
+                        .with_auth(cp.clone())
+                        .with_policy_identity(
+                            &config.policy_expected_issuer,
+                            &config.policy_audience,
+                        )
+                        .with_trust_store(policy_trust.map(PolicyTrustStore::open)),
+                    )
+                })
+        };
+
+        // Dedicated local RS256 + DPoP auth for autonomous agent-roles PoC (separated from OIDC).
+        let local_agent_auth = if config.poc_agents_enabled {
+            let auth = crate::auth::local_agent_token::LocalAgentAuth::new()
+                .expect("Failed to generate ephemeral local RS256 keypair for PoC");
+            tracing::info!(
+                kid = %auth.kid(),
+                "Dedicated local RS256 agent auth initialized (boot-ephemeral key)"
+            );
+            Some(Arc::new(auth))
+        } else {
+            None
+        };
+
+        let role_policy_store = if config.poc_agents_enabled {
+            config.poc_role_artifacts_dir.as_ref().map(|roles_dir| {
+                let floor_dir = config
+                    .poc_role_floor_dir
+                    .clone()
+                    .unwrap_or_else(|| format!("{roles_dir}/.floors"));
+                tracing::info!(
+                    roles_dir = %roles_dir,
+                    floor_dir = %floor_dir,
+                    "Signed local agent-role policy store enabled"
+                );
+                Arc::new(
+                    crate::control_plane::role_policy::RolePolicyStore::new(
+                        roles_dir,
+                        floor_dir,
+                        &config.policy_expected_issuer,
+                        &config.policy_audience,
+                        policy_trust.map(PolicyTrustStore::open),
+                    )
+                    .with_allowed_tenants(config.policy_boot_tenants.iter().cloned()),
                 )
-            });
+            })
+        } else {
+            None
+        };
+
+        let outbound_policy = Arc::new(crate::proxy::outbound_policy::OutboundAddressPolicy::new(
+            config.poc_outbound_allowed_origins.iter(),
+        ));
+
+        let poc_admission = Arc::new(crate::auth::poc_admission::PocAdmissionController::new(
+            crate::auth::poc_admission::PocAdmissionConfig {
+                max_revoked_chains: config.poc_max_revoked_chains,
+                default_chain_budget: config.poc_chain_budget,
+                default_caller_budget: config.poc_caller_budget,
+                max_admission_entries: config.poc_max_admission_entries,
+                caller_budget_window_secs: config.poc_caller_budget_window_secs,
+            },
+        ));
 
         // Initialize A2A agent registry (CAB-1754)
         let a2a_registry = if config.a2a_enabled {
@@ -683,6 +768,10 @@ impl AppState {
             hegemon,
             a2a_registry,
             tool_permissions,
+            local_agent_auth,
+            role_policy_store,
+            outbound_policy,
+            poc_admission,
             snapshot_store,
             memory_monitor,
             ebpf_client: std::env::var("STOA_EBPF_DAEMON_URL")

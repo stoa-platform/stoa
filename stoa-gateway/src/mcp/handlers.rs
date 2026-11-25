@@ -138,7 +138,11 @@ pub(crate) async fn request_tool_context(
 }
 
 /// Shared OPA input: action and ownership come from the registered tool.
-fn check_tool_policy(state: &AppState, tool: &dyn Tool, ctx: &ToolContext) -> Result<(), String> {
+pub(crate) fn check_tool_policy(
+    state: &AppState,
+    tool: &dyn Tool,
+    ctx: &ToolContext,
+) -> Result<(), String> {
     state.uac_enforcer.check_with_context(
         PolicyCallerCtx {
             resource_tenant_id: tool.tenant_id().map(str::to_string),
@@ -170,6 +174,30 @@ pub(crate) async fn check_tool_permission(
     if permissions
         .is_tool_call_allowed(tenant_id, requested_name, canonical_name)
         .await
+    {
+        Ok(())
+    } else {
+        Err(StatusCode::FORBIDDEN)
+    }
+}
+
+/// Side-effect-free variant of [`check_tool_permission`] for `tools/list` filtering:
+/// applies the same fail-closed signed-policy decision without emitting a
+/// `tool_call_denied` audit warning.
+pub(crate) async fn check_tool_permission_quiet(
+    state: &AppState,
+    tenant_id: &str,
+    requested_name: &str,
+    canonical_name: &str,
+) -> Result<(), StatusCode> {
+    let permissions = state
+        .tool_permissions
+        .as_ref()
+        .ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    if permissions
+        .check_tool_permission_decision(tenant_id, requested_name, canonical_name)
+        .await
+        .is_none()
     {
         Ok(())
     } else {

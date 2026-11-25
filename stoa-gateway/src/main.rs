@@ -41,6 +41,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize application state
     let state = AppState::new(config.clone());
 
+    if config.poc_agents_enabled {
+        stoa_gateway::mcp::poc::load_poc_fixtures(&state)
+            .await
+            .map_err(|reason| format!("Failed to load autonomous PoC fixtures: {reason}"))?;
+    }
+
     // SIGHUP handler for policy + route hot-reload (CAB-1109, CAB-1828)
     #[cfg(unix)]
     {

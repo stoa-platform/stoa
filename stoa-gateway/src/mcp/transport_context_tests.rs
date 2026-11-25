@@ -289,6 +289,23 @@ async fn request_context_from_claims_across_http_forms() {
 struct AuditBuffer(Arc<std::sync::Mutex<Vec<u8>>>);
 
 impl AuditBuffer {
+    fn capture() -> (Self, tracing::Dispatch) {
+        static IDLE_DISPATCH: std::sync::OnceLock<tracing::Dispatch> = std::sync::OnceLock::new();
+        // Keep a second dispatcher registered so callsite interest is computed
+        // across dispatchers when another thread first visits a callsite.
+        IDLE_DISPATCH
+            .get_or_init(|| tracing::Dispatch::new(tracing::subscriber::NoSubscriber::new()));
+
+        let buffer = Self::default();
+        let writer = buffer.clone();
+        let subscriber = tracing_subscriber::fmt()
+            .json()
+            .with_writer(move || writer.clone())
+            .with_max_level(tracing::Level::WARN)
+            .finish();
+        (buffer, tracing::Dispatch::new(subscriber))
+    }
+
     fn events_since(&self, start: usize) -> Vec<Value> {
         let bytes = self.0.lock().unwrap();
         String::from_utf8_lossy(&bytes[start..])
@@ -313,14 +330,8 @@ impl std::io::Write for AuditBuffer {
 async fn tenant_context_requires_tenant_claim() {
     use tracing::instrument::WithSubscriber;
 
+    let (buffer, subscriber) = AuditBuffer::capture();
     let fixture = Fixture::new(|_| {}).await;
-    let buffer = AuditBuffer::default();
-    let writer = buffer.clone();
-    let subscriber = tracing_subscriber::fmt()
-        .json()
-        .with_writer(move || writer.clone())
-        .with_max_level(tracing::Level::WARN)
-        .finish();
     async {
         for tenant in [Value::Null, json!(""), json!("   ")] {
             let token = fixture
@@ -366,6 +377,7 @@ async fn tenant_context_requires_tenant_claim() {
 async fn batch_tenant_context_precedes_dispatch() {
     use tracing::instrument::WithSubscriber;
 
+    let (buffer, subscriber) = AuditBuffer::capture();
     let fixture = Fixture::new(|_| {}).await;
     let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     fixture
@@ -373,13 +385,6 @@ async fn batch_tenant_context_precedes_dispatch() {
         .tool_registry
         .register(Arc::new(CountingTool(calls.clone())));
     let token = fixture.token(json!({"tenant_id": null}));
-    let buffer = AuditBuffer::default();
-    let writer = buffer.clone();
-    let subscriber = tracing_subscriber::fmt()
-        .json()
-        .with_writer(move || writer.clone())
-        .with_max_level(tracing::Level::WARN)
-        .finish();
     async {
         let initialize = json!({"jsonrpc": "2.0", "id": 1, "method": "initialize"});
         let tool = json!({"jsonrpc": "2.0", "id": 2, "method": "tools/call",
@@ -480,13 +485,7 @@ async fn tool_denials_preserve_request_correlation() {
         };
         let rpc = json!({"jsonrpc": "2.0", "id": 7, "method": "tools/call",
             "params": {"name": "echo_tool", "arguments": args}});
-        let buffer = AuditBuffer::default();
-        let writer = buffer.clone();
-        let subscriber = tracing_subscriber::fmt()
-            .json()
-            .with_writer(move || writer.clone())
-            .with_max_level(tracing::Level::WARN)
-            .finish();
+        let (buffer, subscriber) = AuditBuffer::capture();
         async {
             for uri in ["/mcp", "/mcp/sse"] {
                 for batch in [false, true] {

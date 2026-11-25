@@ -107,7 +107,8 @@ RUN groupadd -r -g 1000 stoa && useradd -r -u 1000 -g stoa -d /app stoa
 WORKDIR /app
 
 COPY --from=builder /app/target/release/stoa-gateway /app/stoa-gateway
-RUN chown -R stoa:stoa /app
+RUN chown -R stoa:stoa /app \
+    && install -d -m 0700 -o stoa -g stoa /tmp/stoa-poc-floors
 
 USER 1000
 EXPOSE 8080

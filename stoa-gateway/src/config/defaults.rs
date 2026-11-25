@@ -501,8 +501,43 @@ impl Default for Config {
             snapshot_max_age_secs: default_snapshot_max_age_secs(),
             snapshot_body_max_bytes: default_snapshot_body_max_bytes(),
             snapshot_extra_pii_patterns: vec![],
+            admin_routes_disabled: false,
+            policy_local_artifacts_dir: None,
+            poc_agents_enabled: false,
+            poc_bootstrap_secret: None,
+            poc_uac_contracts_dir: None,
+            poc_credentials_file: None,
+            poc_public_base_url: None,
+            poc_role_artifacts_dir: None,
+            poc_role_floor_dir: None,
+            poc_outbound_allowed_origins: vec![],
+            poc_max_revoked_chains: default_poc_max_revoked_chains(),
+            poc_chain_budget: default_poc_chain_budget(),
+            poc_caller_budget: default_poc_caller_budget(),
+            poc_max_admission_entries: default_poc_max_admission_entries(),
+            poc_caller_budget_window_secs: default_poc_caller_budget_window_secs(),
         }
     }
+}
+
+pub(super) fn default_poc_max_revoked_chains() -> usize {
+    crate::auth::poc_admission::DEFAULT_MAX_REVOKED_CHAINS
+}
+
+pub(super) fn default_poc_chain_budget() -> u64 {
+    crate::auth::poc_admission::DEFAULT_CHAIN_BUDGET
+}
+
+pub(super) fn default_poc_caller_budget() -> u64 {
+    crate::auth::poc_admission::DEFAULT_CALLER_BUDGET
+}
+
+pub(super) fn default_poc_max_admission_entries() -> usize {
+    crate::auth::poc_admission::DEFAULT_MAX_ADMISSION_ENTRIES
+}
+
+pub(super) fn default_poc_caller_budget_window_secs() -> u32 {
+    crate::auth::poc_admission::DEFAULT_CALLER_BUDGET_WINDOW_SECS
 }
 
 pub(super) fn default_service_token_max_ttl_secs() -> u64 {

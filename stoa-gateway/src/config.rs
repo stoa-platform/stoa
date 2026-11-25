@@ -989,6 +989,90 @@ pub struct Config {
     /// Env: STOA_SNAPSHOT_EXTRA_PII_PATTERNS (comma-separated or JSON array)
     #[serde(default, deserialize_with = "self::deserializers::string_list")]
     pub snapshot_extra_pii_patterns: Vec<String>,
+
+    // === Autonomous Agent Roles PoC ===
+    /// Omit `/admin/*` routes from the main HTTP router (e.g. isolated agent networks).
+    /// Env: STOA_ADMIN_ROUTES_DISABLED (default: false)
+    #[serde(default)]
+    pub admin_routes_disabled: bool,
+
+    /// Optional local directory containing signed `<tenant_id>.jws` tool-policy artifacts
+    /// for autonomous mode without a Control Plane HTTP endpoint.
+    /// Requires `poc_agents_enabled=true`.
+    /// Env: STOA_POLICY_LOCAL_ARTIFACTS_DIR
+    #[serde(default)]
+    pub policy_local_artifacts_dir: Option<String>,
+
+    /// Enable the autonomous local RS256 + DPoP agent-roles PoC endpoints (`/mcp/poc/*`).
+    /// Refused at startup when `environment: prod`.
+    /// Env: STOA_POC_AGENTS_ENABLED (default: false)
+    #[serde(default)]
+    pub poc_agents_enabled: bool,
+
+    /// Shared secret required on `POST /mcp/poc/bootstrap` (`X-Stoa-Poc-Bootstrap-Secret`)
+    /// so only the designated parent container can mint an initial `depth=0` token.
+    /// Env: STOA_POC_BOOTSTRAP_SECRET
+    #[serde(default)]
+    pub poc_bootstrap_secret: Option<String>,
+
+    /// Local directory containing UAC contract fixtures (`.json`/`.yaml`) loaded at boot
+    /// when `poc_agents_enabled` is true.
+    /// Env: STOA_POC_UAC_CONTRACTS_DIR
+    #[serde(default)]
+    pub poc_uac_contracts_dir: Option<String>,
+
+    /// Local JSON file containing backend credentials seeded into `CredentialStore` at boot
+    /// when `poc_agents_enabled` is true.
+    /// Env: STOA_POC_CREDENTIALS_FILE
+    #[serde(default)]
+    pub poc_credentials_file: Option<String>,
+
+    /// Public base URL used to validate DPoP `htu` claims on `/mcp/poc/*` endpoints
+    /// (e.g. `http://stoa-gateway:8080`).
+    /// Env: STOA_POC_PUBLIC_BASE_URL
+    #[serde(default)]
+    pub poc_public_base_url: Option<String>,
+
+    /// Directory containing signed `<tenant_id>.roles.jws` role policy artifacts.
+    /// Env: STOA_POC_ROLE_ARTIFACTS_DIR
+    #[serde(default)]
+    pub poc_role_artifacts_dir: Option<String>,
+
+    /// Directory where anti-rollback version floor files (`0600`, atomic write) are persisted.
+    /// Env: STOA_POC_ROLE_FLOOR_DIR
+    #[serde(default)]
+    pub poc_role_floor_dir: Option<String>,
+
+    /// Exact normalized origins (`scheme://host:port`) permitted to resolve to private/internal
+    /// addresses in the PoC outbound address policy (used only for isolated local mock fixtures).
+    /// Env: STOA_POC_OUTBOUND_ALLOWED_ORIGINS (CSV or JSON array)
+    #[serde(default, deserialize_with = "self::deserializers::string_list")]
+    pub poc_outbound_allowed_origins: Vec<String>,
+
+    /// Maximum number of entries in the bounded PoC `chain_id` revocation table (fail-closed when full).
+    /// Env: STOA_POC_MAX_REVOKED_CHAINS (default: 10000)
+    #[serde(default = "default_poc_max_revoked_chains")]
+    pub poc_max_revoked_chains: usize,
+
+    /// Default per-chain call budget for the PoC atomic admission controller.
+    /// Env: STOA_POC_CHAIN_BUDGET (default: 50)
+    #[serde(default = "default_poc_chain_budget")]
+    pub poc_chain_budget: u64,
+
+    /// Default per-caller call budget for the PoC atomic admission controller.
+    /// Env: STOA_POC_CALLER_BUDGET (default: 100)
+    #[serde(default = "default_poc_caller_budget")]
+    pub poc_caller_budget: u64,
+
+    /// Maximum number of entries in each PoC admission table for active chains and root callers.
+    /// Env: STOA_POC_MAX_ADMISSION_ENTRIES (default: 10000)
+    #[serde(default = "default_poc_max_admission_entries")]
+    pub poc_max_admission_entries: usize,
+
+    /// Fixed root caller budget window from the first successful debit.
+    /// Env: STOA_POC_CALLER_BUDGET_WINDOW_SECS (default: 900)
+    #[serde(default = "default_poc_caller_budget_window_secs")]
+    pub poc_caller_budget_window_secs: u32,
 }
 
 impl fmt::Debug for Config {
@@ -1227,6 +1311,30 @@ impl fmt::Debug for Config {
             .field(
                 "snapshot_extra_pii_patterns",
                 &self.snapshot_extra_pii_patterns,
+            )
+            .field("admin_routes_disabled", &self.admin_routes_disabled)
+            .field(
+                "policy_local_artifacts_dir",
+                &self.policy_local_artifacts_dir,
+            )
+            .field("poc_agents_enabled", &self.poc_agents_enabled)
+            .field("poc_bootstrap_secret", &r(&self.poc_bootstrap_secret))
+            .field("poc_uac_contracts_dir", &self.poc_uac_contracts_dir)
+            .field("poc_credentials_file", &r(&self.poc_credentials_file))
+            .field("poc_public_base_url", &self.poc_public_base_url)
+            .field("poc_role_artifacts_dir", &self.poc_role_artifacts_dir)
+            .field("poc_role_floor_dir", &self.poc_role_floor_dir)
+            .field(
+                "poc_outbound_allowed_origins",
+                &self.poc_outbound_allowed_origins,
+            )
+            .field("poc_max_revoked_chains", &self.poc_max_revoked_chains)
+            .field("poc_chain_budget", &self.poc_chain_budget)
+            .field("poc_caller_budget", &self.poc_caller_budget)
+            .field("poc_max_admission_entries", &self.poc_max_admission_entries)
+            .field(
+                "poc_caller_budget_window_secs",
+                &self.poc_caller_budget_window_secs,
             )
             .finish()
     }

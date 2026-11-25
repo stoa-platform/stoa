@@ -823,6 +823,98 @@ pub(crate) mod tests {
     }
 
     #[tokio::test]
+    async fn regression_route_tenant_single_element_array_claim_is_accepted() {
+        let (state, issuer, server) = tenant_bound_route_state().await;
+        let token = mint_tenant_payload(&issuer, serde_json::json!({"tenant_id": ["tenant-a"]}));
+        let response = call_tenant_route(&state, &token).await;
+        assert_eq!(response.status(), axum::http::StatusCode::OK);
+        let other = mint_tenant_payload(&issuer, serde_json::json!({"tenant_id": ["tenant-b"]}));
+        let response = call_tenant_route(&state, &other).await;
+        assert_eq!(response.status(), axum::http::StatusCode::FORBIDDEN);
+        assert_eq!(
+            forwarded_credentials(&server).await,
+            vec![Some("route-level-tenant-a".to_string())]
+        );
+    }
+
+    #[tokio::test]
+    async fn regression_admin_api_route_with_jwt_policy_enforces_route_tenant() {
+        use wiremock::{matchers::method, Mock, ResponseTemplate};
+
+        let (validator, issuer, server) = validator_against_test_key().await;
+        Mock::given(method("GET"))
+            .and(wiremock::matchers::path("/upstream/ping"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("accepted"))
+            .mount(&server)
+            .await;
+        let mut state = crate::state::AppState::new(crate::config::Config::default());
+        state.jwt_validator = Some(Arc::new(validator));
+        // Route registered through /admin/apis: no contract_key, owned by tenant-a,
+        // with a jwt_validation policy attached to its id.
+        state.route_registry.upsert(crate::routes::ApiRoute {
+            id: "admin-orders".into(),
+            name: "admin-orders".into(),
+            tenant_id: "tenant-a".into(),
+            path_prefix: "/apis/tenant-a/admin-orders".into(),
+            backend_url: format!("{}/upstream", server.uri()),
+            methods: vec!["GET".into()],
+            spec_hash: "1".into(),
+            activated: true,
+            classification: None,
+            contract_key: None,
+            upstream_http_version: Default::default(),
+            upstreams: vec![],
+            load_balancer: Default::default(),
+            trusted_backend: true,
+            public: false,
+        });
+        state.policy_registry.upsert(crate::routes::PolicyEntry {
+            id: "jwt:admin-orders".into(),
+            name: "jwt_validation".into(),
+            policy_type: "jwt_validation".into(),
+            config: serde_json::json!({}),
+            priority: 0,
+            api_id: "admin-orders".into(),
+        });
+        state
+            .credential_store
+            .upsert(crate::proxy::credentials::BackendCredential {
+                route_id: "admin-orders".into(),
+                auth_type: crate::proxy::credentials::AuthType::ApiKey,
+                header_name: "X-Backend-Key".into(),
+                header_value: "route-level-admin-orders".into(),
+                oauth2: None,
+                allowed_origin: None,
+                shared_with_tenants: false,
+            });
+        let call = |tenant: &'static str| {
+            let state = state.clone();
+            let token = mint_tenant_payload(&issuer, serde_json::json!({"tenant_id": tenant}));
+            async move {
+                let request = axum::http::Request::builder()
+                    .uri("/apis/tenant-a/admin-orders/ping")
+                    .header("Authorization", format!("Bearer {token}"))
+                    .body(axum::body::Body::empty())
+                    .expect("request");
+                crate::proxy::dynamic::dynamic_proxy(axum::extract::State(state), request)
+                    .await
+                    .status()
+            }
+        };
+
+        assert_eq!(call("tenant-b").await, axum::http::StatusCode::FORBIDDEN);
+        assert!(
+            forwarded_credentials(&server).await.is_empty(),
+            "a token of another tenant must not reach the backend"
+        );
+        assert_eq!(call("tenant-a").await, axum::http::StatusCode::OK);
+        assert_eq!(
+            forwarded_credentials(&server).await,
+            vec![Some("route-level-admin-orders".to_string())]
+        );
+    }
+
+    #[tokio::test]
     async fn regression_route_tenant_refusal_leaves_lb_state_untouched() {
         let (state, issuer, _server) = tenant_bound_route_state().await;
         let upstream_url = "http://tenant-lb-regression-upstream.invalid:9";

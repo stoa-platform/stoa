@@ -1180,6 +1180,16 @@ async fn require_published_route_jwt(
 /// without a tenant. A platform admin calls a tenant route with a token scoped
 /// to that tenant. A future cross-tenant mode must be an explicit, audited
 /// opt-in on the contract, not a role check.
+///
+/// The comparison is an exact string match on the canonical `tenant_id` claim
+/// (a string, or a single-element array from a group mapper): no case folding
+/// and no trimming. A token without that claim, or with a different case, gets
+/// 403. The same rule applies to `/admin/apis` routes that carry a
+/// `jwt_validation` policy.
+///
+/// `BackendCredential::shared_with_tenants` is only honored by MCP tool
+/// credentials. It does not open a REST route to other tenants: the REST proxy
+/// stays strict whatever that flag says.
 fn authorize_route_tenant(
     route: &crate::routes::ApiRoute,
     claims: &crate::auth::claims::Claims,

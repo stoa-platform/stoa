@@ -246,6 +246,29 @@ pub async fn dynamic_proxy(State(state): State<AppState>, mut request: Request<B
         );
     }
 
+    // A route-level backend credential is never forwarded for a caller without
+    // an identity. Identity here means an `AuthenticatedUser` set by the JWT
+    // check above (route with a `jwt_validation` policy) or by an upstream
+    // middleware. A bearer sent to a route without such a policy is not
+    // validated, so these routes refuse every call while a route credential is
+    // configured. Refuse before upstream selection so no load-balancer or
+    // circuit-breaker state is touched.
+    let has_identity = request
+        .extensions()
+        .get::<crate::auth::middleware::AuthenticatedUser>()
+        .is_some();
+    if !has_identity && state.credential_store.get(&route.id).is_some() {
+        warn!(
+            route_id = %route.id,
+            "Route credential not forwarded: caller has no identity"
+        );
+        record_proxy_status(401);
+        return bearer_unauthorized(
+            "invalid_request",
+            "This route requires caller authentication",
+        );
+    }
+
     // Soft-mode classification enforcement (CAB-1299)
     // If a route has a classification (from a UAC contract), log the enforcement
     // decision but do NOT deny — this is observability-only until graduation.
@@ -375,11 +398,7 @@ pub async fn dynamic_proxy(State(state): State<AppState>, mut request: Request<B
     // Per-consumer credential injection (CAB-1432) with BYOK fallback (CAB-1250 + CAB-1317)
     // 1. Try consumer-specific credential (from JWT sub claim)
     // 2. Fall back to route-level BYOK credential
-    // 3. Never forward a route-level credential for a caller without an identity
-    let has_identity = request
-        .extensions()
-        .get::<crate::auth::middleware::AuthenticatedUser>()
-        .is_some();
+    //    (callers without an identity were refused before upstream selection)
     let consumer_id = extract_user_id(request.extensions());
     let consumer_cred = if has_identity {
         state.consumer_credential_store.get(&route.id, &consumer_id)
@@ -389,18 +408,11 @@ pub async fn dynamic_proxy(State(state): State<AppState>, mut request: Request<B
     let resolved_header = if let Some(ref cc) = consumer_cred {
         Some((cc.header_name.clone(), cc.header_value.clone()))
     } else {
-        let credential = state.credential_store.get(&route.id);
-        if credential.is_some() && !has_identity {
-            warn!(
-                route_id = %route.id,
-                "Route credential not forwarded: caller has no identity"
-            );
-            record_proxy_status(401);
-            return bearer_unauthorized(
-                "invalid_request",
-                "This route requires caller authentication",
-            );
-        }
+        let credential = if has_identity {
+            state.credential_store.get(&route.id)
+        } else {
+            None
+        };
         match resolve_credential_header(&state, &route.id, credential.as_ref()).await {
             Ok(header) => header,
             Err(response) => {
@@ -1070,7 +1082,12 @@ fn published_route_requires_jwt(state: &AppState, route: &crate::routes::ApiRout
 
 /// Contract-generated routes need caller authentication unless the contract
 /// explicitly opted in with `public: true`. Routes registered directly through
-/// `/admin/apis` (no `contract_key`) keep their existing behaviour.
+/// `/admin/apis` (no `contract_key`) are not affected by this check.
+///
+/// Note: only routes with a `jwt_validation` policy validate a bearer and set
+/// an identity. A public contract route or an `/admin/apis` route without that
+/// policy has no identity, so it answers 401 whenever a route-level credential
+/// is configured for it (see the credential check in [`dynamic_proxy`]).
 fn contract_route_denies_by_default(route: &crate::routes::ApiRoute) -> bool {
     route.contract_key.is_some() && !route.public
 }
@@ -1386,6 +1403,34 @@ mod tests {
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
         let received = backend.received_requests().await.unwrap_or_default();
         assert!(received.is_empty());
+    }
+
+    #[tokio::test]
+    async fn regression_anonymous_credential_refusal_leaves_lb_state_untouched() {
+        let upstream_url = "http://lb-regression-upstream.invalid:9";
+        let state = AppState::new(crate::config::Config::default());
+        let mut route = ping_route();
+        route.id = "admin-lb-ping".into();
+        route.contract_key = None;
+        route.upstreams = vec![crate::lb::Upstream {
+            url: upstream_url.into(),
+            weight: 1,
+            health_check_path: None,
+        }];
+        state.credential_store.upsert(route_credential(&route.id));
+        state.route_registry.upsert(route);
+
+        let gauge = crate::metrics::LB_UPSTREAM_ACTIVE.with_label_values(&[upstream_url]);
+        let before = gauge.get();
+        for _ in 0..3 {
+            let response = call_with_identity(state.clone(), None).await;
+            assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        }
+        assert_eq!(
+            gauge.get(),
+            before,
+            "a refused call must not leave an active upstream connection behind"
+        );
     }
 
     #[tokio::test]

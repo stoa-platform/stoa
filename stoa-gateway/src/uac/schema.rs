@@ -251,10 +251,12 @@ impl UacContractSpec {
 
     /// True when the generated REST routes accept callers without an identity.
     ///
-    /// Only an explicit `public: true` on a contract that does not require a
-    /// JWT opens the routes. Everything else is deny-by-default.
+    /// Only an explicit `public: true` on a contract that declares no
+    /// `inbound_auth` and no JWT policy opens the routes. Everything else is
+    /// deny-by-default, including an `inbound_auth` value this gateway does
+    /// not support.
     pub fn allows_anonymous_rest(&self) -> bool {
-        self.public && !self.requires_jwt_validation()
+        self.public && self.inbound_auth.is_none() && !self.requires_jwt_validation()
     }
 
     /// Recompute required_policies from the current classification.
@@ -302,9 +304,18 @@ impl UacContractSpec {
             }
         }
 
-        if self.public && self.requires_jwt_validation() {
+        if let Some(value) = self.inbound_auth.as_deref() {
+            if !inbound_auth_requires_jwt(Some(value)) {
+                errors.push(format!(
+                    "inbound_auth must be one of: {}",
+                    SUPPORTED_INBOUND_AUTH.join(", ")
+                ));
+            }
+        }
+
+        if self.public && (self.inbound_auth.is_some() || self.requires_jwt_validation()) {
             errors.push(
-                "public: true cannot be combined with JWT inbound_auth or a jwt_validation policy"
+                "public: true cannot be combined with inbound_auth or a jwt_validation policy"
                     .to_string(),
             );
         }
@@ -388,11 +399,20 @@ pub fn is_jwt_validation_policy(policy_type: &str) -> bool {
     )
 }
 
+/// `inbound_auth` values accepted on a contract. All of them mean "validate
+/// the caller RS256 bearer" on the generated REST routes.
+const SUPPORTED_INBOUND_AUTH: &[&str] = &[
+    "jwt",
+    "bearer",
+    "oauth2",
+    "oidc",
+    "client_credentials",
+    "jwt_validation",
+];
+
 fn inbound_auth_requires_jwt(value: Option<&str>) -> bool {
-    matches!(
-        value.unwrap_or("").trim().to_ascii_lowercase().as_str(),
-        "jwt" | "bearer" | "oauth2" | "oidc" | "client_credentials" | "jwt_validation"
-    )
+    let normalized = value.unwrap_or("").trim().to_ascii_lowercase();
+    SUPPORTED_INBOUND_AUTH.contains(&normalized.as_str())
 }
 
 // =============================================================================
@@ -476,6 +496,56 @@ mod tests {
             .validate()
             .iter()
             .any(|error| error.contains("public: true cannot be combined")));
+    }
+
+    #[test]
+    fn regression_unknown_inbound_auth_is_rejected() {
+        for value in ["mtls", "apikey", "api_key", "none", "", "  "] {
+            let mut spec = sample_contract();
+            spec.inbound_auth = Some(value.into());
+            assert!(
+                spec.validate()
+                    .iter()
+                    .any(|error| error.starts_with("inbound_auth must be one of")),
+                "{value:?} must be rejected"
+            );
+            assert!(!spec.requires_jwt_validation());
+            assert!(!spec.allows_anonymous_rest());
+        }
+        for value in [
+            "jwt",
+            " JWT ",
+            "bearer",
+            "oauth2",
+            "oidc",
+            "client_credentials",
+            "jwt_validation",
+        ] {
+            let mut spec = sample_contract();
+            spec.inbound_auth = Some(value.into());
+            assert!(spec.validate().is_empty(), "{value:?} must be accepted");
+        }
+    }
+
+    #[test]
+    fn regression_public_with_any_inbound_auth_is_rejected_and_stays_closed() {
+        for value in ["mtls", "apikey", "jwt", "oidc"] {
+            let mut spec = sample_contract();
+            spec.public = true;
+            spec.inbound_auth = Some(value.into());
+            assert!(
+                spec.validate()
+                    .iter()
+                    .any(|error| error.contains("public: true cannot be combined")),
+                "public + {value:?} must be rejected"
+            );
+            // Even when validation is bypassed (e.g. a reloaded contract), the
+            // generated routes are not opened.
+            assert!(
+                !spec.allows_anonymous_rest(),
+                "public + {value:?} must stay closed"
+            );
+        }
     }
 
     #[test]

@@ -545,6 +545,110 @@ pub(crate) mod tests {
     }
 
     #[tokio::test]
+    async fn regression_route_credential_forwarded_only_for_validated_jwt() {
+        use crate::uac::binders::ProtocolBinder;
+        use wiremock::{matchers::method, Mock, ResponseTemplate};
+
+        let (validator, issuer, server) = validator_against_test_key().await;
+        Mock::given(method("GET"))
+            .and(wiremock::matchers::path("/upstream/ping"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("accepted"))
+            .mount(&server)
+            .await;
+        let mut state = crate::state::AppState::new(crate::config::Config::default());
+        state.jwt_validator = Some(Arc::new(validator));
+        let binder = crate::uac::binders::rest::RestBinder::with_policies(
+            state.route_registry.clone(),
+            state.policy_registry.clone(),
+        );
+        for (name, auth) in [
+            ("protected", serde_json::json!({"inboundAuth": "jwt"})),
+            ("open", serde_json::json!({"public": true})),
+        ] {
+            let mut contract = serde_json::json!({
+                "name": name, "tenant_id": "sandbox", "version": "1", "status": "published",
+                "endpoints": [{"path": "/ping", "methods": ["GET"],
+                    "backend_url": format!("{}/upstream/ping", server.uri())}]
+            });
+            contract
+                .as_object_mut()
+                .unwrap()
+                .extend(auth.as_object().unwrap().clone());
+            let contract: crate::uac::UacContractSpec =
+                serde_json::from_value(contract).expect("contract");
+            assert!(contract.validate().is_empty());
+            binder.bind(&contract).await.expect("bind");
+            state.contract_registry.upsert(contract);
+            state
+                .credential_store
+                .upsert(crate::proxy::credentials::BackendCredential {
+                    route_id: format!("uac:sandbox:{name}:0"),
+                    auth_type: crate::proxy::credentials::AuthType::ApiKey,
+                    header_name: "X-Backend-Key".into(),
+                    header_value: format!("route-level-{name}"),
+                    oauth2: None,
+                    allowed_origin: None,
+                    shared_with_tenants: false,
+                });
+        }
+        let token = mint_tenant_payload(&issuer, serde_json::json!({"tenant_id": "sandbox"}));
+        let call = |path: &'static str, bearer: Option<String>| {
+            let state = state.clone();
+            async move {
+                let mut builder = axum::http::Request::builder().uri(path);
+                if let Some(bearer) = bearer {
+                    builder = builder.header("Authorization", format!("Bearer {bearer}"));
+                }
+                crate::proxy::dynamic::dynamic_proxy(
+                    axum::extract::State(state),
+                    builder.body(axum::body::Body::empty()).expect("request"),
+                )
+                .await
+                .status()
+                .as_u16()
+            }
+        };
+
+        // Validated JWT on a route with a jwt_validation policy: credential forwarded.
+        assert_eq!(
+            call("/apis/sandbox/protected/ping", Some(token.clone())).await,
+            200
+        );
+        // No bearer, or a bearer the gateway did not sign: refused, backend not called.
+        assert_eq!(call("/apis/sandbox/protected/ping", None).await, 401);
+        assert_eq!(
+            call("/apis/sandbox/protected/ping", Some("not-a-jwt".into())).await,
+            401
+        );
+        // Public route with a route credential: no bearer validation happens on
+        // this path, so there is never an identity and the call is refused,
+        // even with a valid JWT.
+        assert_eq!(call("/apis/sandbox/open/ping", None).await, 401);
+        assert_eq!(
+            call("/apis/sandbox/open/ping", Some(token.clone())).await,
+            401
+        );
+
+        let received = server.received_requests().await.unwrap_or_default();
+        let forwarded: Vec<_> = received
+            .iter()
+            .filter(|request| request.url.path() == "/upstream/ping")
+            .collect();
+        assert_eq!(
+            forwarded.len(),
+            1,
+            "only the validated call reaches the backend"
+        );
+        assert_eq!(
+            forwarded[0]
+                .headers
+                .get("x-backend-key")
+                .and_then(|value| value.to_str().ok()),
+            Some("route-level-protected")
+        );
+    }
+
+    #[tokio::test]
     async fn regression_signed_tenant_claim_contract() {
         let (validator, issuer, _server) = validator_against_test_key().await;
         for extra in [

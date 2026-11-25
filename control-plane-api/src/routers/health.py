@@ -7,6 +7,7 @@ K8s-standard health endpoints for pod monitoring:
 """
 
 import asyncio
+import logging
 import time
 from datetime import UTC, datetime
 
@@ -18,6 +19,8 @@ from ..services import kafka_service, keycloak_service
 from ..services.gateway_service import gateway_service
 from ..services.git_provider import git_provider_factory
 from ..services.vault_client import get_vault_client
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/health", tags=["Health"])
 
@@ -183,7 +186,9 @@ async def readiness():
     try:
         checks["vault"] = await _vault_readiness_status()
     except Exception as e:
-        checks["vault"] = f"error: {e!s}"
+        # The probe is unauthenticated: report a fixed status, keep details in logs.
+        logger.warning("Secret store readiness check failed: %s", type(e).__name__)
+        checks["vault"] = "error"
 
     status = "healthy" if all_healthy else "degraded"
 

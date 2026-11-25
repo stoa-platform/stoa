@@ -162,3 +162,18 @@ async def test_status_values_and_cache_expiry(monkeypatch):
 async def test_disabled_store():
     with patch.object(health, "get_vault_client", return_value=MagicMock(enabled=False)):
         assert await health._vault_readiness_status() == "disabled"
+
+
+@pytest.mark.asyncio
+async def test_store_check_error_gives_no_detail(healthy_deps, caplog):
+    detail = "synthetic-detail http://store.invalid:8200/v1/sys/health"
+    with (
+        patch.object(health, "get_vault_client", side_effect=RuntimeError(detail)),
+        caplog.at_level("WARNING", logger=health.__name__),
+    ):
+        response = await health.readiness()
+    assert response.checks["vault"] == "error"
+    assert detail not in response.model_dump_json()
+    assert response.status == "healthy"  # the store stays non-critical
+    assert any("RuntimeError" in r.getMessage() for r in caplog.records)
+    assert not any(detail in r.getMessage() for r in caplog.records)

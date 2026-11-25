@@ -591,10 +591,15 @@ impl AppState {
         };
 
         // Initialize memory monitor (CAB-1829)
-        let memory_monitor = MemoryMonitor::new(config.memory_limit_mb);
+        let memory_monitor = MemoryMonitor::with_watermarks(
+            config.memory_limit_mb,
+            config.memory_backpressure_high_ratio,
+            config.memory_backpressure_low_ratio,
+        );
         tracing::info!(
             limit_mb = config.memory_limit_mb,
             threshold_mb = memory_monitor.threshold_bytes() / (1024 * 1024),
+            release_mb = memory_monitor.release_bytes() / (1024 * 1024),
             "Memory budget monitor initialized"
         );
 

@@ -39,6 +39,10 @@ tokio-tungstenite = { version = "0.29", features = ["rustls-tls-webpki-roots"] }
 uuid = { version = "1", features = ["v4", "serde"] }  # Session IDs
 rand = "0.10"                                # Thread-local PRNG for traceparent (perf)
 socket2 = "0.6"                             # TCP backlog tuning (perf)
+hyper = { version = "1", features = ["server", "http1", "http2"] }  # HTTP server with connection-level limits
+hyper-util = { version = "0.1", features = ["server", "server-auto", "tokio", "http1", "http2"] }
+http-body = "1"                             # Response body wrapper for in-flight tracking
+tower = { version = "0.5", features = ["util"] }  # Router oneshot from the HTTP server loop
 urlencoding = "2"                           # URL encoding for query params
 url = "2"                                    # URL parsing (admin input validation — GW-1 P1-9)
 

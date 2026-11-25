@@ -90,6 +90,14 @@ pub enum ConfigError {
     #[error("tcp_rate_limit_per_ip must be a finite positive f64 when set (got {0})")]
     TcpRateLimitNotFinite(f64),
 
+    /// Backpressure watermarks must satisfy `0 < low <= high <= 1` (finite).
+    /// An inverted pair would release before activating and flap on every sample.
+    #[error(
+        "memory backpressure watermarks must satisfy 0 < low <= high <= 1 \
+         (got high={high}, low={low})"
+    )]
+    InvalidBackpressureWatermarks { high: f64, low: f64 },
+
     /// MCP entrypoints need an explicit token audience. There is no default,
     /// and a production gateway does not start without it.
     #[error(
@@ -278,6 +286,14 @@ impl Config {
             if !rate.is_finite() || rate <= 0.0 {
                 return Err(ConfigError::TcpRateLimitNotFinite(rate));
             }
+        }
+
+        let (high, low) = (
+            self.memory_backpressure_high_ratio,
+            self.memory_backpressure_low_ratio,
+        );
+        if !(high.is_finite() && low.is_finite() && low > 0.0 && low <= high && high <= 1.0) {
+            return Err(ConfigError::InvalidBackpressureWatermarks { high, low });
         }
 
         let mcp_audience_missing = self
@@ -864,6 +880,64 @@ mod tests {
             ..Config::default()
         };
         config.validate().expect("positive finite must validate");
+    }
+
+    #[test]
+    fn regression_validate_backpressure_watermarks() {
+        Config::default()
+            .validate()
+            .expect("default watermarks (0.80 / 0.70) are valid");
+        for (high, low) in [
+            (0.7, 0.8),
+            (0.8, 0.0),
+            (1.2, 0.7),
+            (f64::NAN, 0.7),
+            (0.8, f64::INFINITY),
+        ] {
+            let config = Config {
+                memory_backpressure_high_ratio: high,
+                memory_backpressure_low_ratio: low,
+                ..Config::default()
+            };
+            assert!(
+                matches!(
+                    config.validate(),
+                    Err(ConfigError::InvalidBackpressureWatermarks { .. })
+                ),
+                "high={high} low={low} must be rejected"
+            );
+        }
+        let equal = Config {
+            memory_backpressure_high_ratio: 0.8,
+            memory_backpressure_low_ratio: 0.8,
+            ..Config::default()
+        };
+        equal.validate().expect("low == high disables hysteresis");
+    }
+
+    #[test]
+    #[allow(clippy::result_large_err)] // figment::Jail closure returns Result<(), figment::Error>
+    fn env_vars_set_connection_limits_and_watermarks() {
+        use figment::providers::{Env, Serialized};
+        use figment::{Figment, Jail};
+
+        Jail::expect_with(|jail| {
+            jail.set_env("STOA_HTTP_IDLE_TIMEOUT_SECS", "30");
+            jail.set_env("STOA_HTTP_HEADER_READ_TIMEOUT_SECS", "5");
+            jail.set_env("STOA_HTTP_MAX_CONNECTIONS", "2048");
+            jail.set_env("STOA_MEMORY_BACKPRESSURE_HIGH_RATIO", "0.85");
+            jail.set_env("STOA_MEMORY_BACKPRESSURE_LOW_RATIO", "0.6");
+            let figment = Figment::new()
+                .merge(Serialized::defaults(Config::default()))
+                .merge(Env::prefixed("STOA_").split("__"));
+            let cfg: Config = figment.extract()?;
+            assert_eq!(cfg.http_idle_timeout_secs, 30);
+            assert_eq!(cfg.http_header_read_timeout_secs, 5);
+            assert_eq!(cfg.http_max_connections, 2048);
+            assert_eq!(cfg.memory_backpressure_high_ratio, 0.85);
+            assert_eq!(cfg.memory_backpressure_low_ratio, 0.6);
+            Ok(())
+        });
     }
 
     // CAB-2165 Bundle 1: verify that env vars pick up the enum deserialization

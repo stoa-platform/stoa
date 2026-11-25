@@ -1466,6 +1466,11 @@ pub fn init_all_metrics() {
     Lazy::force(&MTLS_CERTS_EXPIRING_SOON);
     Lazy::force(&FEDERATION_REQUESTS_TOTAL);
     Lazy::force(&crate::memory::MEMORY_USAGE_BYTES);
+    Lazy::force(&crate::memory::MEMORY_LIMIT_BYTES);
+    Lazy::force(&crate::memory::BACKPRESSURE_ACTIVE);
+    Lazy::force(&crate::memory::BACKPRESSURE_REJECTIONS_TOTAL);
+    Lazy::force(&crate::memory::OPEN_FDS);
+    crate::server::init_metrics();
     Lazy::force(&DPOP_VALIDATIONS_TOTAL);
     Lazy::force(&SENDER_CONSTRAINT_CHECKS_TOTAL);
     Lazy::force(&SUPERVISION_DECISIONS_TOTAL);

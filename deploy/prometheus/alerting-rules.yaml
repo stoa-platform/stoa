@@ -76,6 +76,63 @@ spec:
             runbook_url: "https://github.com/stoa-platform/stoa/blob/main/docs/runbooks/alerting-runbooks.md#stoa-gateway-oidc"
 
     # ============================================
+    # STOA Gateway resource / connection alerts
+    # ============================================
+    - name: stoa.stoa-gateway-resources.rules
+      rules:
+        - alert: StoaGatewayMemoryHigh
+          expr: |
+            gateway_memory_usage_bytes > 0.7 * gateway_memory_limit_bytes
+          for: 10m
+          labels:
+            severity: warning
+            component: stoa-gateway
+          annotations:
+            summary: "STOA Gateway memory above 70% of its limit"
+            description: "Gateway {{ $labels.pod }} RSS is above 70% of the configured limit for 10 minutes; backpressure starts at 80%."
+            runbook_url: "https://github.com/stoa-platform/stoa/blob/main/docs/runbooks/alerting-runbooks.md#stoa-gateway-memory"
+
+        - alert: StoaGatewayBackpressureRejections
+          expr: |
+            sum by (pod) (rate(gateway_backpressure_rejections_total[5m])) > 0
+          for: 2m
+          labels:
+            severity: critical
+            component: stoa-gateway
+          annotations:
+            summary: "STOA Gateway rejecting requests with 503 (memory backpressure)"
+            description: "Gateway {{ $labels.pod }} is rejecting {{ $value | humanize }} req/s with 503 because memory backpressure is active."
+            runbook_url: "https://github.com/stoa-platform/stoa/blob/main/docs/runbooks/alerting-runbooks.md#stoa-gateway-memory"
+
+        - alert: StoaGatewayConnectionsHigh
+          expr: |
+            (
+              gateway_http_connections_active > 0.8 * gateway_http_connections_max
+              and gateway_http_connections_max > 0
+            )
+            or gateway_process_open_fds > 8192
+          for: 10m
+          labels:
+            severity: warning
+            component: stoa-gateway
+          annotations:
+            summary: "STOA Gateway open connections high"
+            description: "Gateway {{ $labels.pod }} holds a high number of client connections or open sockets (value {{ $value }}) for 10 minutes."
+            runbook_url: "https://github.com/stoa-platform/stoa/blob/main/docs/runbooks/alerting-runbooks.md#stoa-gateway-connections"
+
+        - alert: StoaGatewayConnectionsRejected
+          expr: |
+            sum by (pod) (rate(gateway_http_connections_rejected_total[5m])) > 0
+          for: 5m
+          labels:
+            severity: warning
+            component: stoa-gateway
+          annotations:
+            summary: "STOA Gateway connection cap reached"
+            description: "Gateway {{ $labels.pod }} is closing new connections because the connection cap is reached."
+            runbook_url: "https://github.com/stoa-platform/stoa/blob/main/docs/runbooks/alerting-runbooks.md#stoa-gateway-connections"
+
+    # ============================================
     # STOA Gateway mTLS Alerts (CAB-864)
     # ============================================
     - name: stoa.stoa-gateway-mtls.rules

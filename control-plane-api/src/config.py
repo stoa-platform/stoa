@@ -746,6 +746,9 @@ class Settings(BaseSettings):
     VAULT_KUBERNETES_ROLE: str = "control-plane-api"
     VAULT_MOUNT_POINT: str = "secret"
     VAULT_ENABLED: bool = True  # Set to False to skip Vault operations (credentials not stored)
+    # Per-request timeout of the secrets-store client, in seconds. hvac waits
+    # 30 s by default; a store that stops answering would hold callers that long.
+    VAULT_TIMEOUT_SECONDS: float = Field(default=3.0, gt=0)
     AUDIT_PSEUDO_VAULT_KEY_NAME: str = Field(
         default="audit-pseudo",
         description=(

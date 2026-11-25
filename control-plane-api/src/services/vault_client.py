@@ -54,10 +54,12 @@ class VaultClient:
         kubernetes_role: str | None = None,
         mount_point: str = "secret",
         enabled: bool = True,
+        timeout: float = 3.0,
     ):
         self.vault_addr = vault_addr
         self.mount_point = mount_point
         self.enabled = enabled
+        self.timeout = timeout
         self._client: hvac.Client | None = None
         self._vault_token = vault_token
         self._kubernetes_role = kubernetes_role
@@ -81,7 +83,7 @@ class VaultClient:
         if self._client is not None and self._client.is_authenticated():
             return self._client
 
-        self._client = hvac.Client(url=self.vault_addr, adapter=_PrivateAdapter)
+        self._client = hvac.Client(url=self.vault_addr, adapter=_PrivateAdapter, timeout=self.timeout)
 
         # Try Kubernetes auth first (in-cluster)
         if self._kubernetes_role:
@@ -308,6 +310,7 @@ def get_vault_client() -> VaultClient:
             kubernetes_role=settings.VAULT_KUBERNETES_ROLE,
             mount_point=settings.VAULT_MOUNT_POINT,
             enabled=settings.VAULT_ENABLED,
+            timeout=settings.VAULT_TIMEOUT_SECONDS,
         )
 
     return _vault_client

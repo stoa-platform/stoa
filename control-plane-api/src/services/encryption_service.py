@@ -7,6 +7,8 @@ with BACKEND_ENCRYPTION_KEY_REQUIRED=true it stops startup instead, and a
 malformed key is refused at startup too (see ensure_backend_encryption_key).
 """
 
+import base64
+import binascii
 import hmac
 import json
 import logging
@@ -46,9 +48,16 @@ class BackendEncryptionKeyInvalidError(RuntimeError):
 
 
 def _is_public_dev_key(key: str | bytes) -> bool:
-    """True when key is the development key published in this repository."""
+    """True when key is the development key published in this repository.
+
+    Compares the decoded key bytes, decoded the way Fernet decodes its key.
+    """
     raw = key.encode() if isinstance(key, str) else key
-    return hmac.compare_digest(raw.strip(), _DEV_FERNET_KEY)
+    try:
+        decoded = base64.urlsafe_b64decode(raw.strip())
+    except (binascii.Error, ValueError):
+        return False
+    return hmac.compare_digest(decoded, base64.urlsafe_b64decode(_DEV_FERNET_KEY))
 
 
 def _key_missing_in_production() -> bool:

@@ -4,9 +4,9 @@
 Reads one field of the Kubernetes Secret with kubectl and reports only whether
 it is present, absent, empty, or the public development key. The value is
 never printed, logged or written to disk:
-- kubectl renders a go-template that outputs only the requested field, so the
-  other fields of the Secret never leave the cluster;
-- that output stays in this process's memory and is compared by digest;
+- kubectl renders a go-template, so kubectl passes only the requested field to
+  the script;
+- that field stays in this process's memory and is compared by digest;
 - kubectl's own stderr is not echoed.
 
 Exit codes:
@@ -37,9 +37,10 @@ import sys
 
 OK, ABSENT, EMPTY, MISSING_RESOURCE, KUBECTL_ERROR, PUBLISHED_DEFAULT = 0, 1, 2, 3, 4, 5
 
-# SHA-256 of the development Fernet key in src/services/encryption_service.py
-# (_DEV_FERNET_KEY). Only the digest is kept here; a test keeps them in sync.
-PUBLISHED_DEFAULT_SHA256 = bytes.fromhex("d52f58590537f9ea0f8778e1826d80f687754a6f6566c410bb3aac6a29512a15")
+# SHA-256 of the decoded bytes of the development Fernet key in
+# src/services/encryption_service.py (_DEV_FERNET_KEY). Only the digest is kept
+# here; a test keeps them in sync.
+PUBLISHED_DEFAULT_SHA256 = bytes.fromhex("871ecee010f50d56b7b5cebb47b37839dee920a06eab417a569fb740db0ac3f0")
 
 # Kubernetes Secret data keys: alphanumerics, '-', '_' and '.'. Checked before
 # the name is placed in the go-template.
@@ -69,7 +70,12 @@ def classify(rendered: str) -> int:
     stripped = decoded.strip()
     if not stripped:
         return EMPTY
-    if hmac.compare_digest(hashlib.sha256(stripped).digest(), PUBLISHED_DEFAULT_SHA256):
+    # Compare decoded key bytes, decoded the way Fernet decodes its key.
+    try:
+        decoded_bytes = base64.urlsafe_b64decode(stripped)
+    except (binascii.Error, ValueError):
+        return OK
+    if hmac.compare_digest(hashlib.sha256(decoded_bytes).digest(), PUBLISHED_DEFAULT_SHA256):
         return PUBLISHED_DEFAULT
     return OK
 

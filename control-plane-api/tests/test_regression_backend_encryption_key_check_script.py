@@ -143,6 +143,27 @@ def test_public_dev_key_reported_as_dev_key(tmp_path, padding):
     _assert_no_value(result)
 
 
+def _reencoded_dev_keys() -> list[str]:
+    decoded = base64.urlsafe_b64decode(enc_mod._DEV_FERNET_KEY)
+    return [base64.urlsafe_b64encode(decoded).decode(), base64.b64encode(decoded).decode()]
+
+
+@pytest.mark.parametrize("encoded", _reencoded_dev_keys())
+def test_dev_key_compared_on_decoded_bytes(tmp_path, encoded):
+    env = _fake_kubectl(tmp_path, document=_secret(BACKEND_ENCRYPTION_KEY=_b64(encoded)))
+    result = _run(env)
+    assert result.returncode == 5
+    assert result.stdout == ""
+    _assert_no_value(result)
+    assert encoded not in result.stderr
+
+
+@pytest.mark.parametrize("value", [MARKER, "!!!!", "c2hvcnQ"])
+def test_other_values_are_present(tmp_path, value):
+    env = _fake_kubectl(tmp_path, document=_secret(BACKEND_ENCRYPTION_KEY=_b64(value)))
+    assert _run(env).returncode == 0
+
+
 def test_dev_key_digest_matches_service_constant():
     import hashlib
     import importlib.util
@@ -150,7 +171,8 @@ def test_dev_key_digest_matches_service_constant():
     spec = importlib.util.spec_from_file_location("check_backend_encryption_key", SCRIPT)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    assert hashlib.sha256(enc_mod._DEV_FERNET_KEY).digest() == module.PUBLISHED_DEFAULT_SHA256
+    decoded = base64.urlsafe_b64decode(enc_mod._DEV_FERNET_KEY)
+    assert hashlib.sha256(decoded).digest() == module.PUBLISHED_DEFAULT_SHA256
     assert enc_mod._DEV_FERNET_KEY.decode() not in SCRIPT.read_text()
 
 

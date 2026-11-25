@@ -18,9 +18,8 @@ passes in every environment.
 ## Check
 
 The script prints only a status (`present`, `absent`, `empty`, public
-development key), never the value. kubectl renders a go-template that returns
-only the requested field, so the other fields of the Secret are not read. The
-script does not write any file and does not echo kubectl errors.
+development key), never the value. kubectl renders a go-template, so kubectl
+passes only the requested field to the script. The script does not write any file and does not echo kubectl errors.
 
 ```bash
 python3 control-plane-api/scripts/check_backend_encryption_key.py \

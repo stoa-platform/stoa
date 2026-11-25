@@ -7,6 +7,7 @@ BACKEND_ENCRYPTION_KEY_REQUIRED=true turns the same condition into a startup
 failure, and also refuses a key that is not a valid Fernet key.
 """
 
+import base64
 import logging
 
 import pytest
@@ -109,6 +110,25 @@ def production_with_public_dev_key(monkeypatch):
 def test_public_dev_key_counts_as_missing(production_with_public_dev_key, monkeypatch, padding):
     monkeypatch.setattr(settings, "BACKEND_ENCRYPTION_KEY", enc_mod._DEV_FERNET_KEY.decode() + padding)
     assert enc_mod._key_missing_in_production() is True
+
+
+def _reencoded_dev_keys() -> list[str]:
+    decoded = base64.urlsafe_b64decode(enc_mod._DEV_FERNET_KEY)
+    return [base64.urlsafe_b64encode(decoded).decode(), base64.b64encode(decoded).decode()]
+
+
+@pytest.mark.parametrize("encoded", _reencoded_dev_keys())
+def test_public_dev_key_compared_on_decoded_bytes(production_with_public_dev_key, monkeypatch, encoded):
+    monkeypatch.setattr(settings, "BACKEND_ENCRYPTION_KEY", encoded)
+    monkeypatch.setattr(settings, "BACKEND_ENCRYPTION_KEY_REQUIRED", True)
+    assert enc_mod._key_missing_in_production() is True
+    with pytest.raises(enc_mod.BackendEncryptionKeyMissingError):
+        enc_mod.ensure_backend_encryption_key()
+
+
+@pytest.mark.parametrize("value", ["!!!!", "c2hvcnQ", ""])
+def test_undecodable_key_is_not_the_dev_key(value):
+    assert enc_mod._is_public_dev_key(value) is False
 
 
 def test_public_dev_key_comparison_uses_compare_digest(monkeypatch):

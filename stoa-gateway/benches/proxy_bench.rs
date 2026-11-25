@@ -39,6 +39,7 @@ fn bench_route_lookup(c: &mut Criterion) {
             upstreams: vec![],
             load_balancer: Default::default(),
             trusted_backend: false,
+            public: false,
         });
     }
 
@@ -68,6 +69,7 @@ fn bench_route_lookup(c: &mut Criterion) {
             upstreams: vec![],
             load_balancer: Default::default(),
             trusted_backend: false,
+            public: false,
         });
     }
 

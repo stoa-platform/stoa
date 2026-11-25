@@ -198,6 +198,14 @@ pub struct UacContractSpec {
     /// Explicit policies. A `jwt_validation` entry is enforced on the REST proxy.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub policies: Vec<ContractPolicy>,
+    /// Explicit opt-in for anonymous access to the generated REST routes.
+    ///
+    /// REST routes of a contract without caller authentication (no JWT
+    /// `inbound_auth` and no `jwt_validation` policy) answer 401 unless this
+    /// is `true`. Route-level backend credentials are never forwarded for a
+    /// caller without an identity, even on a public contract.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub public: bool,
 }
 
 impl UacContractSpec {
@@ -227,6 +235,7 @@ impl UacContractSpec {
             inbound_auth: None,
             inbound_auth_audience: None,
             policies: Vec::new(),
+            public: false,
         }
     }
 
@@ -238,6 +247,16 @@ impl UacContractSpec {
                 .policies
                 .iter()
                 .any(|policy| is_jwt_validation_policy(&policy.policy_type))
+    }
+
+    /// True when the generated REST routes accept callers without an identity.
+    ///
+    /// Only an explicit `public: true` on a contract that declares no
+    /// `inbound_auth` and no JWT policy opens the routes. Everything else is
+    /// deny-by-default, including an `inbound_auth` value this gateway does
+    /// not support.
+    pub fn allows_anonymous_rest(&self) -> bool {
+        self.public && self.inbound_auth.is_none() && !self.requires_jwt_validation()
     }
 
     /// Recompute required_policies from the current classification.
@@ -283,6 +302,22 @@ impl UacContractSpec {
             if !self.requires_jwt_validation() {
                 errors.push("inbound_auth_audience requires JWT authentication".to_string());
             }
+        }
+
+        if let Some(value) = self.inbound_auth.as_deref() {
+            if !inbound_auth_requires_jwt(Some(value)) {
+                errors.push(format!(
+                    "inbound_auth must be one of: {}",
+                    SUPPORTED_INBOUND_AUTH.join(", ")
+                ));
+            }
+        }
+
+        if self.public && (self.inbound_auth.is_some() || self.requires_jwt_validation()) {
+            errors.push(
+                "public: true cannot be combined with inbound_auth or a jwt_validation policy"
+                    .to_string(),
+            );
         }
 
         // Validate LLM config if present
@@ -364,11 +399,20 @@ pub fn is_jwt_validation_policy(policy_type: &str) -> bool {
     )
 }
 
+/// `inbound_auth` values accepted on a contract. All of them mean "validate
+/// the caller RS256 bearer" on the generated REST routes.
+const SUPPORTED_INBOUND_AUTH: &[&str] = &[
+    "jwt",
+    "bearer",
+    "oauth2",
+    "oidc",
+    "client_credentials",
+    "jwt_validation",
+];
+
 fn inbound_auth_requires_jwt(value: Option<&str>) -> bool {
-    matches!(
-        value.unwrap_or("").trim().to_ascii_lowercase().as_str(),
-        "jwt" | "bearer" | "oauth2" | "oidc" | "client_credentials" | "jwt_validation"
-    )
+    let normalized = value.unwrap_or("").trim().to_ascii_lowercase();
+    SUPPORTED_INBOUND_AUTH.contains(&normalized.as_str())
 }
 
 // =============================================================================
@@ -434,6 +478,86 @@ mod tests {
             round_trip.inbound_auth_audience.as_deref(),
             Some("items-read")
         );
+    }
+
+    #[test]
+    fn regression_rest_routes_are_deny_by_default_unless_public() {
+        let mut spec = sample_contract();
+        assert!(!spec.public);
+        assert!(!spec.allows_anonymous_rest());
+
+        spec.public = true;
+        assert!(spec.allows_anonymous_rest());
+        assert!(spec.validate().is_empty());
+
+        spec.inbound_auth = Some("jwt".into());
+        assert!(!spec.allows_anonymous_rest());
+        assert!(spec
+            .validate()
+            .iter()
+            .any(|error| error.contains("public: true cannot be combined")));
+    }
+
+    #[test]
+    fn regression_unknown_inbound_auth_is_rejected() {
+        for value in ["mtls", "apikey", "api_key", "none", "", "  "] {
+            let mut spec = sample_contract();
+            spec.inbound_auth = Some(value.into());
+            assert!(
+                spec.validate()
+                    .iter()
+                    .any(|error| error.starts_with("inbound_auth must be one of")),
+                "{value:?} must be rejected"
+            );
+            assert!(!spec.requires_jwt_validation());
+            assert!(!spec.allows_anonymous_rest());
+        }
+        for value in [
+            "jwt",
+            " JWT ",
+            "bearer",
+            "oauth2",
+            "oidc",
+            "client_credentials",
+            "jwt_validation",
+        ] {
+            let mut spec = sample_contract();
+            spec.inbound_auth = Some(value.into());
+            assert!(spec.validate().is_empty(), "{value:?} must be accepted");
+        }
+    }
+
+    #[test]
+    fn regression_public_with_any_inbound_auth_is_rejected_and_stays_closed() {
+        for value in ["mtls", "apikey", "jwt", "oidc"] {
+            let mut spec = sample_contract();
+            spec.public = true;
+            spec.inbound_auth = Some(value.into());
+            assert!(
+                spec.validate()
+                    .iter()
+                    .any(|error| error.contains("public: true cannot be combined")),
+                "public + {value:?} must be rejected"
+            );
+            // Even when validation is bypassed (e.g. a reloaded contract), the
+            // generated routes are not opened.
+            assert!(
+                !spec.allows_anonymous_rest(),
+                "public + {value:?} must stay closed"
+            );
+        }
+    }
+
+    #[test]
+    fn public_flag_parses_and_is_omitted_when_false() {
+        let parsed: UacContractSpec = serde_json::from_str(
+            r#"{"name":"open","version":"1.0.0","tenant_id":"demo","public":true,"endpoints":[]}"#,
+        )
+        .unwrap();
+        assert!(parsed.public);
+
+        let closed = serde_json::to_value(sample_contract()).expect("serialize");
+        assert!(closed.get("public").is_none());
     }
 
     #[test]

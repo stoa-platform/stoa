@@ -234,6 +234,7 @@ fn bench_route_matching(c: &mut Criterion) {
             upstreams: vec![],
             load_balancer: Default::default(),
             trusted_backend: false,
+            public: false,
         });
     }
 
@@ -261,6 +262,7 @@ fn bench_route_matching(c: &mut Criterion) {
         upstreams: vec![],
         load_balancer: Default::default(),
         trusted_backend: false,
+        public: false,
     });
 
     c.bench_function("route_match_deep_prefix", |b| {

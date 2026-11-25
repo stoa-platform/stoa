@@ -1,17 +1,22 @@
 #!/usr/bin/env python3
 """Pre-deployment check: BACKEND_ENCRYPTION_KEY is set in the Control Plane API Secret.
 
-Reads the Kubernetes Secret with kubectl and reports only whether the key is
-present, absent or empty. The value is never printed, logged or written to
-disk: kubectl's JSON output stays in this process's memory, and kubectl's own
-stderr is not echoed.
+Reads one field of the Kubernetes Secret with kubectl and reports only whether
+it is present, absent, empty, or the public development key. The value is
+never printed, logged or written to disk:
+- kubectl renders a go-template that outputs only the requested field, so the
+  other fields of the Secret never leave the cluster;
+- that output stays in this process's memory and is compared by digest;
+- kubectl's own stderr is not echoed.
 
 Exit codes:
-  0  key present and non-empty
+  0  key present, non-empty and not the public development key
   1  key absent from the Secret
   2  key present but empty (or not valid base64)
   3  Secret not found
-  4  kubectl failed for another reason (access, context, timeout)
+  4  kubectl failed for another reason (access, context, timeout), or an
+     invalid key name
+  5  key is the public development key published in the repository
 
 Usage:
   check_backend_encryption_key.py [--namespace stoa-system]
@@ -24,40 +29,70 @@ from __future__ import annotations
 import argparse
 import base64
 import binascii
-import json
+import hashlib
+import hmac
+import re
 import subprocess
 import sys
 
-OK, ABSENT, EMPTY, MISSING_RESOURCE, KUBECTL_ERROR = 0, 1, 2, 3, 4
+OK, ABSENT, EMPTY, MISSING_RESOURCE, KUBECTL_ERROR, PUBLISHED_DEFAULT = 0, 1, 2, 3, 4, 5
+
+# SHA-256 of the development Fernet key in src/services/encryption_service.py
+# (_DEV_FERNET_KEY). Only the digest is kept here; a test keeps them in sync.
+PUBLISHED_DEFAULT_SHA256 = bytes.fromhex("d52f58590537f9ea0f8778e1826d80f687754a6f6566c410bb3aac6a29512a15")
+
+# Kubernetes Secret data keys: alphanumerics, '-', '_' and '.'. Checked before
+# the name is placed in the go-template.
+FIELD_NAME = re.compile(r"[-._a-zA-Z0-9]{1,253}")
+
+# Prefix marking "field present" in the template output, so an empty value is
+# told apart from an absent field.
+PRESENT_MARK = "="
 
 
-def classify(document: dict, field: str) -> int:
-    data = document.get("data") or {}
-    if field not in data:
+def field_template(field: str) -> str:
+    """go-template printing PRESENT_MARK and the base64 data of one field, or nothing."""
+    return f'{{{{range $k, $v := .data}}}}{{{{if eq $k "{field}"}}}}{PRESENT_MARK}{{{{$v}}}}{{{{end}}}}{{{{end}}}}'
+
+
+def classify(rendered: str) -> int:
+    """Status of the field from the template output (never returned or printed)."""
+    if rendered == "":
         return ABSENT
-    encoded = data[field] or ""
+    if not rendered.startswith(PRESENT_MARK):
+        return KUBECTL_ERROR
+    encoded = rendered[len(PRESENT_MARK) :]
     try:
         decoded = base64.b64decode(encoded, validate=True)
     except (binascii.Error, ValueError):
         return EMPTY
-    return OK if decoded.strip() else EMPTY
+    stripped = decoded.strip()
+    if not stripped:
+        return EMPTY
+    if hmac.compare_digest(hashlib.sha256(stripped).digest(), PUBLISHED_DEFAULT_SHA256):
+        return PUBLISHED_DEFAULT
+    return OK
 
 
-def fetch_resource(namespace: str, name: str, context: str | None, timeout: float) -> tuple[int, dict | None]:
-    command = ["kubectl", "get", "secret", name, "--namespace", namespace, "--output", "json"]
+def fetch_field(namespace: str, name: str, field: str, context: str | None, timeout: float) -> tuple[int, str]:
+    command = [
+        "kubectl",
+        "get",
+        "secret",
+        name,
+        "--namespace",
+        namespace,
+        f"--output=go-template={field_template(field)}",
+    ]
     if context:
         command += ["--context", context]
     try:
         result = subprocess.run(command, capture_output=True, text=True, timeout=timeout, check=False)  # noqa: S603 — fixed argv, no shell
     except (OSError, subprocess.TimeoutExpired):
-        return KUBECTL_ERROR, None
+        return KUBECTL_ERROR, ""
     if result.returncode != 0:
-        return (MISSING_RESOURCE if "NotFound" in result.stderr else KUBECTL_ERROR), None
-    try:
-        document = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        return KUBECTL_ERROR, None
-    return OK, document if isinstance(document, dict) else {}
+        return (MISSING_RESOURCE if "NotFound" in result.stderr else KUBECTL_ERROR), ""
+    return OK, result.stdout
 
 
 MESSAGES = {
@@ -66,6 +101,7 @@ MESSAGES = {
     EMPTY: "empty",
     MISSING_RESOURCE: "secret not found",
     KUBECTL_ERROR: "kubectl failed (no details shown)",
+    PUBLISHED_DEFAULT: "public development key (treated as absent)",
 }
 
 
@@ -79,10 +115,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--timeout", type=float, default=30.0)
     args = parser.parse_args(argv)
 
-    status, document = fetch_resource(args.namespace, args.resource, args.context, args.timeout)
-    if status == OK and document is not None:
-        status = classify(document, args.field)
-    del document
+    if not FIELD_NAME.fullmatch(args.field):
+        print("invalid key name", file=sys.stderr)
+        return KUBECTL_ERROR
+
+    status, rendered = fetch_field(args.namespace, args.resource, args.field, args.context, args.timeout)
+    if status == OK:
+        status = classify(rendered)
+    del rendered
     stream = sys.stdout if status == OK else sys.stderr
     print(f"{args.field} in {args.namespace}/{args.resource}: {MESSAGES[status]}", file=stream)
     return status

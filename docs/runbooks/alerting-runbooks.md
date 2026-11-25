@@ -76,6 +76,41 @@ kubectl describe deployment/stoa-gateway -n stoa-system | grep -E 'KEYCLOAK|OIDC
 **Common causes**: Keycloak down, realm misconfigured, OIDC secret rotated without gateway restart.
 **Mitigation**: verify Keycloak health, restart gateway if secret was rotated.
 
+### stoa-gateway-memory
+
+**Alerts**: `StoaGatewayMemoryHigh` — RSS > 70% of `gateway_memory_limit_bytes` for 10 min;
+`StoaGatewayBackpressureRejections` — `gateway_backpressure_rejections_total` increasing for 2 min.
+
+Backpressure activates at `STOA_MEMORY_BACKPRESSURE_HIGH_RATIO` (default 0.80) of
+`STOA_MEMORY_LIMIT_MB` and is released below `STOA_MEMORY_BACKPRESSURE_LOW_RATIO`
+(default 0.70). While active, non-probe requests get `503` with `Retry-After` and
+`Connection: close`.
+
+```bash
+# Memory, backpressure state and open sockets
+kubectl exec -n stoa-system deploy/stoa-gateway -- curl -s localhost:8080/metrics \
+  | grep -E '^gateway_(memory_|backpressure_|process_open_fds|http_connections_)'
+```
+
+**Common causes**: many idle client connections, traffic burst, large payloads.
+**Mitigation**: check `gateway_http_connections_active` / `gateway_process_open_fds`
+first (see below); scale out or raise the memory limit if usage is genuine.
+
+### stoa-gateway-connections
+
+**Alerts**: `StoaGatewayConnectionsHigh` — active connections > 80% of
+`STOA_HTTP_MAX_CONNECTIONS` or more than 8192 open fds for 10 min;
+`StoaGatewayConnectionsRejected` — new connections closed at the cap.
+
+Idle connections are closed after `STOA_HTTP_IDLE_TIMEOUT_SECS` (default 60) and
+incomplete HTTP/1 request heads after `STOA_HTTP_HEADER_READ_TIMEOUT_SECS`
+(default 10); `gateway_http_connections_timed_out_total{reason}` counts both.
+
+**Common causes**: callers opening a new connection per request without closing
+idle ones, connection pools without an idle timeout.
+**Mitigation**: identify the callers holding connections, fix their connection
+reuse; raise the cap only if the load is legitimate.
+
 ---
 
 ## Control Plane API

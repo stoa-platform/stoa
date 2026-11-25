@@ -964,6 +964,37 @@ pub struct Config {
     #[serde(default = "default_memory_limit_mb")]
     pub memory_limit_mb: u64,
 
+    /// Fraction of `memory_limit_mb` at which backpressure activates (default 0.80).
+    /// Env: STOA_MEMORY_BACKPRESSURE_HIGH_RATIO
+    #[serde(default = "default_memory_backpressure_high_ratio")]
+    pub memory_backpressure_high_ratio: f64,
+
+    /// Fraction of `memory_limit_mb` below which backpressure is released
+    /// (default 0.70). Must be `<= memory_backpressure_high_ratio`; the gap
+    /// prevents flapping when usage hovers around a single threshold.
+    /// Env: STOA_MEMORY_BACKPRESSURE_LOW_RATIO
+    #[serde(default = "default_memory_backpressure_low_ratio")]
+    pub memory_backpressure_low_ratio: f64,
+
+    // === HTTP server connection limits ===
+    /// Close client connections with no in-flight request and no traffic for
+    /// this many seconds (keep-alive and never-used connections). 0 = disabled.
+    /// Env: STOA_HTTP_IDLE_TIMEOUT_SECS
+    #[serde(default = "default_http_idle_timeout_secs")]
+    pub http_idle_timeout_secs: u64,
+
+    /// Close HTTP/1 connections that do not finish sending a request head
+    /// within this many seconds after its first byte. 0 = disabled.
+    /// Env: STOA_HTTP_HEADER_READ_TIMEOUT_SECS
+    #[serde(default = "default_http_header_read_timeout_secs")]
+    pub http_header_read_timeout_secs: u64,
+
+    /// Maximum concurrent client connections; extra connections are closed at
+    /// accept. 0 = unlimited.
+    /// Env: STOA_HTTP_MAX_CONNECTIONS
+    #[serde(default = "default_http_max_connections")]
+    pub http_max_connections: usize,
+
     // === Error Snapshots (CAB-1645) ===
     /// Enable opt-in error snapshot capture for 5xx responses.
     /// When enabled, request/response body excerpts are captured with PII masking.
@@ -1305,6 +1336,20 @@ impl fmt::Debug for Config {
             .field("ip_blocklist_file", &self.ip_blocklist_file)
             .field("tcp_rate_limit_per_ip", &self.tcp_rate_limit_per_ip)
             .field("memory_limit_mb", &self.memory_limit_mb)
+            .field(
+                "memory_backpressure_high_ratio",
+                &self.memory_backpressure_high_ratio,
+            )
+            .field(
+                "memory_backpressure_low_ratio",
+                &self.memory_backpressure_low_ratio,
+            )
+            .field("http_idle_timeout_secs", &self.http_idle_timeout_secs)
+            .field(
+                "http_header_read_timeout_secs",
+                &self.http_header_read_timeout_secs,
+            )
+            .field("http_max_connections", &self.http_max_connections)
             .field("snapshot_enabled", &self.snapshot_enabled)
             .field("snapshot_max_count", &self.snapshot_max_count)
             .field("snapshot_max_age_secs", &self.snapshot_max_age_secs)

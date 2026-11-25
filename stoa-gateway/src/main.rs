@@ -207,18 +207,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "STOA Gateway listening"
     );
 
-    // into_make_service_with_connect_info: exposes peer SocketAddr to middleware
-    // (required by tcp_filter::pre_tls_filter for IP-based filtering after accept)
+    // HTTP server with idle/header deadlines and a connection cap. Requests carry
+    // ConnectInfo<SocketAddr> (required by tcp_filter::pre_tls_filter for
+    // IP-based filtering after accept).
+    let limits = stoa_gateway::server::ServerLimits::from_config_values(
+        config.http_idle_timeout_secs,
+        config.http_header_read_timeout_secs,
+        config.http_max_connections,
+    );
+    info!(
+        idle_timeout_secs = config.http_idle_timeout_secs,
+        header_read_timeout_secs = config.http_header_read_timeout_secs,
+        max_connections = config.http_max_connections,
+        "HTTP connection limits (0 = disabled)"
+    );
     use futures::FutureExt;
     let shutdown = shutdown_signal().shared();
     let http_shutdown = shutdown.clone();
     let http = async {
-        axum::serve(
-            listener,
-            app.into_make_service_with_connect_info::<SocketAddr>(),
-        )
-        .with_graceful_shutdown(http_shutdown)
-        .await?;
+        stoa_gateway::server::serve(listener, app, limits, http_shutdown).await?;
         Ok::<(), Box<dyn std::error::Error>>(())
     };
     let authorization = async {

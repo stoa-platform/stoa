@@ -44,6 +44,7 @@ pub mod rate_limit;
 pub mod resilience;
 pub mod routes;
 pub mod security_headers;
+pub mod server;
 pub mod shadow;
 pub mod skills;
 pub mod soap;
@@ -922,7 +923,8 @@ async fn ready(
 
 // === Memory Backpressure Middleware (CAB-1829) ===
 
-/// Rejects requests with 503 + Retry-After when memory is under pressure.
+/// Rejects requests with 503 + Retry-After + `Connection: close` when memory
+/// is under pressure, and counts them in `gateway_backpressure_rejections_total`.
 /// Health and metrics endpoints are exempt to keep probes and scraping alive.
 async fn memory_backpressure_middleware(
     monitor: memory::MemoryMonitor,
@@ -936,6 +938,8 @@ async fn memory_backpressure_middleware(
     }
 
     if monitor.under_pressure() {
+        // Counted here: this layer sits outside http_metrics_middleware.
+        memory::BACKPRESSURE_REJECTIONS_TOTAL.inc();
         return memory::backpressure_response();
     }
 
@@ -963,6 +967,97 @@ mod tests {
     use tower::ServiceExt;
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    fn backpressure_app(monitor: memory::MemoryMonitor) -> Router {
+        Router::new()
+            .route("/work", axum::routing::get(|| async { "ok" }))
+            .route("/health", axum::routing::get(|| async { "ok" }))
+            .layer(axum::middleware::from_fn(move |request, next| {
+                memory_backpressure_middleware(monitor.clone(), request, next)
+            }))
+    }
+
+    #[tokio::test]
+    async fn regression_backpressure_rejections_counter_increments() {
+        let monitor = memory::MemoryMonitor::new(100);
+        monitor.observe(90 * 1024 * 1024);
+        assert!(monitor.under_pressure());
+        let app = backpressure_app(monitor.clone());
+
+        let before = memory::BACKPRESSURE_REJECTIONS_TOTAL.get();
+        let resp = app
+            .clone()
+            .oneshot(Request::builder().uri("/work").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(
+            resp.headers().get(axum::http::header::CONNECTION).unwrap(),
+            "close"
+        );
+        assert!(memory::BACKPRESSURE_REJECTIONS_TOTAL.get() > before);
+
+        // Exempt probes are served and not counted as rejections.
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // Once released, requests pass again.
+        monitor.observe(10 * 1024 * 1024);
+        let resp = app
+            .oneshot(Request::builder().uri("/work").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn regression_backpressure_503_closes_connection_end_to_end() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let monitor = memory::MemoryMonitor::new(100);
+        monitor.observe(90 * 1024 * 1024);
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let (stop_tx, stop_rx) = tokio::sync::oneshot::channel::<()>();
+        let server = tokio::spawn(server::serve(
+            listener,
+            backpressure_app(monitor),
+            server::ServerLimits::default(),
+            async move {
+                let _ = stop_rx.await;
+            },
+        ));
+
+        // Keep-alive request: the server must still close the socket after the 503.
+        let mut stream = tokio::net::TcpStream::connect(addr).await.unwrap();
+        stream
+            .write_all(b"GET /work HTTP/1.1\r\nHost: t\r\n\r\n")
+            .await
+            .unwrap();
+        let mut out = Vec::new();
+        tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            stream.read_to_end(&mut out),
+        )
+        .await
+        .expect("server closes the connection after the 503")
+        .unwrap();
+        let text = String::from_utf8_lossy(&out).to_ascii_lowercase();
+        assert!(text.starts_with("http/1.1 503"), "{text}");
+        assert!(text.contains("connection: close"), "{text}");
+
+        let _ = stop_tx.send(());
+        server.await.unwrap().unwrap();
+    }
 
     fn sidecar_app() -> Router {
         let config = config::Config {

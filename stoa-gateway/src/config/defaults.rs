@@ -288,6 +288,26 @@ pub(super) fn default_memory_limit_mb() -> u64 {
     512
 }
 
+pub(super) fn default_memory_backpressure_high_ratio() -> f64 {
+    crate::memory::DEFAULT_HIGH_WATERMARK_RATIO
+}
+
+pub(super) fn default_memory_backpressure_low_ratio() -> f64 {
+    crate::memory::DEFAULT_LOW_WATERMARK_RATIO
+}
+
+pub(super) fn default_http_idle_timeout_secs() -> u64 {
+    crate::server::DEFAULT_IDLE_TIMEOUT_SECS
+}
+
+pub(super) fn default_http_header_read_timeout_secs() -> u64 {
+    crate::server::DEFAULT_HEADER_READ_TIMEOUT_SECS
+}
+
+pub(super) fn default_http_max_connections() -> usize {
+    crate::server::DEFAULT_MAX_CONNECTIONS
+}
+
 pub(super) fn default_snapshot_max_count() -> usize {
     100
 }
@@ -496,6 +516,11 @@ impl Default for Config {
             ip_blocklist_file: None,
             tcp_rate_limit_per_ip: None,
             memory_limit_mb: default_memory_limit_mb(),
+            memory_backpressure_high_ratio: default_memory_backpressure_high_ratio(),
+            memory_backpressure_low_ratio: default_memory_backpressure_low_ratio(),
+            http_idle_timeout_secs: default_http_idle_timeout_secs(),
+            http_header_read_timeout_secs: default_http_header_read_timeout_secs(),
+            http_max_connections: default_http_max_connections(),
             snapshot_enabled: false,
             snapshot_max_count: default_snapshot_max_count(),
             snapshot_max_age_secs: default_snapshot_max_age_secs(),

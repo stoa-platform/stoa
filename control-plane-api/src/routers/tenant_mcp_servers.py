@@ -249,13 +249,14 @@ async def create_tenant_mcp_server(
             vault = get_vault_client()
             credentials_dict = request.credentials.model_dump(exclude_none=True)
             vault_path = await vault.store_credential(str(server.id), credentials_dict)
-            if vault_path:
-                server.credential_vault_path = vault_path
-            else:
-                logger.warning("Vault unavailable — credentials not stored for server %s", request.name)
         except Exception as e:
             logger.warning("Secret store error — server not created: %s", type(e).__name__)
             raise HTTPException(status_code=503, detail=SECRET_STORE_UNAVAILABLE_DETAIL) from None
+        if not vault_path:
+            # Secret store disabled: saving the server would drop the supplied credentials.
+            logger.warning("Secret store disabled — server not created: credentials supplied")
+            raise HTTPException(status_code=503, detail=SECRET_STORE_UNAVAILABLE_DETAIL)
+        server.credential_vault_path = vault_path
 
     server = await repo.create(server)
     await db.commit()
@@ -308,14 +309,16 @@ async def update_tenant_mcp_server(
             vault = get_vault_client()
             credentials_dict = request.credentials.model_dump(exclude_none=True)
             vault_path = await vault.store_credential(str(server.id), credentials_dict)
-            if vault_path:
-                server.credential_vault_path = vault_path
-            else:
-                logger.warning("Vault unavailable — credentials not updated for server %s", server.name)
         except Exception as e:
             await db.rollback()
             logger.warning("Secret store error — server not updated: %s", type(e).__name__)
             raise HTTPException(status_code=503, detail=SECRET_STORE_UNAVAILABLE_DETAIL) from None
+        if not vault_path:
+            # Secret store disabled: saving the server would drop the supplied credentials.
+            await db.rollback()
+            logger.warning("Secret store disabled — server not updated: credentials supplied")
+            raise HTTPException(status_code=503, detail=SECRET_STORE_UNAVAILABLE_DETAIL)
+        server.credential_vault_path = vault_path
 
     server = await repo.update(server)
     await db.commit()

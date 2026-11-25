@@ -2,7 +2,9 @@
 
 Creating or updating an external or tenant MCP server with credentials used to
 succeed when the store failed: the server was saved without them and only a
-log line said so. The request now fails with 503 and nothing is written.
+log line said so. The request now fails with 503 and nothing is written. The
+same applies when the store is disabled (VAULT_ENABLED=false) and credentials
+are supplied: they could not be kept, so the write is refused.
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -114,6 +116,70 @@ def test_tenant_update_refused(app_with_tenant_admin, mock_db_session, error):
 
 def test_create_without_credentials_does_not_touch_the_store(app_with_cpi_admin, mock_db_session):
     vault = _failing_vault(VaultUnavailableError("down"))
+    with patch(EXT_REPO) as repo_cls, patch(EXT_VAULT, return_value=vault):
+        repo = repo_cls.return_value
+        repo.get_by_name = AsyncMock(return_value=None)
+        repo.create = AsyncMock(return_value=external_server())
+        body = {k: v for k, v in EXT_CREATE.items() if k != "credentials"} | {"auth_type": "none"}
+        with TestClient(app_with_cpi_admin) as client:
+            response = client.post(EXT_BASE, json=body)
+    assert response.status_code == 201
+    vault.store_credential.assert_not_awaited()
+
+
+def _disabled_vault() -> MagicMock:
+    vault = MagicMock()
+    vault.enabled = False
+    vault.store_credential = AsyncMock(return_value=None)
+    return vault
+
+
+def test_external_create_refused_when_store_disabled(app_with_cpi_admin, mock_db_session):
+    with patch(EXT_REPO) as repo_cls, patch(EXT_VAULT, return_value=_disabled_vault()):
+        repo = repo_cls.return_value
+        repo.get_by_name = AsyncMock(return_value=None)
+        repo.create = AsyncMock(return_value=external_server())
+        with TestClient(app_with_cpi_admin) as client:
+            response = client.post(EXT_BASE, json=EXT_CREATE)
+    _assert_refused(response, repo, mock_db_session, "create")
+
+
+def test_external_update_refused_when_store_disabled(app_with_cpi_admin, mock_db_session):
+    server_id = uuid4()
+    with patch(EXT_REPO) as repo_cls, patch(EXT_VAULT, return_value=_disabled_vault()):
+        repo = repo_cls.return_value
+        repo.get_by_id = AsyncMock(return_value=external_server(id=server_id))
+        repo.update = AsyncMock()
+        with TestClient(app_with_cpi_admin) as client:
+            response = client.put(f"{EXT_BASE}/{server_id}", json={"credentials": {"bearer_token": "placeholder"}})
+    _assert_refused(response, repo, mock_db_session, "update")
+    mock_db_session.rollback.assert_awaited()
+
+
+def test_tenant_create_refused_when_store_disabled(app_with_tenant_admin, mock_db_session):
+    with patch(TEN_REPO) as repo_cls, patch(TEN_VAULT, return_value=_disabled_vault()):
+        repo = repo_cls.return_value
+        repo.get_by_tenant_and_name = AsyncMock(return_value=None)
+        repo.create = AsyncMock(return_value=tenant_server())
+        with TestClient(app_with_tenant_admin) as client:
+            response = client.post(TEN_BASE, json=TEN_CREATE)
+    _assert_refused(response, repo, mock_db_session, "create")
+
+
+def test_tenant_update_refused_when_store_disabled(app_with_tenant_admin, mock_db_session):
+    server = tenant_server()
+    with patch(TEN_REPO) as repo_cls, patch(TEN_VAULT, return_value=_disabled_vault()):
+        repo = repo_cls.return_value
+        repo.get_by_id = AsyncMock(return_value=server)
+        repo.update = AsyncMock()
+        with TestClient(app_with_tenant_admin) as client:
+            response = client.put(f"{TEN_BASE}/{server.id}", json={"credentials": {"bearer_token": "placeholder"}})
+    _assert_refused(response, repo, mock_db_session, "update")
+    mock_db_session.rollback.assert_awaited()
+
+
+def test_create_without_credentials_allowed_when_store_disabled(app_with_cpi_admin, mock_db_session):
+    vault = _disabled_vault()
     with patch(EXT_REPO) as repo_cls, patch(EXT_VAULT, return_value=vault):
         repo = repo_cls.return_value
         repo.get_by_name = AsyncMock(return_value=None)

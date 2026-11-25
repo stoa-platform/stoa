@@ -186,7 +186,7 @@ async def readiness():
     try:
         checks["vault"] = await _vault_readiness_status()
     except Exception as e:
-        # The probe is unauthenticated: report a fixed status, keep details in logs.
+        # Probe output stays generic: report a fixed status, keep details in logs.
         logger.warning("Secret store readiness check failed: %s", type(e).__name__)
         checks["vault"] = "error"
 

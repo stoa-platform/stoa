@@ -755,6 +755,10 @@ class Settings(BaseSettings):
 
     # Backend API encryption (Fernet key for BYOK credential storage)
     BACKEND_ENCRYPTION_KEY: str = ""
+    # When true, production refuses to start without BACKEND_ENCRYPTION_KEY
+    # instead of falling back to the public development key. Off by default
+    # until every deployment is confirmed to set the key.
+    BACKEND_ENCRYPTION_KEY_REQUIRED: bool = False
 
     # Database (PostgreSQL)
     DATABASE_URL: str = "postgresql+asyncpg://stoa:stoa@localhost:5432/stoa"

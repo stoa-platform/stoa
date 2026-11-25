@@ -137,6 +137,7 @@ from .services import (
     keycloak_service,
     metrics_service,
 )
+from .services.encryption_service import ensure_backend_encryption_key
 from .services.gateway_service import gateway_service
 from .tracing_config import configure_tracing, shutdown_tracing
 from .workers.audit_trail_consumer import audit_trail_consumer
@@ -203,6 +204,8 @@ async def lifespan(app: FastAPI):
         version=settings.VERSION,
         environment=settings.ENVIRONMENT,
     )
+    # Refuses to start only when BACKEND_ENCRYPTION_KEY_REQUIRED is set.
+    ensure_backend_encryption_key()
     if not settings.audit_demo_fallback_enabled:
         logger.info(
             "Audit demo fallback disabled",

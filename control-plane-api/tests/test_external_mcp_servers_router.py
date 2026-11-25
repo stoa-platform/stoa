@@ -551,8 +551,8 @@ class TestVaultCredentials:
 
         assert response.status_code == 201
 
-    def test_create_server_vault_failure_graceful(self, app_with_cpi_admin, mock_db_session):
-        """Vault failure during create still creates server (graceful degradation)."""
+    def test_create_server_vault_failure_refused(self, app_with_cpi_admin, mock_db_session):
+        """Vault failure during create refuses the request; nothing is saved."""
         mock_srv = _mock_server()
 
         with (
@@ -575,7 +575,8 @@ class TestVaultCredentials:
                     },
                 )
 
-        assert response.status_code == 201
+        assert response.status_code == 503
+        MockRepo.return_value.create.assert_not_awaited()
 
     def test_update_server_with_vault_credentials(self, app_with_cpi_admin, mock_db_session):
         """Update server stores new credentials in vault."""
@@ -598,8 +599,8 @@ class TestVaultCredentials:
 
         assert response.status_code == 200
 
-    def test_update_server_vault_failure_graceful(self, app_with_cpi_admin, mock_db_session):
-        """Vault failure during update still updates server (graceful degradation)."""
+    def test_update_server_vault_failure_refused(self, app_with_cpi_admin, mock_db_session):
+        """Vault failure during update refuses the request; nothing is saved."""
         server_id = uuid4()
         mock_srv = _mock_server(id=server_id)
 
@@ -617,7 +618,8 @@ class TestVaultCredentials:
                     json={"credentials": {"bearer_token": "secret"}},
                 )
 
-        assert response.status_code == 200
+        assert response.status_code == 503
+        MockRepo.return_value.update.assert_not_awaited()
 
     def test_delete_server_with_vault_cleanup(self, app_with_cpi_admin, mock_db_session):
         """Delete server cleans up vault credentials."""

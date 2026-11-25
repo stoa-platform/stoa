@@ -51,6 +51,10 @@ router = APIRouter(
     tags=["Tenant MCP Servers"],
 )
 
+# Returned when credentials were supplied but the secret store could not save
+# them: the server is not created or changed, so it never runs without them.
+SECRET_STORE_UNAVAILABLE_DETAIL = "Secret store unavailable; credentials were not saved. Retry later."
+
 # Name prefix separator for global uniqueness
 _NAME_SEP = "--"
 
@@ -239,7 +243,7 @@ async def create_tenant_mcp_server(
         created_by=user.id,
     )
 
-    # Store credentials in Vault if provided (graceful degradation)
+    # Store credentials in Vault if provided; a store failure refuses the request (503)
     if request.credentials and request.auth_type != AuthTypeEnum.NONE:
         try:
             vault = get_vault_client()
@@ -250,7 +254,8 @@ async def create_tenant_mcp_server(
             else:
                 logger.warning("Vault unavailable — credentials not stored for server %s", request.name)
         except Exception as e:
-            logger.warning("Vault error — credentials not stored: %s", e)
+            logger.warning("Secret store error — server not created: %s", type(e).__name__)
+            raise HTTPException(status_code=503, detail=SECRET_STORE_UNAVAILABLE_DETAIL) from None
 
     server = await repo.create(server)
     await db.commit()
@@ -308,7 +313,9 @@ async def update_tenant_mcp_server(
             else:
                 logger.warning("Vault unavailable — credentials not updated for server %s", server.name)
         except Exception as e:
-            logger.warning("Vault error — credentials not updated: %s", e)
+            await db.rollback()
+            logger.warning("Secret store error — server not updated: %s", type(e).__name__)
+            raise HTTPException(status_code=503, detail=SECRET_STORE_UNAVAILABLE_DETAIL) from None
 
     server = await repo.update(server)
     await db.commit()

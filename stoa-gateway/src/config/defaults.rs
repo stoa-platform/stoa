@@ -494,6 +494,8 @@ impl Default for Config {
             llm_proxy_mistral_api_key: None,
             llm_proxy_mistral_upstream_url: default_llm_proxy_mistral_upstream_url(),
             llm_proxy_skip_validation: false,
+            llm_proxy_token_budget_enabled: false,
+            llm_proxy_token_budget_limit: default_token_budget_limit(),
             api_proxy: ApiProxyConfig::default(),
             hegemon_enabled: false,
             hegemon_budget_daily_usd: default_hegemon_budget_daily_usd(),

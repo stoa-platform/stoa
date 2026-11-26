@@ -19,7 +19,9 @@ use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 use tracing::{debug, error, info, warn};
 
-use crate::llm::{CostCalculator, LlmProvider, TokenUsage};
+use crate::guardrails::{BudgetStatus, TokenBudgetTracker};
+use crate::llm::{BudgetGate, CostCalculator, LlmProvider, TokenUsage};
+use crate::metrics;
 use crate::state::AppState;
 
 /// Dedicated HTTP client for LLM proxy (long timeouts, large bodies).
@@ -91,6 +93,20 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
         format = ?api_format,
         "LLM proxy: consumer authenticated"
     );
+
+    // Step 2b: per-consumer token budget (refuse before any upstream call once reached)
+    let budget_key = llm_budget_key(&tenant_id, &subscription_id);
+    if let Some(ref tracker) = state.llm_token_budget {
+        if let Some(rejection) = check_llm_token_budget(
+            tracker,
+            &budget_key,
+            &tenant_id,
+            &subscription_id,
+            api_format,
+        ) {
+            return rejection;
+        }
+    }
 
     // Step 3: Resolve upstream — subscription-aware Azure routing or static fallback (CAB-1615)
     let resolved = resolve_upstream(&state, api_format, &subscription_id, &request_path);
@@ -300,6 +316,8 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
         let sse_cost_calculator = state.cost_calculator.clone();
         let sse_request_model = request_model.clone();
         let sse_provider = resolved_provider;
+        let sse_budget = state.llm_token_budget.clone();
+        let sse_budget_key = budget_key.clone();
 
         // Spawn async metering (non-blocking, fire-and-forget)
         tokio::spawn(async move {
@@ -332,6 +350,15 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
                             latency_ms = elapsed.as_millis() as u64,
                             "LLM proxy: usage extracted from SSE stream"
                         );
+
+                        if let Some(ref tracker) = sse_budget {
+                            record_llm_token_usage(
+                                tracker,
+                                &sse_budget_key,
+                                &metering_tenant,
+                                &usage,
+                            );
+                        }
 
                         // Track cost to Prometheus (CAB-1487 wiring — SSE path)
                         track_cost(
@@ -386,6 +413,10 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
                 "LLM proxy: usage extracted from response"
             );
 
+            if let Some(ref tracker) = state.llm_token_budget {
+                record_llm_token_usage(tracker, &budget_key, &tenant_id, &usage);
+            }
+
             // Track cost to Prometheus (CAB-1487 wiring)
             track_cost(
                 &state.cost_calculator,
@@ -425,6 +456,98 @@ pub async fn llm_proxy_handler(State(state): State<AppState>, request: Request<B
         *response.headers_mut() = response_headers;
         response
     }
+}
+
+/// Budget key of an LLM proxy consumer (tenant and subscription resolved from its key).
+fn llm_budget_key(tenant_id: &str, subscription_id: &str) -> String {
+    format!("llm:{tenant_id}:{subscription_id}")
+}
+
+/// Total tokens charged to the consumer budget for one upstream response.
+fn llm_usage_tokens(usage: &LlmUsage) -> u64 {
+    usage
+        .input_tokens
+        .saturating_add(usage.output_tokens)
+        .saturating_add(usage.cache_read_input_tokens)
+        .saturating_add(usage.cache_creation_input_tokens)
+}
+
+/// Charge the tokens reported by the upstream to the consumer budget.
+fn record_llm_token_usage(
+    tracker: &TokenBudgetTracker,
+    budget_key: &str,
+    tenant_id: &str,
+    usage: &LlmUsage,
+) {
+    tracker.record_usage(budget_key, llm_usage_tokens(usage));
+    metrics::record_token_budget_usage(tenant_id, "input", usage.input_tokens);
+    metrics::record_token_budget_usage(tenant_id, "output", usage.output_tokens);
+}
+
+/// Pre-flight budget check: `Some(429 response)` once the consumer budget is reached.
+fn check_llm_token_budget(
+    tracker: &TokenBudgetTracker,
+    budget_key: &str,
+    tenant_id: &str,
+    subscription_id: &str,
+    api_format: LlmApiFormat,
+) -> Option<Response> {
+    match tracker.check_budget(budget_key) {
+        BudgetStatus::Exceeded => {
+            metrics::record_token_budget_exceeded(tenant_id);
+            let remaining_secs = tracker.window_remaining_secs(budget_key);
+            warn!(
+                tenant_id = %tenant_id,
+                subscription_id = %subscription_id,
+                remaining_secs = remaining_secs,
+                "LLM proxy token budget exceeded — request rejected"
+            );
+            Some(token_budget_exceeded_response(api_format, remaining_secs))
+        }
+        BudgetStatus::Warning { pct } => {
+            warn!(
+                tenant_id = %tenant_id,
+                subscription_id = %subscription_id,
+                pct = pct,
+                "LLM proxy token budget warning: {}% used",
+                pct
+            );
+            None
+        }
+        BudgetStatus::OK => None,
+    }
+}
+
+/// 429 in the error shape of the client's API format, with `Retry-After`.
+fn token_budget_exceeded_response(api_format: LlmApiFormat, remaining_secs: u64) -> Response {
+    let message = format!("Token budget exceeded for this consumer. Resets in {remaining_secs}s.");
+    let body = match api_format {
+        LlmApiFormat::OpenAiCompat => serde_json::json!({
+            "error": {
+                "message": message,
+                "type": "budget_exceeded",
+                "code": "token_budget_exceeded",
+            }
+        }),
+        LlmApiFormat::Anthropic => serde_json::json!({
+            "type": "error",
+            "error": {
+                "type": "rate_limit_error",
+                "message": message,
+            }
+        }),
+    };
+    let mut response = (StatusCode::TOO_MANY_REQUESTS, axum::Json(body)).into_response();
+    let (name, value) = BudgetGate::exceeded_header();
+    response
+        .headers_mut()
+        .insert(name, HeaderValue::from_static(value));
+    if let Ok(retry_after) = HeaderValue::from_str(&remaining_secs.to_string()) {
+        response
+            .headers_mut()
+            .insert(header::RETRY_AFTER, retry_after);
+    }
+    response
 }
 
 /// Resolved upstream target — either Azure (subscription-routed) or static (config-based).
@@ -1284,5 +1407,185 @@ data: {"type":"message_stop"}
             }
             other => panic!("Expected Static resolution, got: {other:?}"),
         }
+    }
+
+    // === Per-consumer token budget on the LLM proxy ===
+
+    fn budget_state(upstream: &str, enabled: bool, limit: u64) -> AppState {
+        let config = crate::config::Config {
+            llm_proxy_enabled: true,
+            llm_proxy_skip_validation: true,
+            llm_proxy_upstream_url: upstream.to_string(),
+            llm_proxy_mistral_upstream_url: upstream.to_string(),
+            llm_proxy_api_key: Some("fixture-upstream".to_string()),
+            llm_proxy_token_budget_enabled: enabled,
+            llm_proxy_token_budget_limit: limit,
+            ..Default::default()
+        };
+        AppState::new(config)
+    }
+
+    async fn openai_upstream(prompt_tokens: u64, completion_tokens: u64) -> wiremock::MockServer {
+        let upstream = wiremock::MockServer::start().await;
+        wiremock::Mock::given(wiremock::matchers::method("POST"))
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_json(
+                serde_json::json!({
+                    "choices": [],
+                    "usage": {"prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens}
+                }),
+            ))
+            .mount(&upstream)
+            .await;
+        upstream
+    }
+
+    async fn call(state: &AppState, path: &str) -> (StatusCode, HeaderMap, serde_json::Value) {
+        let request = Request::builder()
+            .method("POST")
+            .uri(path)
+            .header("x-api-key", "fixture-consumer-key")
+            .header("content-type", "application/json")
+            .body(Body::from(r#"{"model":"fixture","messages":[]}"#))
+            .expect("request");
+        let response = llm_proxy_handler(State(state.clone()), request).await;
+        let status = response.status();
+        let headers = response.headers().clone();
+        let bytes = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .expect("body");
+        let json = serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null);
+        (status, headers, json)
+    }
+
+    #[test]
+    fn llm_budget_key_is_per_tenant_and_subscription() {
+        assert_eq!(llm_budget_key("t1", "s1"), "llm:t1:s1");
+        assert_ne!(llm_budget_key("t1", "s1"), llm_budget_key("t1", "s2"));
+        assert_ne!(llm_budget_key("t1", "s1"), llm_budget_key("t2", "s1"));
+    }
+
+    #[test]
+    fn llm_usage_tokens_counts_input_output_and_cache() {
+        let usage = LlmUsage {
+            input_tokens: 10,
+            output_tokens: 20,
+            cache_read_input_tokens: 3,
+            cache_creation_input_tokens: 4,
+        };
+        assert_eq!(llm_usage_tokens(&usage), 37);
+        let huge = LlmUsage {
+            input_tokens: u64::MAX,
+            output_tokens: 1,
+            cache_read_input_tokens: 0,
+            cache_creation_input_tokens: 0,
+        };
+        assert_eq!(llm_usage_tokens(&huge), u64::MAX);
+    }
+
+    #[test]
+    fn llm_budget_is_cumulative_and_isolated_per_consumer() {
+        let tracker = TokenBudgetTracker::new(100, 3600);
+        let usage = LlmUsage {
+            input_tokens: 40,
+            output_tokens: 20,
+            cache_read_input_tokens: 0,
+            cache_creation_input_tokens: 0,
+        };
+        let a = llm_budget_key("t1", "consumer-a");
+        let b = llm_budget_key("t1", "consumer-b");
+        record_llm_token_usage(&tracker, &a, "t1", &usage);
+        assert!(check_llm_token_budget(
+            &tracker,
+            &a,
+            "t1",
+            "consumer-a",
+            LlmApiFormat::OpenAiCompat
+        )
+        .is_none());
+        record_llm_token_usage(&tracker, &a, "t1", &usage);
+        assert!(check_llm_token_budget(
+            &tracker,
+            &a,
+            "t1",
+            "consumer-a",
+            LlmApiFormat::OpenAiCompat
+        )
+        .is_some());
+        assert!(check_llm_token_budget(
+            &tracker,
+            &b,
+            "t1",
+            "consumer-b",
+            LlmApiFormat::OpenAiCompat
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn llm_budget_zero_limit_is_unlimited() {
+        let tracker = TokenBudgetTracker::new(0, 3600);
+        let key = llm_budget_key("t1", "s1");
+        tracker.record_usage(&key, u64::MAX);
+        assert!(
+            check_llm_token_budget(&tracker, &key, "t1", "s1", LlmApiFormat::Anthropic).is_none()
+        );
+    }
+
+    #[tokio::test]
+    async fn token_budget_exceeded_response_openai_shape() {
+        let response = token_budget_exceeded_response(LlmApiFormat::OpenAiCompat, 42);
+        assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(response.headers()["x-stoa-budget-exceeded"], "true");
+        assert_eq!(response.headers()[header::RETRY_AFTER], "42");
+        let bytes = axum::body::to_bytes(response.into_body(), 1024)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(body["error"]["type"], "budget_exceeded");
+        assert_eq!(body["error"]["code"], "token_budget_exceeded");
+        assert!(body["error"]["message"].as_str().unwrap().contains("42s"));
+    }
+
+    #[tokio::test]
+    async fn token_budget_exceeded_response_anthropic_shape() {
+        let response = token_budget_exceeded_response(LlmApiFormat::Anthropic, 7);
+        assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+        let bytes = axum::body::to_bytes(response.into_body(), 1024)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(body["type"], "error");
+        assert_eq!(body["error"]["type"], "rate_limit_error");
+    }
+
+    #[tokio::test]
+    async fn llm_proxy_refuses_once_consumer_budget_is_reached() {
+        let upstream = openai_upstream(60, 40).await;
+        let state = budget_state(&upstream.uri(), true, 150);
+
+        // 0 used -> allowed (100 charged), 100 < 150 -> allowed (200 charged), then refused.
+        let (s1, _, _) = call(&state, "/v1/chat/completions").await;
+        let (s2, _, _) = call(&state, "/v1/chat/completions").await;
+        let (s3, h3, b3) = call(&state, "/v1/chat/completions").await;
+        assert_eq!(s1, StatusCode::OK);
+        assert_eq!(s2, StatusCode::OK);
+        assert_eq!(s3, StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(h3["x-stoa-budget-exceeded"], "true");
+        assert_eq!(b3["error"]["type"], "budget_exceeded");
+        // The refused request never reached the upstream.
+        assert_eq!(upstream.received_requests().await.unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn llm_proxy_budget_disabled_by_default() {
+        let upstream = openai_upstream(600, 400).await;
+        let state = budget_state(&upstream.uri(), false, 150);
+        assert!(state.llm_token_budget.is_none());
+        for _ in 0..3 {
+            let (status, _, _) = call(&state, "/v1/chat/completions").await;
+            assert_eq!(status, StatusCode::OK);
+        }
+        assert_eq!(upstream.received_requests().await.unwrap().len(), 3);
+        assert!(!crate::config::Config::default().llm_proxy_token_budget_enabled);
     }
 }

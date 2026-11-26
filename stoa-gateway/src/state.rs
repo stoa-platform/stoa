@@ -108,6 +108,9 @@ pub struct AppState {
     /// Per-tenant token budget tracker (CAB-1337 Phase 2)
     /// None when token budget tracking is disabled.
     pub token_budget: Option<Arc<TokenBudgetTracker>>,
+    /// Per-consumer token budget tracker for the LLM proxy.
+    /// None when `llm_proxy_token_budget_enabled` is false.
+    pub llm_token_budget: Option<Arc<TokenBudgetTracker>>,
     /// Per-tenant guardrail policy store (CAB-1337 Phase 3)
     /// Populated by K8s CRD watcher; empty store = all tenants use global defaults.
     pub guardrail_policy_store: Arc<GuardrailPolicyStore>,
@@ -442,6 +445,23 @@ impl AppState {
             None
         };
 
+        // Per-consumer token budget on the LLM proxy: same tracker type as the MCP
+        // path, separate counters keyed by LLM consumer.
+        let llm_token_budget = if config.llm_proxy_token_budget_enabled {
+            let window_secs = config.token_budget_window_hours * 3600;
+            tracing::info!(
+                limit = config.llm_proxy_token_budget_limit,
+                window_hours = config.token_budget_window_hours,
+                "LLM proxy token budget enabled"
+            );
+            Some(Arc::new(TokenBudgetTracker::new(
+                config.llm_proxy_token_budget_limit,
+                window_secs,
+            )))
+        } else {
+            None
+        };
+
         // Initialize mTLS stats (CAB-864)
         let mtls_stats = Arc::new(MtlsStats::new());
         if config.mtls.enabled {
@@ -758,6 +778,7 @@ impl AppState {
             skill_health,
             federation_cache,
             token_budget,
+            llm_token_budget,
             guardrail_policy_store: Arc::new(GuardrailPolicyStore::new()),
             deploy_progress,
             prompt_cache,

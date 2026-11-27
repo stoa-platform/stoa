@@ -132,11 +132,13 @@ pub struct ContractPolicy {
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct ConsumerQuotaConfig {
     consumers: Vec<ConsumerQuotaEntry>,
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct ConsumerQuotaEntry {
     consumer_id: String,
     rate_limit_per_minute: u32,
@@ -228,7 +230,7 @@ impl UacContractSpec {
         let mut policies = self
             .policies
             .iter()
-            .filter(|p| p.policy_type == "consumer_quota");
+            .filter(|policy| is_consumer_quota_policy(&policy.policy_type));
         let Some(policy) = policies.next() else {
             return Ok(None);
         };
@@ -322,6 +324,15 @@ impl UacContractSpec {
     /// Returns a list of validation errors (empty = valid).
     pub fn validate(&self) -> Vec<String> {
         let mut errors = Vec::new();
+
+        for (i, policy) in self.policies.iter().enumerate() {
+            let policy_type = &policy.policy_type;
+            if !is_jwt_validation_policy(policy_type) && !is_consumer_quota_policy(policy_type) {
+                errors.push(format!(
+                    "policies[{i}].type has unknown policy type {policy_type:?}"
+                ));
+            }
+        }
 
         if let Err(error) = self.consumer_quotas() {
             errors.push(error.to_string());
@@ -451,6 +462,10 @@ pub fn is_jwt_validation_policy(policy_type: &str) -> bool {
     )
 }
 
+fn is_consumer_quota_policy(policy_type: &str) -> bool {
+    policy_type.trim().to_ascii_lowercase() == "consumer_quota"
+}
+
 /// `inbound_auth` values accepted on a contract. All of them mean "validate
 /// the caller RS256 bearer" on the generated REST routes.
 const SUPPORTED_INBOUND_AUTH: &[&str] = &[
@@ -495,6 +510,15 @@ mod tests {
         spec.description = Some("Process payments".to_string());
         spec.endpoints = vec![sample_endpoint()];
         spec
+    }
+
+    fn sample_quota_policy(policy_type: &str) -> ContractPolicy {
+        ContractPolicy {
+            policy_type: policy_type.into(),
+            config: serde_json::json!({
+                "consumers": [{"consumer_id": "reader", "rate_limit_per_minute": 5}]
+            }),
+        }
     }
 
     fn sample_llm_example() -> EndpointLlmExample {
@@ -657,6 +681,77 @@ mod tests {
         .unwrap();
         assert!(from_policy.requires_jwt_validation());
         assert_eq!(from_policy.policies[0].policy_type, "jwt_validation");
+    }
+
+    #[test]
+    fn consumer_quota_policy_types_are_normalized() {
+        for policy_type in ["Consumer_Quota", " consumer_quota", " consumer_quota "] {
+            let mut spec = sample_contract();
+            spec.inbound_auth = Some("jwt".into());
+            spec.policies.push(sample_quota_policy(policy_type));
+
+            assert!(
+                spec.validate().is_empty(),
+                "{policy_type:?} must be accepted"
+            );
+            let quotas = spec.consumer_quotas().unwrap().unwrap();
+            assert_eq!(quotas.get("reader"), Some(&5));
+        }
+    }
+
+    #[test]
+    fn unknown_contract_policy_types_are_rejected() {
+        for policy_type in [
+            "consummer_quota",
+            "",
+            "  ",
+            "rate_limit",
+            "ip_whitelist",
+            "oauth",
+        ] {
+            let mut spec = sample_contract();
+            spec.inbound_auth = Some("jwt".into());
+            spec.policies.push(sample_quota_policy(policy_type));
+
+            assert_eq!(
+                spec.validate(),
+                vec![format!(
+                    "policies[0].type has unknown policy type {policy_type:?}"
+                )]
+            );
+            assert_eq!(spec.consumer_quotas(), Ok(None));
+        }
+    }
+
+    #[test]
+    fn duplicate_normalized_consumer_quota_policies_are_rejected() {
+        let mut spec = sample_contract();
+        spec.inbound_auth = Some("jwt".into());
+        spec.policies = vec![
+            sample_quota_policy("Consumer_Quota"),
+            sample_quota_policy(" consumer_quota "),
+        ];
+
+        let error = "only one consumer_quota policy is allowed";
+        assert_eq!(spec.consumer_quotas(), Err(error));
+        assert_eq!(spec.validate(), vec![error.to_string()]);
+    }
+
+    #[test]
+    fn unknown_consumer_quota_config_fields_are_rejected() {
+        let mut spec = sample_contract();
+        spec.inbound_auth = Some("jwt".into());
+        let mut extra_config_field = sample_quota_policy("consumer_quota");
+        let mut extra_entry_field = extra_config_field.clone();
+        extra_config_field.config["extra"] = serde_json::json!(true);
+        extra_entry_field.config["consumers"][0]["extra"] = serde_json::json!(true);
+
+        let error = "consumer_quota requires config.consumers with valid IDs and integer limits";
+        for policy in [extra_config_field, extra_entry_field] {
+            spec.policies = vec![policy];
+            assert_eq!(spec.consumer_quotas(), Err(error));
+            assert_eq!(spec.validate(), vec![error.to_string()]);
+        }
     }
 
     #[test]

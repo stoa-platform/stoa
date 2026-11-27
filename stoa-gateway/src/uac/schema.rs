@@ -463,7 +463,7 @@ pub fn is_jwt_validation_policy(policy_type: &str) -> bool {
 }
 
 fn is_consumer_quota_policy(policy_type: &str) -> bool {
-    policy_type.trim().to_ascii_lowercase() == "consumer_quota"
+    policy_type.trim().eq_ignore_ascii_case("consumer_quota")
 }
 
 /// `inbound_auth` values accepted on a contract. All of them mean "validate

@@ -2,7 +2,7 @@
 //!
 //! MCP-native API Gateway bridging legacy systems to AI agents.
 
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use tokio::net::TcpListener;
 use tracing::{error, info, warn};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
@@ -28,6 +28,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 _ => error.into(),
             }
         })?;
+
+    // Resolve the HTTP listen address up front so an invalid STOA_HOST stops
+    // startup before any background work begins (CAB-2681).
+    let http_addr = bind_addr(&config.host, config.port)?;
 
     // Initialize tracing (with optional OTel export if configured)
     init_tracing(&config);
@@ -184,7 +188,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             config.ext_authz_required_scopes.clone(),
             engine,
         );
-        Some((tokio::net::TcpListener::bind(addr).await?, service))
+        let listener = tokio::net::TcpListener::bind(addr).await?;
+        let bound = listener.local_addr()?;
+        info!(addr = %bound, "ext_authz gRPC listening");
+        Some((listener, service))
     } else {
         None
     };
@@ -207,10 +214,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = stoa_gateway::build_router(state);
 
     // Start server with tuned TCP socket (CAB-1359 perf)
-    let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
-    let listener = create_tcp_listener(addr)?;
+    let listener = create_tcp_listener(http_addr)?;
+    let bound = listener.local_addr()?;
     info!(
-        addr = %addr,
+        addr = %bound,
         backlog = TCP_BACKLOG,
         "STOA Gateway listening"
     );
@@ -286,6 +293,16 @@ async fn prewarm_connections(cp_url: &str) {
             }
         }
     }
+}
+
+/// Build the HTTP listen address from `STOA_HOST` and `STOA_PORT` (CAB-2681).
+///
+/// Only literal IPv4 or IPv6 addresses are accepted; hostnames are not resolved.
+fn bind_addr(host: &str, port: u16) -> Result<SocketAddr, Box<dyn std::error::Error>> {
+    let ip: IpAddr = host.parse().map_err(|_| {
+        format!("STOA_HOST must be an IP address such as 0.0.0.0 or ::, got '{host}'")
+    })?;
+    Ok(SocketAddr::new(ip, port))
 }
 
 /// Create a TCP listener with tuned socket options for high-concurrency workloads.
@@ -614,5 +631,51 @@ async fn init_mode_components(config: &Config) {
             attestation_interval = config.attestation_interval,
             "Agent governance enabled (ADR-012)"
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::net::{Ipv4Addr, Ipv6Addr};
+
+    #[tokio::test]
+    async fn loopback_host_binds_loopback_ipv4() {
+        let addr = bind_addr("127.0.0.1", 0).expect("loopback host is valid");
+        assert_eq!(addr.ip(), IpAddr::V4(Ipv4Addr::LOCALHOST));
+
+        let listener = create_tcp_listener(addr).expect("bind on loopback");
+        let bound = listener.local_addr().expect("bound address");
+        assert_eq!(bound.ip(), IpAddr::V4(Ipv4Addr::LOCALHOST));
+        assert_ne!(bound.port(), 0);
+        drop(listener);
+    }
+
+    #[test]
+    fn non_ip_host_is_rejected() {
+        for host in ["not-an-ip", "localhost", "", "0.0.0.0:8080"] {
+            let error = bind_addr(host, 8080).expect_err(host);
+            assert!(
+                error.to_string().contains(&format!("'{host}'")),
+                "error should name the invalid value: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn default_host_is_unspecified_ipv4() {
+        let config = Config::default();
+        let addr = bind_addr(&config.host, config.port).expect("default host is valid");
+        assert_eq!(addr.ip(), IpAddr::V4(Ipv4Addr::UNSPECIFIED));
+        assert_eq!(addr.port(), config.port);
+    }
+
+    #[test]
+    fn ipv6_hosts_are_accepted() {
+        let loopback = bind_addr("::1", 8080).expect("IPv6 loopback is valid");
+        assert_eq!(loopback.ip(), IpAddr::V6(Ipv6Addr::LOCALHOST));
+
+        let any = bind_addr("::", 8080).expect("IPv6 unspecified is valid");
+        assert_eq!(any.ip(), IpAddr::V6(Ipv6Addr::UNSPECIFIED));
     }
 }

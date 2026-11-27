@@ -480,10 +480,11 @@ mod transactional {
     use async_trait::async_trait;
     use axum::http::StatusCode;
     use axum::response::IntoResponse;
+    use serde_json::{json, Value};
 
     use crate::handlers::admin::contracts::{perform_delete, perform_upsert, ContractBinders};
     use crate::uac::registry::ContractRegistry;
-    use crate::uac::schema::{ContractStatus, UacContractSpec, UacEndpoint};
+    use crate::uac::schema::{ContractPolicy, ContractStatus, UacContractSpec, UacEndpoint};
 
     /// Mock binder with per-method outcomes; remembers calls for assertions.
     struct MockBinders {
@@ -556,6 +557,188 @@ mod transactional {
             .await
             .unwrap();
         serde_json::from_slice(&body).unwrap()
+    }
+
+    fn contract_with_quota(consumers: Value) -> UacContractSpec {
+        let mut spec = valid_contract("catalog", "demo");
+        spec.inbound_auth = Some("jwt".into());
+        spec.policies.push(ContractPolicy {
+            policy_type: "consumer_quota".into(),
+            config: json!({"consumers": consumers}),
+        });
+        spec
+    }
+
+    fn quota_contract(limit: u32) -> UacContractSpec {
+        contract_with_quota(json!([{"consumer_id": "reader", "rate_limit_per_minute": limit}]))
+    }
+
+    #[tokio::test]
+    async fn contract_quota_is_optional_and_invalid_updates_leave_bindings_untouched() {
+        let registry = Arc::new(ContractRegistry::new());
+        let binders = MockBinders::happy(1, 1);
+        let original = valid_contract("catalog", "demo");
+        assert_eq!(
+            perform_upsert(registry.clone(), &binders, false, original)
+                .await
+                .status(),
+            StatusCode::CREATED
+        );
+
+        let mut missing_jwt = quota_contract(5);
+        missing_jwt.inbound_auth = None;
+        let mut duplicate_policy = quota_contract(5);
+        duplicate_policy
+            .policies
+            .push(duplicate_policy.policies[0].clone());
+        for invalid in [
+            quota_contract(0),
+            contract_with_quota(json!([{"consumer_id": " ", "rate_limit_per_minute": 5}])),
+            contract_with_quota(json!([{"consumer_id": "reader", "rate_limit_per_minute": 5.5}])),
+            contract_with_quota(
+                json!([{"consumer_id": "reader", "rate_limit_per_minute": 5}, {"consumer_id": "reader", "rate_limit_per_minute": 6}]),
+            ),
+            contract_with_quota(Value::Null),
+            missing_jwt,
+            duplicate_policy,
+        ] {
+            assert_eq!(
+                perform_upsert(registry.clone(), &binders, false, invalid)
+                    .await
+                    .status(),
+                StatusCode::BAD_REQUEST
+            );
+        }
+        assert_eq!(binders.call_log(), vec!["bind_rest", "bind_mcp"]);
+        assert_eq!(registry.count(), 1);
+        assert!(registry.consumer_quotas("demo:catalog").is_none());
+    }
+
+    #[tokio::test]
+    async fn contract_snapshot_keeps_canonical_scope_and_rolls_back_on_write_failure() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("contracts.json");
+        let registry = Arc::new(ContractRegistry::with_state_path(Some(path.clone())));
+        let key = "demo:catalog";
+        let mut spec = quota_contract(5);
+        spec.key = Some("catalog-alias".into());
+
+        std::fs::create_dir(&path).unwrap();
+        let binders = MockBinders::happy(1, 1);
+        let response = perform_upsert(registry.clone(), &binders, false, spec.clone()).await;
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(registry.count(), 0);
+        assert_eq!(
+            binders.call_log(),
+            vec!["bind_rest", "bind_mcp", "unbind_rest", "unbind_mcp"]
+        );
+        std::fs::remove_dir(&path).unwrap();
+
+        let response = perform_upsert(registry.clone(), &binders, false, spec.clone()).await;
+        assert_eq!(response.status(), StatusCode::CREATED);
+        assert_eq!(read_body_json(response).await["key"], "catalog-alias");
+        assert_eq!(
+            perform_upsert(registry.clone(), &binders, false, spec)
+                .await
+                .status(),
+            StatusCode::OK
+        );
+        assert!(registry.get("catalog-alias").is_none());
+        assert_eq!(registry.consumer_quotas(key).unwrap()["reader"], 5);
+        let snapshot = registry.read_snapshot().await.unwrap();
+        assert_eq!(snapshot.len(), 1);
+        assert_eq!(snapshot[0].key.as_deref(), Some("catalog-alias"));
+
+        let saved = dir.path().join("saved.json");
+        std::fs::rename(&path, &saved).unwrap();
+        std::fs::create_dir(&path).unwrap();
+        let binders = MockBinders::happy(1, 1);
+        assert_eq!(
+            perform_upsert(registry.clone(), &binders, false, quota_contract(8))
+                .await
+                .status(),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
+        assert_eq!(
+            binders.call_log(),
+            vec!["bind_rest", "bind_mcp", "bind_rest", "bind_mcp"]
+        );
+        assert_eq!(registry.consumer_quotas(key).unwrap()["reader"], 5);
+
+        let binders = MockBinders::happy(1, 1);
+        assert_eq!(
+            perform_delete(registry.clone(), &binders, key.into())
+                .await
+                .status(),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
+        assert_eq!(
+            binders.call_log(),
+            vec!["unbind_rest", "unbind_mcp", "bind_rest", "bind_mcp"]
+        );
+        assert_eq!(registry.consumer_quotas(key).unwrap()["reader"], 5);
+
+        std::fs::remove_dir(&path).unwrap();
+        std::fs::rename(saved, &path).unwrap();
+        assert_eq!(
+            registry.read_snapshot().await.unwrap()[0]
+                .consumer_quotas()
+                .unwrap()
+                .unwrap()["reader"],
+            5
+        );
+        assert_eq!(
+            perform_delete(registry.clone(), &binders, key.into())
+                .await
+                .status(),
+            StatusCode::OK
+        );
+        assert!(registry.read_snapshot().await.unwrap().is_empty());
+        assert_eq!(registry.count(), 0);
+    }
+
+    #[tokio::test]
+    async fn snapshot_restores_generated_bindings_from_declarative_endpoints() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = crate::config::Config {
+            contract_state_path: Some(dir.path().join("contracts.json")),
+            llm_enabled: true,
+            ..Default::default()
+        };
+        let state = crate::state::AppState::new(config.clone());
+        let mut spec = quota_contract(5);
+        spec.llm_config = Some(serde_json::from_value(json!({
+            "capabilities": [{"capability": "embed", "providers": [{
+                "name": "embedding", "model": "example-model", "backend_url": "https://example.com"
+            }]}]
+        })).unwrap());
+        let binders = super::super::RealBinders::from_state(&state);
+        let response = perform_upsert(state.contract_registry.clone(), &binders, true, spec).await;
+        assert_eq!(response.status(), StatusCode::CREATED);
+        assert_eq!(read_body_json(response).await["llm_capabilities"], 1);
+        let snapshot = state.contract_registry.read_snapshot().await.unwrap();
+        assert_eq!(snapshot[0].endpoints.len(), 1);
+
+        let restored = crate::state::AppState::new(config);
+        super::super::restore_contracts(&restored).await.unwrap();
+        assert_eq!(
+            restored
+                .contract_registry
+                .get("demo:catalog")
+                .unwrap()
+                .endpoints
+                .len(),
+            2
+        );
+        assert_eq!(restored.route_registry.count(), 2);
+        assert_eq!(restored.tool_registry.count(), state.tool_registry.count());
+        assert_eq!(
+            restored
+                .contract_registry
+                .consumer_quotas("demo:catalog")
+                .unwrap()["reader"],
+            5
+        );
     }
 
     // ── P1-1: upsert_contract_rest_bind_failure_does_not_persist_contract ─

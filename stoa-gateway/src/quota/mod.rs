@@ -28,8 +28,10 @@ mod rate_limiter;
 
 pub use budget_cache::{BudgetCache, BudgetCacheConfig};
 pub use middleware::quota_middleware;
+pub(crate) use middleware::{add_rate_limit_headers, quota_error_response};
 pub use quota_manager::{QuotaManager, QuotaManagerConfig};
 pub use quota_manager::{QuotaState, QuotaStats};
+pub(crate) use rate_limiter::ContractQuotaKey;
 pub use rate_limiter::PlanQuota;
 pub use rate_limiter::{ConsumerRateLimiter, RateLimiterConfig};
 

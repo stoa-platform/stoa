@@ -12,7 +12,7 @@ use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 /// 1024 matches nginx/envoy defaults.
 const TCP_BACKLOG: i32 = 1024;
 
-use stoa_gateway::config::Config;
+use stoa_gateway::config::{Config, ConfigError};
 use stoa_gateway::control_plane::GatewayRegistrar;
 use stoa_gateway::state::AppState;
 
@@ -20,7 +20,14 @@ use stoa_gateway::state::AppState;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load configuration first (needed for OTel endpoint)
     let config = Config::load()?;
-    config.validate()?;
+    config
+        .validate()
+        .map_err(|error| -> Box<dyn std::error::Error> {
+            match error {
+                ConfigError::StandaloneWithControlPlane => error.to_string().into(),
+                _ => error.into(),
+            }
+        })?;
 
     // Initialize tracing (with optional OTel export if configured)
     init_tracing(&config);
@@ -40,6 +47,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Initialize application state
     let state = AppState::new(config.clone());
+    stoa_gateway::handlers::admin::restore_contracts(&state)
+        .await
+        .map_err(|error| format!("Could not restore contract snapshot: {error}"))?;
 
     if config.poc_agents_enabled {
         stoa_gateway::mcp::poc::load_poc_fixtures(&state)
@@ -62,7 +72,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     Ok(()) => info!("Policies reloaded successfully"),
                     Err(e) => error!(error = %e, "Policy reload failed"),
                 }
-                if sighup_state.config.route_reload_enabled {
+                if sighup_state.config.route_reload_enabled && !sighup_state.config.standalone {
                     match stoa_gateway::handlers::admin::reload_routes_from_cp(&sighup_state).await
                     {
                         Ok(count) => {
@@ -82,25 +92,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize mode-specific components
     init_mode_components(&config).await;
 
-    let control_plane_url = config
-        .control_plane_url
-        .as_deref()
-        .map(str::trim)
-        .filter(|url| !url.is_empty())
-        .map(str::to_string);
+    let control_plane_url = config.normalized_control_plane_url();
 
     // Auto-register with Control Plane (ADR-028, CAB-1915)
     // Registration runs in background with retry so the gateway becomes visible
     // even if the CP API is not ready at startup (common in K8s).
     // The registrar is kept alive so api_bridge can read the assigned gateway_id (CAB-1940).
-    let registrar: Option<std::sync::Arc<GatewayRegistrar>> = if config.auto_register {
-        match (&control_plane_url, &config.control_plane_api_key) {
+    let registrar: Option<std::sync::Arc<GatewayRegistrar>> = if config.auto_register
+        && !config.standalone
+    {
+        match (control_plane_url, &config.control_plane_api_key) {
             (Some(cp_url), Some(api_key)) => {
                 info!(
                     "Starting background registration with Control Plane: {}",
                     cp_url
                 );
-                let r = std::sync::Arc::new(GatewayRegistrar::new(cp_url.clone(), api_key.clone()));
+                let r =
+                    std::sync::Arc::new(GatewayRegistrar::new(cp_url.to_string(), api_key.clone()));
 
                 r.clone().start_registration_and_heartbeat(
                     config.clone(),
@@ -142,7 +150,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Pre-warm connection pool: establish TCP+TLS connections to Control Plane
     // before the first real request, so ramp_up traffic doesn't pay cold-start cost.
-    if let Some(cp_url) = &control_plane_url {
+    if let Some(cp_url) = control_plane_url {
         prewarm_connections(cp_url).await;
     }
 

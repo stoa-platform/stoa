@@ -131,6 +131,17 @@ pub struct ContractPolicy {
     pub config: Value,
 }
 
+#[derive(Deserialize)]
+struct ConsumerQuotaConfig {
+    consumers: Vec<ConsumerQuotaEntry>,
+}
+
+#[derive(Deserialize)]
+struct ConsumerQuotaEntry {
+    consumer_id: String,
+    rate_limit_per_minute: u32,
+}
+
 // =============================================================================
 // UAC Contract Spec
 // =============================================================================
@@ -209,6 +220,43 @@ pub struct UacContractSpec {
 }
 
 impl UacContractSpec {
+    pub(crate) fn canonical_key(&self) -> String {
+        format!("{}:{}", self.tenant_id, self.name)
+    }
+
+    pub(crate) fn consumer_quotas(&self) -> Result<Option<HashMap<String, u32>>, &'static str> {
+        let mut policies = self
+            .policies
+            .iter()
+            .filter(|p| p.policy_type == "consumer_quota");
+        let Some(policy) = policies.next() else {
+            return Ok(None);
+        };
+        if policies.next().is_some() {
+            return Err("only one consumer_quota policy is allowed");
+        }
+        if !self.requires_jwt_validation() {
+            return Err("consumer_quota requires JWT authentication");
+        }
+        let config: ConsumerQuotaConfig =
+            serde_json::from_value(policy.config.clone()).map_err(|_| {
+                "consumer_quota requires config.consumers with valid IDs and integer limits"
+            })?;
+        let mut limits = HashMap::with_capacity(config.consumers.len());
+        for entry in config.consumers {
+            if entry.consumer_id.trim().is_empty() || entry.rate_limit_per_minute == 0 {
+                return Err("consumer_quota requires non-blank consumer IDs and positive limits");
+            }
+            if limits
+                .insert(entry.consumer_id, entry.rate_limit_per_minute)
+                .is_some()
+            {
+                return Err("consumer_quota consumer IDs must be unique");
+            }
+        }
+        Ok(Some(limits))
+    }
+
     /// Create a minimal contract spec for testing or quick creation.
     pub fn new(name: impl Into<String>, tenant_id: impl Into<String>) -> Self {
         let classification = Classification::default(); // H
@@ -274,6 +322,10 @@ impl UacContractSpec {
     /// Returns a list of validation errors (empty = valid).
     pub fn validate(&self) -> Vec<String> {
         let mut errors = Vec::new();
+
+        if let Err(error) = self.consumer_quotas() {
+            errors.push(error.to_string());
+        }
 
         if self.name.is_empty() {
             errors.push("name must not be empty".to_string());

@@ -367,6 +367,8 @@ impl Default for Config {
             keycloak_internal_url: None,
             gateway_external_url: default_gateway_external_url(),
             control_plane_url: None,
+            standalone: false,
+            contract_state_path: None,
             control_plane_api_key: None,
             audit_spool_dir: default_audit_spool_dir(),
             audit_spool_capacity_bytes: default_audit_spool_capacity_bytes(),

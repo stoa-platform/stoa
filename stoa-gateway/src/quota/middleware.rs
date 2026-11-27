@@ -19,6 +19,7 @@ use axum::{
 use serde::Serialize;
 use tracing::{debug, instrument, warn};
 
+use super::rate_limiter::RateLimitInfo;
 use crate::auth::middleware::AuthenticatedUser;
 use crate::diagnostics::latency::{SharedTracker, Stage};
 use crate::metrics;
@@ -133,19 +134,23 @@ pub async fn quota_middleware(
 
     // 5. Add rate limit headers to response
     if rate_limit_info.limit > 0 {
-        let headers = response.headers_mut();
-        if let Ok(val) = rate_limit_info.limit.to_string().parse() {
-            headers.insert("X-RateLimit-Limit", val);
-        }
-        if let Ok(val) = rate_limit_info.remaining.to_string().parse() {
-            headers.insert("X-RateLimit-Remaining", val);
-        }
-        if let Ok(val) = rate_limit_info.reset_epoch.to_string().parse() {
-            headers.insert("X-RateLimit-Reset", val);
-        }
+        add_rate_limit_headers(&mut response, &rate_limit_info);
     }
 
     response
+}
+
+pub(crate) fn add_rate_limit_headers(response: &mut Response, info: &RateLimitInfo) {
+    let headers = response.headers_mut();
+    for (name, value) in [
+        ("x-ratelimit-limit", i64::from(info.limit)),
+        ("x-ratelimit-remaining", i64::from(info.remaining)),
+        ("x-ratelimit-reset", info.reset_epoch),
+    ] {
+        if let Ok(value) = value.to_string().parse() {
+            headers.insert(name, value);
+        }
+    }
 }
 
 /// Extract consumer_id from request extensions.
@@ -172,7 +177,7 @@ fn extract_consumer_id(request: &Request<Body>) -> Option<String> {
 }
 
 /// Build a 429 response from a QuotaError.
-fn quota_error_response(error: &QuotaError) -> Response {
+pub(crate) fn quota_error_response(error: &QuotaError) -> Response {
     let (retry_after, message) = match error {
         QuotaError::RateLimit {
             retry_after_secs,
@@ -232,6 +237,36 @@ mod tests {
         Router,
     };
     use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn contract_quota_response_uses_shared_body_and_rate_limit_headers() {
+        let error = QuotaError::RateLimit {
+            limit_type: "per_minute".into(),
+            limit: 5,
+            retry_after_secs: 1,
+        };
+        let mut response = quota_error_response(&error);
+        add_rate_limit_headers(
+            &mut response,
+            &RateLimitInfo {
+                limit: 5,
+                remaining: 0,
+                reset_epoch: 100,
+            },
+        );
+        assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(response.headers()["retry-after"], "1");
+        assert_eq!(response.headers()["x-ratelimit-limit"], "5");
+        assert_eq!(response.headers()["x-ratelimit-remaining"], "0");
+        assert_eq!(response.headers()["x-ratelimit-reset"], "100");
+        let body = axum::body::to_bytes(response.into_body(), 4096)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["error"], "quota_exceeded");
+        assert_eq!(json["retry_after_secs"], 1);
+        assert!(json["message"].is_string());
+    }
 
     async fn echo_handler() -> &'static str {
         "OK"

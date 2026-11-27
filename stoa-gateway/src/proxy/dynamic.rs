@@ -10,6 +10,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use std::net::IpAddr;
+use std::sync::Arc;
 use std::time::Duration;
 use tracing::{debug, error, instrument, warn};
 
@@ -21,7 +22,9 @@ use crate::auth::jwt::{JwtError, JwtValidator, ValidatedToken};
 use crate::auth::middleware::AuthenticatedUser;
 use crate::proxy::credentials::{AuthType, BackendCredential};
 use crate::proxy::hop_detection;
+use crate::quota::{add_rate_limit_headers, quota_error_response, ContractQuotaKey};
 use crate::resilience::RetryConfig;
+use crate::routes::ApiRoute;
 use crate::state::AppState;
 
 use super::observe_only_guardrails;
@@ -199,12 +202,22 @@ pub async fn dynamic_proxy(State(state): State<AppState>, mut request: Request<B
     let method = request.method().clone();
 
     // Find matching route (path is percent-decoded so spaces in API names match)
-    let route = match state.route_registry.find_by_path(&path) {
-        Some(r) => r,
-        None => {
-            record_proxy_status(404);
-            return (StatusCode::NOT_FOUND, "No matching API route").into_response();
-        }
+    let published_rest = path.starts_with("/apis/");
+    let route = state.route_registry.find_by_path(&path);
+    let (route, bindings) = if published_rest
+        && route
+            .as_ref()
+            .is_some_and(|route| route.contract_key.is_some())
+    {
+        let bindings = state.contract_registry.bindings.read().await;
+        // Look up the route again in case a contract changed before we acquired the lock.
+        (state.route_registry.find_by_path(&path), Some(bindings))
+    } else {
+        (route, None)
+    };
+    let Some(route) = route else {
+        record_proxy_status(404);
+        return (StatusCode::NOT_FOUND, "No matching API route").into_response();
     };
 
     if !route.activated {
@@ -227,8 +240,24 @@ pub async fn dynamic_proxy(State(state): State<AppState>, mut request: Request<B
     // /admin/policies for this route) fail-closes the REST proxy. Routes
     // with no such policy stay unchanged. Classification `auth-jwt` is not
     // this check — that list is advisory and log-only.
-    if published_route_requires_jwt(&state, &route) {
-        if let Err(response) = require_published_route_jwt(&state, &route, &mut request).await {
+    let contract_key = route.contract_key.as_deref();
+    let contract_quota = contract_key.filter(|_| published_rest).and_then(|key| {
+        state
+            .contract_registry
+            .consumer_quotas(key)
+            .map(|quotas| (key, quotas))
+    });
+    let requires_jwt = contract_quota.is_some() || published_route_requires_jwt(&state, &route);
+    let audience = contract_key
+        .filter(|_| requires_jwt)
+        .and_then(|key| state.contract_registry.rest_audience(key));
+    // JWT validation may fetch JWKS. Release the lock once the route and policy are captured.
+    drop(bindings);
+
+    if requires_jwt {
+        if let Err(response) =
+            require_published_route_jwt(&state, &route, audience.as_deref(), &mut request).await
+        {
             record_proxy_status(response.status().as_u16());
             return *response;
         }
@@ -246,6 +275,61 @@ pub async fn dynamic_proxy(State(state): State<AppState>, mut request: Request<B
         );
     }
 
+    let rate_limit = if let Some((contract, quotas)) = contract_quota {
+        let identity = request
+            .extensions()
+            .get::<AuthenticatedUser>()
+            .and_then(|user| {
+                let claims = &user.claims;
+                let consumer = claims.azp.as_deref()?;
+                let limit = *quotas.get(consumer)?;
+                Some((
+                    ContractQuotaKey {
+                        tenant: route.tenant_id.clone(),
+                        contract: contract.to_string(),
+                        issuer: claims.iss.clone(),
+                        consumer: consumer.to_string(),
+                    },
+                    limit,
+                ))
+            });
+        let Some((key, limit)) = identity else {
+            record_proxy_status(403);
+            return (
+                StatusCode::FORBIDDEN,
+                "Consumer is not allowed for this contract",
+            )
+                .into_response();
+        };
+        match state
+            .consumer_rate_limiter
+            .check_contract_rate_limit(key, limit)
+        {
+            Ok(info) => Some(info),
+            Err((error, info)) => {
+                record_proxy_status(429);
+                let mut response = quota_error_response(&error);
+                add_rate_limit_headers(&mut response, &info);
+                return response;
+            }
+        }
+    } else {
+        None
+    };
+    let mut response = proxy_route(state, request, route, path, method).await;
+    if let Some(info) = rate_limit {
+        add_rate_limit_headers(&mut response, &info);
+    }
+    response
+}
+
+async fn proxy_route(
+    state: AppState,
+    request: Request<Body>,
+    route: Arc<ApiRoute>,
+    path: String,
+    method: Method,
+) -> Response {
     // A route-level backend credential is never forwarded for a caller without
     // an identity. Identity here means an `AuthenticatedUser` set by the JWT
     // check above (route with a `jwt_validation` policy) or by an upstream
@@ -1102,6 +1186,7 @@ fn contract_route_denies_by_default(route: &crate::routes::ApiRoute) -> bool {
 async fn require_published_route_jwt(
     state: &AppState,
     route: &crate::routes::ApiRoute,
+    audience: Option<&str>,
     request: &mut Request<Body>,
 ) -> Result<(), Box<Response>> {
     let header = request
@@ -1133,12 +1218,7 @@ async fn require_published_route_jwt(
         }
     };
 
-    let audience = route
-        .contract_key
-        .as_deref()
-        .and_then(|key| state.contract_registry.get(key))
-        .and_then(|contract| contract.inbound_auth_audience);
-    let validation = match audience.as_deref() {
+    let validation = match audience {
         Some(audience) => validator.validate_with_audience(token, audience).await,
         None => validator.validate(token).await,
     };

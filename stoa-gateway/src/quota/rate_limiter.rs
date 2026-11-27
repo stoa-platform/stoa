@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
-use tokio::time::{interval, Duration as TokioDuration};
+use tokio::time::{interval, Duration as TokioDuration, Instant as TokioInstant};
 use tracing::{debug, info};
 
 use super::QuotaError;
@@ -239,12 +239,39 @@ pub struct RateLimitInfo {
     pub reset_epoch: i64,
 }
 
-/// Per-consumer rate limiter using token bucket algorithm.
+const CONTRACT_WINDOW: TokioDuration = TokioDuration::from_secs(60);
+
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub(crate) struct ContractQuotaKey {
+    pub tenant: String,
+    pub contract: String,
+    pub issuer: String,
+    pub consumer: String,
+}
+
+struct FixedWindow {
+    ends_at: TokioInstant,
+    reset_epoch: i64,
+    used: u32,
+}
+
+impl FixedWindow {
+    fn new(now: TokioInstant) -> Self {
+        Self {
+            ends_at: now + CONTRACT_WINDOW,
+            reset_epoch: chrono::Utc::now().timestamp() + CONTRACT_WINDOW.as_secs() as i64,
+            used: 0,
+        }
+    }
+}
+
+/// Per-consumer rate limiter for plan and contract quotas.
 ///
 /// Manages separate token buckets for each consumer, keyed by consumer_id.
 /// Plan quotas are looked up from an in-memory cache.
 pub struct ConsumerRateLimiter {
     buckets: Arc<RwLock<HashMap<String, TokenBucket>>>,
+    contract_windows: RwLock<HashMap<ContractQuotaKey, FixedWindow>>,
     plan_quotas: Arc<RwLock<HashMap<String, PlanQuota>>>,
     config: RateLimiterConfig,
 }
@@ -254,9 +281,48 @@ impl ConsumerRateLimiter {
     pub fn new(config: RateLimiterConfig) -> Self {
         Self {
             buckets: Arc::new(RwLock::new(HashMap::new())),
+            contract_windows: RwLock::new(HashMap::new()),
             plan_quotas: Arc::new(RwLock::new(HashMap::new())),
             config,
         }
+    }
+
+    /// Admit a request against a fixed window beginning with the first admission.
+    pub(crate) fn check_contract_rate_limit(
+        &self,
+        key: ContractQuotaKey,
+        limit: u32,
+    ) -> Result<RateLimitInfo, (QuotaError, RateLimitInfo)> {
+        let mut windows = self.contract_windows.write();
+        let now = TokioInstant::now();
+        let window = windows.entry(key).or_insert_with(|| FixedWindow::new(now));
+        if now >= window.ends_at {
+            *window = FixedWindow::new(now);
+        }
+
+        if window.used >= limit {
+            let until_reset = window.ends_at - now;
+            return Err((
+                QuotaError::RateLimit {
+                    retry_after_secs: until_reset.as_secs()
+                        + u64::from(until_reset.subsec_nanos() > 0),
+                    limit_type: "per_minute".into(),
+                    limit,
+                },
+                RateLimitInfo {
+                    limit,
+                    remaining: 0,
+                    reset_epoch: window.reset_epoch,
+                },
+            ));
+        }
+
+        window.used += 1;
+        Ok(RateLimitInfo {
+            limit,
+            remaining: limit - window.used,
+            reset_epoch: window.reset_epoch,
+        })
     }
 
     /// Set the plan quota for a consumer.
@@ -332,6 +398,11 @@ impl ConsumerRateLimiter {
 
     /// Cleanup stale consumer buckets.
     pub fn cleanup_stale_buckets(&self) {
+        {
+            let mut windows = self.contract_windows.write();
+            let now = TokioInstant::now();
+            windows.retain(|_, window| window.ends_at > now);
+        }
         let stale_threshold = std::time::Duration::from_secs(self.config.stale_threshold_secs);
         let mut buckets = self.buckets.write();
 
@@ -405,6 +476,114 @@ fn bucket_effective_limit_from_quota(quota: &PlanQuota) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn contract_key() -> ContractQuotaKey {
+        ContractQuotaKey {
+            tenant: "demo".into(),
+            contract: "demo:catalog".into(),
+            issuer: "https://issuer.example.com".into(),
+            consumer: "reader".into(),
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn fixed_window_rejects_sixth_request_and_restores_at_sixty_seconds() {
+        let limiter = ConsumerRateLimiter::new(test_config());
+        let key = contract_key();
+        let first = limiter.check_contract_rate_limit(key.clone(), 5).unwrap();
+        assert_eq!(first.remaining, 4);
+        for remaining in (0..4).rev() {
+            let info = limiter.check_contract_rate_limit(key.clone(), 5).unwrap();
+            assert_eq!(info.remaining, remaining);
+            assert_eq!(info.reset_epoch, first.reset_epoch);
+        }
+
+        let assert_rejected = |seconds| {
+            let (error, info) = limiter
+                .check_contract_rate_limit(key.clone(), 5)
+                .unwrap_err();
+            assert!(
+                matches!(error, QuotaError::RateLimit { retry_after_secs, .. } if retry_after_secs == seconds)
+            );
+            assert_eq!(info.limit, 5);
+            assert_eq!(info.remaining, 0);
+            assert_eq!(info.reset_epoch, first.reset_epoch);
+        };
+        assert_rejected(60);
+        tokio::time::advance(TokioDuration::from_secs(59)).await;
+        assert_rejected(1);
+        tokio::time::advance(TokioDuration::from_millis(500)).await;
+        assert_rejected(1);
+        limiter.cleanup_stale_buckets();
+        assert_eq!(limiter.contract_windows.read().len(), 1);
+        tokio::time::advance(TokioDuration::from_millis(500)).await;
+        assert_eq!(
+            limiter.check_contract_rate_limit(key, 5).unwrap().remaining,
+            4
+        );
+        tokio::time::advance(TokioDuration::from_secs(60)).await;
+        limiter.cleanup_stale_buckets();
+        assert!(limiter.contract_windows.read().is_empty());
+    }
+
+    #[test]
+    fn fixed_window_serializes_concurrent_admission_and_preserves_usage_on_limit_change() {
+        let limiter = ConsumerRateLimiter::new(test_config());
+        let key = contract_key();
+        let barrier = std::sync::Barrier::new(12);
+        let admitted = std::thread::scope(|scope| {
+            let threads: Vec<_> = (0..12)
+                .map(|_| {
+                    scope.spawn(|| {
+                        barrier.wait();
+                        limiter.check_contract_rate_limit(key.clone(), 5).is_ok()
+                    })
+                })
+                .collect();
+            threads
+                .into_iter()
+                .map(|thread| thread.join().unwrap())
+                .filter(|admitted| *admitted)
+                .count()
+        });
+        assert_eq!(admitted, 5);
+        assert!(limiter.check_contract_rate_limit(key.clone(), 4).is_err());
+        assert_eq!(
+            limiter
+                .check_contract_rate_limit(key.clone(), 6)
+                .unwrap()
+                .remaining,
+            0
+        );
+        assert!(limiter.check_contract_rate_limit(key.clone(), 6).is_err());
+
+        for distinct in [
+            ContractQuotaKey {
+                consumer: "editor".into(),
+                ..key.clone()
+            },
+            ContractQuotaKey {
+                issuer: "https://issuer2.example.com".into(),
+                ..key.clone()
+            },
+            ContractQuotaKey {
+                contract: "demo:groups".into(),
+                ..key.clone()
+            },
+            ContractQuotaKey {
+                tenant: "other".into(),
+                ..key
+            },
+        ] {
+            assert_eq!(
+                limiter
+                    .check_contract_rate_limit(distinct, 5)
+                    .unwrap()
+                    .remaining,
+                4
+            );
+        }
+    }
 
     fn test_config() -> RateLimiterConfig {
         RateLimiterConfig {

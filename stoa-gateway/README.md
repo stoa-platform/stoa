@@ -117,6 +117,55 @@ Tools are denied by default: a tenant can call a tool only when the Control Plan
 returns an explicit allow for it. Without a `private_key_jwt` service identity, the
 gateway cannot read tool permissions and every tool call is denied.
 
+### Standalone contract publishing
+
+Set `STOA_STANDALONE=true` to disable control plane registration, heartbeats,
+remote API key validation, and remote route reload. Leave `STOA_CONTROL_PLANE_URL`
+unset or blank. The gateway refuses to start when both are configured. The admin
+contract endpoints remain available through the usual admin authentication. The
+standalone flag defaults to `false`.
+
+`STOA_CONTRACT_STATE_PATH` sets the contract snapshot file. In standalone mode it
+defaults to `contracts.json` in the working directory. Setting the path also
+enables persistence in connected mode. Use a writable directory on a persistent
+volume and give each gateway process its own snapshot file. The gateway saves
+contract changes atomically and restores bindings before listening. A missing
+file starts with an empty registry. An unreadable or invalid snapshot prevents
+startup.
+
+### Per-consumer REST quotas
+
+In `edge-mcp` mode, the gateway always enforces a published REST contract's
+`consumer_quota` policy. `STOA_QUOTA_ENFORCEMENT_ENABLED` controls the generic
+quota middleware independently. When pushing a contract to `/admin/contracts`,
+include `inbound_auth: "jwt"` (or a JWT policy) and a `consumer_quota` policy
+in `policies`. Configure the JWT issuer through `STOA_KEYCLOAK_URL` and set the
+expected audience with `inbound_auth_audience` on the contract. The default REST
+audience uses `STOA_KEYCLOAK_CLIENT_ID`, which defaults to `stoa-mcp-gateway`.
+
+```json
+{
+  "type": "consumer_quota",
+  "config": {
+    "consumers": [
+      {"consumer_id": "catalog-reader", "rate_limit_per_minute": 5}
+    ]
+  }
+}
+```
+
+Each consumer ID must be unique and each cap must be a positive integer.
+The gateway matches the verified JWT `azp` claim to `consumer_id` after checking
+the JWT and tenant. Missing or unlisted consumer IDs receive `403`.
+
+All endpoints of a published REST contract share a fixed 60-second window for
+each tenant, contract, JWT issuer, and consumer. The first admission opens the
+window. Responses include `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and
+`X-RateLimit-Reset` (Unix seconds). Calls above the cap receive `429` with
+`Retry-After` in seconds. Contract updates keep the current window's usage.
+Restarting restores contracts and caps and starts fresh counters. Each replica
+counts requests independently.
+
 ## Dependencies
 
 - **Depends on**: control-plane-api (config/tool sync), Keycloak (JWT verification)

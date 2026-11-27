@@ -640,7 +640,7 @@ mod tests {
     use std::net::{Ipv4Addr, Ipv6Addr};
 
     #[tokio::test]
-    async fn loopback_host_binds_loopback_ipv4() {
+    async fn regression_loopback_host_binds_loopback_ipv4() {
         let addr = bind_addr("127.0.0.1", 0).expect("loopback host is valid");
         assert_eq!(addr.ip(), IpAddr::V4(Ipv4Addr::LOCALHOST));
 
@@ -652,7 +652,7 @@ mod tests {
     }
 
     #[test]
-    fn non_ip_host_is_rejected() {
+    fn regression_non_ip_host_is_rejected() {
         for host in ["not-an-ip", "localhost", "", "0.0.0.0:8080"] {
             let error = bind_addr(host, 8080).expect_err(host);
             assert!(
@@ -663,7 +663,7 @@ mod tests {
     }
 
     #[test]
-    fn default_host_is_unspecified_ipv4() {
+    fn regression_default_host_is_unspecified_ipv4() {
         let config = Config::default();
         let addr = bind_addr(&config.host, config.port).expect("default host is valid");
         assert_eq!(addr.ip(), IpAddr::V4(Ipv4Addr::UNSPECIFIED));
@@ -671,7 +671,7 @@ mod tests {
     }
 
     #[test]
-    fn ipv6_hosts_are_accepted() {
+    fn regression_ipv6_hosts_are_accepted() {
         let loopback = bind_addr("::1", 8080).expect("IPv6 loopback is valid");
         assert_eq!(loopback.ip(), IpAddr::V6(Ipv6Addr::LOCALHOST));
 

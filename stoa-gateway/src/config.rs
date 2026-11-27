@@ -142,6 +142,14 @@ pub struct Config {
     #[serde(default)]
     pub control_plane_url: Option<String>,
 
+    /// Disable control plane pull operations. Env: STOA_STANDALONE.
+    #[serde(default)]
+    pub standalone: bool,
+
+    /// Optional contract snapshot path. Env: STOA_CONTRACT_STATE_PATH.
+    #[serde(default)]
+    pub contract_state_path: Option<PathBuf>,
+
     #[serde(default)]
     pub control_plane_api_key: Option<String>,
 
@@ -1139,6 +1147,8 @@ impl fmt::Debug for Config {
             .field("keycloak_internal_url", &self.keycloak_internal_url)
             .field("gateway_external_url", &self.gateway_external_url)
             .field("control_plane_url", &self.control_plane_url)
+            .field("standalone", &self.standalone)
+            .field("contract_state_path", &self.contract_state_path)
             .field("control_plane_api_key", &r(&self.control_plane_api_key))
             .field("audit_spool_dir", &self.audit_spool_dir)
             .field(

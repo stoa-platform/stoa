@@ -33,6 +33,9 @@ pub enum ConfigError {
     #[error("invalid port: {0} (expected 1..=65535)")]
     InvalidPort(u16),
 
+    #[error("STOA_STANDALONE=true requires STOA_CONTROL_PLANE_URL to be unset or blank")]
+    StandaloneWithControlPlane,
+
     /// mTLS cannot be safely enabled with an empty trusted-proxy allow list,
     /// because `trusted_proxies: []` documents "accept all sources" (auth bypass
     /// risk). Operators must explicitly list trusted F5/ingress IPs.
@@ -119,6 +122,11 @@ fn non_empty_trimmed(value: &Option<String>) -> Option<&str> {
 }
 
 impl Config {
+    /// Control plane URL after trimming whitespace and treating blank as unset.
+    pub fn normalized_control_plane_url(&self) -> Option<&str> {
+        non_empty_trimmed(&self.control_plane_url)
+    }
+
     /// Return the Keycloak backend URL for service-to-service calls.
     ///
     /// Prefers `keycloak_internal_url` (K8s service DNS) over `keycloak_url` (external)
@@ -141,7 +149,7 @@ impl Config {
             && self.environment_explicit
             && non_empty_trimmed(&self.keycloak_url).is_none()
             && non_empty_trimmed(&self.keycloak_internal_url).is_none()
-            && non_empty_trimmed(&self.control_plane_url).is_none()
+            && self.normalized_control_plane_url().is_none()
     }
 
     /// Load configuration from file and environment.
@@ -215,11 +223,14 @@ impl Config {
             .ok()
             .and_then(|value| value.as_str().and_then(super::Environment::parse_literal))
             .is_some();
+        if config.standalone && config.normalized_control_plane_url().is_none() {
+            config.control_plane_url = None;
+        }
 
         info!(
             port = config.port,
             host = %config.host,
-            control_plane = non_empty_trimmed(&config.control_plane_url).unwrap_or("not set"),
+            control_plane = config.normalized_control_plane_url().unwrap_or("not set"),
             "Configuration loaded"
         );
 
@@ -239,6 +250,10 @@ impl Config {
 
         if self.port == 0 {
             return Err(ConfigError::InvalidPort(self.port));
+        }
+
+        if self.standalone && self.normalized_control_plane_url().is_some() {
+            return Err(ConfigError::StandaloneWithControlPlane);
         }
 
         if self.mtls.enabled && self.mtls.trusted_proxies.is_empty() {
@@ -342,7 +357,7 @@ impl Config {
             );
         }
 
-        let has_control_plane = non_empty_trimmed(&self.control_plane_url).is_some();
+        let has_control_plane = self.normalized_control_plane_url().is_some();
         let has_keycloak = self.keycloak_backend_url().is_some();
 
         if self.keycloak_client_key_path.is_none() && has_control_plane {

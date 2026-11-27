@@ -20,6 +20,8 @@ use crate::state::AppState;
 /// and background callers (tracing Display) can act on them.
 #[derive(Error, Debug)]
 pub enum ReloadError {
+    #[error("Remote route reload is disabled in standalone mode")]
+    Standalone,
     #[error("STOA_CONTROL_PLANE_URL not configured")]
     NotConfigured,
     #[error("HTTP request to control plane failed")]
@@ -38,6 +40,7 @@ impl ReloadError {
     /// HTTP status to surface on the admin endpoint.
     fn http_status(&self) -> StatusCode {
         match self {
+            Self::Standalone => StatusCode::CONFLICT,
             Self::NotConfigured => StatusCode::SERVICE_UNAVAILABLE,
             Self::CpUnreachable(_)
             | Self::CpStatus(_)
@@ -50,6 +53,7 @@ impl ReloadError {
     /// Generic, non-leaky client message.
     fn client_message(&self) -> &'static str {
         match self {
+            Self::Standalone => "Remote route reload is disabled in standalone mode",
             Self::NotConfigured => "Route reload unavailable: control plane URL not configured",
             Self::CpUnreachable(_) => "Route reload failed: control plane unreachable",
             Self::CpStatus(_) => "Route reload failed: control plane returned an error",
@@ -102,7 +106,7 @@ struct RouteSyncAckStep {
 /// route table using `ArcSwap`. Readers never block during the swap.
 /// Requires `STOA_ROUTE_RELOAD_ENABLED=true`.
 pub async fn routes_reload(State(state): State<AppState>) -> impl IntoResponse {
-    if !state.config.route_reload_enabled {
+    if !state.config.standalone && !state.config.route_reload_enabled {
         return (
             StatusCode::CONFLICT,
             Json(serde_json::json!({
@@ -145,6 +149,9 @@ pub async fn routes_reload(State(state): State<AppState>) -> impl IntoResponse {
 ///
 /// Shared logic used by the admin endpoint, SIGHUP handler, and watch loop.
 pub async fn reload_routes_from_cp(state: &AppState) -> Result<usize, ReloadError> {
+    if state.config.standalone {
+        return Err(ReloadError::Standalone);
+    }
     let cp_url = state
         .config
         .control_plane_url

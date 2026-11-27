@@ -31,6 +31,7 @@ pub struct ApiKeyInfo {
 /// API Key validator with caching
 pub struct ApiKeyValidator {
     cache: Cache<String, ApiKeyInfo>,
+    standalone: bool,
     control_plane_url: String,
     http_client: reqwest::Client,
 }
@@ -45,6 +46,7 @@ impl ApiKeyValidator {
 
         Self {
             cache,
+            standalone: config.standalone,
             control_plane_url: config.control_plane_url.clone().unwrap_or_default(),
             http_client: reqwest::Client::new(),
         }
@@ -52,6 +54,11 @@ impl ApiKeyValidator {
 
     /// Validate API key (cache first, then Control Plane)
     pub async fn validate(&self, api_key: &str) -> Result<ApiKeyInfo, ApiKeyError> {
+        if self.standalone {
+            return Err(ApiKeyError::ConfigError(
+                "Remote API key validation is disabled in standalone mode".into(),
+            ));
+        }
         // Check cache
         if let Some(info) = self.cache.get(api_key) {
             debug!(key_id = %info.key_id, "API key cache hit");

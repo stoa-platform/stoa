@@ -52,7 +52,9 @@ pub use circuit_breaker::{
     circuit_breaker_reset, circuit_breaker_reset_by_name, circuit_breaker_stats,
     circuit_breakers_list, CircuitBreakerStatsResponse,
 };
-pub use contracts::{delete_contract, get_contract, list_contracts, upsert_contract};
+pub use contracts::{
+    delete_contract, get_contract, list_contracts, restore_contracts, upsert_contract,
+};
 pub use credentials::{
     delete_backend_credential, delete_consumer_credential, list_backend_credentials,
     list_consumer_credentials, upsert_backend_credential, upsert_consumer_credential,

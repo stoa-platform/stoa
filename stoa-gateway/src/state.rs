@@ -192,11 +192,7 @@ impl AppState {
         let circuit_breakers = Arc::new(CircuitBreakerRegistry::new(cb_config));
         tracing::info!("Per-upstream circuit breaker registry initialized");
 
-        let control_plane_url = config
-            .control_plane_url
-            .as_deref()
-            .map(str::trim)
-            .filter(|url| !url.is_empty());
+        let control_plane_url = config.normalized_control_plane_url();
         let keycloak_url = config
             .keycloak_url
             .as_deref()
@@ -348,11 +344,11 @@ impl AppState {
             tracing::info!(
                 rate_per_minute = config.quota_default_rate_per_minute,
                 daily_limit = config.quota_default_daily_limit,
-                "Consumer quota enforcement enabled"
+                "Generic consumer quota enforcement enabled"
             );
         } else {
             tracing::info!(
-                "Consumer quota enforcement disabled (STOA_QUOTA_ENFORCEMENT_ENABLED=false)"
+                "Generic consumer quota enforcement disabled (STOA_QUOTA_ENFORCEMENT_ENABLED=false)"
             );
         }
 
@@ -378,8 +374,11 @@ impl AppState {
         // Initialize event buffer for polling fallback (CAB-1179)
         let event_buffer = Arc::new(EventBuffer::new());
 
-        // Initialize UAC contract registry (CAB-1299)
-        let contract_registry = Arc::new(ContractRegistry::new());
+        let contract_state_path = config
+            .contract_state_path
+            .clone()
+            .or_else(|| config.standalone.then(|| "contracts.json".into()));
+        let contract_registry = Arc::new(ContractRegistry::with_state_path(contract_state_path));
 
         // Initialize classification enforcer (CAB-1299) — soft mode
         let classification_enforcer = if config.classification_enforcement_enabled {
@@ -854,9 +853,9 @@ impl AppState {
         // Start rate limiter cleanup
         self.rate_limiter.clone().start_cleanup_task();
 
-        // Start consumer rate limiter cleanup (CAB-1121 P4)
+        // Contract quota windows need cleanup even when generic quotas are disabled.
+        self.consumer_rate_limiter.clone().start_cleanup_task();
         if self.config.quota_enforcement_enabled {
-            self.consumer_rate_limiter.clone().start_cleanup_task();
             self.quota_manager.clone().start_reset_task();
         }
 
@@ -874,7 +873,10 @@ impl AppState {
         }
 
         // Start route reload watch loop (CAB-1828)
-        if self.config.route_reload_enabled && self.config.control_plane_url.is_some() {
+        if !self.config.standalone
+            && self.config.route_reload_enabled
+            && self.config.control_plane_url.is_some()
+        {
             let reload_state = self.clone();
             let interval_secs = self.config.route_reload_interval_secs;
             tokio::spawn(async move {

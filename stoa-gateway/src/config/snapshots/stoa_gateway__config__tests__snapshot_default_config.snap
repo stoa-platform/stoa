@@ -24,6 +24,8 @@ expression: "Config::default()"
   "service_token_max_ttl_secs": 300,
   "gateway_external_url": "http://localhost:8080",
   "control_plane_url": null,
+  "standalone": false,
+  "contract_state_path": null,
   "control_plane_api_key": null,
   "audit_spool_dir": "/var/lib/stoa-gateway/audit-spool",
   "audit_spool_capacity_bytes": 67108864,

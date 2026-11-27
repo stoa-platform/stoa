@@ -1,25 +1,7 @@
-//! UAC contract CRUD admin endpoints (CAB-1299).
-//!
-//! GW-1 P1-1 / P1-2 / P2-2: contract mutations are transactional
-//! across three stores (contract registry, REST route registry, MCP
-//! tool registry). The previous implementation persisted the contract
-//! *before* the binders ran, so a binder failure left the registry
-//! claiming routes/tools that did not exist. This module now enforces:
-//!
-//! - **upsert**: *bind-first*. Only commit to `contract_registry` once
-//!   both REST and MCP binds have succeeded. On failure, best-effort
-//!   unbind of the partial artefacts is attempted and the handler
-//!   returns `500`.
-//! - **delete**: *unbind-first*. Only remove from `contract_registry`
-//!   once both unbinds have succeeded. On failure, the contract stays
-//!   in the registry and the handler returns `500`.
-//! - **counts**: `routes_generated` / `tools_generated` come from the
-//!   real `BindingOutput` length, never from `contract.endpoints.len()`.
-//!
-//! The `ContractBinders` trait is a local abstraction used to inject
-//! test doubles; the production path wraps `RestBinder` + `McpBinder`
-//! via `RealBinders`.
+//! UAC contract administration and startup restoration.
 
+use std::collections::HashSet;
+use std::io;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -92,23 +74,22 @@ pub async fn upsert_contract(
     State(state): State<AppState>,
     Json(contract): Json<UacContractSpec>,
 ) -> Response {
-    let binders = RealBinders::from_state(&state);
-    perform_upsert(
-        state.contract_registry.clone(),
-        &binders,
-        state.config.llm_enabled,
-        contract,
-    )
+    // Complete an active mutation even if the client drops the request.
+    tokio::spawn(async move {
+        let binders = RealBinders::from_state(&state);
+        perform_upsert(
+            state.contract_registry,
+            &binders,
+            state.config.llm_enabled,
+            contract,
+        )
+        .await
+    })
     .await
+    .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response())
 }
 
-/// Transactional upsert — extracted so tests can inject `ContractBinders`.
-pub(crate) async fn perform_upsert(
-    registry: Arc<ContractRegistry>,
-    binders: &dyn ContractBinders,
-    llm_enabled: bool,
-    mut contract: UacContractSpec,
-) -> Response {
+fn validate_contract(contract: &mut UacContractSpec) -> Result<(), Vec<String>> {
     // Normalize endpoint shorthand: merge `method` into `methods` if provided.
     for ep in &mut contract.endpoints {
         if let Some(method) = ep.method.take() {
@@ -121,42 +102,79 @@ pub(crate) async fn perform_upsert(
     // Validate the contract.
     let errors = contract.validate();
     if !errors.is_empty() {
+        return Err(errors);
+    }
+
+    contract.refresh_policies();
+    Ok(())
+}
+
+fn expand_contract(contract: &mut UacContractSpec, llm_enabled: bool) -> usize {
+    let Some(llm_config) = &contract.llm_config else {
+        return 0;
+    };
+    if !llm_enabled {
+        warn!("Contract has llm_config but STOA_LLM_ENABLED=false, skipping LLM expansion");
+        return 0;
+    }
+    let synthetic = llm_config.expand_endpoints();
+    let count = synthetic.len();
+    contract.endpoints.extend(synthetic);
+    count
+}
+
+/// Restore pushed contracts and rebuild their bindings before serving requests.
+pub async fn restore_contracts(state: &AppState) -> io::Result<()> {
+    let registry = &state.contract_registry;
+    let _mutation = registry.bindings.write().await;
+    let mut contracts = registry.read_snapshot().await?;
+    let mut keys = HashSet::with_capacity(contracts.len());
+    for contract in &mut contracts {
+        validate_contract(contract).map_err(|_| {
+            io::Error::new(io::ErrorKind::InvalidData, "invalid contract in snapshot")
+        })?;
+        if !keys.insert(contract.canonical_key()) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "duplicate contract in snapshot",
+            ));
+        }
+    }
+
+    let binders = RealBinders::from_state(state);
+    for declarative in contracts {
+        let mut contract = declarative.clone();
+        let expanded = expand_contract(&mut contract, state.config.llm_enabled) > 0;
+        binders
+            .bind_rest(&contract)
+            .await
+            .map_err(io::Error::other)?;
+        binders
+            .bind_mcp(&contract)
+            .await
+            .map_err(io::Error::other)?;
+        registry.upsert_bound(contract, expanded.then_some(declarative));
+    }
+    Ok(())
+}
+
+pub(crate) async fn perform_upsert(
+    registry: Arc<ContractRegistry>,
+    binders: &dyn ContractBinders,
+    llm_enabled: bool,
+    mut contract: UacContractSpec,
+) -> Response {
+    if let Err(errors) = validate_contract(&mut contract) {
         return (
             StatusCode::BAD_REQUEST,
             Json(serde_json::json!({"status": "error", "errors": errors})),
         )
             .into_response();
     }
-
-    contract.refresh_policies();
-
-    // Expand LLM capabilities into synthetic endpoints (CAB-709).
-    let llm_capabilities = if let Some(ref llm_config) = contract.llm_config {
-        if llm_enabled {
-            let synthetic = llm_config.expand_endpoints();
-            let count = synthetic.len();
-            contract.endpoints.extend(synthetic);
-            count
-        } else {
-            warn!("Contract has llm_config but STOA_LLM_ENABLED=false, skipping LLM expansion");
-            0
-        }
-    } else {
-        0
-    };
-
-    let key = contract
-        .key
-        .clone()
-        .unwrap_or_else(|| format!("{}:{}", contract.tenant_id, contract.name));
-
-    // Snapshot the previous contract (if this is an update) so any binder
-    // failure after bind_rest has started mutating the route/tool registries
-    // can be rolled back to the old state. `bind_rest` and `bind_mcp` both
-    // remove existing artefacts for the contract_key *before* installing
-    // new ones — without this snapshot, a post-remove failure would leave
-    // partial/empty bindings for a contract that still lives in the
-    // registry (GW-1 P1-1 update-case extension).
+    let declarative = contract.clone();
+    let llm_capabilities = expand_contract(&mut contract, llm_enabled);
+    let key = contract.canonical_key();
+    let _mutation = registry.bindings.write().await;
     let previous = registry.get(&key);
 
     // ── bind-first ────────────────────────────────────────────
@@ -197,8 +215,27 @@ pub(crate) async fn perform_upsert(
         }
     };
 
-    // ── commit ────────────────────────────────────────────────
-    let existed = registry.upsert(contract).is_some();
+    if let Err(error) = registry
+        .persist_change(&key, Some(declarative.clone()))
+        .await
+    {
+        if let Some(ref old) = previous {
+            restore_previous_bindings(binders, old, &key).await;
+        } else {
+            if let Err(error) = binders.unbind_rest(&key).await {
+                warn!(%error, contract = %key, "REST rollback failed");
+            }
+            if let Err(error) = binders.unbind_mcp(&key).await {
+                warn!(%error, contract = %key, "MCP rollback failed");
+            }
+        }
+        return storage_failure_response(&error);
+    }
+
+    let response_key = contract.key.clone().unwrap_or(key);
+    let existed = registry
+        .upsert_bound(contract, (llm_capabilities > 0).then_some(declarative))
+        .is_some();
     let status = if existed {
         StatusCode::OK
     } else {
@@ -207,7 +244,7 @@ pub(crate) async fn perform_upsert(
     (
         status,
         Json(serde_json::json!({
-            "key": key,
+            "key": response_key,
             "status": "ok",
             "routes_generated": routes_count,
             "tools_generated": tools_count,
@@ -240,8 +277,12 @@ pub async fn get_contract(
 /// left untouched and the caller receives a `500` — prevents orphaned
 /// routes/tools persisting after the contract disappears.
 pub async fn delete_contract(State(state): State<AppState>, Path(key): Path<String>) -> Response {
-    let binders = RealBinders::from_state(&state);
-    perform_delete(state.contract_registry.clone(), &binders, key).await
+    tokio::spawn(async move {
+        let binders = RealBinders::from_state(&state);
+        perform_delete(state.contract_registry, &binders, key).await
+    })
+    .await
+    .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response())
 }
 
 /// Transactional delete — extracted for testing.
@@ -250,6 +291,7 @@ pub(crate) async fn perform_delete(
     binders: &dyn ContractBinders,
     key: String,
 ) -> Response {
+    let _mutation = registry.bindings.write().await;
     // Snapshot the contract up-front: if `unbind_mcp` fails after
     // `unbind_rest` succeeded, we need the contract spec in hand to
     // restore REST bindings (GW-1 P1-2 partial-state extension).
@@ -286,7 +328,11 @@ pub(crate) async fn perform_delete(
         }
     };
 
-    // ── commit ────────────────────────────────────────────────
+    if let Err(error) = registry.persist_change(&key, None).await {
+        restore_previous_bindings(binders, &old_contract, &key).await;
+        return storage_failure_response(&error);
+    }
+
     registry.remove(&key);
     (
         StatusCode::OK,
@@ -295,6 +341,15 @@ pub(crate) async fn perform_delete(
             "routes_removed": routes_removed,
             "tools_removed": tools_removed,
         })),
+    )
+        .into_response()
+}
+
+fn storage_failure_response(error: &io::Error) -> Response {
+    warn!(%error, "Could not save contract snapshot");
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(serde_json::json!({"status": "error", "message": "Could not save contract snapshot"})),
     )
         .into_response()
 }

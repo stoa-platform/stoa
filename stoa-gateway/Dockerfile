@@ -128,7 +128,7 @@ ENTRYPOINT ["/app/stoa-gateway"]
 # shell, no package manager, no curl. The Debian stage above carried curl, its
 # Kerberos/LDAP/SASL libraries, util-linux, perl and tar for a Docker
 # HEALTHCHECK that Kubernetes ignores: the Deployment probes /health over HTTP.
-FROM gcr.io/distroless/cc-debian13@sha256:809d04afa1be033c441f76bb0051878c342fb76d0ea236bc6dc94b655fa0fbd6 AS runtime
+FROM gcr.io/distroless/cc-debian13@sha256:e8343d4a7da8bb210df0c3ea29de38bbadbba6c773bed0cd8bde506fca3a5c44 AS runtime
 
 COPY LICENSE NOTICE /usr/share/licenses/stoa/
 

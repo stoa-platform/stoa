@@ -21,6 +21,37 @@ use crate::mcp::session::SessionManager;
 use crate::resilience::CircuitBreakerRegistry;
 use crate::uac::Action;
 
+pub(crate) const POC_SECURITY_TOOL: &str = "stoa_security";
+const MY_LIMITS_ACTION: &str = "get_my_limits";
+
+/// PoC-local action. The PoC router supplies the verified session and its live limits.
+pub(crate) fn poc_security_definition() -> Value {
+    json!({
+        "name": POC_SECURITY_TOOL,
+        "description": "Read the signed role and effective limits of the calling agent",
+        "inputSchema": {
+            "type": "object",
+            "properties": { "action": { "const": MY_LIMITS_ACTION } },
+            "required": ["action"],
+            "additionalProperties": false
+        }
+    })
+}
+
+pub(crate) fn is_my_limits_action(args: &Value) -> bool {
+    args.as_object().is_some_and(|args| {
+        args.len() == 1 && args.get("action").and_then(Value::as_str) == Some(MY_LIMITS_ACTION)
+    })
+}
+
+pub(crate) fn my_limits_result(limits: Value) -> Value {
+    json!({
+        "content": ToolResult::text(limits.to_string()).content,
+        "structuredContent": limits,
+        "isError": false
+    })
+}
+
 /// Native tool that calls CP API directly (no Python proxy)
 pub struct NativeTool {
     tool_name: String,
@@ -844,6 +875,11 @@ impl NativeTool {
             .get("action")
             .and_then(|v| v.as_str())
             .unwrap_or("audit_log");
+        if action == MY_LIMITS_ACTION {
+            return Err(ToolError::PermissionDenied(
+                "A PoC agent session is required".to_string(),
+            ));
+        }
 
         warn!(action = %action, "stoa_security called — returning stub response");
 
@@ -1622,6 +1658,17 @@ mod tests {
         let v: Value = serde_json::from_str(text).unwrap();
         assert_eq!(v["status"], "coming_soon");
         assert_eq!(v["action"], "audit_log");
+    }
+
+    #[tokio::test]
+    async fn security_my_limits_requires_a_poc_session() {
+        let tool = make_tool(POC_SECURITY_TOOL);
+        let args = json!({"action": MY_LIMITS_ACTION});
+        assert!(is_my_limits_action(&args));
+        assert!(matches!(
+            tool.handle_security_stub(&args).await,
+            Err(ToolError::PermissionDenied(_))
+        ));
     }
 
     // ─── execute routing ──────────────────────────────────────

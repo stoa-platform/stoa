@@ -18,7 +18,7 @@ use std::path::Path;
 use axum::{
     body::Bytes,
     extract::State,
-    http::{HeaderMap, StatusCode},
+    http::{header::CACHE_CONTROL, HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
     Json,
 };
@@ -36,12 +36,17 @@ use crate::auth::local_agent_token::{
     LocalTokenError, DELEGATION_ISSUER, LOCAL_AGENT_ISSUER,
 };
 use crate::auth::poc_admission::{AdmissionError, AdmitCallRequest};
-use crate::control_plane::role_policy::{ArgumentConstraint, RoleEvalInput, RolePolicySpec};
+use crate::control_plane::role_policy::{
+    ArgumentConstraint, RoleEvalInput, RolePolicySpec, RolePolicyStore,
+};
 use crate::mcp::handlers::{check_tool_permission, check_tool_permission_quiet, check_tool_policy};
 use crate::mcp::sse::{
     JsonRpcResponse, INVALID_PARAMS, INVALID_REQUEST, METHOD_NOT_FOUND, PARSE_ERROR,
 };
-use crate::mcp::tools::{Tool, ToolContext};
+use crate::mcp::tools::native_tool::{
+    is_my_limits_action, my_limits_result, poc_security_definition, POC_SECURITY_TOOL,
+};
+use crate::mcp::tools::{Tool, ToolContext, ToolDefinition};
 use crate::proxy::credentials::{normalize_origin, BackendCredential, MCP_TOOL_KEY_PREFIX};
 use crate::state::AppState;
 use crate::uac::binders::mcp::McpBinder;
@@ -652,6 +657,7 @@ pub async fn handle_poc_mcp(
     } else {
         None
     };
+    let is_limits_call = requested_tool_name.as_deref() == Some(POC_SECURITY_TOOL);
 
     let base = public_base_url(&state);
     let mcp_htu = format!("{base}/mcp/poc");
@@ -665,6 +671,14 @@ pub async fn handle_poc_mcp(
                         "child token is only valid for tool calls targeting its resource",
                     ));
                 };
+                if is_limits_call {
+                    // Introspection is local and read-only. Validate the child's
+                    // audience against its signed tool grant even for this call.
+                    let tool = child_audience_tool(claims).ok_or(
+                        LocalTokenError::InvalidClaims("child token is missing its resource grant"),
+                    )?;
+                    return Ok(canonical_tool_audience(&claims.tenant_id, tool));
+                }
                 let canonical = state
                     .tool_registry
                     .get_for_tenant(req_name, &claims.tenant_id)
@@ -711,7 +725,22 @@ pub async fn handle_poc_mcp(
         ),
     };
 
-    (StatusCode::OK, Json(response)).into_response()
+    let mut response = (StatusCode::OK, Json(response)).into_response();
+    if is_limits_call {
+        response
+            .headers_mut()
+            .insert(CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    }
+    response
+}
+
+fn child_audience_tool(claims: &LocalAgentClaims) -> Option<&str> {
+    claims
+        .allowed_tools
+        .as_ref()?
+        .iter()
+        .find(|tool| canonical_tool_audience(&claims.tenant_id, tool) == claims.aud)
+        .map(String::as_str)
 }
 
 fn poc_tool_context(claims: &LocalAgentClaims) -> ToolContext {
@@ -734,6 +763,21 @@ async fn effective_poc_allowed_tools(
     state: &AppState,
     claims: &LocalAgentClaims,
 ) -> Result<(u64, HashSet<String>, RolePolicySpec), PocToolRejection> {
+    let (store, version) = refreshed_poc_role_policy(state, claims).await?;
+    store
+        .effective_allowed_tools(
+            &claims.tenant_id,
+            &claims.role,
+            version,
+            claims.allowed_tools.as_deref(),
+        )
+        .map_err(|_| (-32003, "Role policy unavailable"))
+}
+
+async fn refreshed_poc_role_policy<'a>(
+    state: &'a AppState,
+    claims: &LocalAgentClaims,
+) -> Result<(&'a RolePolicyStore, u64), PocToolRejection> {
     let store = state
         .role_policy_store
         .as_ref()
@@ -745,14 +789,7 @@ async fn effective_poc_allowed_tools(
         .refresh_tenant(&claims.tenant_id)
         .await
         .map_err(|_| (-32003, "Role policy unavailable"))?;
-    store
-        .effective_allowed_tools(
-            &claims.tenant_id,
-            &claims.role,
-            version,
-            claims.allowed_tools.as_deref(),
-        )
-        .map_err(|_| (-32003, "Role policy unavailable"))
+    Ok((store, version))
 }
 
 fn poc_caller_id(claims: &LocalAgentClaims) -> String {
@@ -815,6 +852,26 @@ async fn handle_poc_tools_list(
         Err((code, msg)) => return JsonRpcResponse::error(request_id, code, msg),
     };
 
+    let mut tools: Vec<_> = visible_poc_tools(state, claims, &allowed_tools)
+        .await
+        .into_iter()
+        .map(|def| {
+            json!({
+                "name": def.name,
+                "description": def.description,
+                "inputSchema": def.input_schema
+            })
+        })
+        .collect();
+    tools.push(poc_security_definition());
+    JsonRpcResponse::success(request_id, json!({ "tools": tools }))
+}
+
+async fn visible_poc_tools(
+    state: &AppState,
+    claims: &LocalAgentClaims,
+    allowed_tools: &HashSet<String>,
+) -> Vec<ToolDefinition> {
     let ctx = poc_tool_context(claims);
     let mut tools = Vec::new();
     for def in state.tool_registry.list(Some(&claims.tenant_id)) {
@@ -828,14 +885,64 @@ async fn handle_poc_tools_list(
             .await
             .is_ok()
         {
-            tools.push(json!({
-                "name": def.name,
-                "description": def.description,
-                "inputSchema": def.input_schema
-            }));
+            tools.push(def);
         }
     }
-    JsonRpcResponse::success(request_id, json!({ "tools": tools }))
+    tools
+}
+
+async fn handle_poc_my_limits(
+    state: &AppState,
+    claims: &LocalAgentClaims,
+    args: &Value,
+) -> Result<Value, PocToolRejection> {
+    if !is_my_limits_action(args) {
+        return Err((INVALID_PARAMS, "Expected only action get_my_limits"));
+    }
+    let (store, issued_version) = refreshed_poc_role_policy(state, claims).await?;
+    let (version, mut allowed_tools, mut constraints) = store
+        .effective_limits(
+            &claims.tenant_id,
+            &claims.role,
+            issued_version,
+            claims.allowed_tools.as_deref(),
+            claims.arg_constraints.as_ref(),
+        )
+        .map_err(|_| (-32003, "Role policy unavailable"))?;
+    if claims.depth > 0 {
+        let audience_tool = child_audience_tool(claims);
+        allowed_tools.retain(|tool| Some(tool.as_str()) == audience_tool);
+    }
+
+    let mut visible_names: Vec<_> = visible_poc_tools(state, claims, &allowed_tools)
+        .await
+        .into_iter()
+        .map(|def| def.name)
+        .collect();
+    constraints.retain(|tool, _| visible_names.contains(tool));
+    visible_names.push(POC_SECURITY_TOOL.to_string());
+    visible_names.sort_unstable();
+
+    let budget = state
+        .poc_admission
+        .budget_snapshot(
+            &claims.chain_id,
+            &poc_caller_id(claims),
+            claims.exp,
+            chrono::Utc::now().timestamp(),
+        )
+        .map_err(admission_rejection)?;
+    Ok(my_limits_result(json!({
+        "role": claims.role,
+        "issued_policy_version": issued_version,
+        "policy_version": version,
+        "allowed_tools": visible_names,
+        "argument_constraints": constraints,
+        "budgets": {
+            "chain_remaining": budget.chain_remaining,
+            "caller_remaining": budget.caller_remaining
+        }
+    })))
 }
 
 async fn decide_poc_tool_access<'a>(
@@ -847,6 +954,9 @@ async fn decide_poc_tool_access<'a>(
 ) -> Result<&'a dyn Tool, PocToolRejection> {
     // Check signed tenant permissions with requested and canonical names.
     let canonical_name = tool.map_or(requested_name, Tool::name);
+    if requested_name == POC_SECURITY_TOOL || canonical_name == POC_SECURITY_TOOL {
+        return Err((-32003, "Security introspection requires a direct tool call"));
+    }
     let perm_res = if audit_denial {
         check_tool_permission(state, &ctx.tenant_id, requested_name, canonical_name).await
     } else {
@@ -1138,7 +1248,12 @@ async fn handle_poc_tool_call(
         }
     };
 
-    match authorize_and_execute_poc_tool(state, claims, &call_req.name, call_req.arguments).await {
+    let result = if call_req.name == POC_SECURITY_TOOL {
+        handle_poc_my_limits(state, claims, &call_req.arguments.value).await
+    } else {
+        authorize_and_execute_poc_tool(state, claims, &call_req.name, call_req.arguments).await
+    };
+    match result {
         Ok(result) => JsonRpcResponse::success(request.id, result),
         Err((code, msg)) => JsonRpcResponse::error(request.id, code, msg),
     }
@@ -1919,7 +2034,7 @@ allow if {
                                 "x": child_dpop.jwk.x,
                                 "y": child_dpop.jwk.y
                             },
-                            "allowed_tools": ["payments_list"],
+                            "allowed_tools": ["payments_list", "payments_redirect"],
                             "arg_constraints": {
                                 "currency": { "type": "allowed_values", "values": ["EUR"] },
                                 "limit": { "type": "max_number", "max": 25.0 }
@@ -1945,8 +2060,92 @@ allow if {
         assert_eq!(child_json["tenant_id"], "acme");
         let child_tok = child_json["access_token"].as_str().unwrap().to_string();
 
-        // 3. Child call with conforming args succeeds!
         let mcp_htu = format!("{base_url}/mcp/poc");
+        let read_limits = |proof_id: &str, args: Value| {
+            app.clone().oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/mcp/poc")
+                    .header("content-type", "application/json")
+                    .header("Authorization", format!("DPoP {child_tok}"))
+                    .header(
+                        "DPoP",
+                        child_dpop.proof("POST", &mcp_htu, proof_id, Some(&child_tok)),
+                    )
+                    .body(Body::from(
+                        json!({
+                            "jsonrpc": "2.0", "id": 100, "method": "tools/call",
+                            "params": { "name": POC_SECURITY_TOOL, "arguments": args }
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+        };
+        let args = json!({"action": "get_my_limits"});
+        let mut initial_budgets = None;
+        for proof_id in ["limits-child-1", "limits-child-2"] {
+            let resp = read_limits(proof_id, args.clone()).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::OK);
+            assert_eq!(resp.headers()[CACHE_CONTROL], "no-store");
+            let rpc: Value = serde_json::from_slice(
+                &axum::body::to_bytes(resp.into_body(), 16 * 1024)
+                    .await
+                    .unwrap(),
+            )
+            .unwrap();
+            let result = &rpc["result"];
+            let limits = &result["structuredContent"];
+            assert_eq!(
+                serde_json::from_str::<Value>(result["content"][0]["text"].as_str().unwrap())
+                    .unwrap(),
+                *limits
+            );
+            assert_eq!(limits["role"], "reader");
+            assert_eq!(limits["issued_policy_version"], 1);
+            assert_eq!(limits["policy_version"], 1);
+            assert_eq!(
+                limits["allowed_tools"],
+                json!(["payments_list", POC_SECURITY_TOOL])
+            );
+            assert_eq!(
+                limits["argument_constraints"],
+                json!({
+                    "payments_list": {
+                        "currency": [
+                            {"type": "allowed_values", "values": ["EUR", "USD"]},
+                            {"type": "allowed_values", "values": ["EUR"]}
+                        ],
+                        "account": [{"type": "prefix", "prefix": "acct-"}],
+                        "limit": [
+                            {"type": "max_number", "max": 100.0},
+                            {"type": "max_number", "max": 25.0}
+                        ]
+                    }
+                })
+            );
+            let budgets = initial_budgets.get_or_insert_with(|| limits["budgets"].clone());
+            assert_eq!(limits["budgets"], *budgets);
+        }
+
+        let resp = read_limits(
+            "limits-invalid-args",
+            json!({
+                "action": "get_my_limits", "role": "someone_else"
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let rpc: Value = serde_json::from_slice(
+            &axum::body::to_bytes(resp.into_body(), 16 * 1024)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(rpc["error"]["code"], INVALID_PARAMS);
+
+        // 3. Child call with conforming args succeeds!
         let ok_call = json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -2020,16 +2219,15 @@ allow if {
                 )
                 .await
                 .unwrap();
+            assert_eq!(resp.status(), StatusCode::OK);
             let rpc: Value = serde_json::from_slice(
                 &axum::body::to_bytes(resp.into_body(), 16 * 1024)
                     .await
                     .unwrap(),
             )
             .unwrap();
-            assert!(
-                rpc.get("error").is_some(),
-                "expected constraint denial for {args}"
-            );
+            assert_eq!(rpc["error"]["code"], -32003, "arguments: {args}");
+            assert_eq!(rpc["error"]["message"], "Tool call rejected by role policy");
         }
 
         // 5. OPA negative case (parent calls payments_opa_denied -> denied, zero upstream calls!)
@@ -4189,7 +4387,7 @@ allow if {
                     .iter()
                     .filter_map(|t| t["name"].as_str())
                     .collect();
-                assert_eq!(names, vec!["payments_list"]);
+                assert_eq!(names, vec!["payments_list", POC_SECURITY_TOOL]);
             }
             let list_denials: Vec<Value> = audit_buffer
                 .events_since(list_start)
@@ -4571,7 +4769,24 @@ allow if {
             .iter()
             .filter_map(|t| t["name"].as_str())
             .collect();
-        assert_eq!(names_v2, vec!["payments_list"]);
+        assert_eq!(names_v2, vec!["payments_list", POC_SECURITY_TOOL]);
+        let limits_v2 = send_mcp(
+            "red-limits-2",
+            json!({
+                "jsonrpc": "2.0",
+                "id": 6,
+                "method": "tools/call",
+                "params": {
+                    "name": POC_SECURITY_TOOL,
+                    "arguments": {"action": "get_my_limits"}
+                }
+            }),
+        )
+        .await;
+        let limits = &limits_v2["result"]["structuredContent"];
+        assert_eq!(limits["issued_policy_version"], 1);
+        assert_eq!(limits["policy_version"], 2);
+        assert_eq!(limits["allowed_tools"], json!(names_v2));
 
         let list_call_v2 = send_mcp(
             "red-call-3",

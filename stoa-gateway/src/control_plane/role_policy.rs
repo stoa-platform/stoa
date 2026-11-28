@@ -452,6 +452,66 @@ struct TenantPolicyState {
     snapshot: Option<TenantSnapshot>,
 }
 
+/// All constraints for an argument must match, including those from historical policies.
+pub(crate) type EffectiveArgumentConstraints =
+    BTreeMap<String, BTreeMap<String, Vec<ArgumentConstraint>>>;
+
+struct RoleSession<'a> {
+    state: &'a TenantPolicyState,
+    current: &'a VerifiedRolePolicy,
+    role: &'a str,
+    issued_version: u64,
+}
+
+impl<'a> RoleSession<'a> {
+    fn history(&self) -> impl Iterator<Item = Option<&'a RolePolicySpec>> {
+        let role = self.role;
+        self.state
+            .history
+            .range(self.issued_version..=self.current.version)
+            .map(move |(_, policy)| policy.roles.get(role))
+    }
+
+    fn allows_tool(&self, tool: &str, token_allowed_tools: Option<&[String]>) -> bool {
+        token_allowed_tools.is_none_or(|allowed| allowed.iter().any(|name| name == tool))
+            && self
+                .history()
+                .all(|spec| spec.is_some_and(|spec| spec.allowed_tools.contains(tool)))
+    }
+
+    fn tool_constraints<'b>(
+        &'b self,
+        tool: &'b str,
+        token_constraints: Option<&'b HashMap<String, ArgumentConstraint>>,
+    ) -> impl Iterator<Item = (&'b String, &'b ArgumentConstraint)> + 'b {
+        self.history()
+            .flatten()
+            .filter_map(move |spec| spec.argument_constraints.get(tool))
+            .chain(token_constraints)
+            .flatten()
+    }
+
+    fn active_role(&self) -> Result<&'a RolePolicySpec, RolePolicyError> {
+        self.current
+            .roles
+            .get(self.role)
+            .ok_or(RolePolicyError::DeniedByRole)
+    }
+
+    fn allowed_tools(
+        &self,
+        active_role: &RolePolicySpec,
+        token_allowed_tools: Option<&[String]>,
+    ) -> HashSet<String> {
+        active_role
+            .allowed_tools
+            .iter()
+            .filter(|tool| self.allows_tool(tool, token_allowed_tools))
+            .cloned()
+            .collect()
+    }
+}
+
 /// Typed inputs for evaluating a single tool call against the signed role policy.
 pub struct RoleEvalInput<'a> {
     pub tenant_id: &'a str,
@@ -989,46 +1049,13 @@ impl RolePolicyStore {
             token_allowed_tools,
             token_constraints,
         } = *input;
-        validate_tenant_filename(tenant_id)?;
-        self.ensure_tenant_allowed(tenant_id)?;
-        self.require_trust_loaded()?;
-
-        let map = self.tenants.read();
-        let state = map.get(tenant_id).ok_or(RolePolicyError::ArtifactMissing)?;
-        let current = state
-            .snapshot
-            .as_ref()
-            .ok_or(RolePolicyError::ArtifactMissing)?
-            .result
-            .as_ref()
-            .map_err(Clone::clone)?;
-        if Utc::now() >= current.expires_at {
-            return Err(RolePolicyError::ValidityInvalid);
-        }
-        if issued_policy_version == 0 || issued_policy_version > current.version {
-            return Err(RolePolicyError::DeniedByRole);
-        }
-
-        // Token-level explicit tool allow-list (strict narrowing for delegated tokens).
-        if let Some(allowed) = token_allowed_tools {
-            if !allowed.iter().any(|t| t == tool_name) {
+        self.with_role_session(tenant_id, role, issued_policy_version, |session| {
+            if !session.allows_tool(tool_name, token_allowed_tools) {
                 return Err(RolePolicyError::DeniedByRole);
             }
-        }
 
-        // Intersect EVERY activated policy version from `issued_policy_version..=current.version`.
-        // Guarantees:
-        // - Widening added after token issuance is denied (absent in `issued_policy_version`).
-        // - Reduction takes effect immediately once refreshed (absent in `current.version`).
-        // - Withdrawal in v(k) followed by restoration in v(k+1) under the same token stays denied
-        //   because v(k) is in `issued_policy_version..=current.version`.
-        if !state.history.contains_key(&issued_policy_version) {
-            return Err(RolePolicyError::DeniedByRole);
-        }
-
-        let args_obj = args.as_object();
-        let validate = |constraints: &HashMap<String, ArgumentConstraint>| {
-            for (arg_name, constraint) in constraints {
+            let args_obj = args.as_object();
+            for (arg_name, constraint) in session.tool_constraints(tool_name, token_constraints) {
                 let wire_lexeme =
                     raw_number_args.map(|raw_map| raw_map.get(arg_name).map(String::as_str));
                 if !constraint
@@ -1038,34 +1065,10 @@ impl RolePolicyStore {
                 }
             }
             Ok(())
-        };
-
-        for (&ver, policy) in state.history.range(issued_policy_version..=current.version) {
-            if Utc::now() >= policy.expires_at && ver == current.version {
-                return Err(RolePolicyError::ValidityInvalid);
-            }
-            let Some(role_spec) = policy.roles.get(role) else {
-                return Err(RolePolicyError::DeniedByRole);
-            };
-            if !role_spec.allowed_tools.contains(tool_name) {
-                return Err(RolePolicyError::DeniedByRole);
-            }
-            if let Some(constraints) = role_spec.argument_constraints.get(tool_name) {
-                validate(constraints)?;
-            }
-        }
-
-        // Apply any additional delegated argument constraints from the token.
-        if let Some(extra_constraints) = token_constraints {
-            validate(extra_constraints)?;
-        }
-
-        Ok(())
+        })
     }
 
-    /// Return `(current_version, allowed_tools, active_role_spec)` intersected monotonically
-    /// across every policy version activated since `issued_policy_version` and any token-level
-    /// tool allow-list, reading only the in-memory snapshot (no file I/O).
+    /// Project the same monotonic tool allow-list used for enforcement.
     pub(crate) fn effective_allowed_tools(
         &self,
         tenant_id: &str,
@@ -1073,6 +1076,52 @@ impl RolePolicyStore {
         issued_policy_version: u64,
         token_allowed_tools: Option<&[String]>,
     ) -> Result<(u64, HashSet<String>, RolePolicySpec), RolePolicyError> {
+        self.with_role_session(tenant_id, role, issued_policy_version, |session| {
+            let active_role = session.active_role()?;
+            Ok((
+                session.current.version,
+                session.allowed_tools(active_role, token_allowed_tools),
+                active_role.clone(),
+            ))
+        })
+    }
+
+    /// Project the session's tool and argument limits from a single verified snapshot.
+    pub(crate) fn effective_limits(
+        &self,
+        tenant_id: &str,
+        role: &str,
+        issued_policy_version: u64,
+        token_allowed_tools: Option<&[String]>,
+        token_constraints: Option<&HashMap<String, ArgumentConstraint>>,
+    ) -> Result<(u64, HashSet<String>, EffectiveArgumentConstraints), RolePolicyError> {
+        self.with_role_session(tenant_id, role, issued_policy_version, |session| {
+            let tools = session.allowed_tools(session.active_role()?, token_allowed_tools);
+            let mut constraints = EffectiveArgumentConstraints::new();
+            for tool in &tools {
+                for (argument, constraint) in session.tool_constraints(tool, token_constraints) {
+                    let rules = constraints
+                        .entry(tool.clone())
+                        .or_default()
+                        .entry(argument.clone())
+                        .or_default();
+                    if !rules.contains(constraint) {
+                        rules.push(constraint.clone());
+                    }
+                }
+            }
+            Ok((session.current.version, tools, constraints))
+        })
+    }
+
+    /// Keep all policy reads for an operation under the same snapshot lock.
+    fn with_role_session<T>(
+        &self,
+        tenant_id: &str,
+        role: &str,
+        issued_version: u64,
+        evaluate: impl FnOnce(RoleSession<'_>) -> Result<T, RolePolicyError>,
+    ) -> Result<T, RolePolicyError> {
         validate_tenant_filename(tenant_id)?;
         self.ensure_tenant_allowed(tenant_id)?;
         self.require_trust_loaded()?;
@@ -1089,35 +1138,21 @@ impl RolePolicyStore {
         if Utc::now() >= current.expires_at {
             return Err(RolePolicyError::ValidityInvalid);
         }
-        if issued_policy_version == 0
-            || issued_policy_version > current.version
-            || !state.history.contains_key(&issued_policy_version)
+        if issued_version == 0
+            || issued_version > current.version
+            || !state.history.contains_key(&issued_version)
         {
             return Err(RolePolicyError::DeniedByRole);
         }
-        let active_role = current
-            .roles
-            .get(role)
-            .ok_or(RolePolicyError::DeniedByRole)?;
-        let history: Option<Vec<_>> = state
-            .history
-            .range(issued_policy_version..=current.version)
-            .map(|(_, policy)| policy.roles.get(role))
-            .collect();
-        let mut allowed_tools = HashSet::new();
-        if let Some(history) = history {
-            for tool in &active_role.allowed_tools {
-                if token_allowed_tools.is_some_and(|allowed| !allowed.contains(tool))
-                    || history
-                        .iter()
-                        .any(|spec| !spec.allowed_tools.contains(tool))
-                {
-                    continue;
-                }
-                allowed_tools.insert(tool.clone());
-            }
-        }
-        Ok((current.version, allowed_tools, active_role.clone()))
+
+        // Intersect every activated version through the current one. Once withdrawn,
+        // a permission cannot be restored for a session that saw the withdrawal.
+        evaluate(RoleSession {
+            state,
+            current,
+            role,
+            issued_version,
+        })
     }
 
     fn verify_jws(
@@ -2078,6 +2113,97 @@ mod tests {
         );
         let (v4, _) = store.current_role_snapshot("acme", "reader").unwrap();
         assert!(eval("payments_export", v4).is_ok());
+    }
+
+    #[test]
+    fn effective_limits_keep_historical_and_delegated_constraints() {
+        let tmp = tempfile::tempdir().unwrap();
+        let signer = RoleSigner::new();
+        let trust = tmp.path().join("trust.json");
+        fs::write(&trust, signer.trust_jwks()).unwrap();
+        let roles = tmp.path().join("roles");
+        fs::create_dir(&roles).unwrap();
+        let store = RolePolicyStore::new(
+            &roles,
+            tmp.path().join("floors"),
+            "stoa-poc-policy",
+            "stoa-gateway",
+            Some(PolicyTrustStore::open(&trust)),
+        );
+        let original = ArgumentConstraint::AllowedValues {
+            values: vec![json!("acct-1"), json!("external")],
+        };
+        let current = ArgumentConstraint::Prefix {
+            prefix: "acct-".into(),
+        };
+        for (version, tools, account) in [
+            (1, json!(["payments_list", "withdrawn"]), &original),
+            (2, json!(["payments_list", "added"]), &current),
+        ] {
+            fs::write(
+                roles.join("acme.roles.jws"),
+                signer.sign(
+                    "acme",
+                    version,
+                    600,
+                    json!({"reader": {
+                        "allowed_tools": tools,
+                        "argument_constraints": {"payments_list": {"account": account}}
+                    }}),
+                ),
+            )
+            .unwrap();
+            store.reload_tenant("acme").unwrap();
+        }
+        let token_tools = ["payments_list".into(), "withdrawn".into(), "added".into()];
+        let max = ArgumentConstraint::MaxNumber { max: 25.0 };
+        let token_constraints = HashMap::from([("limit".into(), max.clone())]);
+        let (version, tools, constraints) = store
+            .effective_limits(
+                "acme",
+                "reader",
+                1,
+                Some(&token_tools),
+                Some(&token_constraints),
+            )
+            .unwrap();
+        assert_eq!(version, 2);
+        assert_eq!(tools, HashSet::from(["payments_list".into()]));
+        assert_eq!(
+            constraints["payments_list"],
+            BTreeMap::from([
+                ("account".into(), vec![original, current]),
+                ("limit".into(), vec![max]),
+            ])
+        );
+        for (account, limit, allowed) in [
+            ("acct-1", 25, true),
+            ("acct-2", 25, false),
+            ("external", 25, false),
+            ("acct-1", 26, false),
+        ] {
+            let args = json!({"account": account, "limit": limit});
+            let projected = constraints["payments_list"]
+                .iter()
+                .all(|(arg, rules)| rules.iter().all(|rule| rule.matches(args.get(arg))));
+            assert_eq!(projected, allowed);
+            assert_eq!(
+                store.evaluate_call(&RoleEvalInput {
+                    tenant_id: "acme",
+                    role: "reader",
+                    tool_name: "payments_list",
+                    args: &args,
+                    issued_policy_version: 1,
+                    token_allowed_tools: Some(&token_tools),
+                    token_constraints: Some(&token_constraints),
+                }),
+                if allowed {
+                    Ok(())
+                } else {
+                    Err(RolePolicyError::DeniedByConstraint)
+                }
+            );
+        }
     }
 
     #[test]

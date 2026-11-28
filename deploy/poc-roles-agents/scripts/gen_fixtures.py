@@ -35,6 +35,11 @@ def main() -> None:
         type=Path,
         help="write a second version of the signed role policy",
     )
+    parser.add_argument(
+        "--refusal-role-v2-out",
+        type=Path,
+        help="write the signed role update for the session refusal cases",
+    )
     args = parser.parse_args()
     runtime_dir = args.runtime_dir
     upstream_api_key = os.environ["STOA_POC_UPSTREAM_API_KEY"]
@@ -132,6 +137,17 @@ def main() -> None:
     if args.role_v2_out:
         args.role_v2_out.write_text(
             sign_jws(priv, "stoa-agent-role-policy+jws", kid, {**role_policy_payload, "version": 2}) + "\n",
+            encoding="utf-8",
+        )
+    if args.refusal_role_v2_out:
+        revised_reader = {
+            "allowed_tools": [
+                tool for tool in reader_role_tools if tool != "payments_list"
+            ] + ["payments_hidden"],
+        }
+        revised_policy = {**role_policy_payload, "version": 2, "roles": {"reader": revised_reader}}
+        args.refusal_role_v2_out.write_text(
+            sign_jws(priv, "stoa-agent-role-policy+jws", kid, revised_policy) + "\n",
             encoding="utf-8",
         )
 

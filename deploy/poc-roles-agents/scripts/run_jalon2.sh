@@ -17,7 +17,7 @@ cleanup() {
 trap cleanup EXIT
 
 echo "=== [1/5] Generating ephemeral signed Jalon 2 fixtures ==="
-python3 ./scripts/gen_fixtures.py ./.runtime
+python3 ./scripts/gen_fixtures.py ./.runtime --refusal-role-v2-out ./.runtime/acme.refusal.v2.jws
 
 echo "=== [2/5] Starting isolated 4-container Docker Compose stack ==="
 docker compose up -d --build --wait
@@ -44,6 +44,7 @@ import json, sys
 s = json.load(sys.stdin)
 assert s["upstream_calls"] == 2, f"expected exactly 2 authorized /payments calls (1 parent + 1 child), got {s}"
 assert s["valid_api_key_calls"] == 2, f"expected 2 valid API key calls, got {s}"
+assert s["forbidden_calls"] == 0, f"payments_hidden (/forbidden) was reached: {s}"
 assert s["caller_auth_headers_seen"] == 0, f"caller Authorization header leaked upstream: {s}"
 assert s["redirect_target_calls"] == 0, f"3xx redirect was followed: {s}"
 assert s["oauth2_calls"] == 0, f"unexpected oauth2 calls: {s}"

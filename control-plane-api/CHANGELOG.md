@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.16.0](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.15.1...control-plane-api-v1.16.0) (2026-11-28)
+
+
+### Features
+
+* **api:** optional startup refusal and pre-deployment check for the backend encryption key ([#3239](https://github.com/stoa-platform/stoa/issues/3239)) ([ce2b0e8](https://github.com/stoa-platform/stoa/commit/ce2b0e8ad38b08d8399c612f804c7ca81badabf6))
+
+
+### Bug Fixes
+
+* **api:** bound secret-store checks in readiness and client timeout ([#3238](https://github.com/stoa-platform/stoa/issues/3238)) ([c94a5ae](https://github.com/stoa-platform/stoa/commit/c94a5ae6d0f322f9c15b9c7b592d2911dbe3063f))
+* **api:** refuse MCP server writes when credentials cannot be stored ([#3240](https://github.com/stoa-platform/stoa/issues/3240)) ([e6c1ac3](https://github.com/stoa-platform/stoa/commit/e6c1ac3848d3b09ee11efd0e003ee5cd4e3d27d5))
+* **cp-api:** forward inbound auth and public flag to gateway contracts ([#3233](https://github.com/stoa-platform/stoa/issues/3233)) ([00d61bd](https://github.com/stoa-platform/stoa/commit/00d61bd79d6bd78e0b2fd3c298a606334109ac74))
+
 ## [1.15.1](https://github.com/stoa-platform/stoa/compare/control-plane-api-v1.15.0...control-plane-api-v1.15.1) (2026-11-23)
 
 

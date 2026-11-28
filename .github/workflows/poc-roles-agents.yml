@@ -17,11 +17,14 @@ on:
       - 'stoa-gateway/src/main.rs'
       - 'stoa-gateway/src/mcp/poc.rs'
       - 'stoa-gateway/src/mcp/tools/dynamic_tool.rs'
+      - 'stoa-gateway/src/mcp/tools/native_tool.rs'
       - 'stoa-gateway/src/proxy/credentials.rs'
       - 'stoa-gateway/src/proxy/outbound_policy.rs'
       - 'stoa-gateway/src/state.rs'
       - 'stoa-gateway/src/uac/binders/mcp.rs'
       - '.github/workflows/poc-roles-agents.yml'
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:

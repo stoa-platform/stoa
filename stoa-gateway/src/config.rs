@@ -864,6 +864,21 @@ pub struct Config {
     #[serde(default)]
     pub llm_proxy_skip_validation: bool,
 
+    /// Enforce a cumulative token budget per LLM proxy consumer (default: false).
+    /// Reuses the token budget tracker of the MCP path with its own counters: each
+    /// consumer (tenant and subscription resolved from the API key) accumulates the
+    /// input, output and cache tokens reported by the upstream, and requests are
+    /// refused with 429 once the limit is reached, until the window resets.
+    /// The window is `token_budget_window_hours` (Env: STOA_TOKEN_BUDGET_WINDOW_HOURS).
+    /// Env: STOA_LLM_PROXY_TOKEN_BUDGET_ENABLED
+    #[serde(default)]
+    pub llm_proxy_token_budget_enabled: bool,
+
+    /// Token budget per LLM proxy consumer per window (0 = unlimited).
+    /// Env: STOA_LLM_PROXY_TOKEN_BUDGET_LIMIT
+    #[serde(default = "default_token_budget_limit")]
+    pub llm_proxy_token_budget_limit: u64,
+
     // === API Proxy — Internal Dogfooding (CAB-1722) ===
     /// API proxy configuration for routing internal API calls through the gateway.
     /// Each backend (Linear, GitHub, Slack, etc.) is individually toggled.
@@ -1327,6 +1342,14 @@ impl fmt::Debug for Config {
                 &self.llm_proxy_mistral_upstream_url,
             )
             .field("llm_proxy_skip_validation", &self.llm_proxy_skip_validation)
+            .field(
+                "llm_proxy_token_budget_enabled",
+                &self.llm_proxy_token_budget_enabled,
+            )
+            .field(
+                "llm_proxy_token_budget_limit",
+                &self.llm_proxy_token_budget_limit,
+            )
             .field("api_proxy", &self.api_proxy)
             .field("hegemon_enabled", &self.hegemon_enabled)
             .field("hegemon_budget_daily_usd", &self.hegemon_budget_daily_usd)

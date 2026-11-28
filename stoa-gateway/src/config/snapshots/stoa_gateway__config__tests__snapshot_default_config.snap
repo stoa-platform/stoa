@@ -196,6 +196,8 @@ expression: "Config::default()"
   "llm_proxy_mistral_api_key": null,
   "llm_proxy_mistral_upstream_url": "https://api.mistral.ai",
   "llm_proxy_skip_validation": false,
+  "llm_proxy_token_budget_enabled": false,
+  "llm_proxy_token_budget_limit": 500000,
   "api_proxy": {
     "enabled": false,
     "require_auth": true,

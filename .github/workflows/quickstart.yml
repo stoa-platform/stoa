@@ -1,4 +1,4 @@
-# Fresh runner: timeout 300 on docker compose up --wait, then verify.sh.
+# Fresh runner: images build separately, then timeout 300 covers stack startup only.
 # The control plane image is pulled anonymously. No registry login.
 
 name: Quickstart
@@ -61,6 +61,12 @@ jobs:
             echo "::add-mask::$value"
             printf '%s=%s\n' "$name" "$value" >> "$GITHUB_ENV"
           done
+
+      - name: Build images
+        working-directory: quickstart
+        run: |
+          set -euo pipefail
+          timeout 1800 docker compose build
 
       - name: Start the stack
         working-directory: quickstart

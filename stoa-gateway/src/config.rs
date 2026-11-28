@@ -967,22 +967,32 @@ pub struct Config {
     pub tcp_rate_limit_per_ip: Option<f64>,
 
     // === Memory Budget (CAB-1829) ===
-    /// Process memory limit in MB. Backpressure (503) activates at 80% of this limit.
+    /// Requested process memory budget in MiB, capped by a finite cgroup limit.
+    /// When omitted, the runtime uses the cgroup limit or falls back to 512 MiB.
     /// Env: STOA_MEMORY_LIMIT_MB
     #[serde(default = "default_memory_limit_mb")]
     pub memory_limit_mb: u64,
 
-    /// Fraction of `memory_limit_mb` at which backpressure activates (default 0.80).
+    /// Whether the loader found an explicit memory budget in YAML or the environment.
+    #[serde(skip)]
+    pub memory_limit_explicit: bool,
+
+    /// Fraction of the effective memory limit at which backpressure activates (default 0.80).
     /// Env: STOA_MEMORY_BACKPRESSURE_HIGH_RATIO
     #[serde(default = "default_memory_backpressure_high_ratio")]
     pub memory_backpressure_high_ratio: f64,
 
-    /// Fraction of `memory_limit_mb` below which backpressure is released
+    /// Fraction of the effective memory limit below which backpressure is released
     /// (default 0.70). Must be `<= memory_backpressure_high_ratio`; the gap
     /// prevents flapping when usage hovers around a single threshold.
     /// Env: STOA_MEMORY_BACKPRESSURE_LOW_RATIO
     #[serde(default = "default_memory_backpressure_low_ratio")]
     pub memory_backpressure_low_ratio: f64,
+
+    /// Seconds of continuous backpressure before liveness fails. 0 disables this check.
+    /// Env: STOA_BACKPRESSURE_LIVENESS_FAIL_AFTER_SECS
+    #[serde(default = "default_backpressure_liveness_fail_after_secs")]
+    pub backpressure_liveness_fail_after_secs: u64,
 
     // === HTTP server connection limits ===
     /// Close client connections with no in-flight request and no traffic for
@@ -1353,6 +1363,10 @@ impl fmt::Debug for Config {
             .field(
                 "memory_backpressure_low_ratio",
                 &self.memory_backpressure_low_ratio,
+            )
+            .field(
+                "backpressure_liveness_fail_after_secs",
+                &self.backpressure_liveness_fail_after_secs,
             )
             .field("http_idle_timeout_secs", &self.http_idle_timeout_secs)
             .field(

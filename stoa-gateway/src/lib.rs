@@ -98,7 +98,7 @@ pub fn build_router(state: AppState) -> Router {
     let mut base = Router::new()
         .route("/health", get(health))
         .route("/health/ready", get(ready))
-        .route("/health/live", get(health))
+        .route("/health/live", get(live))
         .route("/ready", get(ready))
         .route("/metrics", get(prometheus_metrics));
 
@@ -818,11 +818,36 @@ async fn health() -> &'static str {
     "OK"
 }
 
+async fn live(
+    axum::extract::State(state): axum::extract::State<AppState>,
+) -> impl axum::response::IntoResponse {
+    use axum::http::StatusCode;
+
+    if state
+        .memory_monitor
+        .liveness_failed(state.config.backpressure_liveness_fail_after_secs)
+    {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "NOT LIVE: sustained memory backpressure",
+        );
+    }
+    (StatusCode::OK, "OK")
+}
+
 async fn ready(
     axum::extract::State(state): axum::extract::State<AppState>,
 ) -> axum::response::Response {
     use axum::http::StatusCode;
     use axum::response::IntoResponse;
+
+    if state.memory_monitor.under_pressure() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "NOT READY: memory backpressure",
+        )
+            .into_response();
+    }
 
     if state.config.ext_authz_grpc_addr.is_some()
         && state
@@ -975,6 +1000,83 @@ mod tests {
             .layer(axum::middleware::from_fn(move |request, next| {
                 memory_backpressure_middleware(monitor.clone(), request, next)
             }))
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn memory_pressure_probes_respect_grace_and_recovery() {
+        use std::time::Duration;
+
+        for grace in [300, 0] {
+            let mut config = config::Config {
+                backpressure_liveness_fail_after_secs: grace,
+                control_plane_url: None,
+                ..config::Config::default()
+            };
+            config.mtls.enabled = true;
+            config.mtls.trusted_proxies = vec!["192.0.2.0/24".to_string()];
+            config.sender_constraint.enabled = true;
+            let state = AppState::new(config);
+            let monitor = state.memory_monitor.clone();
+            let app = build_router(state);
+
+            let probe = |uri: &'static str| {
+                app.clone()
+                    .oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap())
+            };
+            assert_eq!(
+                probe("/health/ready").await.unwrap().status(),
+                StatusCode::OK
+            );
+
+            monitor.observe(monitor.threshold_bytes());
+            for uri in ["/ready", "/health/ready"] {
+                let response = probe(uri).await.unwrap();
+                assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+                assert_eq!(
+                    &axum::body::to_bytes(response.into_body(), 1024)
+                        .await
+                        .unwrap()[..],
+                    b"NOT READY: memory backpressure"
+                );
+            }
+
+            tokio::time::advance(Duration::from_secs(299)).await;
+            monitor.observe(monitor.release_bytes()); // The hysteresis band keeps the timer running.
+            assert_eq!(
+                probe("/health/live").await.unwrap().status(),
+                StatusCode::OK
+            );
+
+            tokio::time::advance(Duration::from_secs(1)).await;
+            let response = probe("/health/live").await.unwrap();
+            if grace > 0 {
+                assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+                assert_eq!(
+                    &axum::body::to_bytes(response.into_body(), 1024)
+                        .await
+                        .unwrap()[..],
+                    b"NOT LIVE: sustained memory backpressure"
+                );
+            } else {
+                assert_eq!(response.status(), StatusCode::OK);
+            }
+            assert_eq!(probe("/health").await.unwrap().status(), StatusCode::OK);
+
+            monitor.observe(monitor.release_bytes() - 1);
+            assert_eq!(
+                probe("/health/ready").await.unwrap().status(),
+                StatusCode::OK
+            );
+            assert_eq!(
+                probe("/health/live").await.unwrap().status(),
+                StatusCode::OK
+            );
+            monitor.observe(monitor.threshold_bytes());
+            assert_eq!(
+                probe("/health/live").await.unwrap().status(),
+                StatusCode::OK
+            );
+        }
     }
 
     #[tokio::test]

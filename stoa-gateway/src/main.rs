@@ -14,6 +14,7 @@ const TCP_BACKLOG: i32 = 1024;
 
 use stoa_gateway::config::{Config, ConfigError};
 use stoa_gateway::control_plane::GatewayRegistrar;
+use stoa_gateway::memory::MemoryMonitor;
 use stoa_gateway::state::AppState;
 
 #[tokio::main]
@@ -50,7 +51,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     stoa_gateway::metrics::init_all_metrics();
 
     // Initialize application state
-    let state = AppState::new(config.clone());
+    let state = AppState::with_memory_monitor(config.clone(), MemoryMonitor::for_runtime(&config));
     stoa_gateway::handlers::admin::restore_contracts(&state)
         .await
         .map_err(|error| format!("Could not restore contract snapshot: {error}"))?;

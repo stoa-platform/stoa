@@ -174,6 +174,15 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(config: Config) -> Self {
+        let memory_monitor = MemoryMonitor::with_watermarks(
+            config.memory_limit_mb,
+            config.memory_backpressure_high_ratio,
+            config.memory_backpressure_low_ratio,
+        );
+        Self::with_memory_monitor(config, memory_monitor)
+    }
+
+    pub fn with_memory_monitor(config: Config, memory_monitor: MemoryMonitor) -> Self {
         let tool_registry = Arc::new(ToolRegistry::new());
         let session_manager = Arc::new(SessionManager::new(config.mcp_session_ttl_minutes));
         let rate_limiter = Arc::new(RateLimiter::new(&config));
@@ -588,19 +597,6 @@ impl AppState {
             tracing::info!("HEGEMON agent gateway disabled (STOA_HEGEMON_ENABLED=false)");
             None
         };
-
-        // Initialize memory monitor (CAB-1829)
-        let memory_monitor = MemoryMonitor::with_watermarks(
-            config.memory_limit_mb,
-            config.memory_backpressure_high_ratio,
-            config.memory_backpressure_low_ratio,
-        );
-        tracing::info!(
-            limit_mb = config.memory_limit_mb,
-            threshold_mb = memory_monitor.threshold_bytes() / (1024 * 1024),
-            release_mb = memory_monitor.release_bytes() / (1024 * 1024),
-            "Memory budget monitor initialized"
-        );
 
         // Initialize error snapshot store (CAB-1645)
         let snapshot_store = if config.snapshot_enabled {

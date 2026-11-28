@@ -82,9 +82,12 @@ kubectl describe deployment/stoa-gateway -n stoa-system | grep -E 'KEYCLOAK|OIDC
 `StoaGatewayBackpressureRejections` — `gateway_backpressure_rejections_total` increasing for 2 min.
 
 Backpressure activates at `STOA_MEMORY_BACKPRESSURE_HIGH_RATIO` (default 0.80) of
-`STOA_MEMORY_LIMIT_MB` and is released below `STOA_MEMORY_BACKPRESSURE_LOW_RATIO`
-(default 0.70). While active, non-probe requests get `503` with `Retry-After` and
-`Connection: close`.
+the effective memory budget and is released below `STOA_MEMORY_BACKPRESSURE_LOW_RATIO`
+(default 0.70). The budget comes from the finite cgroup limit or an explicit
+`STOA_MEMORY_LIMIT_MB` (capped at the cgroup limit), with a 512 MiB fallback.
+While active, non-probe requests get `503` with `Retry-After` and `Connection: close`.
+`/health/ready` returns `503` immediately. `/health/live` returns `503` after
+`STOA_BACKPRESSURE_LIVENESS_FAIL_AFTER_SECS` of continuous pressure (default 300).
 
 ```bash
 # Memory, backpressure state and open sockets

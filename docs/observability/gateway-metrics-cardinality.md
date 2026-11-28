@@ -20,10 +20,15 @@ It does not:
 
 | Metric | Previous labels | PR 2 labels | Contract status | Notes |
 | --- | --- | --- | --- | --- |
-| `stoa_http_requests_total` | `method`, `path`, `status` | `method`, `http_route`, `status` | improved | `http_route` contains a normalized route label, never raw request path. |
+| `stoa_http_requests_total` | `method`, `path`, `status` | `method`, `http_route`, `status` | improved | `http_route` normalizes numeric and UUID-like path segments. |
 | `stoa_http_request_duration_seconds` | `method`, `path` | `method`, `http_route` | improved | Same normalized route projection as the request counter. |
 | `stoa_mcp_tools_calls_total` | `tool`, `tenant`, `status`, `consumer_id` | `tool`, `tenant`, `status` | improved | `consumer_id` removed from Prometheus labels. |
 | `stoa_quota_remaining` | `consumer`, `period` | not emitted | removed | Per-consumer quota values must be exposed through tenant-safe APIs, traces, or logs, not Prometheus labels. |
+
+The gateway admits up to 4,096 distinct combinations of method, route and
+status per process. Over-budget combinations and oversized labels are counted
+with `method="__overflow__"` and `http_route="__overflow__"`. The counter keeps
+the status code and the histogram retains the aggregate request latency.
 
 ## Remaining Gateway Labels
 

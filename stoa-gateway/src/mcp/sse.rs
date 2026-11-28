@@ -472,26 +472,13 @@ pub async fn handle_sse_get(
     let authorization_deadline = crate::auth::tenant::authorization_deadline(claims.exp);
 
     tokio::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(30));
-        loop {
-            tokio::select! {
-                _ = tokio::time::sleep_until(authorization_deadline) => break,
-                _ = interval.tick() => {},
-            }
-
-            // Check if session still exists
-            if session_manager.get(&session_id_clone).await.is_none() {
-                debug!(session_id = %session_id_clone, "Session expired, closing SSE");
-                break;
-            }
-
-            // Send keepalive
-            let event = Event::default().comment("keepalive");
-            if tx_keepalive.send(event).await.is_err() {
-                debug!(session_id = %session_id_clone, "SSE client disconnected");
-                break;
-            }
-        }
+        keep_sse_alive(
+            &session_manager,
+            &session_id_clone,
+            &tx_keepalive,
+            authorization_deadline,
+        )
+        .await;
         // Unregister NotificationBus channel on disconnect (CAB-1178)
         session_manager.unregister_channel_if_same(&session_id_clone, &tx_keepalive);
 
@@ -511,6 +498,31 @@ pub async fn handle_sse_get(
                 .text("ping"),
         )
         .into_response()
+}
+
+async fn keep_sse_alive(
+    sessions: &super::session::SessionManager,
+    session_id: &str,
+    tx: &mpsc::Sender<Event>,
+    authorization_deadline: tokio::time::Instant,
+) {
+    let mut interval = tokio::time::interval(Duration::from_secs(30));
+    loop {
+        tokio::select! {
+            _ = tokio::time::sleep_until(authorization_deadline) => break,
+            _ = tx.closed() => break,
+            _ = interval.tick() => {},
+        }
+
+        if sessions.get(session_id).await.is_none() {
+            debug!(%session_id, "Session expired, closing SSE");
+            break;
+        }
+
+        // A slow client can fill the queue. A keepalive is expendable and
+        // must never block disconnect or authorization expiry.
+        let _ = tx.try_send(Event::default().comment("keepalive"));
+    }
 }
 
 /// DELETE /mcp/sse - Close session
@@ -1312,6 +1324,23 @@ mod tests {
     fn test_negotiate_version_empty_string() {
         let result = negotiate_protocol_version(Some(""));
         assert_eq!(result, DEFAULT_PROTOCOL_VERSION);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn full_sse_queue_does_not_block_authorization_expiry() {
+        let sessions = super::super::session::SessionManager::default();
+        let (tx, mut rx) = mpsc::channel(1);
+        assert!(sessions.register_tenant_channel("test-session", "test-tenant", tx.clone(), true));
+        tx.try_send(Event::default().comment("buffered")).unwrap();
+
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
+        tokio::time::timeout(
+            Duration::from_secs(5),
+            keep_sse_alive(&sessions, "test-session", &tx, deadline),
+        )
+        .await
+        .expect("keepalive should stop at the deadline even when the queue is full");
+        assert!(rx.try_recv().is_ok());
     }
 
     // === SseQueryParams deserialization ===

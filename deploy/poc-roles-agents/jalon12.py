@@ -3,21 +3,27 @@
 
 from contextlib import redirect_stdout
 import os
+from pathlib import Path
 import sys
 
-from agent_harness import DpopKey, run_child, run_parent
+from agent_harness import DpopKey, run_child, run_parent, run_role_update_checks
 from agent_pipes import agent_pair, emit, receive, send
 
 
 def parent(gateway: str, mock_ip: str) -> None:
     child_jwk = receive(sys.stdin)["child_jwk"]
+    dpop = DpopKey()
     with redirect_stdout(sys.stderr):
-        parent_token, child_token = run_parent(gateway, mock_ip, child_jwk)
+        parent_token, child_token = run_parent(gateway, mock_ip, child_jwk, dpop)
     payload = {"parent_token": parent_token}
     if child_token is not None:
         payload["child_token"] = child_token
     emit(payload)
-    del parent_token, child_token, payload
+    del child_token, payload
+    if child_jwk is not None:
+        receive(sys.stdin)
+        with redirect_stdout(sys.stderr):
+            run_role_update_checks(gateway, dpop, parent_token)
 
 
 def child(gateway: str, mock_ip: str) -> None:
@@ -41,6 +47,10 @@ def orchestrate(jalon: str, mock_ip: str) -> None:
         send(parent_agent.stdin, {"child_jwk": child_jwk})
         send(child_agent.stdin, receive(parent_agent.stdout))
         receive(child_agent.stdout)
+        if jalon == "jalon2":
+            runtime = Path(".runtime")
+            (runtime / "acme.refusal.v2.jws").replace(runtime / "roles" / "acme.roles.jws")
+            send(parent_agent.stdin, {})
 
 
 if __name__ == "__main__":

@@ -44,9 +44,23 @@ bash scripts/run_jalon5_floor.sh
 What each scenario verifies:
 
 - **`scripts/run_jalon1.sh`**: Ephemeral fixture generation, `/ready` gating, disabled `/admin/*`, network isolation between agents and `upstream-mock`, `POST /mcp/poc/bootstrap`, DPoP proof validation and replay rejection, and backend API key injection without forwarding caller tokens upstream.
-- **`scripts/run_jalon2.sh`**: Signed role policy loading with a `0600` anti-rollback floor file, gateway delegation (`POST /mcp/poc/delegate`) up to depth 3 (rejecting depth 4), v1 argument constraints (`allowed_values`, `prefix`, `max_number`) and strict child narrowing, OPA enforcement, outbound address policy enforcement, and refusal to follow 3xx redirects.
+- **`scripts/run_jalon2.sh`**: Signed role policy loading with a `0600` anti-rollback floor file, gateway delegation (`POST /mcp/poc/delegate`) up to depth 3 (rejecting depth 4), v1 argument constraints, strict child narrowing, caller limits, role changes under the same token, OPA enforcement, outbound address policy enforcement, and refusal to follow 3xx redirects.
 - **`scripts/run_jalon3.sh`**: Filtered `tools/list`, guarded sequential sub-calls (`poc/subcalls`) with full authorization on fallback steps, atomic chain revocation (`POST /mcp/poc/revoke`), two-level budgets (chain + root caller) under concurrency, and token invalidation across a gateway restart.
 - **`scripts/run_jalon5_floor.sh`**: Durable `0600` anti-rollback floor persistence in the named `role-floors` volume across restarts, `SIGKILL`, and container recreation, plus fail-closed startup when a lower version is presented or the floor file is unreadable.
+
+The [refusal catalogue](cas/README.md) maps the 12 checks to their requests, exact responses, and gateway code. GitHub Actions runs the scenarios for matching pull requests and on each push to `main`. A failed scenario fails the Compose check.
+
+## Caller limits
+
+To read the current session's limits, send this JSON-RPC request to `POST /mcp/poc` with the session's DPoP token and a fresh proof.
+
+```json
+{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"stoa_security","arguments":{"action":"get_my_limits"}}}
+```
+
+The result includes `structuredContent` and the same JSON as text content. It reports the role from the signed token, the issued and current policy versions, the canonical names of the effective tools, and their argument constraints. A child sees only its resource-scoped grant and the introspection tool. Each argument's array lists rules that must all match. A number subject to `max_number` must be finite and within the gateway's exact numeric domain.
+
+Introspection requires an active chain and returns remaining chain and caller budgets without debiting either. The response uses `Cache-Control: no-store`. Calls are checked against the policies and budgets in effect when they arrive.
 
 ## Restart Behavior
 

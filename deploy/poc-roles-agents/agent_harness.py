@@ -133,9 +133,70 @@ def make_external_rs256_token(kid: str | None, aud: str) -> str:
     return f"{inp}.{b64url(sig)}"
 
 
-def run_parent(gateway_url: str, upstream_ip: str, child_jwk: dict | None) -> tuple[str, str | None]:
-    upstream_host = os.environ["UPSTREAM_MOCK_HOST"]
+def assert_rpc_error(
+    status: int, body: str, code: int, message: str, *, http_status: int = 200
+) -> None:
+    error = json.loads(body).get("error", {})
+    assert (status, error.get("code"), error.get("message")) == (http_status, code, message), (
+        f"expected HTTP {http_status}, RPC {code} {message!r}; got HTTP {status}, RPC {error}"
+    )
+
+
+def assert_role_denial(status: int, body: str) -> None:
+    assert_rpc_error(status, body, -32003, "Tool call rejected by role policy")
+
+
+def call_poc_tool(
+    gateway: str, dpop: DpopKey, token: str, name: str, arguments: dict
+) -> tuple[int, str]:
+    url = f"{gateway}/mcp/poc"
+    return http_req(
+        "POST",
+        url,
+        headers={
+            "Authorization": f"DPoP {token}",
+            "DPoP": dpop.sign_proof("POST", url, access_token=token),
+        },
+        body={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": name, "arguments": arguments},
+        },
+    )
+
+
+def read_my_limits(gateway: str, dpop: DpopKey, token: str) -> dict:
+    status, body = call_poc_tool(gateway, dpop, token, "stoa_security", {"action": "get_my_limits"})
+    rpc = json.loads(body)
+    assert status == 200 and "error" not in rpc, f"get_my_limits failed: HTTP {status}"
+    result = rpc["result"]
+    assert result["isError"] is False
+    limits = result["structuredContent"]
+    assert json.loads(result["content"][0]["text"]) == limits
+    return limits
+
+
+def bootstrap_parent(gateway_url: str, dpop: DpopKey) -> dict:
     bootstrap_secret = os.environ["STOA_POC_BOOTSTRAP_SECRET"]
+    boot_url = f"{gateway_url}/mcp/poc/bootstrap"
+    code, body = http_req(
+        "POST",
+        boot_url,
+        headers={
+            "X-Stoa-Poc-Bootstrap-Secret": bootstrap_secret,
+            "DPoP": dpop.sign_proof("POST", boot_url),
+        },
+        body={"sub": "agent-parent", "tenant_id": "acme", "role": "reader", "ttl_secs": 300},
+    )
+    assert code == 200, f"bootstrap failed: {code}"
+    return json.loads(body)
+
+
+def run_parent(
+    gateway_url: str, upstream_ip: str, child_jwk: dict | None, dpop: DpopKey
+) -> tuple[str, str | None]:
+    upstream_host = os.environ["UPSTREAM_MOCK_HOST"]
 
     assert_tcp_unreachable(upstream_host, 9000, "agent-parent -> upstream-mock (DNS)")
     assert_tcp_unreachable(upstream_ip, 9000, "agent-parent -> upstream-mock (IP)")
@@ -148,19 +209,7 @@ def run_parent(gateway_url: str, upstream_ip: str, child_jwk: dict | None) -> tu
     assert code == 404, f"/admin/health expected 404, got {code}"
     print("PASS: /admin/health returned 404 (isolated from agent containers)", flush=True)
 
-    dpop = DpopKey()
-    boot_url = f"{gateway_url}/mcp/poc/bootstrap"
-    code, body = http_req(
-        "POST",
-        boot_url,
-        headers={
-            "X-Stoa-Poc-Bootstrap-Secret": bootstrap_secret,
-            "DPoP": dpop.sign_proof("POST", boot_url),
-        },
-        body={"sub": "agent-parent", "tenant_id": "acme", "role": "reader", "ttl_secs": 300},
-    )
-    assert code == 200, f"bootstrap failed: {code}"
-    boot = json.loads(body)
+    boot = bootstrap_parent(gateway_url, dpop)
     token = boot["access_token"]
     kid = boot["kid"]
     assert boot["token_type"] == "DPoP" and boot["depth"] == 0
@@ -246,9 +295,9 @@ def run_parent(gateway_url: str, upstream_ip: str, child_jwk: dict | None) -> tu
         print("PASS: tools/list excludes OPA-denied tool (payments_opa_denied)", flush=True)
 
         # Jalon 2 parent checks: OPA negative, outbound address policy block, 3xx non-follow + scrubbed error
-        for label, tool_name, expected_err in [
-            ("OPA negative case (payments_opa_denied)", "payments_opa_denied", "policy"),
-            ("Outbound address policy blocks link-local IP", "payments_outbound_blocked", "failed"),
+        for label, tool_name, rpc_code, rpc_message in [
+            ("OPA negative case (payments_opa_denied)", "payments_opa_denied", -32003, "Tool call rejected by policy"),
+            ("Outbound address policy blocks link-local IP", "payments_outbound_blocked", -32000, "Tool execution failed"),
         ]:
             c, b = http_req(
                 "POST",
@@ -264,7 +313,7 @@ def run_parent(gateway_url: str, upstream_ip: str, child_jwk: dict | None) -> tu
                     "params": {"name": tool_name, "arguments": {}},
                 },
             )
-            assert c == 200 and "error" in json.loads(b) and expected_err in b.lower(), f"{label} failed: {c} {b}"
+            assert_rpc_error(c, b, rpc_code, rpc_message)
             print(f"PASS: {label} denied (zero upstream calls)", flush=True)
 
         c, b = http_req(
@@ -287,7 +336,7 @@ def run_parent(gateway_url: str, upstream_ip: str, child_jwk: dict | None) -> tu
         # Delegation checks: widening or TTL > parent rejected (403); narrowed child succeeds (200)
         del_url = f"{gateway_url}/mcp/poc/delegate"
 
-        c, _ = http_req(
+        c, b = http_req(
             "POST",
             del_url,
             headers={
@@ -303,7 +352,9 @@ def run_parent(gateway_url: str, upstream_ip: str, child_jwk: dict | None) -> tu
                 "ttl_secs": 90,
             },
         )
-        assert c == 403, f"widened delegation expected 403, got {c}"
+        assert c == 403 and json.loads(b)["error"] == "child argument constraint widens parent constraint", (
+            f"unexpected widened delegation response: {c}"
+        )
         print("PASS: delegation widening parent constraint -> 403", flush=True)
 
         c, _ = http_req(
@@ -445,11 +496,11 @@ def run_child(
                     "params": {"name": "payments_list", "arguments": bad_args},
                 },
             )
-            assert c == 200 and "error" in json.loads(b), f"expected constraint deny for {label}: {c} {b}"
+            assert_role_denial(c, b)
             print(f"PASS: agent-child constraint denied ({label})", flush=True)
 
         # 3. Calling another tool mismatches child canonical resource `aud` -> 401
-        c, _ = http_req(
+        c, b = http_req(
             "POST",
             mcp_url,
             headers={
@@ -463,7 +514,7 @@ def run_child(
                 "params": {"name": "payments_redirect", "arguments": {}},
             },
         )
-        assert c == 401, f"wrong tool audience for child expected 401, got {c}"
+        assert_rpc_error(c, b, -32001, "Unauthorized", http_status=401)
         print("PASS: agent-child calling different tool rejected on audience mismatch -> 401", flush=True)
 
         # 4. Depth chain 1 -> 2 -> 3 succeeds, 3 -> 4 is rejected (403)
@@ -487,7 +538,7 @@ def run_child(
             )
             assert c == 200 and json.loads(b)["depth"] == next_depth, f"depth {next_depth} failed: {c}"
             curr_tok = json.loads(b)["access_token"]
-        c, _ = http_req(
+        c, b = http_req(
             "POST",
             del_url,
             headers={
@@ -502,8 +553,47 @@ def run_child(
                 "ttl_secs": 30,
             },
         )
-        assert c == 403, f"depth 3 -> 4 expected 403, got {c}"
+        assert c == 403 and json.loads(b)["error"] == "delegation depth exceeds maximum of 3", (
+            f"unexpected delegation depth response: {c}"
+        )
         print("PASS: delegation depth bound 1 -> 2 -> 3 allowed, 3 -> 4 -> 403", flush=True)
+
+        run_declared_limit_check(gateway_url, child_dpop, child_token)
+
+
+def run_declared_limit_check(gateway: str, dpop: DpopKey, token: str) -> None:
+    limits = read_my_limits(gateway, dpop, token)
+    assert limits["role"] == "reader"
+    assert limits["issued_policy_version"] == limits["policy_version"] == 1
+    assert limits["allowed_tools"] == ["payments_list", "stoa_security"]
+    rules = limits["argument_constraints"]["payments_list"]["limit"]
+    assert {"type": "max_number", "max": 25.0} in rules
+    assert_role_denial(*call_poc_tool(
+        gateway, dpop, token, "payments_list",
+        {"currency": "EUR", "account": "acct-child-1", "limit": 26},
+    ))
+    assert read_my_limits(gateway, dpop, token)["budgets"] == limits["budgets"]
+    print("PASS: case 12 refuses the call above the child's declared limit", flush=True)
+
+
+def run_role_update_checks(gateway: str, dpop: DpopKey, token_v1: str) -> None:
+    # The same v1 token previously called payments_list successfully in run_parent.
+    assert_role_denial(*call_poc_tool(
+        gateway, dpop, token_v1, "payments_list",
+        {"currency": "USD", "account": "acct-parent-1", "limit": 80},
+    ))
+    print("PASS: case 7 refuses withdrawn tool on the next call", flush=True)
+
+    assert_role_denial(*call_poc_tool(gateway, dpop, token_v1, "payments_hidden", {}))
+    old_limits = read_my_limits(gateway, dpop, token_v1)
+    assert old_limits["issued_policy_version"] == 1 and old_limits["policy_version"] == 2
+    assert "payments_list" not in old_limits["allowed_tools"]
+    assert "payments_hidden" not in old_limits["allowed_tools"]
+    token_v2 = bootstrap_parent(gateway, dpop)["access_token"]
+    new_limits = read_my_limits(gateway, dpop, token_v2)
+    assert new_limits["issued_policy_version"] == new_limits["policy_version"] == 2
+    assert "payments_hidden" in new_limits["allowed_tools"]
+    print("PASS: case 8 keeps the added tool outside the v1 token's scope", flush=True)
 
 
 def run_jalon3_parent_phase1(
@@ -565,7 +655,7 @@ def run_jalon3_parent_phase1(
             "params": {"name": "payments_hidden", "arguments": {}},
         },
     )
-    assert c == 200 and "error" in json.loads(b), f"payments_hidden direct call expected deny: {c}"
+    assert_role_denial(c, b)
     print("PASS: direct call to payments_hidden denied (X-Stoa-Source ignored)", flush=True)
 
     # 3. poc/subcalls: step 1 (payments_list) succeeds [chain_A=1, caller=1], step 2 (payments_hidden) denied
@@ -589,7 +679,7 @@ def run_jalon3_parent_phase1(
             },
         },
     )
-    assert c == 200 and "error" in json.loads(b), f"subcall step 2 expected deny: {c}"
+    assert_role_denial(c, b)
     print("PASS: poc/subcalls denied out-of-role step 2 (payments_hidden never reached)", flush=True)
 
     # 4. poc/subcalls fallback with invalid constraint args denied [payments_fail => chain_A=2, caller=2]

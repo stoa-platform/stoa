@@ -20,6 +20,7 @@ changes are covered by the version sections below and by the per-component
 
 ### Added
 
+- The agent roles PoC exposes `stoa_security` with `get_my_limits` so callers can inspect their signed role, effective tools, argument constraints, and remaining budgets (CAB-2682).
 - Signed tool-policy artifacts: the control plane publishes per-tenant tool policy snapshots with a monotonic version, a compact signature, validated policy bounds, and the issuer, audience and tenant identity bound into the artifact (#3026, #3030, #3031, #3036, #3038, #3040).
 - The gateway loads pinned policy-signer trust sets, verifies tool-policy artifacts against them, and refuses tool calls and readiness when the signer is not trusted (#3032, #3033, #3037).
 - Durable audit spool in the gateway and an audit ingest endpoint in the control plane, so audit events survive a control-plane outage (#2792, #2793).

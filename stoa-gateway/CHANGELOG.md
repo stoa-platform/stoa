@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.9.29](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.28...stoa-gateway-v0.9.29) (2026-11-28)
+
+
+### Features
+
+* **gateway:** agent refusal suite with my-limits tool (CAB-2682) ([#3247](https://github.com/stoa-platform/stoa/issues/3247)) ([d8d4e45](https://github.com/stoa-platform/stoa/commit/d8d4e45db016630130c3cbba61c842339f0a3717))
+* **gateway:** agent roles PoC first slice (RS256, DPoP, delegation, compose) ([#3230](https://github.com/stoa-platform/stoa/issues/3230)) ([cfa8f13](https://github.com/stoa-platform/stoa/commit/cfa8f137438635d94e5d6ba56e60612fbc522273))
+* **gateway:** idle timeouts, connection cap and backpressure hysteresis ([#3236](https://github.com/stoa-platform/stoa/issues/3236)) ([6f13d75](https://github.com/stoa-platform/stoa/commit/6f13d752dc895d45f7151aedccb67b49d0a5f806))
+
+
+### Bug Fixes
+
+* **gateway:** enforce route tenant on JWT-protected contract routes ([#3235](https://github.com/stoa-platform/stoa/issues/3235)) ([a1134c7](https://github.com/stoa-platform/stoa/commit/a1134c73fbb805f808af064b56bc36a2bfbdf135))
+* **gateway:** honor STOA_HOST for listener bind address ([#3246](https://github.com/stoa-platform/stoa/issues/3246)) ([d31a5a0](https://github.com/stoa-platform/stoa/commit/d31a5a08369ecb3c79587507f652ac483eadace7))
+* **gateway:** secure defaults for REST contract routes ([#3232](https://github.com/stoa-platform/stoa/issues/3232)) ([7fb3d69](https://github.com/stoa-platform/stoa/commit/7fb3d69bd6dc9498e6356786184413ce9aa86036))
+
 ## [0.9.28](https://github.com/stoa-platform/stoa/compare/stoa-gateway-v0.9.27...stoa-gateway-v0.9.28) (2026-11-23)
 
 

@@ -221,6 +221,7 @@ expression: "Config::default()"
   "memory_limit_mb": 512,
   "memory_backpressure_high_ratio": 0.8,
   "memory_backpressure_low_ratio": 0.7,
+  "backpressure_liveness_fail_after_secs": 300,
   "http_idle_timeout_secs": 60,
   "http_header_read_timeout_secs": 10,
   "http_max_connections": 4096,

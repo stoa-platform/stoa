@@ -6,7 +6,10 @@
 //! - SSE connection duration
 //! - Rate limit and session gauges
 
+use std::collections::HashSet;
+
 use once_cell::sync::Lazy;
+use parking_lot::Mutex;
 use prometheus::{
     register_counter_vec, register_gauge, register_gauge_vec, register_histogram_vec, CounterVec,
     Gauge, GaugeVec, HistogramVec,
@@ -1354,8 +1357,45 @@ pub fn canonicalize_tenant_labels(families: &mut [prometheus::proto::MetricFamil
 
 // === HTTP metrics helpers ===
 
+const MAX_HTTP_METRIC_SERIES: usize = 4096;
+const HTTP_METRIC_OVERFLOW: &str = "__overflow__";
+static HTTP_METRIC_SERIES: Lazy<Mutex<HttpMetricSeries>> = Lazy::new(Mutex::default);
+
+#[derive(Default)]
+struct HttpMetricSeries {
+    admitted: HashSet<(String, String, u16)>,
+}
+
+impl HttpMetricSeries {
+    fn labels<'a>(
+        &mut self,
+        method: &'a str,
+        route: &'a str,
+        status: u16,
+        limit: usize,
+    ) -> (&'a str, &'a str) {
+        if method.len() <= 32 && route.len() <= 256 {
+            let key = (method.to_owned(), route.to_owned(), status);
+            // Prometheus retains children for the lifetime of the process.
+            // Keep serving admitted labels once the budget fills.
+            if self.admitted.len() < limit {
+                self.admitted.insert(key);
+                return (method, route);
+            }
+            if self.admitted.contains(&key) {
+                return (method, route);
+            }
+        }
+        (HTTP_METRIC_OVERFLOW, HTTP_METRIC_OVERFLOW)
+    }
+}
+
 /// Record an HTTP request with method, normalized route, status, and duration.
 pub fn record_http_request(method: &str, http_route: &str, status: u16, duration_secs: f64) {
+    let (method, http_route) =
+        HTTP_METRIC_SERIES
+            .lock()
+            .labels(method, http_route, status, MAX_HTTP_METRIC_SERIES);
     let status_str = status.to_string();
     HTTP_REQUESTS_TOTAL
         .with_label_values(&[method, http_route, &status_str])
@@ -1905,6 +1945,21 @@ mod tests {
             "proxy_requests_total sample missing from /metrics body:\n{}",
             body
         );
+    }
+
+    #[test]
+    fn test_http_metric_series_retains_existing_labels_and_groups_overflow() {
+        let mut series = HttpMetricSeries::default();
+        let overflow = (HTTP_METRIC_OVERFLOW, HTTP_METRIC_OVERFLOW);
+        assert_eq!(series.labels("GET", "/first", 200, 2), ("GET", "/first"));
+        assert_eq!(series.labels("GET", &"/".repeat(257), 200, 2), overflow);
+        assert_eq!(series.labels(&"X".repeat(33), "/first", 200, 2), overflow);
+        assert_eq!(series.labels("GET", "/first", 404, 2), ("GET", "/first"));
+        assert_eq!(series.labels("GET", "/new", 200, 2), overflow);
+        assert_eq!(series.labels("OTHER", "/first", 200, 2), overflow);
+        assert_eq!(series.labels("GET", "/first", 503, 2), overflow);
+        assert_eq!(series.labels("GET", "/first", 200, 2), ("GET", "/first"));
+        assert_eq!(series.admitted.len(), 2);
     }
 
     #[test]

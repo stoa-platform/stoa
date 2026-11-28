@@ -9,14 +9,20 @@
 //! Memory sampling uses `/proc/self/statm` on Linux and `mach_task_info`
 //! on macOS, polled every 5 seconds by a background Tokio task.
 
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum::http::{header, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use once_cell::sync::Lazy;
+use parking_lot::RwLock;
 use prometheus::{register_gauge, register_int_counter, Gauge, IntCounter};
+use tokio::time::Instant;
 use tracing::{info, warn};
+
+use crate::config::Config;
 
 /// Prometheus gauge: current process RSS in bytes.
 pub static MEMORY_USAGE_BYTES: Lazy<Gauge> = Lazy::new(|| {
@@ -27,11 +33,11 @@ pub static MEMORY_USAGE_BYTES: Lazy<Gauge> = Lazy::new(|| {
     .expect("Failed to create gateway_memory_usage_bytes metric")
 });
 
-/// Prometheus gauge: configured process memory limit in bytes.
+/// Prometheus gauge: effective process memory limit in bytes.
 pub static MEMORY_LIMIT_BYTES: Lazy<Gauge> = Lazy::new(|| {
     register_gauge!(
         "gateway_memory_limit_bytes",
-        "Configured process memory limit in bytes (backpressure reference)"
+        "Effective process memory limit in bytes (backpressure reference)"
     )
     .expect("Failed to create gateway_memory_limit_bytes metric")
 });
@@ -74,6 +80,69 @@ pub const DEFAULT_LOW_WATERMARK_RATIO: f64 = 0.70;
 
 /// Polling interval for memory sampling.
 const POLL_INTERVAL_SECS: u64 = 5;
+const MIB: u64 = 1024 * 1024;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum LimitSource {
+    Config,
+    CgroupV2,
+    CgroupV1,
+    Default,
+}
+
+impl LimitSource {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Config => "config",
+            Self::CgroupV2 => "cgroup_v2",
+            Self::CgroupV1 => "cgroup_v1",
+            Self::Default => "default",
+        }
+    }
+}
+
+fn read_cgroup_limit(path: &Path, source: LimitSource) -> Option<u64> {
+    let contents = std::fs::read_to_string(path).ok()?;
+    let bytes = contents.trim().parse::<u64>().ok()?;
+    // v1 reports LONG_MAX rounded down to a page boundary for an unlimited
+    // cgroup on 64-bit Linux (up to 64 KiB pages). v2 uses the string "max".
+    if source == LimitSource::CgroupV1 && bytes >= i64::MAX as u64 - 65_535 {
+        return None;
+    }
+    Some(bytes)
+}
+
+fn effective_limit(
+    limit_mb: u64,
+    explicit: bool,
+    v2_path: &Path,
+    v1_path: &Path,
+) -> (u64, LimitSource) {
+    let configured_bytes = limit_mb.saturating_mul(MIB);
+    let cgroup = [
+        (v2_path, LimitSource::CgroupV2),
+        (v1_path, LimitSource::CgroupV1),
+    ]
+    .into_iter()
+    .filter_map(|(path, source)| read_cgroup_limit(path, source).map(|bytes| (bytes, source)))
+    .min_by_key(|&(bytes, _)| bytes);
+
+    match cgroup {
+        Some((bytes, source)) if !explicit || bytes <= configured_bytes => {
+            if explicit && bytes < configured_bytes {
+                warn!(
+                    configured_bytes,
+                    cgroup_bytes = bytes,
+                    source = source.as_str(),
+                    "Configured memory budget exceeds the cgroup limit; using the cgroup limit"
+                );
+            }
+            (bytes, source)
+        }
+        _ if explicit => (configured_bytes, LimitSource::Config),
+        _ => (configured_bytes, LimitSource::Default),
+    }
+}
 
 /// Monitors process memory and signals backpressure.
 #[derive(Clone)]
@@ -88,8 +157,8 @@ struct Inner {
     threshold_bytes: u64,
     /// Backpressure is released only when RSS falls below this value (low watermark).
     release_bytes: u64,
-    /// True while backpressure is active.
-    under_pressure: AtomicBool,
+    /// Start of the current uninterrupted backpressure interval, if any.
+    pressure_since: RwLock<Option<Instant>>,
     /// Latest RSS reading in bytes.
     current_rss: AtomicU64,
 }
@@ -112,6 +181,30 @@ pub fn next_pressure_state(
 }
 
 impl MemoryMonitor {
+    /// Resolve the runtime memory budget from configuration and container cgroups.
+    pub fn for_runtime(config: &Config) -> Self {
+        let (limit_bytes, source) = effective_limit(
+            config.memory_limit_mb,
+            config.memory_limit_explicit,
+            Path::new("/sys/fs/cgroup/memory.max"),
+            Path::new("/sys/fs/cgroup/memory/memory.limit_in_bytes"),
+        );
+        let monitor = Self::with_byte_limit(
+            limit_bytes,
+            config.memory_backpressure_high_ratio,
+            config.memory_backpressure_low_ratio,
+        );
+        info!(
+            source = source.as_str(),
+            limit_bytes,
+            threshold_bytes = monitor.threshold_bytes(),
+            release_bytes = monitor.release_bytes(),
+            liveness_fail_after_secs = config.backpressure_liveness_fail_after_secs,
+            "Memory budget monitor initialized"
+        );
+        monitor
+    }
+
     /// Create a new monitor with the given limit in megabytes and default
     /// watermarks (activate at 80%, release below 70%).
     pub fn new(limit_mb: u64) -> Self {
@@ -127,7 +220,10 @@ impl MemoryMonitor {
     /// Ratios are expected to satisfy `0 < low <= high <= 1` (enforced by
     /// config validation); `low` is clamped to `high` defensively.
     pub fn with_watermarks(limit_mb: u64, high_ratio: f64, low_ratio: f64) -> Self {
-        let limit_bytes = limit_mb * 1024 * 1024;
+        Self::with_byte_limit(limit_mb.saturating_mul(MIB), high_ratio, low_ratio)
+    }
+
+    fn with_byte_limit(limit_bytes: u64, high_ratio: f64, low_ratio: f64) -> Self {
         let threshold_bytes = (limit_bytes as f64 * high_ratio) as u64;
         let release_bytes = ((limit_bytes as f64 * low_ratio) as u64).min(threshold_bytes);
         MEMORY_LIMIT_BYTES.set(limit_bytes as f64);
@@ -136,7 +232,7 @@ impl MemoryMonitor {
                 limit_bytes,
                 threshold_bytes,
                 release_bytes,
-                under_pressure: AtomicBool::new(false),
+                pressure_since: RwLock::new(None),
                 current_rss: AtomicU64::new(0),
             }),
         }
@@ -144,7 +240,17 @@ impl MemoryMonitor {
 
     /// Returns true when the process is under memory pressure.
     pub fn under_pressure(&self) -> bool {
-        self.inner.under_pressure.load(Ordering::Relaxed)
+        self.inner.pressure_since.read().is_some()
+    }
+
+    /// Whether backpressure has lasted at least the liveness grace period.
+    pub fn liveness_failed(&self, fail_after_secs: u64) -> bool {
+        fail_after_secs != 0
+            && self
+                .inner
+                .pressure_since
+                .read()
+                .is_some_and(|since| since.elapsed() >= Duration::from_secs(fail_after_secs))
     }
 
     /// Current RSS in bytes.
@@ -173,15 +279,21 @@ impl MemoryMonitor {
         inner.current_rss.store(rss, Ordering::Relaxed);
         MEMORY_USAGE_BYTES.set(rss as f64);
 
-        let was_pressured = inner.under_pressure.load(Ordering::Relaxed);
+        let mut pressure_since = inner.pressure_since.write();
+        let was_pressured = pressure_since.is_some();
         let now_pressured = next_pressure_state(
             was_pressured,
             rss,
             inner.threshold_bytes,
             inner.release_bytes,
         );
-        inner.under_pressure.store(now_pressured, Ordering::Relaxed);
+        if now_pressured && !was_pressured {
+            *pressure_since = Some(Instant::now());
+        } else if !now_pressured {
+            *pressure_since = None;
+        }
         BACKPRESSURE_ACTIVE.set(if now_pressured { 1.0 } else { 0.0 });
+        drop(pressure_since);
 
         if now_pressured && !was_pressured {
             warn!(
@@ -209,7 +321,11 @@ impl MemoryMonitor {
                 tokio::time::interval(tokio::time::Duration::from_secs(POLL_INTERVAL_SECS));
             loop {
                 interval.tick().await;
-                monitor.observe(read_rss_bytes());
+                let rss = read_rss_bytes();
+                // A failed sample must not reset active backpressure.
+                if rss > 0 {
+                    monitor.observe(rss);
+                }
                 OPEN_FDS.set(read_fd_count() as f64);
             }
         });
@@ -263,8 +379,8 @@ fn read_rss_linux() -> u64 {
         .nth(1)
         .and_then(|s| s.parse().ok())
         .unwrap_or(0);
-    let page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) } as u64;
-    resident_pages * page_size
+    let page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
+    resident_pages * u64::try_from(page_size).unwrap_or(0)
 }
 
 #[cfg(target_os = "macos")]
@@ -365,13 +481,33 @@ mod tests {
     }
 
     #[test]
-    fn backpressure_flag() {
-        let m = MemoryMonitor::new(512);
-        // Manually set pressure
-        m.inner.under_pressure.store(true, Ordering::Relaxed);
-        assert!(m.under_pressure());
-        m.inner.under_pressure.store(false, Ordering::Relaxed);
-        assert!(!m.under_pressure());
+    fn effective_memory_limit_uses_config_cgroup_or_default() {
+        let dir = tempfile::tempdir().unwrap();
+        let v2 = dir.path().join("memory.max");
+        let v1 = dir.path().join("memory.limit_in_bytes");
+        let limit = |mb, explicit| effective_limit(mb, explicit, &v2, &v1);
+
+        assert_eq!(limit(512, false), (512 * MIB, LimitSource::Default));
+        assert_eq!(limit(768, true), (768 * MIB, LimitSource::Config));
+
+        // Preserve the cgroup budget to the byte, including sub-MiB limits.
+        let v2_bytes = 1024 * MIB + 4096;
+        std::fs::write(&v2, format!("{v2_bytes}\n")).unwrap();
+        assert_eq!(limit(512, false), (v2_bytes, LimitSource::CgroupV2));
+        assert_eq!(limit(512, true), (512 * MIB, LimitSource::Config));
+        assert_eq!(limit(2048, true), (v2_bytes, LimitSource::CgroupV2));
+
+        std::fs::write(&v1, "268435456\n").unwrap();
+        assert_eq!(limit(512, false), (256 * MIB, LimitSource::CgroupV1));
+
+        std::fs::write(&v2, "max\n").unwrap();
+        assert_eq!(limit(512, false), (256 * MIB, LimitSource::CgroupV1));
+
+        std::fs::write(&v1, "9223372036854771712\n").unwrap();
+        assert_eq!(limit(512, false), (512 * MIB, LimitSource::Default));
+
+        std::fs::write(&v2, "malformed\n").unwrap();
+        assert_eq!(limit(512, false), (512 * MIB, LimitSource::Default));
     }
 
     #[test]
@@ -451,10 +587,10 @@ mod tests {
 
     #[test]
     fn metric_is_registered() {
-        // Force-initialize the metric and verify it exists
         Lazy::force(&MEMORY_USAGE_BYTES);
-        MEMORY_USAGE_BYTES.set(42.0);
-        assert_eq!(MEMORY_USAGE_BYTES.get() as u64, 42);
+        assert!(prometheus::gather()
+            .iter()
+            .any(|metric| metric.get_name() == "gateway_memory_usage_bytes"));
     }
 
     #[tokio::test]

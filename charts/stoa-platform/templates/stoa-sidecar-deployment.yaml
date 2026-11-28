@@ -185,7 +185,7 @@ spec:
             {{- end }}
           livenessProbe:
             httpGet:
-              path: /health
+              path: /health/live
               port: authz
             initialDelaySeconds: 5
             periodSeconds: 10

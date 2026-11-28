@@ -19,7 +19,7 @@ spec:
             - {name: STOA_ADMIN_REQUIRE_STRONG_AUTH, value: "false"}
             - {name: STOA_AUTO_REGISTER, value: "false"}
           resources: {requests: {cpu: 100m, memory: 128Mi}, limits: {cpu: "1", memory: 512Mi}}
-          livenessProbe: {httpGet: {path: /health, port: 8080}, initialDelaySeconds: 20, periodSeconds: 10}
+          livenessProbe: {httpGet: {path: /health/live, port: 8080}, initialDelaySeconds: 20, periodSeconds: 10}
           volumeMounts:
             - {name: spool, mountPath: /var/lib/stoa-gateway}
         - name: edge

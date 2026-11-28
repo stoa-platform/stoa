@@ -164,8 +164,7 @@ impl Config {
         let mut figment = Figment::new()
             // Start with defaults
             .merge(Serialized::defaults(Config::default()));
-        // Track explicit overrides (file -> STOA_* env) without defaults so
-        // `environment_explicit` reflects the winning provider value only.
+        // Track the winning overrides (file -> STOA_* env) without defaults.
         let mut explicit_figment = Figment::new();
 
         // Try config.yaml if exists. Read the file once and reuse the captured
@@ -223,6 +222,7 @@ impl Config {
             .ok()
             .and_then(|value| value.as_str().and_then(super::Environment::parse_literal))
             .is_some();
+        config.memory_limit_explicit = explicit_figment.find_value("memory_limit_mb").is_ok();
         if config.standalone && config.normalized_control_plane_url().is_none() {
             config.control_plane_url = None;
         }
@@ -951,6 +951,31 @@ mod tests {
             assert_eq!(cfg.http_max_connections, 2048);
             assert_eq!(cfg.memory_backpressure_high_ratio, 0.85);
             assert_eq!(cfg.memory_backpressure_low_ratio, 0.6);
+            Ok(())
+        });
+    }
+
+    #[test]
+    #[allow(clippy::result_large_err)] // Figment's Jail callback requires figment::Error.
+    fn memory_budget_tracks_explicit_config_and_loads_liveness_grace() {
+        figment::Jail::expect_with(|jail| {
+            jail.clear_env();
+            let defaults = Config::load().expect("default config");
+            assert!(!defaults.memory_limit_explicit);
+            assert_eq!(defaults.memory_limit_mb, 512);
+            assert_eq!(defaults.backpressure_liveness_fail_after_secs, 300);
+
+            jail.create_file("config.yaml", "memory_limit_mb: 512\n")?;
+            let yaml = Config::load().expect("YAML config");
+            assert!(yaml.memory_limit_explicit);
+            assert_eq!(yaml.memory_limit_mb, 512);
+
+            jail.set_env("STOA_MEMORY_LIMIT_MB", "768");
+            jail.set_env("STOA_BACKPRESSURE_LIVENESS_FAIL_AFTER_SECS", "0");
+            let env = Config::load().expect("environment config");
+            assert!(env.memory_limit_explicit);
+            assert_eq!(env.memory_limit_mb, 768);
+            assert_eq!(env.backpressure_liveness_fail_after_secs, 0);
             Ok(())
         });
     }

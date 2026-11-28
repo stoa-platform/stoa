@@ -296,6 +296,10 @@ pub(super) fn default_memory_backpressure_low_ratio() -> f64 {
     crate::memory::DEFAULT_LOW_WATERMARK_RATIO
 }
 
+pub(super) fn default_backpressure_liveness_fail_after_secs() -> u64 {
+    300
+}
+
 pub(super) fn default_http_idle_timeout_secs() -> u64 {
     crate::server::DEFAULT_IDLE_TIMEOUT_SECS
 }
@@ -518,8 +522,10 @@ impl Default for Config {
             ip_blocklist_file: None,
             tcp_rate_limit_per_ip: None,
             memory_limit_mb: default_memory_limit_mb(),
+            memory_limit_explicit: false,
             memory_backpressure_high_ratio: default_memory_backpressure_high_ratio(),
             memory_backpressure_low_ratio: default_memory_backpressure_low_ratio(),
+            backpressure_liveness_fail_after_secs: default_backpressure_liveness_fail_after_secs(),
             http_idle_timeout_secs: default_http_idle_timeout_secs(),
             http_header_read_timeout_secs: default_http_header_read_timeout_secs(),
             http_max_connections: default_http_max_connections(),

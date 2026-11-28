@@ -117,6 +117,21 @@ Tools are denied by default: a tenant can call a tool only when the Control Plan
 returns an explicit allow for it. Without a `private_key_jwt` service identity, the
 gateway cannot read tool permissions and every tool call is denied.
 
+### Memory backpressure
+
+| Variable | Behavior |
+| --- | --- |
+| `STOA_MEMORY_LIMIT_MB` | Optional memory budget in MiB. The gateway uses the finite Linux cgroup limit when the budget is omitted and caps an explicit budget at that limit. If neither provides a budget, it uses 512 MiB. The YAML key `memory_limit_mb` can also set an explicit budget. |
+| `STOA_MEMORY_BACKPRESSURE_HIGH_RATIO` | Starts shedding when process RSS reaches this fraction of the effective budget. Defaults to `0.80`. |
+| `STOA_MEMORY_BACKPRESSURE_LOW_RATIO` | Stops shedding when process RSS falls below this fraction of the effective budget. Defaults to `0.70`. |
+| `STOA_BACKPRESSURE_LIVENESS_FAIL_AFTER_SECS` | `/health/live` returns `503` after this many continuous seconds of shedding. Defaults to `300`. Set to `0` to disable the memory check on liveness. |
+
+Leave the memory budget unset on Kubernetes to use the container limit. The
+startup log records the effective budget, its source and both RSS thresholds.
+`/health` answers `200` while the process can respond. `/health/ready` (alias
+`/ready`) returns `503` as soon as shedding starts, in addition to its existing
+readiness checks. Recovery below the low watermark resets the liveness timer.
+
 ### Standalone contract publishing
 
 Set `STOA_STANDALONE=true` to disable control plane registration, heartbeats,
